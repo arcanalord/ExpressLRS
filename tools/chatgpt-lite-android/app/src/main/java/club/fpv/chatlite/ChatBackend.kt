@@ -60,13 +60,18 @@ class ChatBackend {
 
             override fun onResponse(call: Call, response: Response) {
                 response.use { res ->
+                    val body = res.body
                     if (!res.isSuccessful) {
-                        val detail = runCatching { res.body.string().take(500) }.getOrDefault("")
+                        val detail = runCatching { body?.string()?.take(500).orEmpty() }.getOrDefault("")
                         close(IOException("HTTP ${res.code}: ${detail.ifBlank { res.message }}"))
                         return
                     }
+                    if (body == null) {
+                        close(IOException("HTTP ${res.code}: empty response body"))
+                        return
+                    }
 
-                    val source = res.body.source()
+                    val source = body.source()
                     val buffer = Buffer()
                     try {
                         while (!source.exhausted()) {
