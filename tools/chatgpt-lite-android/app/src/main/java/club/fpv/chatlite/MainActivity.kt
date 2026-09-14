@@ -1,6 +1,5 @@
 package club.fpv.chatlite
 
-import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
@@ -8,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,7 +54,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
@@ -79,7 +78,10 @@ private fun ChatLiteApp(vm: ChatViewModel = viewModel()) {
             ChatScreen(
                 vm = vm,
                 onOpenChatGpt = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://chatgpt.com/")))
+                    CustomTabsIntent.Builder()
+                        .setShowTitle(true)
+                        .build()
+                        .launchUrl(context, Uri.parse("https://chatgpt.com/"))
                 },
             )
         }
@@ -93,7 +95,6 @@ private fun ChatScreen(vm: ChatViewModel, onOpenChatGpt: () -> Unit) {
     val isStreaming by vm.isStreaming.collectAsState()
     val error by vm.error.collectAsState()
     val backendUrl by vm.backendUrl.collectAsState()
-    val proxyToken by vm.proxyToken.collectAsState()
     val model by vm.model.collectAsState()
 
     var input by rememberSaveable { mutableStateOf("") }
@@ -101,9 +102,7 @@ private fun ChatScreen(vm: ChatViewModel, onOpenChatGpt: () -> Unit) {
     var visibleCount by rememberSaveable { mutableIntStateOf(DEFAULT_WINDOW) }
     val listState = rememberLazyListState()
 
-    val visibleMessages = remember(messages, visibleCount) {
-        messages.takeLast(visibleCount)
-    }
+    val visibleMessages = remember(messages, visibleCount) { messages.takeLast(visibleCount) }
 
     LaunchedEffect(messages.size, isStreaming) {
         val loadMoreRow = if (messages.size > visibleMessages.size) 1 else 0
@@ -112,13 +111,12 @@ private fun ChatScreen(vm: ChatViewModel, onOpenChatGpt: () -> Unit) {
     }
 
     if (showSettings) {
-        SettingsDialog(
+        AdvancedSettingsDialog(
             backendUrl = backendUrl,
-            proxyToken = proxyToken,
             model = model,
             onDismiss = { showSettings = false },
-            onSave = { url, token, selectedModel ->
-                vm.saveConfig(url, token, selectedModel)
+            onSave = { url, selectedModel ->
+                vm.saveConfig(url, "", selectedModel)
                 showSettings = false
             },
         )
@@ -131,109 +129,102 @@ private fun ChatScreen(vm: ChatViewModel, onOpenChatGpt: () -> Unit) {
                     Column {
                         Text("Chat Lite")
                         Text(
-                            if (backendUrl.isBlank()) "аккаунтный режим / backend не настроен" else model,
+                            if (backendUrl.isBlank()) "вход по аккаунту" else "нативный Lite · $model",
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 },
                 actions = {
-                    TextButton(onClick = { showSettings = true }) { Text("Настройки") }
-                    TextButton(onClick = vm::newChat) { Text("Новый") }
+                    TextButton(onClick = { showSettings = true }) { Text("Расширенные") }
+                    if (backendUrl.isNotBlank()) TextButton(onClick = vm::newChat) { Text("Новый") }
                 },
             )
         },
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding(),
+            modifier = Modifier.fillMaxSize().padding(padding).imePadding(),
         ) {
             if (backendUrl.isBlank()) {
-                AccountModeCard(onOpenChatGpt, onSettings = { showSettings = true })
-            }
-
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    if (messages.size > visibleMessages.size) {
-                        item(key = "__load_more__") {
-                            OutlinedButton(
-                                onClick = { visibleCount += WINDOW_STEP },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Показать ещё ${minOf(WINDOW_STEP, messages.size - visibleMessages.size)} сообщений")
+                AccountModeCard(onOpenChatGpt, onAdvanced = { showSettings = true })
+                Box(Modifier.weight(1f).fillMaxWidth())
+            } else {
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (messages.size > visibleMessages.size) {
+                            item(key = "__load_more__") {
+                                OutlinedButton(
+                                    onClick = { visibleCount += WINDOW_STEP },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text("Показать ещё ${minOf(WINDOW_STEP, messages.size - visibleMessages.size)} сообщений") }
                             }
                         }
-                    }
 
-                    items(
-                        items = visibleMessages,
-                        key = { it.id },
-                        contentType = { it.role },
-                    ) { message ->
-                        MessageBubble(message)
-                    }
+                        items(items = visibleMessages, key = { it.id }, contentType = { it.role }) { message ->
+                            MessageBubble(message)
+                        }
 
-                    if (isStreaming) {
-                        item(key = "__streaming__", contentType = "streaming") {
-                            StreamingBubble(vm)
+                        if (isStreaming) {
+                            item(key = "__streaming__", contentType = "streaming") { StreamingBubble(vm) }
                         }
                     }
                 }
-            }
 
-            error?.let { message ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                error?.let { message ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                     ) {
-                        Text(message, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = vm::clearError) { Text("OK") }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(message, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = vm::clearError) { Text("OK") }
+                        }
                     }
                 }
-            }
 
-            Composer(
-                value = input,
-                onValueChange = { input = it },
-                isStreaming = isStreaming,
-                nativeReady = backendUrl.isNotBlank(),
-                onSend = {
-                    val send = input
-                    input = ""
-                    vm.send(send)
-                },
-                onStop = vm::stop,
-            )
+                Composer(
+                    value = input,
+                    onValueChange = { input = it },
+                    isStreaming = isStreaming,
+                    onSend = {
+                        val send = input
+                        input = ""
+                        vm.send(send)
+                    },
+                    onStop = vm::stop,
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun AccountModeCard(onOpenChatGpt: () -> Unit, onSettings: () -> Unit) {
+private fun AccountModeCard(onOpenChatGpt: () -> Unit, onAdvanced: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
     ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Без отдельной оплаты API", style = MaterialTheme.typography.titleSmall)
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Вход по аккаунту", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Открой обычный ChatGPT через браузер — используется твоя текущая авторизация и подписка. Для максимально быстрого нативного режима настрой Lite backend.",
+                "Chat Lite откроет ChatGPT в защищённой вкладке Chrome. Она использует ту же браузерную сессию, в которой ты уже вошёл. Само Android-приложение не получает пароль, cookie или токен аккаунта.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "Это единственный режим, который использует твою обычную подписку ChatGPT. Нативный API-режим оплачивается отдельно и не связан с подпиской.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onOpenChatGpt) { Text("Открыть ChatGPT") }
-                OutlinedButton(onClick = onSettings) { Text("Lite backend") }
+            Button(onClick = onOpenChatGpt, modifier = Modifier.fillMaxWidth()) {
+                Text("Открыть ChatGPT по аккаунту")
             }
+            TextButton(onClick = onAdvanced) { Text("Расширенный нативный режим") }
         }
     }
 }
@@ -253,11 +244,7 @@ private fun MessageBubble(message: ChatMessage) {
             ),
         ) {
             SelectionContainer {
-                Text(
-                    text = message.content,
-                    modifier = Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Text(message.content, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
@@ -272,11 +259,7 @@ private fun StreamingBubble(vm: ChatViewModel) {
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         ) {
-            Text(
-                text = if (text.isEmpty()) "…" else text,
-                modifier = Modifier.padding(12.dp),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Text(if (text.isEmpty()) "…" else text, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -286,7 +269,6 @@ private fun Composer(
     value: String,
     onValueChange: (String) -> Unit,
     isStreaming: Boolean,
-    nativeReady: Boolean,
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
@@ -300,7 +282,7 @@ private fun Composer(
             modifier = Modifier.weight(1f),
             minLines = 1,
             maxLines = 6,
-            placeholder = { Text(if (nativeReady) "Сообщение" else "Настрой backend для нативного режима") },
+            placeholder = { Text("Сообщение") },
             enabled = !isStreaming,
         )
         Spacer(Modifier.width(8.dp))
@@ -310,30 +292,28 @@ private fun Composer(
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
             ) { Text("Стоп") }
         } else {
-            Button(onClick = onSend, enabled = nativeReady && value.isNotBlank()) { Text("→") }
+            Button(onClick = onSend, enabled = value.isNotBlank()) { Text("→") }
         }
     }
 }
 
 @Composable
-private fun SettingsDialog(
+private fun AdvancedSettingsDialog(
     backendUrl: String,
-    proxyToken: String,
     model: String,
     onDismiss: () -> Unit,
-    onSave: (String, String, String) -> Unit,
+    onSave: (String, String) -> Unit,
 ) {
     var url by remember(backendUrl) { mutableStateOf(backendUrl) }
-    var token by remember(proxyToken) { mutableStateOf(proxyToken) }
     var selectedModel by remember(model) { mutableStateOf(model) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Lite backend") },
+        title = { Text("Расширенный нативный режим") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "API-ключ OpenAI в приложение не кладём. Здесь хранится только адрес нашего прокси и, при необходимости, отдельный прокси-токен.",
+                    "Не нужен для входа по аккаунту. Этот режим работает через отдельный backend/API и оплачивается отдельно от подписки ChatGPT. API-ключ в APK не хранится.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 OutlinedTextField(
@@ -341,13 +321,6 @@ private fun SettingsDialog(
                     onValueChange = { url = it },
                     label = { Text("Backend URL") },
                     placeholder = { Text("https://example.vercel.app") },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = token,
-                    onValueChange = { token = it },
-                    label = { Text("Proxy token (необязательно)") },
-                    visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
                 )
                 OutlinedTextField(
@@ -361,11 +334,10 @@ private fun SettingsDialog(
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
                 )
+                TextButton(onClick = { onSave("", selectedModel) }) { Text("Отключить нативный режим") }
             }
         },
-        confirmButton = {
-            Button(onClick = { onSave(url, token, selectedModel) }) { Text("Сохранить") }
-        },
+        confirmButton = { Button(onClick = { onSave(url, selectedModel) }) { Text("Сохранить") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }
