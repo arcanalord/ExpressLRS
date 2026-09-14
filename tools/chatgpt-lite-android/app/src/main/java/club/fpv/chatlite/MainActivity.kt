@@ -357,7 +357,7 @@ private fun SettingsDialog(
                     singleLine = true,
                 )
                 Text(
-                    "Быстро: openai/gpt-5.6-luna\nСильнее: openai/gpt-5.6-sol",
+                    "Быстро: openai/gpt-5.6-luna-fast\nСильнее: openai/gpt-5.6-sol",
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
                 )
