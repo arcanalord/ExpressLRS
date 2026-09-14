@@ -11,8 +11,8 @@ android {
         applicationId = "club.fpv.chatlite"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     buildTypes {
@@ -49,13 +49,12 @@ kotlin {
 
 dependencies {
     // Deliberately pinned to the last API-36-compatible AndroidX generation.
-    // The newer Aug/Sep 2026 releases require compileSdk 37+ without giving this
-    // small client any functionality we need.
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("androidx.activity:activity-compose:1.11.0")
+    implementation("androidx.browser:browser:1.8.0")
     implementation(platform("androidx.compose:compose-bom:2026.06.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
