@@ -17,7 +17,7 @@ A deliberately small Android chat client focused on smooth long conversations on
 1. **Account mode**: opens `https://chatgpt.com/` with the user's browser session, so the normal ChatGPT account/subscription remains available.
 2. **Native Lite mode**: talks to the included Vercel backend. The backend uses Vercel AI Gateway; no OpenAI API key is stored in the Android app.
 
-Default native model: `openai/gpt-5.6-luna`. `openai/gpt-5.6-sol` is available in Settings for harder tasks.
+Default native model: `openai/gpt-5.6-luna-fast`. `openai/gpt-5.6-sol` is available in Settings for harder tasks.
 
 ## Backend
 
@@ -27,4 +27,4 @@ For personal deployments, set an optional `CHAT_LITE_TOKEN` environment variable
 
 ## Build
 
-This repository branch includes a GitHub Actions workflow that installs Gradle and Android SDK 37, runs `:app:assembleDebug`, and uploads `ChatLite-debug.apk` as a workflow artifact.
+This repository branch includes a GitHub Actions workflow that installs Gradle and Android SDK 36, runs `:app:assembleDebug`, and uploads `ChatLite-debug.apk` as a workflow artifact.

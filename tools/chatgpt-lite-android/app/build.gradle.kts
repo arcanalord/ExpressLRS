@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "club.fpv.chatlite"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "club.fpv.chatlite"

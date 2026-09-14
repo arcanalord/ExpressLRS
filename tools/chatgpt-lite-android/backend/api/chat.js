@@ -1,7 +1,8 @@
 import { streamText } from 'ai';
 
-const DEFAULT_MODEL = 'openai/gpt-5.6-luna';
+const DEFAULT_MODEL = 'openai/gpt-5.6-luna-fast';
 const ALLOWED_MODELS = new Set([
+  'openai/gpt-5.6-luna-fast',
   'openai/gpt-5.6-luna',
   'openai/gpt-5.6-terra',
   'openai/gpt-5.6-sol',
