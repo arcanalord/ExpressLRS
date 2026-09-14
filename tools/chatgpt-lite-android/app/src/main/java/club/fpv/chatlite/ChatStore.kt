@@ -11,19 +11,22 @@ class ChatStore(context: Context) {
     private val prefs = context.getSharedPreferences("chat-lite", Context.MODE_PRIVATE)
 
     fun loadMessages(): List<ChatMessage> = runCatching {
-        if (!historyFile.exists()) return emptyList()
-        val array = JSONArray(historyFile.readText())
-        buildList(array.length()) {
-            for (i in 0 until array.length()) {
-                val o = array.getJSONObject(i)
-                add(
-                    ChatMessage(
-                        id = o.optString("id").ifBlank { UUID.randomUUID().toString() },
-                        role = o.optString("role", "assistant"),
-                        content = o.optString("content"),
-                        createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+        if (!historyFile.exists()) {
+            emptyList()
+        } else {
+            val array = JSONArray(historyFile.readText())
+            buildList(array.length()) {
+                for (i in 0 until array.length()) {
+                    val o = array.getJSONObject(i)
+                    add(
+                        ChatMessage(
+                            id = o.optString("id").ifBlank { UUID.randomUUID().toString() },
+                            role = o.optString("role", "assistant"),
+                            content = o.optString("content"),
+                            createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+                        )
                     )
-                )
+                }
             }
         }
     }.getOrDefault(emptyList())
@@ -64,6 +67,6 @@ class ChatStore(context: Context) {
     }
 
     companion object {
-        const val DEFAULT_MODEL = "openai/gpt-5.6-luna"
+        const val DEFAULT_MODEL = "openai/gpt-5.6-luna-fast"
     }
 }
