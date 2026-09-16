@@ -35,6 +35,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity implements SerialInputOutputManager.Listener, SensorEventListener {
     private static final String ACTION_USB_PERMISSION = "ru.fpvclub.rangerrf.USB_PERMISSION";
@@ -43,6 +45,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final StringBuilder lineBuffer = new StringBuilder();
+    private final ExecutorService uartWriter = Executors.newSingleThreadExecutor();
 
     private UsbManager usbManager;
     private SensorManager sensorManager;
@@ -56,6 +59,14 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
     private UsbDevice connectedDevice;
     private String connectedDriver = "USB serial";
     private boolean receiverRegistered;
+    private volatile long rxBytes = 0;
+    private volatile long txBytes = 0;
+    private volatile long rxLines = 0;
+    private volatile long connectedAtMs = 0;
+    private volatile long lastRxAtMs = 0;
+    private volatile long lastHeadingAtMs = 0;
+    private volatile int compassAccuracy = SensorManager.SENSOR_STATUS_UNRELIABLE;
+    private volatile float lastHeadingDeg = Float.NaN;
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -90,6 +101,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
                 pushStatus("USB-мост готов", "idle");
+                pushSensorState();
                 main.postDelayed(MainActivity.this::connectUsb, 250);
             }
         });
@@ -102,6 +114,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
     @Override protected void onResume() {
         super.onResume();
         if (rotationSensor != null) sensorManager.registerListener(this, rotationSensor, SensorManager.SENSOR_DELAY_UI);
+        pushSensorState();
     }
 
     @Override protected void onPause() {
@@ -121,13 +134,33 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
         SensorManager.getOrientation(remappedMatrix, orientation);
         float deg = (float)Math.toDegrees(orientation[0]);
         if (deg < 0) deg += 360f;
+        lastHeadingDeg = deg;
+        lastHeadingAtMs = System.currentTimeMillis();
         eval("window.onHeading && window.onHeading(" + String.format(Locale.US, "%.1f", deg) + ")");
     }
 
-    @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {}
+    @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        if (sensor != null && sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+            compassAccuracy = accuracy;
+            pushSensorState();
+        }
+    }
+
+    private void pushSensorState() {
+        String state;
+        switch (compassAccuracy) {
+            case SensorManager.SENSOR_STATUS_ACCURACY_HIGH: state = "HIGH"; break;
+            case SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM: state = "MEDIUM"; break;
+            case SensorManager.SENSOR_STATUS_ACCURACY_LOW: state = "LOW"; break;
+            default: state = "UNRELIABLE"; break;
+        }
+        boolean available = rotationSensor != null;
+        eval("window.onCompassState && window.onCompassState(" + available + "," + JSONObject.quote(state) + ")");
+    }
 
     @Override protected void onDestroy() {
         disconnectUsb(null);
+        uartWriter.shutdownNow();
         if (receiverRegistered) unregisterReceiver(receiver);
         if (webView != null) webView.destroy();
         super.onDestroy();
@@ -145,9 +178,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
 
     private UsbSerialDriver findDriverForDevice(UsbDevice device) {
         List<UsbSerialDriver> drivers = UsbSerialProber.getDefaultProber().findAllDrivers(usbManager);
-        for (UsbSerialDriver d : drivers) {
-            if (d.getDevice().getDeviceId() == device.getDeviceId()) return d;
-        }
+        for (UsbSerialDriver d : drivers) if (d.getDevice().getDeviceId() == device.getDeviceId()) return d;
         return null;
     }
 
@@ -192,10 +223,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
             return;
         }
         UsbDeviceConnection c = usbManager.openDevice(d);
-        if (c == null) {
-            pushStatus("Не удалось открыть USB", "error");
-            return;
-        }
+        if (c == null) { pushStatus("Не удалось открыть USB", "error"); return; }
         try {
             UsbSerialPort p = driver.getPorts().get(0);
             p.open(c);
@@ -208,9 +236,12 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
             connectedDriver = driver.getClass().getSimpleName().replace("SerialDriver", "");
             ioManager = new SerialInputOutputManager(p, this);
             ioManager.start();
+            rxBytes = txBytes = rxLines = 0;
+            connectedAtMs = System.currentTimeMillis();
+            lastRxAtMs = 0;
 
             pushStatus(deviceLabel() + " • 115200 • подключено", "ok");
-            writeLine("I");
+            enqueueWrite("I");
         } catch (Exception e) {
             try { c.close(); } catch (Exception ignored) {}
             serialPort = null;
@@ -227,9 +258,9 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
         serialPort = null;
         connectedDevice = null;
         connectedDriver = "USB serial";
-        if (p != null) {
-            try { p.close(); } catch (Exception ignored) {}
-        }
+        connectedAtMs = 0;
+        lastRxAtMs = 0;
+        if (p != null) try { p.close(); } catch (Exception ignored) {}
         if (message != null) pushStatus(message, "idle");
     }
 
@@ -237,11 +268,22 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
         if (serialPort == null) throw new IOException("USB не подключён");
         String clean = line == null ? "" : line.trim();
         if (clean.isEmpty()) return;
-        serialPort.write((clean + "\n").getBytes(StandardCharsets.US_ASCII), WRITE_TIMEOUT_MS);
+        byte[] bytes = (clean + "\n").getBytes(StandardCharsets.US_ASCII);
+        serialPort.write(bytes, WRITE_TIMEOUT_MS);
+        txBytes += bytes.length;
         pushTx(clean);
     }
 
+    private void enqueueWrite(String line) {
+        uartWriter.execute(() -> {
+            try { writeLine(line); }
+            catch (Exception e) { pushStatus("UART запись: " + e.getMessage(), "error"); }
+        });
+    }
+
     @Override public void onNewData(byte[] data) {
+        rxBytes += data.length;
+        lastRxAtMs = System.currentTimeMillis();
         String chunk = new String(data, StandardCharsets.US_ASCII);
         synchronized (lineBuffer) {
             lineBuffer.append(chunk);
@@ -249,7 +291,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
             while ((nl = lineBuffer.indexOf("\n")) >= 0) {
                 String line = lineBuffer.substring(0, nl).replace("\r", "").trim();
                 lineBuffer.delete(0, nl + 1);
-                if (!line.isEmpty()) pushLine(line);
+                if (!line.isEmpty()) { ++rxLines; pushLine(line); }
             }
             if (lineBuffer.length() > 8192) lineBuffer.delete(0, lineBuffer.length() - 4096);
         }
@@ -261,9 +303,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
 
     private void pushLine(String line) { eval("window.onSerialLine && window.onSerialLine(" + JSONObject.quote(line) + ")"); }
     private void pushTx(String line) { eval("window.onSerialTx && window.onSerialTx(" + JSONObject.quote(line) + ")"); }
-    private void pushStatus(String text, String state) {
-        eval("window.onNativeStatus && window.onNativeStatus(" + JSONObject.quote(text) + "," + JSONObject.quote(state) + ")");
-    }
+    private void pushStatus(String text, String state) { eval("window.onNativeStatus && window.onNativeStatus(" + JSONObject.quote(text) + "," + JSONObject.quote(state) + ")"); }
     private void eval(String js) { main.post(() -> { if (webView != null) webView.evaluateJavascript(js, null); }); }
 
     private String deviceLabel() {
@@ -287,11 +327,29 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
         @JavascriptInterface public void disconnect() { main.post(() -> disconnectUsb("USB отключён")); }
         @JavascriptInterface public boolean isConnected() { return serialPort != null; }
         @JavascriptInterface public String transport() { return connectedDriver; }
-        @JavascriptInterface public void send(String line) {
-            new Thread(() -> {
-                try { writeLine(line); }
-                catch (Exception e) { pushStatus("UART запись: " + e.getMessage(), "error"); }
-            }, "rf-finder-write").start();
+        @JavascriptInterface public void send(String line) { enqueueWrite(line); }
+        @JavascriptInterface public String diagnostics() {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("connected", serialPort != null);
+                o.put("driver", connectedDriver);
+                o.put("baud", BAUD);
+                o.put("rxBytes", rxBytes);
+                o.put("txBytes", txBytes);
+                o.put("rxLines", rxLines);
+                o.put("connectedAtMs", connectedAtMs);
+                o.put("lastRxAtMs", lastRxAtMs);
+                o.put("lastRxAgeMs", lastRxAtMs == 0 ? -1 : Math.max(0, System.currentTimeMillis() - lastRxAtMs));
+                o.put("rotationVectorAvailable", rotationSensor != null);
+                o.put("compassAccuracy", compassAccuracy);
+                o.put("lastHeadingDeg", Float.isNaN(lastHeadingDeg) ? JSONObject.NULL : lastHeadingDeg);
+                o.put("lastHeadingAgeMs", lastHeadingAtMs == 0 ? -1 : Math.max(0, System.currentTimeMillis() - lastHeadingAtMs));
+                if (connectedDevice != null) {
+                    o.put("vid", connectedDevice.getVendorId());
+                    o.put("pid", connectedDevice.getProductId());
+                }
+                return o.toString();
+            } catch (Exception e) { return "{}"; }
         }
     }
 }
