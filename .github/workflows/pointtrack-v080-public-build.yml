@@ -1,0 +1,92 @@
+name: PointTrack v0.8.0-dev clean rebuild APK
+
+on:
+  push:
+    branches: [pointtrack-build-v070]
+    paths:
+      - ".pointtrack_v08/**"
+      - ".github/workflows/pointtrack-v080-public-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.4.1"
+
+      - name: Install Android SDK pieces
+        shell: bash
+        run: |
+          set -euxo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platforms;android-37" \
+            "build-tools;36.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - name: Reconstruct source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/pointtrack-src
+          cat .pointtrack_v08/chunks/src.part*.b64 | base64 -d > /tmp/PointTrack_v0.8.0-dev_CLEAN_REBUILD_SOURCE.tar.xz
+          echo "468d49375bfce4c992992e301c87ba5ff3b98b1e894eb06fa62fd69fb0b681c5  /tmp/PointTrack_v0.8.0-dev_CLEAN_REBUILD_SOURCE.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/PointTrack_v0.8.0-dev_CLEAN_REBUILD_SOURCE.tar.xz -C /tmp/pointtrack-src
+          ROOT=/tmp/pointtrack-src/PointTrack_v0.8.0-dev_CLEAN_REBUILD_BASELINE
+          test "$(cat "$ROOT/VERSION")" = "0.8.0-dev"
+          grep -q 'versionName = "0.8.0-dev"' "$ROOT/platform_android/android_app/app/build.gradle.kts"
+          grep -q 'compileSdk = 37' "$ROOT/platform_android/android_app/app/build.gradle.kts"
+          grep -q 'targetSdk = 37' "$ROOT/platform_android/android_app/app/build.gradle.kts"
+          grep -q 'TrackerBridge_nativeCreate' "$ROOT/platform_android/android_app/app/src/main/cpp/pointtrack_jni.cpp"
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Host regression
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S "$ROOT" -B /tmp/pt-host -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/pt-host -j2
+          ctest --test-dir /tmp/pt-host --output-on-failure
+
+      - name: Android debug build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd "$ROOT/platform_android/android_app"
+          gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APK="$ROOT/platform_android/android_app/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libpointtrack_jni.so'
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "$APK"
+          mkdir -p out
+          OUT="out/PointTrack_v0.8.0-dev_run${GITHUB_RUN_NUMBER}_CLEAN_REBUILD_debug.apk"
+          cp "$APK" "$OUT"
+          sha256sum "$OUT" | tee out/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PointTrack-v0.8.0-dev-APK
+          path: |
+            out/*.apk
+            out/SHA256SUMS.txt
+          retention-days: 30
