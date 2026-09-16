@@ -1,14 +1,263 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="theme-color" content="#0B0B0C"><title>RF Finder</title><style>
-:root{color-scheme:dark;--bg:#0B0B0C;--s:#121315;--s2:#18181B;--glass:rgba(24,24,27,.72);--hair:rgba(255,255,255,.09);--hair2:rgba(255,255,255,.15);--text:#F2F2F7;--muted:#A1A1AA;--blue:#0A84FF;--green:#30D158;--red:#FF453A}*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}button,input{font:inherit}button{touch-action:manipulation}main{max-width:900px;margin:auto;padding:12px 12px 30px}.chrome{position:sticky;top:6px;z-index:20;padding:8px;border:1px solid var(--hair);border-radius:18px;background:var(--glass);backdrop-filter:blur(18px) saturate(125%);-webkit-backdrop-filter:blur(18px) saturate(125%)}.top{display:flex;gap:10px;align-items:center}.grow{flex:1;min-width:0}.title{font-size:20px;font-weight:650}.status{font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.usb,.btn,.chip,.step,.tab{min-height:44px;border:1px solid var(--hair2);border-radius:12px;background:rgba(255,255,255,.05);color:var(--text);font-size:14px;font-weight:600}.usb{min-width:82px}.usb.ok{border-color:rgba(48,209,88,.55)}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:8px}.tab{border:0;background:transparent;color:var(--muted)}.tab.active{background:rgba(255,255,255,.09);color:var(--text)}.view{display:none}.view.active{display:block}.section{margin-top:16px;padding-top:16px;border-top:1px solid var(--hair)}.head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.label{font-size:13px;letter-spacing:.06em;color:var(--muted);font-weight:600}.small{font-size:14px;color:var(--muted)}.hero{text-align:center;padding:20px 4px 8px}.rssi{font:750 clamp(70px,20vw,104px)/.95 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-5px}.rssi small{font:500 18px system-ui;color:var(--muted);letter-spacing:0}.meta{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:12px}.pill{padding:6px 10px;border:1px solid var(--hair);border-radius:999px;background:rgba(255,255,255,.03);font:600 13px ui-monospace,monospace;color:#D8D8DE}.meter{height:10px;margin:18px 4px 5px;border:1px solid var(--hair);border-radius:999px;background:#070708;overflow:hidden}.meter i{display:block;height:100%;width:0;background:var(--blue);transition:width 120ms linear}.scale{display:flex;justify-content:space-between;color:var(--muted);font:13px ui-monospace,monospace}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}.stat{padding:10px 4px 4px;border-top:1px solid var(--hair);text-align:center}.stat b{display:block;font:650 18px ui-monospace,monospace}.stat span{font-size:13px;color:var(--muted)}.primary{display:block}.compassWrap{display:grid;justify-items:center;gap:12px}.compass{--z:226px;position:relative;width:var(--z);height:var(--z);border-radius:50%;overflow:hidden;background:radial-gradient(circle,#18191C 0 42%,#111214 43% 69%,#0D0E10 70%);border:1px solid var(--hair2);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 28px rgba(0,0,0,.22)}.compass:before{content:"";position:absolute;inset:14px;border-radius:50%;border:1px solid var(--hair);background:repeating-conic-gradient(from -1deg,rgba(255,255,255,.25) 0 1deg,transparent 1deg 14deg)}.rose{position:absolute;inset:0;transition:transform 120ms linear}.c{position:absolute;left:50%;top:50%;width:28px;height:28px;margin:-14px;display:grid;place-items:center;font-size:14px;font-weight:650;color:#D6D6DC;transform:rotate(var(--a)) translateY(calc(var(--z)*-.39)) rotate(calc(var(--a)*-1))}.c.n{color:var(--red)}.forward{position:absolute;z-index:5;left:50%;top:7px;transform:translateX(-50%);width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:11px solid var(--blue)}.target{display:none;position:absolute;z-index:6;inset:0;transition:transform 120ms linear}.target i{position:absolute;left:50%;top:18px;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:var(--green);border:3px solid #0D0E10;box-shadow:0 0 0 1px rgba(48,209,88,.55)}.target span{position:absolute;left:50%;top:42px;transform:translateX(-50%);font-size:13px;font-weight:650;color:var(--green)}.center{position:absolute;z-index:7;left:50%;top:50%;width:110px;height:110px;transform:translate(-50%,-50%);border-radius:50%;display:grid;place-content:center;text-align:center;background:var(--s);border:1px solid var(--hair)}.center span{font-size:13px;color:var(--muted)}.center strong{font:650 31px ui-monospace,monospace}.bearingMeta{width:min(100%,430px);display:grid;grid-template-columns:1fr 1fr;gap:8px}.bearingMeta div{padding:10px 8px;border-top:1px solid var(--hair);text-align:center}.bearingMeta span{display:block;font-size:13px;color:var(--muted)}.bearingMeta strong{font:650 20px ui-monospace,monospace}.turn{min-height:22px;font-size:14px;color:var(--muted);text-align:center}.turn.on{color:var(--green);font-weight:600}.freq{font:650 28px ui-monospace,monospace}.row3{display:grid;grid-template-columns:48px 1fr 48px;gap:10px;align-items:center}.slider{width:100%;min-height:44px;accent-color:var(--blue)}.step{width:48px}.seg{display:flex;gap:8px;flex-wrap:wrap}.chip{padding:0 12px;color:var(--muted)}.chip.active{color:var(--text);border-color:rgba(10,132,255,.5);background:rgba(10,132,255,.15)}.btn{padding:0 14px}.btn.primary{border-color:rgba(10,132,255,.5);background:rgba(10,132,255,.18)}.btn.good{border-color:rgba(48,209,88,.4);background:rgba(48,209,88,.12)}canvas{width:100%;display:block;border:1px solid var(--hair);border-radius:16px;background:#0D0D0F}.history{height:150px}.spectrum{height:260px;touch-action:manipulation}.marker{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:12px;border-top:1px solid var(--hair)}.marker strong{font:650 20px ui-monospace,monospace}.marker em{font:650 15px ui-monospace,monospace;color:var(--green);font-style:normal}.centerRow{display:flex;gap:10px;align-items:center}.centerMHz{min-width:105px;text-align:right;font:650 20px ui-monospace,monospace}.diag{margin-top:18px}.diag summary{min-height:44px;padding:12px 4px;color:var(--muted);font-size:14px}.diagbox{padding:12px;border:1px solid var(--hair);border-radius:16px;background:var(--s)}.actions{display:flex;gap:8px;flex-wrap:wrap}.log{max-height:170px;overflow:auto;margin:10px 0 0;white-space:pre-wrap;word-break:break-word;color:#C7C7CC;font:13px/1.45 ui-monospace,monospace}.footer{padding-top:18px;text-align:center;color:var(--muted);font-size:13px}@media(min-width:720px){.primary{display:grid;grid-template-columns:1.05fr .95fr;gap:28px;align-items:center;padding-top:10px}.compass{--z:270px}.rssi{font-size:96px}}@media(max-width:520px){main{padding-left:10px;padding-right:10px}.rssi{font-size:72px}.compass{--z:218px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.chrome{background:#18181B}}
-</style></head><body><main>
-<header class="chrome"><div class="top"><div class="grow"><div class="title">RF Finder</div><div id="status" class="status">USB-UART не подключён</div></div><button id="usb" class="usb" type="button">USB</button></div><nav class="tabs"><button class="tab active" data-view="bearing" type="button">ПЕЛЕНГ</button><button class="tab" data-view="overview" type="button">ОБЗОР</button></nav></header>
-<section id="bearing" class="view active"><div class="primary"><div class="hero"><div class="rssi"><span id="rssi">—</span><small> dBm</small></div><div class="meta"><span id="freqPill" class="pill">2440.0 МГц</span><span id="deltaPill" class="pill">Δ — dB</span><span id="modePill" class="pill">NORMAL</span></div><div class="meter"><i id="meter"></i></div><div class="scale"><span>−120</span><span>−90</span><span>−60</span><span>−30 dBm</span></div><div class="stats"><div class="stat"><b id="minRssi">—</b><span>МИН</span></div><div class="stat"><b id="avgRssi">—</b><span>СРЕД</span></div><div class="stat"><b id="peakRssi">—</b><span>ПИК</span></div></div></div><div class="section" style="border-top:0"><div class="head"><div><div class="label">НАПРАВЛЕНИЕ</div><div id="headingHint" class="small">Поворачивай антенну вместе с телефоном</div></div><button id="newPass" class="btn" type="button">НОВЫЙ ПРОХОД</button></div><div class="compassWrap"><div class="compass" role="img" aria-label="Компас пеленга"><div id="rose" class="rose"><span class="c n" style="--a:0deg">N</span><span class="c" style="--a:90deg">E</span><span class="c" style="--a:180deg">S</span><span class="c" style="--a:270deg">W</span></div><i class="forward"></i><div id="target" class="target"><i></i><span>ПИК</span></div><div class="center"><span>АЗИМУТ</span><strong id="heading">—°</strong></div></div><div class="bearingMeta"><div><span>ЛУЧШЕЕ НАПРАВЛЕНИЕ</span><strong id="bestHeading">—°</strong></div><div><span>ПИК ПРОХОДА</span><strong id="bestPass">— dBm</strong></div></div><div id="turn" class="turn">Сделай проход — пик появится на круге</div></div></div></div>
-<div class="section"><div class="head"><div><div class="label">ЧАСТОТА</div><div id="fixedText" class="freq">2440.0 МГц</div></div><button id="resetPeak" class="btn" type="button">СБРОС ПИКА</button></div><div class="row3"><button id="minus" class="step" type="button">−</button><input id="freqSlider" class="slider" type="range" min="2400" max="2480" step="0.1" value="2440" aria-label="Частота"><button id="plus" class="step" type="button">+</button></div><div class="scale"><span id="rangeMin">2400</span><span>шаг 0.1 МГц</span><span id="rangeMax">2480</span></div></div>
-<div class="section"><div class="head"><div><div class="label">СГЛАЖИВАНИЕ</div><div class="small">Для вращения антенны</div></div></div><div class="seg"><button class="chip" data-smooth="fast">БЫСТРО</button><button class="chip active" data-smooth="normal">НОРМА</button><button class="chip" data-smooth="smooth">ПЛАВНО</button></div></div>
-<div class="section"><div class="head"><span class="label">ИСТОРИЯ RSSI</span><span id="count" class="small">0 отсч.</span></div><canvas id="history" class="history"></canvas></div></section>
-<section id="overview" class="view"><div class="section" style="border-top:0"><div class="head"><div><div class="label">СПЕКТР</div><div id="scanText" class="small">2400–2480 МГц</div></div><button id="scan" class="btn good">СКАН</button></div><canvas id="spectrum" class="spectrum"></canvas><div class="marker"><div class="grow"><div class="label">МАРКЕР</div><strong id="markerFreq">—</strong></div><div><em id="markerDbm">—</em><br><button id="goBearing" class="btn primary" disabled>ПЕЛЕНГ</button></div></div></div><div class="section"><div class="head"><div><div class="label">CENTER / SPAN</div><div class="small">Центр и ширина обзора</div></div></div><div class="centerRow"><input id="centerSlider" class="slider grow" type="range" min="2400" max="2480" step="0.1" value="2440"><div id="centerText" class="centerMHz">2440.0</div></div><div class="seg"><button class="chip active" data-span="80">80 МГц</button><button class="chip" data-span="40">40</button><button class="chip" data-span="20">20</button><button class="chip" data-span="10">10</button></div></div></section>
-<details class="diag"><summary>Диагностика</summary><div class="diagbox"><div class="actions"><button id="info" class="btn">INFO</button><button id="disconnect" class="btn">ОТКЛЮЧИТЬ</button><button id="clearLog" class="btn">ОЧИСТИТЬ</button></div><pre id="log" class="log">—</pre></div></details><div class="footer">FPV Club RF Finder v0.4.1 • RX-only</div></main>
-<script>(()=>{'use strict';const $=id=>document.getElementById(id),u={status:$('status'),usb:$('usb'),rssi:$('rssi'),freqPill:$('freqPill'),delta:$('deltaPill'),mode:$('modePill'),meter:$('meter'),min:$('minRssi'),avg:$('avgRssi'),peak:$('peakRssi'),fixed:$('fixedText'),freq:$('freqSlider'),rmin:$('rangeMin'),rmax:$('rangeMax'),heading:$('heading'),bestHeading:$('bestHeading'),bestPass:$('bestPass'),hint:$('headingHint'),rose:$('rose'),target:$('target'),turn:$('turn'),count:$('count'),history:$('history'),spectrum:$('spectrum'),scanText:$('scanText'),scan:$('scan'),markerFreq:$('markerFreq'),markerDbm:$('markerDbm'),go:$('goBearing'),center:$('centerSlider'),centerText:$('centerText'),log:$('log')};const native=typeof AndroidSerial!=='undefined';let lo=2400,hi=2480,fixed=2440,center=2440,span=80,smooth='normal',ema=null,st={n:0,min:Infinity,max:-Infinity,mean:0},hist=[],heading=null,bestHead=null,bestDb=-Infinity,scanOn=false,sweep=new Map(),sweepNo=-1,marker=null,markerDb=null,timer=null;const a={fast:.55,normal:.25,smooth:.11},clamp=(v,x,y)=>Math.min(y,Math.max(x,v)),fmt=(v,d=1)=>Number.isFinite(v)?v.toFixed(d):'—';
-function status(t,s='idle'){u.status.textContent=t;u.usb.classList.toggle('ok',s==='ok');u.usb.textContent=s==='ok'?'ОНЛАЙН':'USB'}function log(t){let x=u.log.textContent==='—'?[]:u.log.textContent.split('\n');x.push(t);u.log.textContent=x.slice(-28).join('\n')}function send(c){if(!native)return;try{AndroidSerial.send(c);log('> '+c)}catch(e){status(String(e),'error')}}function resetStats(){st={n:0,min:Infinity,max:-Infinity,mean:0};hist=[];ema=null;stats();drawHist()}function resetPass(){bestHead=null;bestDb=-Infinity;u.bestHeading.textContent='—°';u.bestPass.textContent='— dBm';compass()}function stats(){u.min.textContent=fmt(st.min);u.avg.textContent=st.n?fmt(st.mean):'—';u.peak.textContent=fmt(st.max);u.count.textContent=st.n+' отсч.'}function delta(t,c){return((t-c+540)%360)-180}function compass(){let h=Number.isFinite(heading)?heading:0;u.rose.style.transform='rotate('+(-h)+'deg)';if(Number.isFinite(heading))u.heading.textContent=Math.round(heading)+'°';if(bestHead===null||!Number.isFinite(heading)){u.target.style.display='none';u.turn.classList.remove('on');u.turn.textContent=bestHead===null?'Сделай проход — пик появится на круге':'Жду датчик азимута';return}let d=delta(bestHead,heading),ad=Math.abs(d);u.target.style.display='block';u.target.style.transform='rotate('+d+'deg)';u.turn.textContent=ad<=6?'ПИК ПРЯМО ПО КУРСУ':'Поверни '+Math.round(ad)+'° '+(d>0?'вправо':'влево');u.turn.classList.toggle('on',ad<=6)}function renderFreq(){u.fixed.textContent=fmt(fixed)+' МГц';u.freqPill.textContent=fmt(fixed)+' МГц'}function tune(v,now=false){fixed=Math.round(clamp(v,lo,hi)*10)/10;u.freq.value=fixed;renderFreq();resetStats();resetPass();clearTimeout(timer);let f=()=>send('F,'+Math.round(fixed*1e6));now?f():timer=setTimeout(f,130)}function rssi(raw){if(!Number.isFinite(raw)||raw>0||raw<-180)return;ema=ema===null?raw:a[smooth]*raw+(1-a[smooth])*ema;st.n++;st.min=Math.min(st.min,raw);st.max=Math.max(st.max,raw);st.mean+=(raw-st.mean)/st.n;hist.push(ema);if(hist.length>220)hist.shift();u.rssi.textContent=fmt(ema);u.meter.style.width=clamp((ema+120)/90*100,0,100)+'%';u.delta.textContent='Δ '+fmt(ema-st.min)+' dB';stats();if(heading!==null&&ema>bestDb){bestDb=ema;bestHead=heading;u.bestHeading.textContent=Math.round(bestHead)+'°';u.bestPass.textContent=fmt(bestDb)+' dBm';compass()}drawHist()}function cs(c){let d=Math.max(1,Math.min(2,devicePixelRatio||1)),r=c.getBoundingClientRect(),w=Math.max(10,Math.round(r.width*d)),h=Math.max(10,Math.round(r.height*d));if(c.width!==w||c.height!==h){c.width=w;c.height=h}return[c.getContext('2d'),w,h,d]}function drawHist(){let[c,w,h,d]=cs(u.history);c.clearRect(0,0,w,h);c.strokeStyle='#303034';c.lineWidth=d;for(let i=1;i<4;i++){let y=h*i/4;c.beginPath();c.moveTo(0,y);c.lineTo(w,y);c.stroke()}if(hist.length<2)return;c.strokeStyle='#0A84FF';c.lineWidth=2*d;c.beginPath();hist.forEach((v,i)=>{let x=i/(hist.length-1)*w,y=clamp((-30-v)/90*h,0,h);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke()}function bounds(){let h=span/2,s=center-h,e=center+h;if(s<lo){e+=lo-s;s=lo}if(e>hi){s-=e-hi;e=hi}return[clamp(s,lo,hi),clamp(e,lo,hi)]}function scanLabel(){let[s,e]=bounds();u.centerText.textContent=fmt(center);u.scanText.textContent=fmt(s)+'–'+fmt(e)+' МГц • span '+fmt(e-s,0)}function step(){return span<=20?.25:span<=40?.5:1}function startScan(){let[s,e]=bounds();sweep.clear();sweepNo=-1;marker=markerDb=null;u.markerFreq.textContent=u.markerDbm.textContent='—';u.go.disabled=true;send('S,'+Math.round(s*1e6)+','+Math.round(e*1e6)+','+Math.round(step()*1e6)+',2');scanOn=true;u.scan.textContent='СТОП';u.scan.classList.remove('good');drawSpec()}function stopScan(){send('X');scanOn=false;u.scan.textContent='СКАН';u.scan.classList.add('good')}function choose(f,db){marker=f;markerDb=Number.isFinite(db)?db:null;u.markerFreq.textContent=fmt(f)+' МГц';u.markerDbm.textContent=markerDb===null?'—':fmt(markerDb)+' dBm';u.go.disabled=false;drawSpec()}function drawSpec(){let[c,w,h,d]=cs(u.spectrum),[s,e]=bounds();c.clearRect(0,0,w,h);c.strokeStyle='#303034';c.lineWidth=d;for(let i=1;i<5;i++){let x=w*i/5;c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke()}let p=[...sweep].map(([hz,db])=>[hz/1e6,db]).filter(x=>x[0]>=s&&x[0]<=e).sort((x,y)=>x[0]-y[0]);if(p.length){c.strokeStyle='#30D158';c.lineWidth=2*d;c.beginPath();p.forEach((q,i)=>{let x=(q[0]-s)/(e-s)*w,y=clamp((-30-q[1])/90*h,0,h);i?c.lineTo(x,y):c.moveTo(x,y)});c.stroke()}if(marker!==null){let x=(marker-s)/(e-s)*w;c.strokeStyle='#0A84FF';c.lineWidth=2*d;c.beginPath();c.moveTo(x,0);c.lineTo(x,h);c.stroke()}}
-function line(x){log(x);let p=x.split(',');if(p[0]==='R'&&p.length>=4){let hz=Number(p[1]),db=Number(p[2]);if(Number.isFinite(hz)){fixed=hz/1e6;u.freq.value=fixed;renderFreq()}rssi(db)}else if(p[0]==='S'&&p.length>=5){let hz=Number(p[1]),db=Number(p[2]),n=Number(p[4]);if(Number.isFinite(n)&&n!==sweepNo){sweepNo=n;sweep.clear()}if(Number.isFinite(hz)&&Number.isFinite(db)){sweep.set(hz,db);drawSpec()}}else if(p[0]==='P'&&p.length>=3){let hz=Number(p[1]),db=Number(p[2]);if(Number.isFinite(hz)&&Number.isFinite(db))choose(hz/1e6,db)}else if(p[0]==='I'&&p[1]==='range'&&p.length>=4){let x=Number(p[2])/1e6,y=Number(p[3])/1e6;if(x<y){lo=x;hi=y;u.freq.min=u.center.min=lo;u.freq.max=u.center.max=hi;u.rmin.textContent=fmt(lo,0);u.rmax.textContent=fmt(hi,0);scanLabel()}}}
-window.onSerialLine=line;window.onNativeStatus=status;window.onSerialTx=()=>{};window.onHeading=d=>{heading=Number(d);if(Number.isFinite(heading)){u.hint.textContent='Азимут телефона';compass()}};document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.view).classList.add('active');requestAnimationFrame(()=>{drawHist();drawSpec()})});u.usb.onclick=()=>{if(native)AndroidSerial.connect()};$('disconnect').onclick=()=>{if(native)AndroidSerial.disconnect()};$('info').onclick=()=>send('I');$('clearLog').onclick=()=>u.log.textContent='—';u.freq.oninput=e=>tune(Number(e.target.value));$('minus').onclick=()=>tune(fixed-.1,true);$('plus').onclick=()=>tune(fixed+.1,true);$('resetPeak').onclick=()=>{resetStats();resetPass()};$('newPass').onclick=resetPass;document.querySelectorAll('[data-smooth]').forEach(b=>b.onclick=()=>{smooth=b.dataset.smooth;document.querySelectorAll('[data-smooth]').forEach(x=>x.classList.toggle('active',x===b));u.mode.textContent=smooth==='fast'?'FAST':smooth==='smooth'?'SMOOTH':'NORMAL';ema=null});u.center.oninput=e=>{center=Number(e.target.value);scanLabel();drawSpec()};document.querySelectorAll('[data-span]').forEach(b=>b.onclick=()=>{span=Number(b.dataset.span);document.querySelectorAll('[data-span]').forEach(x=>x.classList.toggle('active',x===b));scanLabel();drawSpec()});u.scan.onclick=()=>scanOn?stopScan():startScan();u.go.onclick=()=>{if(marker===null)return;if(scanOn)stopScan();tune(marker,true);document.querySelector('[data-view="bearing"]').click()};u.spectrum.onpointerup=e=>{let r=u.spectrum.getBoundingClientRect(),[s,en]=bounds(),f=s+clamp((e.clientX-r.left)/r.width,0,1)*(en-s),best=null,dist=Infinity;for(let[hz,db]of sweep){let mhz=hz/1e6,d=Math.abs(mhz-f);if(d<dist){dist=d;best=[mhz,db]}}choose(best?best[0]:f,best?best[1]:null)};window.onresize=()=>{drawHist();drawSpec()};renderFreq();scanLabel();stats();drawHist();drawSpec();if(native){try{status(AndroidSerial.isConnected()?'USB подключён':'USB-мост готов',AndroidSerial.isConnected()?'ok':'idle')}catch(e){}setTimeout(()=>AndroidSerial.connect(),250)}else status('Требуется Android APK','error')})();</script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0B0B0C">
+<title>RF Finder</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0B0B0C;
+  --surface:#121315;
+  --surface2:#17181B;
+  --glass:rgba(20,22,26,.74);
+  --glass-strong:rgba(20,22,26,.90);
+  --hair:rgba(255,255,255,.09);
+  --hair-strong:rgba(255,255,255,.16);
+  --text:#F2F2F7;
+  --muted:#A8A8B2;
+  --blue:#0A84FF;
+  --green:#30D158;
+  --red:#FF453A;
+  --shadow:0 18px 44px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:radial-gradient(circle at 50% -10%,#101923 0,#0B0B0C 34%,#09090A 100%);color:var(--text);font:16px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+button,input{font:inherit}
+button{touch-action:manipulation}
+main{max-width:900px;margin:0 auto;padding:14px 14px 30px}
+.topbar{position:sticky;top:8px;z-index:20;border:1px solid var(--hair);background:var(--glass);backdrop-filter:blur(20px) saturate(125%);-webkit-backdrop-filter:blur(20px) saturate(125%);border-radius:20px;padding:12px;box-shadow:0 8px 28px rgba(0,0,0,.20)}
+.headrow{display:flex;align-items:center;gap:12px}.grow{flex:1;min-width:0}
+.appTitle{font-size:22px;font-weight:700;letter-spacing:-.02em}.device{font-size:14px;color:#B8C8DC;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conn{min-height:44px;display:flex;align-items:center;gap:8px;padding:0 12px;border:1px solid var(--hair-strong);border-radius:14px;background:rgba(255,255,255,.045);color:var(--text);font-weight:650;font-size:14px}
+.connDot{width:9px;height:9px;border-radius:50%;background:#6F7278;box-shadow:none}.conn.ok .connDot{background:var(--green);box-shadow:0 0 14px rgba(48,209,88,.46)}.conn.error .connDot{background:var(--red)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}.tab{min-height:48px;border:1px solid var(--hair);border-radius:14px;background:rgba(255,255,255,.025);color:#B8C6D7;font-weight:700;letter-spacing:.01em}.tab.active{background:linear-gradient(180deg,rgba(10,132,255,.34),rgba(10,132,255,.18));border-color:rgba(10,132,255,.68);color:white;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+.view{display:none}.view.active{display:block}.section{margin-top:16px}
+.card{border:1px solid var(--hair);border-radius:20px;background:linear-gradient(180deg,rgba(18,22,27,.95),rgba(14,17,21,.96));box-shadow:var(--shadow)}
+.label{font-size:13px;letter-spacing:.05em;color:var(--muted);font-weight:650}.subtle{font-size:14px;color:var(--muted)}
+.compassCard{padding:16px 14px 14px}.compassHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.passBtn{min-height:44px;border:1px solid var(--hair-strong);border-radius:12px;padding:0 12px;background:rgba(255,255,255,.045);color:var(--text);font-size:14px;font-weight:650}
+.compassWrap{display:grid;place-items:center}.compass{--size:min(82vw,420px);position:relative;width:var(--size);height:var(--size);border-radius:50%;background:radial-gradient(circle at 50% 46%,#11161B 0 27%,#0C1116 28% 58%,#080C10 59% 100%);border:2px solid rgba(10,132,255,.72);box-shadow:inset 0 0 42px rgba(10,132,255,.06),0 0 0 1px rgba(255,255,255,.025)}
+.compass:before{content:"";position:absolute;inset:18px;border-radius:50%;border:1px solid rgba(255,255,255,.10);background:repeating-conic-gradient(from -1deg,rgba(190,214,240,.75) 0 1deg,transparent 1deg 10deg);mask:radial-gradient(circle,transparent 0 70%,#000 70% 100%);-webkit-mask:radial-gradient(circle,transparent 0 70%,#000 70% 100%)}
+.rose{position:absolute;inset:0;transition:transform 120ms linear}.cardinal{position:absolute;left:50%;top:50%;width:32px;height:32px;margin:-16px;display:grid;place-items:center;font-size:18px;font-weight:750;color:#CFD8E5;transform:rotate(var(--a)) translateY(calc(var(--size)*-.405)) rotate(calc(var(--a)*-1))}.cardinal.n{color:var(--red)}
+.forward{position:absolute;z-index:6;left:50%;top:14px;transform:translateX(-50%);width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-bottom:18px solid var(--blue);filter:drop-shadow(0 2px 6px rgba(10,132,255,.48))}
+.target{display:none;position:absolute;inset:0;z-index:7;transition:transform 120ms linear}.target i{position:absolute;left:50%;top:24px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:var(--green);border:3px solid #0A0E12;box-shadow:0 0 0 1px rgba(48,209,88,.72),0 0 16px rgba(48,209,88,.34)}.target span{position:absolute;left:50%;top:50px;transform:translateX(-50%);font-size:13px;color:var(--green);font-weight:750}
+.compassCenter{position:absolute;z-index:8;left:50%;top:50%;transform:translate(-50%,-50%);width:44%;aspect-ratio:1;border-radius:50%;display:grid;place-content:center;text-align:center;background:rgba(12,16,20,.94);border:1px solid var(--hair);box-shadow:0 8px 28px rgba(0,0,0,.26)}.compassCenter strong{font:750 clamp(38px,12vw,62px)/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.04em}.compassCenter span{font-size:13px;color:#AEB8C5;margin-top:8px}.turnHint{min-height:24px;margin-top:12px;text-align:center;color:var(--muted);font-size:14px}.turnHint.on{color:var(--green);font-weight:650}
+.dirStats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.dirStat{padding:10px 8px;border-top:1px solid var(--hair);text-align:center}.dirStat span{display:block;font-size:13px;color:var(--muted)}.dirStat strong{font:700 20px ui-monospace,SFMono-Regular,monospace}
+.dashboard{display:grid;gap:14px;margin-top:14px}.rssiCard{padding:16px}.rssiTop{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}.rssiTitle{font-size:17px;font-weight:700}.rssiValue{margin-top:2px;font:780 clamp(54px,15vw,76px)/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#37E4A1;letter-spacing:-.05em}.rssiValue small{font:600 18px system-ui;letter-spacing:0;color:#7CE8BE}.miniStats{display:grid;gap:6px;min-width:116px}.miniRow{display:flex;justify-content:space-between;gap:14px;font-size:14px}.miniRow span{color:#BBC5D3}.miniRow b{font:650 14px ui-monospace,monospace}.meter{height:11px;margin-top:14px;border:1px solid var(--hair);border-radius:999px;background:#080B0E;overflow:hidden}.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#20D49D,#30D158);transition:width 100ms linear}.meterScale{display:flex;justify-content:space-between;margin-top:5px;color:var(--muted);font:13px ui-monospace,monospace}
+.freqCard{padding:16px}.freqHead{display:flex;align-items:center;justify-content:space-between;gap:10px}.freqHead strong{font:700 24px ui-monospace,monospace}.freqRow{display:grid;grid-template-columns:48px 1fr 48px;gap:10px;align-items:center;margin-top:12px}.step{width:48px;min-height:48px;border:1px solid var(--hair-strong);border-radius:50%;background:rgba(255,255,255,.055);color:white;font-size:24px}.slider{width:100%;min-height:44px;accent-color:var(--blue)}.range{display:flex;justify-content:space-between;color:var(--muted);font:13px ui-monospace,monospace;margin-top:2px}.controlGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.control{min-height:86px;padding:12px;border:1px solid var(--hair);border-radius:18px;background:linear-gradient(180deg,rgba(18,22,27,.94),rgba(14,17,21,.96))}.control strong{display:block;margin-top:8px;font-size:16px}.seg{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.chip{min-height:42px;border:1px solid var(--hair-strong);border-radius:12px;background:rgba(255,255,255,.045);color:#C1C7D0;padding:0 11px;font-size:14px;font-weight:650}.chip.active{border-color:rgba(10,132,255,.62);background:rgba(10,132,255,.17);color:white}.switch{width:54px;height:32px;border:0;border-radius:999px;background:#353840;padding:3px;position:relative;margin-top:10px}.switch i{display:block;width:26px;height:26px;border-radius:50%;background:white;transition:transform 150ms ease-out}.switch.on{background:var(--blue)}.switch.on i{transform:translateX(22px)}
+.historyCard{padding:14px 14px 10px}.historyHead{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}canvas{display:block;width:100%;background:#090D11;border:1px solid var(--hair);border-radius:16px}.history{height:150px}
+.overviewCard{padding:16px}.spectrum{height:320px;touch-action:manipulation}.markerBar{display:flex;align-items:center;gap:12px;margin-top:12px}.markerInfo{flex:1}.markerInfo strong{display:block;font:700 21px ui-monospace,monospace}.markerInfo em{display:block;color:var(--green);font:700 15px ui-monospace,monospace;font-style:normal;margin-top:2px}.toBearing{min-height:46px;border:1px solid rgba(10,132,255,.62);border-radius:13px;background:rgba(10,132,255,.18);color:white;padding:0 14px;font-weight:700}.toBearing:disabled{opacity:.38}.overviewControls{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;margin-top:12px}.overviewControl{padding:14px;border:1px solid var(--hair);border-radius:18px;background:linear-gradient(180deg,rgba(18,22,27,.94),rgba(14,17,21,.96))}.centerText{font:700 23px ui-monospace,monospace;margin-top:8px}.scanBtn{width:100%;min-height:58px;margin-top:12px;border:1px solid rgba(10,132,255,.76);border-radius:16px;background:linear-gradient(180deg,#138CFF,#006FD9);color:white;font-size:17px;font-weight:750;box-shadow:0 9px 22px rgba(10,132,255,.18)}.scanBtn.stop{background:#22262C;border-color:var(--hair-strong);box-shadow:none}.howto{padding:12px 8px 2px;text-align:center;color:#B7C0CD;font-size:14px}.details{margin-top:14px}.details summary{min-height:48px;display:flex;align-items:center;cursor:pointer;color:#D6D9DF;font-weight:650}.detailsBox{padding-top:10px;border-top:1px solid var(--hair)}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{min-height:44px;border:1px solid var(--hair-strong);border-radius:12px;background:rgba(255,255,255,.045);color:white;padding:0 12px;font-size:14px;font-weight:650}.log{max-height:160px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:10px 0 0;color:#C4C8D0;font:13px/1.45 ui-monospace,monospace}.footer{text-align:center;padding:18px 0 0;color:#777E88;font-size:13px}
+@media(min-width:740px){.bearingLayout{display:grid;grid-template-columns:1.05fr .95fr;gap:14px;align-items:start}.compassCard{grid-row:span 2}.dashboard{margin-top:0}.compass{--size:min(44vw,430px)}.controlGrid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:620px){main{padding:10px 10px 26px}.topbar{top:5px}.appTitle{font-size:20px}.device{font-size:13px}.conn{padding:0 9px}.connText{display:none}.compassCard{padding-left:10px;padding-right:10px}.compass{--size:min(88vw,390px)}.controlGrid{grid-template-columns:1fr 1fr}.control:last-child{grid-column:1/-1}.overviewControls{grid-template-columns:1fr}.spectrum{height:275px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.topbar{background:var(--glass-strong)}}
+</style>
+</head>
+<body>
+<main>
+  <header class="topbar">
+    <div class="headrow">
+      <div class="grow">
+        <div class="appTitle">RF Finder</div>
+        <div id="device" class="device">DAKERFPV Nano C3 · LR1121</div>
+      </div>
+      <button id="usb" class="conn" type="button" aria-label="Подключить USB">
+        <i class="connDot"></i><span id="connText" class="connText">Подключить</span>
+      </button>
+    </div>
+    <nav class="tabs" aria-label="Режим">
+      <button class="tab active" data-view="bearing" type="button">◉ ПЕЛЕНГ</button>
+      <button class="tab" data-view="overview" type="button">⌁ ОБЗОР</button>
+    </nav>
+  </header>
+
+  <section id="bearing" class="view active section">
+    <div class="bearingLayout">
+      <article class="card compassCard">
+        <div class="compassHead">
+          <div><div class="label">НАПРАВЛЕНИЕ</div><div id="headingHint" class="subtle">Поворачивай антенну вместе с телефоном</div></div>
+          <button id="newPass" class="passBtn" type="button">Новый проход</button>
+        </div>
+        <div class="compassWrap">
+          <div class="compass" role="img" aria-label="Компас пеленга">
+            <div id="rose" class="rose">
+              <span class="cardinal n" style="--a:0deg">N</span>
+              <span class="cardinal" style="--a:90deg">E</span>
+              <span class="cardinal" style="--a:180deg">S</span>
+              <span class="cardinal" style="--a:270deg">W</span>
+            </div>
+            <i class="forward"></i>
+            <div id="target" class="target"><i></i><span>ПИК</span></div>
+            <div class="compassCenter"><strong id="bearingValue">—°</strong><span id="bearingLabel">АЗИМУТ</span></div>
+          </div>
+          <div id="turn" class="turnHint">Сделай полный проход — пик появится на круге</div>
+          <div class="dirStats">
+            <div class="dirStat"><span>ЛУЧШЕЕ НАПРАВЛЕНИЕ</span><strong id="bestHeading">—°</strong></div>
+            <div class="dirStat"><span>ПИК ПРОХОДА</span><strong id="bestPass">— dBm</strong></div>
+          </div>
+        </div>
+      </article>
+
+      <div class="dashboard">
+        <article class="card rssiCard">
+          <div class="rssiTop">
+            <div><div class="rssiTitle">RSSI</div><div class="rssiValue"><span id="rssi">—</span><small> dBm</small></div></div>
+            <div class="miniStats">
+              <div class="miniRow"><span>МИН</span><b id="minRssi">—</b></div>
+              <div class="miniRow"><span>СРЕД</span><b id="avgRssi">—</b></div>
+              <div class="miniRow"><span>МАКС</span><b id="peakRssi">—</b></div>
+            </div>
+          </div>
+          <div class="meter"><i id="meter"></i></div>
+          <div class="meterScale"><span>−120</span><span>−90</span><span>−60</span><span>−30</span></div>
+        </article>
+
+        <article class="card freqCard">
+          <div class="freqHead"><span class="label">ЧАСТОТА</span><strong id="fixedText">2440.0 МГц</strong></div>
+          <div class="freqRow"><button id="minus" class="step" type="button" aria-label="Уменьшить частоту">−</button><input id="freqSlider" class="slider" type="range" min="2400" max="2480" step="0.1" value="2440" aria-label="Частота"><button id="plus" class="step" type="button" aria-label="Увеличить частоту">+</button></div>
+          <div class="range"><span id="rangeMin">2400</span><span>шаг 0.1 МГц</span><span id="rangeMax">2480</span></div>
+        </article>
+      </div>
+    </div>
+
+    <div class="controlGrid section">
+      <div class="control"><div class="label">ПОЛОСА</div><strong>≈ 800 кГц</strong><div class="subtle">текущая прошивка</div></div>
+      <div class="control"><div class="label">СГЛАЖИВАНИЕ</div><div class="seg"><button class="chip" data-smooth="fast" type="button">Быстро</button><button class="chip active" data-smooth="normal" type="button">Норма</button><button class="chip" data-smooth="smooth" type="button">Плавно</button></div></div>
+      <div class="control"><div class="label">PEAK HOLD</div><button id="peakHold" class="switch on" type="button" aria-pressed="true" aria-label="Peak Hold"><i></i></button><div id="peakMode" class="subtle">включён</div></div>
+    </div>
+
+    <article class="card historyCard section">
+      <div class="historyHead"><span class="label">ИСТОРИЯ RSSI</span><span id="sampleCount" class="subtle">0 отсч.</span></div>
+      <canvas id="history" class="history"></canvas>
+    </article>
+  </section>
+
+  <section id="overview" class="view section">
+    <article class="card overviewCard">
+      <div class="compassHead"><div><div class="label">СПЕКТР</div><div id="scanText" class="subtle">2400–2480 МГц</div></div><span id="scanState" class="subtle">готов</span></div>
+      <canvas id="spectrum" class="spectrum"></canvas>
+      <div class="markerBar">
+        <div class="markerInfo"><span class="label">МАРКЕР</span><strong id="markerFreq">—</strong><em id="markerDbm">—</em></div>
+        <button id="goBearing" class="toBearing" type="button" disabled>ПЕЛЕНГ</button>
+      </div>
+    </article>
+
+    <div class="overviewControls">
+      <div class="overviewControl"><div class="label">ЦЕНТР</div><div id="centerText" class="centerText">2440.0 МГц</div><input id="centerSlider" class="slider" type="range" min="2400" max="2480" step="0.1" value="2440" aria-label="Центр обзора"></div>
+      <div class="overviewControl"><div class="label">РАЗМАХ (SPAN)</div><div class="seg"><button class="chip active" data-span="80" type="button">80</button><button class="chip" data-span="40" type="button">40</button><button class="chip" data-span="20" type="button">20</button><button class="chip" data-span="10" type="button">10</button><span class="subtle" style="align-self:center">МГц</span></div></div>
+    </div>
+    <button id="scan" class="scanBtn" type="button">▶ СКАНИРОВАТЬ</button>
+    <div class="howto">Нажми на пик на графике, затем «ПЕЛЕНГ». Приложение перестроит приёмник на выбранную частоту.</div>
+  </section>
+
+  <details class="details card section">
+    <summary>Дополнительно</summary>
+    <div class="detailsBox">
+      <div class="actions"><button id="info" class="btn" type="button">INFO</button><button id="disconnect" class="btn" type="button">ОТКЛЮЧИТЬ</button><button id="clearLog" class="btn" type="button">ОЧИСТИТЬ ЛОГ</button><button id="resetStats" class="btn" type="button">СБРОС СТАТИСТИКИ</button></div>
+      <pre id="log" class="log">—</pre>
+    </div>
+  </details>
+  <div class="footer">FPV Club RF Finder v0.4.1 · RX-only</div>
+</main>
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+const ui={device:$('device'),usb:$('usb'),connText:$('connText'),rssi:$('rssi'),meter:$('meter'),min:$('minRssi'),avg:$('avgRssi'),peak:$('peakRssi'),fixed:$('fixedText'),freq:$('freqSlider'),rmin:$('rangeMin'),rmax:$('rangeMax'),bearingValue:$('bearingValue'),bearingLabel:$('bearingLabel'),bestHeading:$('bestHeading'),bestPass:$('bestPass'),hint:$('headingHint'),rose:$('rose'),target:$('target'),turn:$('turn'),sampleCount:$('sampleCount'),history:$('history'),spectrum:$('spectrum'),scanText:$('scanText'),scanState:$('scanState'),scan:$('scan'),markerFreq:$('markerFreq'),markerDbm:$('markerDbm'),go:$('goBearing'),center:$('centerSlider'),centerText:$('centerText'),log:$('log'),peakHold:$('peakHold'),peakMode:$('peakMode')};
+const native=typeof AndroidSerial!=='undefined';
+let lo=2400,hi=2480,fixed=2440,center=2440,span=80,smoothing='normal',ema=null;
+let stats={n:0,min:Infinity,max:-Infinity,mean:0},history=[],heading=null,bestHeading=null,bestDb=-Infinity,peakHold=true;
+let scanOn=false,sweep=new Map(),sweepNo=-1,markerMHz=null,markerDbm=null,sendTimer=null;
+const alpha={fast:.55,normal:.25,smooth:.11};
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const fmt=(v,d=1)=>Number.isFinite(v)?v.toFixed(d):'—';
+
+function setStatus(text,state='idle'){
+  ui.usb.classList.toggle('ok',state==='ok');
+  ui.usb.classList.toggle('error',state==='error');
+  ui.connText.textContent=state==='ok'?'Подключен':state==='error'?'Ошибка':'Подключить';
+  ui.usb.title=text;
+}
+function log(text){const a=ui.log.textContent==='—'?[]:ui.log.textContent.split('\n');a.push(text);ui.log.textContent=a.slice(-32).join('\n');ui.log.scrollTop=ui.log.scrollHeight}
+function send(cmd){if(!native){setStatus('Требуется Android USB bridge','error');return}try{AndroidSerial.send(cmd);log('> '+cmd)}catch(e){setStatus(String(e),'error')}}
+function resetStats(){stats={n:0,min:Infinity,max:-Infinity,mean:0};history=[];ema=null;renderStats();drawHistory()}
+function resetPass(){bestHeading=null;bestDb=-Infinity;ui.bestHeading.textContent='—°';ui.bestPass.textContent='— dBm';renderCompass()}
+function renderStats(){ui.min.textContent=Number.isFinite(stats.min)?fmt(stats.min):'—';ui.avg.textContent=stats.n?fmt(stats.mean):'—';ui.peak.textContent=Number.isFinite(stats.max)?fmt(stats.max):'—';ui.sampleCount.textContent=stats.n+' отсч.'}
+function angleDelta(target,current){return ((target-current+540)%360)-180}
+function renderCompass(){
+  const h=Number.isFinite(heading)?heading:0;
+  ui.rose.style.transform='rotate('+(-h)+'deg)';
+  const hasBest=bestHeading!==null&&Number.isFinite(bestHeading);
+  ui.bearingValue.textContent=Math.round(hasBest?bestHeading:h)+'°';
+  ui.bearingLabel.textContent=hasBest?'НА ИСТОЧНИК':'АЗИМУТ';
+  if(!hasBest||!Number.isFinite(heading)||!peakHold){ui.target.style.display='none';ui.turn.classList.remove('on');ui.turn.textContent=!Number.isFinite(heading)?'Жду датчик компаса':!peakHold?'Peak Hold выключен':'Сделай полный проход — пик появится на круге';return}
+  const d=angleDelta(bestHeading,heading),ad=Math.abs(d);
+  ui.target.style.display='block';ui.target.style.transform='rotate('+d+'deg)';
+  ui.turn.textContent=ad<=6?'ПИК ПРЯМО ПО КУРСУ':'Поверни '+Math.round(ad)+'° '+(d>0?'вправо':'влево');
+  ui.turn.classList.toggle('on',ad<=6);
+}
+function renderFreq(){ui.fixed.textContent=fmt(fixed)+' МГц'}
+function tune(mhz,immediate=false){
+  fixed=Math.round(clamp(mhz,lo,hi)*10)/10;ui.freq.value=fixed;renderFreq();resetStats();resetPass();clearTimeout(sendTimer);
+  const go=()=>send('F,'+Math.round(fixed*1e6)); if(immediate)go(); else sendTimer=setTimeout(go,130);
+}
+function updateRssi(raw){
+  if(!Number.isFinite(raw)||raw>0||raw<-180)return;
+  ema=ema===null?raw:alpha[smoothing]*raw+(1-alpha[smoothing])*ema;
+  stats.n++;stats.min=Math.min(stats.min,raw);stats.max=Math.max(stats.max,raw);stats.mean+=(raw-stats.mean)/stats.n;
+  history.push(ema);if(history.length>240)history.shift();
+  ui.rssi.textContent=fmt(ema);ui.meter.style.width=clamp((ema+120)/90*100,0,100)+'%';renderStats();
+  if(peakHold&&Number.isFinite(heading)&&ema>bestDb){bestDb=ema;bestHeading=heading;ui.bestHeading.textContent=Math.round(bestHeading)+'°';ui.bestPass.textContent=fmt(bestDb)+' dBm';renderCompass()}
+  drawHistory();
+}
+function canvasSize(c){const dpr=Math.max(1,Math.min(2,devicePixelRatio||1)),r=c.getBoundingClientRect(),w=Math.max(10,Math.round(r.width*dpr)),h=Math.max(10,Math.round(r.height*dpr));if(c.width!==w||c.height!==h){c.width=w;c.height=h}return{ctx:c.getContext('2d'),w,h,dpr}}
+function drawHistory(){
+  const{ctx,w,h,dpr}=canvasSize(ui.history);ctx.clearRect(0,0,w,h);ctx.strokeStyle='#26313A';ctx.lineWidth=dpr;
+  for(let i=1;i<4;i++){const y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+  if(history.length<2)return;ctx.strokeStyle='#0A84FF';ctx.lineWidth=2*dpr;ctx.beginPath();history.forEach((v,i)=>{const x=i/(history.length-1)*w,y=clamp(((-30-v)/90)*h,0,h);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
+}
+function bounds(){const half=span/2;let a=center-half,b=center+half;if(a<lo){b+=lo-a;a=lo}if(b>hi){a-=b-hi;b=hi}return[clamp(a,lo,hi),clamp(b,lo,hi)]}
+function scanStep(){return span<=20?.25:span<=40?.5:1}
+function renderScanLabel(){const[a,b]=bounds();ui.centerText.textContent=fmt(center)+' МГц';ui.scanText.textContent=fmt(a)+'–'+fmt(b)+' МГц · span '+fmt(b-a,0)}
+function startScan(){const[a,b]=bounds();sweep.clear();sweepNo=-1;markerMHz=markerDbm=null;ui.markerFreq.textContent=ui.markerDbm.textContent='—';ui.go.disabled=true;send('S,'+Math.round(a*1e6)+','+Math.round(b*1e6)+','+Math.round(scanStep()*1e6)+',2');scanOn=true;ui.scan.textContent='■ ОСТАНОВИТЬ';ui.scan.classList.add('stop');ui.scanState.textContent='сканирование';drawSpectrum()}
+function stopScan(){send('X');scanOn=false;ui.scan.textContent='▶ СКАНИРОВАТЬ';ui.scan.classList.remove('stop');ui.scanState.textContent='готов'}
+function chooseMarker(mhz,dbm){if(!Number.isFinite(mhz))return;markerMHz=mhz;markerDbm=Number.isFinite(dbm)?dbm:null;ui.markerFreq.textContent=fmt(markerMHz)+' МГц';ui.markerDbm.textContent=markerDbm===null?'—':fmt(markerDbm)+' dBm';ui.go.disabled=false;drawSpectrum()}
+function drawSpectrum(){
+  const{ctx,w,h,dpr}=canvasSize(ui.spectrum),[a,b]=bounds();ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle='#26313A';ctx.lineWidth=dpr;
+  for(let i=1;i<6;i++){const x=w*i/6;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
+  for(let i=1;i<4;i++){const y=h*i/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+  const pts=[...sweep.entries()].map(([hz,db])=>[hz/1e6,db]).filter(p=>p[0]>=a&&p[0]<=b).sort((x,y)=>x[0]-y[0]);
+  if(pts.length){const grad=ctx.createLinearGradient(0,0,0,h);grad.addColorStop(0,'rgba(10,132,255,.42)');grad.addColorStop(1,'rgba(10,132,255,.02)');ctx.beginPath();pts.forEach((p,i)=>{const x=(p[0]-a)/(b-a)*w,y=clamp(((-20-p[1])/100)*h,0,h);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fillStyle=grad;ctx.fill();ctx.strokeStyle='#35B3FF';ctx.lineWidth=2*dpr;ctx.beginPath();pts.forEach((p,i)=>{const x=(p[0]-a)/(b-a)*w,y=clamp(((-20-p[1])/100)*h,0,h);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}
+  if(markerMHz!==null&&markerMHz>=a&&markerMHz<=b){const x=(markerMHz-a)/(b-a)*w;ctx.strokeStyle='#7ED0FF';ctx.setLineDash([4*dpr,4*dpr]);ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#0A84FF';ctx.beginPath();ctx.arc(x,clamp(((-20-(markerDbm??-60))/100)*h,8*dpr,h-8*dpr),5*dpr,0,Math.PI*2);ctx.fill()}
+  ctx.fillStyle='#929AA6';ctx.font=(12*dpr)+'px system-ui';ctx.fillText(fmt(a),8*dpr,h-8*dpr);const t=fmt(b),tw=ctx.measureText(t).width;ctx.fillText(t,w-tw-8*dpr,h-8*dpr);
+}
+function parseLine(line){
+  log(line);const p=line.split(',');
+  if(p[0]==='R'&&p.length>=4){const hz=Number(p[1]),db=Number(p[2]);if(Number.isFinite(hz)){fixed=hz/1e6;ui.freq.value=fixed;renderFreq()}updateRssi(db);return}
+  if(p[0]==='S'&&p.length>=5){const hz=Number(p[1]),db=Number(p[2]),n=Number(p[4]);if(Number.isFinite(n)&&n!==sweepNo){sweepNo=n;sweep.clear()}if(Number.isFinite(hz)&&Number.isFinite(db)){sweep.set(hz,db);drawSpectrum()}return}
+  if(p[0]==='P'&&p.length>=3){const hz=Number(p[1]),db=Number(p[2]);if(Number.isFinite(hz)&&Number.isFinite(db))chooseMarker(hz/1e6,db);return}
+  if(p[0]==='I'&&p[1]==='range'&&p.length>=4){const a=Number(p[2])/1e6,b=Number(p[3])/1e6;if(Number.isFinite(a)&&Number.isFinite(b)&&a<b){lo=a;hi=b;ui.freq.min=ui.center.min=lo;ui.freq.max=ui.center.max=hi;ui.rmin.textContent=fmt(lo,0);ui.rmax.textContent=fmt(hi,0);renderScanLabel()}return}
+  if(p[0]==='I'&&p.length>=5&&p[3]==='LR1121'){ui.device.textContent='DAKERFPV Nano C3 · LR1121';return}
+  if(p[0]==='A'&&p[1]==='F'&&p[2]){const hz=Number(p[2]);if(Number.isFinite(hz)){fixed=hz/1e6;ui.freq.value=fixed;renderFreq()}return}
+}
+window.onSerialLine=parseLine;window.onSerialTx=()=>{};window.onNativeStatus=(text,state)=>setStatus(text,state);window.onHeading=deg=>{heading=Number(deg);if(Number.isFinite(heading)){ui.hint.textContent='Компас телефона активен';renderCompass()}};
+
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.view).classList.add('active');requestAnimationFrame(()=>{drawHistory();drawSpectrum()})}));
+ui.usb.addEventListener('click',()=>{if(native)AndroidSerial.connect()});
+$('disconnect').addEventListener('click',()=>{if(native)AndroidSerial.disconnect()});$('info').addEventListener('click',()=>send('I'));$('clearLog').addEventListener('click',()=>ui.log.textContent='—');$('resetStats').addEventListener('click',resetStats);
+ui.freq.addEventListener('input',e=>tune(Number(e.target.value)));$('minus').addEventListener('click',()=>tune(fixed-.1,true));$('plus').addEventListener('click',()=>tune(fixed+.1,true));$('newPass').addEventListener('click',resetPass);
+document.querySelectorAll('[data-smooth]').forEach(b=>b.addEventListener('click',()=>{smoothing=b.dataset.smooth;document.querySelectorAll('[data-smooth]').forEach(x=>x.classList.toggle('active',x===b));ema=null}));
+ui.peakHold.addEventListener('click',()=>{peakHold=!peakHold;ui.peakHold.classList.toggle('on',peakHold);ui.peakHold.setAttribute('aria-pressed',String(peakHold));ui.peakMode.textContent=peakHold?'включён':'выключен';if(!peakHold)resetPass();renderCompass()});
+ui.center.addEventListener('input',e=>{center=Number(e.target.value);renderScanLabel();drawSpectrum()});
+document.querySelectorAll('[data-span]').forEach(b=>b.addEventListener('click',()=>{span=Number(b.dataset.span);document.querySelectorAll('[data-span]').forEach(x=>x.classList.toggle('active',x===b));renderScanLabel();drawSpectrum()}));
+ui.scan.addEventListener('click',()=>scanOn?stopScan():startScan());
+ui.go.addEventListener('click',()=>{if(markerMHz===null)return;if(scanOn)stopScan();tune(markerMHz,true);document.querySelector('[data-view="bearing"]').click()});
+ui.spectrum.addEventListener('pointerup',e=>{const r=ui.spectrum.getBoundingClientRect(),[a,b]=bounds(),mhz=a+clamp((e.clientX-r.left)/r.width,0,1)*(b-a);let best=null,dist=Infinity;for(const[hz,db]of sweep){const f=hz/1e6,d=Math.abs(f-mhz);if(d<dist){dist=d;best=[f,db]}}chooseMarker(best?best[0]:mhz,best?best[1]:null)});
+window.addEventListener('resize',()=>{drawHistory();drawSpectrum()});
+renderFreq();renderScanLabel();renderStats();renderCompass();drawHistory();drawSpectrum();
+if(native){try{setStatus(AndroidSerial.isConnected()?'USB подключён':'USB-мост готов',AndroidSerial.isConnected()?'ok':'idle')}catch(e){}setTimeout(()=>AndroidSerial.connect(),250)}else setStatus('Требуется Android APK','error');
+})();
+</script>
+</body>
+</html>
