@@ -49,7 +49,7 @@ constexpr uint8_t LORA_IQ_STANDARD = 0x00;
 }
 
 static constexpr char FW_NAME[] = "fpvclub-rf-finder-lr1121";
-static constexpr char FW_VERSION[] = "0.6.0-dev1";
+static constexpr char FW_VERSION[] = "0.6.1-dev1";
 static constexpr char PROTOCOL_VERSION[] = "0.6";
 static constexpr uint32_t MIN_FREQ_HZ = 2400000000UL;
 static constexpr uint32_t MAX_FREQ_HZ = 2480000000UL;
@@ -414,9 +414,9 @@ static void probeTick()
 
     // 12 ms slot gives a chance to catch 50-500 Hz packets while covering the full
     // 80-channel grid in under one second per PHY. Start near marker, then walk grid.
-    if (!probe.confirmed && (uint32_t)(now - probe.slotStartedMs) >= 12UL) {
+    if ((uint32_t)(now - probe.slotStartedMs) >= 12UL) {
         probe.channel = (uint8_t)((probe.channel + 1) % 80);
-        if (probe.channel == 0) probe.profile = (probe.profile + 1) % PROBE_PROFILE_COUNT;
+        if (probe.channel == 0 && !probe.confirmed) probe.profile = (probe.profile + 1) % PROBE_PROFILE_COUNT;
         if (!configureProbeSlot()) stopProbe("ERROR");
     }
 }
