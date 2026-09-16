@@ -349,7 +349,7 @@ static bool configureProbeSlot()
     if (!setRxDoneIrq() || !clearAllIrq()) return false;
     if (!enterContinuousRx()) return false;
     probe.slotStartedMs = millis();
-    Serial.printf("Q,STATE,SEARCH,%s,%lu\n", pr.name, probe.activeProbeFreqHz);
+    if (!probe.trackOnly) Serial.printf("Q,STATE,SEARCH,%s,%lu\n", pr.name, probe.activeProbeFreqHz);
     return true;
 }
 
@@ -387,8 +387,7 @@ static bool startTrack(uint32_t timeoutMs)
     probe.confirmed = true;
     probe.trackOnly = true;
     runMode = RunMode::PACKET_PROBE;
-    Serial.printf("Q,STATE,TRACK,%s,%lu
-", PROBE_PROFILES[probe.profile].name, elrsChannelHz(probe.channel));
+    Serial.printf("Q,STATE,TRACK,%s,%lu\n", PROBE_PROFILES[probe.profile].name, elrsChannelHz(probe.channel));
     return configureProbeSlot();
 }
 
@@ -594,22 +593,17 @@ static void printDiagnostics()
     Serial.printf("I,diag,uart_commands,%lu\n", diag.uartCommands);
     Serial.printf("I,diag,unknown_commands,%lu\n", diag.unknownCommands);
     Serial.printf("I,diag,recoveries,%lu\n", diag.recoveries);
-    Serial.printf("I,diag,irq_read_fail,%lu
-", diag.irqReadFail);
-    Serial.printf("I,diag,irq_spurious,%lu
-", diag.irqSpurious);
-    Serial.printf("I,diag,source_reject,%lu
-", diag.probeSourceReject);
+    Serial.printf("I,diag,irq_read_fail,%lu\n", diag.irqReadFail);
+    Serial.printf("I,diag,irq_spurious,%lu\n", diag.irqSpurious);
+    Serial.printf("I,diag,source_reject,%lu\n", diag.probeSourceReject);
     Serial.printf("I,diag,last_sweep_ms,%lu\n", diag.lastSweepDurationMs);
 }
 
 static void printInfo()
 {
     Serial.printf("I,%s,%s,LR1121,RX_ONLY\n", FW_NAME, FW_VERSION);
-    Serial.printf("I,range,%lu,%lu
-", VERIFIED_MIN_FREQ_HZ, VERIFIED_MAX_FREQ_HZ);
-    Serial.printf("I,cap,experimental_range,%lu,%lu
-", EXPERIMENTAL_MIN_FREQ_HZ, EXPERIMENTAL_MAX_FREQ_HZ);
+    Serial.printf("I,range,%lu,%lu\n", VERIFIED_MIN_FREQ_HZ, VERIFIED_MAX_FREQ_HZ);
+    Serial.printf("I,cap,experimental_range,%lu,%lu\n", EXPERIMENTAL_MIN_FREQ_HZ, EXPERIMENTAL_MAX_FREQ_HZ);
     Serial.printf("I,fixed,%lu\n", fixedFreqHz);
     Serial.printf("I,mode,%s\n", modeName());
     Serial.printf("I,config,avg_fixed,%u\n", fixedAvgSamples);
@@ -639,8 +633,7 @@ static bool switchToFixed(uint32_t freqHz)
     }
     fixedFreqHz = freqHz;
     runMode = RunMode::FIXED;
-    Serial.printf("A,F,%lu,%s
-", fixedFreqHz, isVerifiedFrequency(fixedFreqHz) ? "VERIFIED" : "EXPERIMENTAL");
+    Serial.printf("A,F,%lu,%s\n", fixedFreqHz, isVerifiedFrequency(fixedFreqHz) ? "VERIFIED" : "EXPERIMENTAL");
     return true;
 }
 
