@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euxo pipefail
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
+          sdkmanager --channel=3 \
             "platforms;android-37" \
             "build-tools;36.0.0" \
             "ndk;28.2.13676358" \
