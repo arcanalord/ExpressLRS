@@ -1,9 +1,9 @@
-name: RF Finder build v3
+name: RF Finder build v4
 
 on:
   push:
     branches:
-      - rf-finder-nano-v0.3.0
+      - rf-finder-lr1121-v0.4.0
     paths:
       - 'rf_finder/**'
       - '.github/workflows/rf-finder-build-v3.yml'
@@ -11,7 +11,7 @@ on:
 
 jobs:
   firmware:
-    name: ESP8285 firmware
+    name: ESP32-C3 LR1121 firmware
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -20,17 +20,17 @@ jobs:
           python-version: '3.11'
       - name: Install PlatformIO
         run: python -m pip install --upgrade platformio
-      - name: Build Nano RX firmware
+      - name: Build LR1121 firmware
         working-directory: rf_finder/firmware
-        run: pio run -e elrs_nano_esp8285
+        run: pio run -e rf_finder_lr1121_c3
       - name: Prepare firmware artifact
         run: |
           mkdir -p out/firmware
-          cp rf_finder/firmware/.pio/build/elrs_nano_esp8285/firmware.bin out/firmware/RF_Finder_Nano_RX_v0.3.0.bin
-          sha256sum out/firmware/RF_Finder_Nano_RX_v0.3.0.bin > out/firmware/RF_Finder_Nano_RX_v0.3.0.bin.sha256
+          cp rf_finder/firmware/.pio/build/rf_finder_lr1121_c3/firmware.bin out/firmware/RF_Finder_DAKERFPV_LR1121_v0.4.0.bin
+          sha256sum out/firmware/RF_Finder_DAKERFPV_LR1121_v0.4.0.bin > out/firmware/RF_Finder_DAKERFPV_LR1121_v0.4.0.bin.sha256
       - uses: actions/upload-artifact@v7
         with:
-          name: RF-Finder-Nano-RX-v0.3.0
+          name: RF-Finder-DAKERFPV-LR1121-v0.4.0
           path: out/firmware/*
 
   android:
