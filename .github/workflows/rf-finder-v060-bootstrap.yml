@@ -2,8 +2,11 @@ name: RF Finder v0.6.0 bootstrap
 
 on:
   push:
-    branches: [rf-finder-v0.6.0]
-    paths: ['.github/workflows/rf-finder-v060-bootstrap.yml']
+    branches:
+      - rf-finder-v0.6.0
+    paths:
+      - '.github/workflows/rf-finder-v060-bootstrap.yml'
+      - '.github/scripts/rf_finder_v060_patch.py'
   workflow_dispatch:
 
 permissions:
@@ -18,171 +21,55 @@ jobs:
           ref: rf-finder-v0.6.0
           fetch-depth: 0
 
-      - name: Apply v0.6.0 dev1 firmware and Android patch
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          # ---- firmware ----
-          p=Path('rf_finder/firmware/src/main.cpp')
-          s=p.read_text(encoding='utf-8')
-          def one(old,new,label):
-              global s
-              n=s.count(old)
-              if n!=1: raise SystemExit(f'{label}: expected 1 match got {n}')
-              s=s.replace(old,new,1)
-
-          one('constexpr uint16_t SYS_SET_DIO_AS_RF_SWITCH = 0x0112;\nconstexpr uint16_t SYS_SET_STANDBY = 0x011C;',
-              'constexpr uint16_t SYS_SET_DIO_AS_RF_SWITCH = 0x0112;\nconstexpr uint16_t SYS_SET_DIO_IRQ_PARAMS = 0x0113;\nconstexpr uint16_t SYS_CLEAR_IRQ = 0x0114;\nconstexpr uint16_t SYS_SET_STANDBY = 0x011C;', 'irq opcodes')
-          one('constexpr uint16_t RADIO_GET_RSSI_INST = 0x0205;\nconstexpr uint16_t RADIO_SET_RX = 0x0209;',
-              'constexpr uint16_t RADIO_GET_PKT_STATUS = 0x0204;\nconstexpr uint16_t RADIO_GET_RSSI_INST = 0x0205;\nconstexpr uint16_t RADIO_SET_RX = 0x0209;', 'status opcode')
-          one('constexpr uint16_t RADIO_SET_RX_BOOSTED = 0x0227;\n',
-              'constexpr uint16_t RADIO_SET_RX_BOOSTED = 0x0227;\nconstexpr uint16_t RADIO_GET_PACKET = 0x0700;\nconstexpr uint32_t IRQ_RX_DONE = 0x00000008UL;\n', 'get packet')
-          one('constexpr uint8_t LORA_CR_4_5 = 0x01;',
-              'constexpr uint8_t LORA_CR_4_5 = 0x01;\nconstexpr uint8_t LORA_CR_LI_4_6 = 0x06;\nconstexpr uint8_t LORA_CR_LI_4_8 = 0x07;', 'coding rates')
-          one('static constexpr char FW_VERSION[] = "0.5.0-dev1";\nstatic constexpr char PROTOCOL_VERSION[] = "0.5";',
-              'static constexpr char FW_VERSION[] = "0.6.0-dev1";\nstatic constexpr char PROTOCOL_VERSION[] = "0.6";', 'fw version')
-          one('enum class RunMode : uint8_t { FIXED, SWEEP };', 'enum class RunMode : uint8_t { FIXED, SWEEP, PACKET_PROBE };', 'run mode')
-          one('static SweepConfig sweep;\n\nstatic const char *modeName()\n{\n    return runMode == RunMode::FIXED ? "FIXED" : "SWEEP";\n}', '''static SweepConfig sweep;
-
-struct ProbeProfile {
-    const char *name;
-    uint8_t sf;
-    uint8_t cr;
-    uint8_t preamble;
-    uint8_t payloadLen;
-};
-
-// Current ExpressLRS 2.4 GHz LoRa family, mapped to LR1121 BW 812 kHz.
-// GFSK/K modes are deliberately deferred until LoRa RX is field-proven.
-static const ProbeProfile PROBE_PROFILES[] = {
-    {"LORA500", 0x05, lr1121::LORA_CR_LI_4_6, 12, 8},
-    {"LORA250", 0x06, lr1121::LORA_CR_LI_4_8, 14, 8},
-    {"LORA150", 0x07, lr1121::LORA_CR_LI_4_8, 12, 8},
-    {"LORA50",  0x08, lr1121::LORA_CR_LI_4_8, 12, 8},
-};
-static constexpr size_t PROBE_PROFILE_COUNT = sizeof(PROBE_PROFILES) / sizeof(PROBE_PROFILES[0]);
-
-struct ProbeState {
-    uint32_t freqHz = DEFAULT_FREQ_HZ;
-    uint32_t timeoutMs = 8000;
-    uint32_t startedMs = 0;
-    uint32_t profileStartedMs = 0;
-    size_t profile = 0;
-    uint32_t packets = 0;
-    uint32_t syncPackets = 0;
-    uint8_t lastUid3 = 0, lastUid4 = 0, lastUid5 = 0;
-    uint8_t consistentSync = 0;
-    bool confirmed = false;
-};
-static ProbeState probe;
-
-static const char *modeName()
-{
-    if (runMode == RunMode::FIXED) return "FIXED";
-    if (runMode == RunMode::SWEEP) return "SWEEP";
-    return "PACKET_PROBE";
-}''', 'probe structs')
-
-          marker='static bool setBoosted(bool enabled)\n{'
-          insert='''static bool setRxDoneIrq()\n{\n    // Same 8-byte IRQ layout used by the current ExpressLRS LR1121 driver.\n    uint8_t p[8] = {0};\n    p[3] = (uint8_t)lr1121::IRQ_RX_DONE;\n    return writeCommand(lr1121::SYS_SET_DIO_IRQ_PARAMS, p, sizeof(p));\n}\n\nstatic bool clearAllIrq()\n{\n    const uint8_t p[4] = {0xFF,0xFF,0xFF,0xFF};\n    return writeCommand(lr1121::SYS_CLEAR_IRQ, p, sizeof(p));\n}\n\nstatic bool configureProbeProfile(size_t index)\n{\n    if (index >= PROBE_PROFILE_COUNT) return false;\n    const ProbeProfile &pr = PROBE_PROFILES[index];\n    if (!standby()) return false;\n    const uint8_t pktType = lr1121::PKT_LORA;\n    if (!writeCommand(lr1121::RADIO_SET_PKT_TYPE, &pktType, 1)) return false;\n    const uint8_t mod[4] = {pr.sf, lr1121::LORA_BW_800, pr.cr, 0x00};\n    if (!writeCommand(lr1121::RADIO_SET_MOD_PARAMS, mod, sizeof(mod))) return false;\n    const uint8_t pkt[6] = {0x00, pr.preamble, lr1121::LORA_FIXED, pr.payloadLen, lr1121::LORA_CRC_OFF, lr1121::LORA_IQ_STANDARD};\n    if (!writeCommand(lr1121::RADIO_SET_PKT_PARAMS, pkt, sizeof(pkt))) return false;\n    if (!setFrequency(probe.freqHz)) return false;\n    if (!setRxDoneIrq() || !clearAllIrq()) return false;\n    if (!enterContinuousRx()) return false;\n    probe.profileStartedMs = millis();\n    Serial.printf("Q,STATE,SEARCH,%s,%lu\\n", pr.name, probe.freqHz);\n    return true;\n}\n\nstatic void stopProbe(const char *reason)\n{\n    runMode = RunMode::FIXED;\n    clearAllIrq();\n    tuneRx(fixedFreqHz);\n    Serial.printf("Q,STATE,%s,NONE,%lu\\n", reason, fixedFreqHz);\n}\n\nstatic bool startProbe(uint32_t freqHz, uint32_t timeoutMs)\n{\n    if (freqHz < MIN_FREQ_HZ || freqHz > MAX_FREQ_HZ) return false;\n    probe = ProbeState{};\n    probe.freqHz = freqHz;\n    probe.timeoutMs = constrain(timeoutMs, 2000UL, 30000UL);\n    probe.startedMs = millis();\n    runMode = RunMode::PACKET_PROBE;\n    if (!configureProbeProfile(0)) { stopProbe("ERROR"); return false; }\n    return true;\n}\n\nstatic String toHex(const uint8_t *data, size_t len)\n{\n    static const char H[] = "0123456789ABCDEF";\n    String out; out.reserve(len * 2);\n    for (size_t i=0;i<len;i++) { out += H[data[i] >> 4]; out += H[data[i] & 0x0F]; }\n    return out;\n}\n\nstatic void handleProbePacket()\n{\n    const ProbeProfile &pr = PROBE_PROFILES[probe.profile];\n    uint8_t b[20] = {0};\n    const size_t total = (size_t)pr.payloadLen + 6;\n    if (!writeCommand(lr1121::RADIO_GET_PACKET) || !readResponse(b, total)) { clearAllIrq(); enterContinuousRx(); return; }\n    ++probe.packets;\n    const int rssi = -(int)(b[5] / 2);\n    const int snrQuarter = (int8_t)b[2];\n    const float snr = snrQuarter / 4.0f;\n    const uint8_t *payload = b + 6;\n    const uint8_t type = payload[0] & 0x03;\n    bool sync = type == 2 && pr.payloadLen == 8;\n    uint8_t rateIndex = 0xFF, fhssIndex = 0xFF;\n    if (sync) {\n        ++probe.syncPackets;\n        fhssIndex = payload[1];\n        rateIndex = (payload[3] >> 4) & 0x0F;\n        if (payload[4] == probe.lastUid3 && payload[5] == probe.lastUid4 && payload[6] == probe.lastUid5) {\n            if (probe.consistentSync < 255) ++probe.consistentSync;\n        } else {\n            probe.lastUid3=payload[4]; probe.lastUid4=payload[5]; probe.lastUid5=payload[6]; probe.consistentSync=1;\n        }\n    }\n    const String hex = toHex(payload, pr.payloadLen);\n    Serial.printf("D,%lu,%lu,LORA,%s,%d,%.2f,type=%u,%u,%s\\n", millis(), probe.freqHz, pr.name, rssi, snr, type, pr.payloadLen, hex.c_str());\n    Serial.printf("Q,STATE,PHY_LOCK,%s,%lu\\n", pr.name, probe.freqHz);\n    // Conservative confirmation: repeated LoRa-demodulated ELRS-shaped SYNC packets with the same UID suffix.\n    if (!probe.confirmed && sync && probe.consistentSync >= 2 && rateIndex <= 15) {\n        probe.confirmed = true;\n        Serial.printf("E,ELRS,CONFIRMED,%s,%lu,%lu,%u,%u\\n", pr.name, probe.packets, probe.syncPackets, rateIndex, fhssIndex);\n        Serial.printf("Q,STATE,CONFIRMED,%s,%lu\\n", pr.name, probe.freqHz);\n    }\n    clearAllIrq();\n    enterContinuousRx();\n}\n\nstatic void probeTick()\n{\n    const uint32_t now = millis();\n    if ((uint32_t)(now - probe.startedMs) >= probe.timeoutMs) {\n        if (!probe.confirmed) Serial.printf("E,ELRS,NOT_CONFIRMED,%s,%lu,%lu,255,255\\n", PROBE_PROFILES[probe.profile].name, probe.packets, probe.syncPackets);\n        stopProbe("TIMEOUT");\n        return;\n    }\n    if (digitalRead(hw::DIO1) == HIGH) handleProbePacket();\n    if (!probe.confirmed && (uint32_t)(now - probe.profileStartedMs) >= 1000UL) {\n        probe.profile = (probe.profile + 1) % PROBE_PROFILE_COUNT;\n        configureProbeProfile(probe.profile);\n    }\n}\n\n'''
-          if marker not in s: raise SystemExit('setBoosted marker missing')
-          s=s.replace(marker,insert+marker,1)
-
-          one('Serial.println("I,cap,packet_probe,NOT_YET_IMPLEMENTED");\n    Serial.println("I,protocol,F|S|X|I|A|D|G|T|Z,DIAG");',
-              'Serial.println("I,cap,packet_probe,ELRS_LORA_DEV1");\n    Serial.println("I,cap,elrs_profiles,LORA500|LORA250|LORA150|LORA50");\n    Serial.println("I,protocol,F|S|X|I|A|D|G|T|Z,DIAG|Q,ELRS|Q,X");', 'capabilities')
-
-          one('if (line == "X") {\n        if (switchToFixed(fixedFreqHz)) Serial.println("A,X");\n        return;\n    }',
-              'if (line == "X") {\n        if (runMode == RunMode::PACKET_PROBE) stopProbe("STOPPED");\n        else if (switchToFixed(fixedFreqHz)) Serial.println("A,X");\n        return;\n    }\n    if (line == "Q,X") {\n        if (runMode == RunMode::PACKET_PROBE) stopProbe("STOPPED");\n        else Serial.println("Q,STATE,STOPPED,NONE,0");\n        return;\n    }\n    if (line.startsWith("Q,ELRS,")) {\n        unsigned long f=0,w=0,t=0;\n        if (sscanf(line.c_str(), "Q,ELRS,%lu,%lu,%lu", &f,&w,&t) != 3 || f < MIN_FREQ_HZ || f > MAX_FREQ_HZ) { Serial.println("E,PROBE_ARGS"); return; }\n        if (!startProbe((uint32_t)f,(uint32_t)t)) Serial.println("E,PROBE_START");\n        return;\n    }', 'probe commands')
-          one('if (runMode == RunMode::FIXED) fixedTick();\n    else sweepTick();',
-              'if (runMode == RunMode::FIXED) fixedTick();\n    else if (runMode == RunMode::SWEEP) sweepTick();\n    else probeTick();', 'loop mode')
-          p.write_text(s, encoding='utf-8')
-
-          # ---- Android ----
-          p=Path('rf_finder/android/app/src/main/assets/index.html')
-          s=p.read_text(encoding='utf-8')
-          def oneh(old,new,label):
-              global s
-              n=s.count(old)
-              if n!=1: raise SystemExit(f'html {label}: expected 1 match got {n}')
-              s=s.replace(old,new,1)
-
-          oneh('<button id="goBearing" class="btn primary" disabled>ПЕЛЕНГ</button>',
-               '<button id="goBearing" class="btn primary" disabled>ПЕЛЕНГ</button><button id="elrsDetect" class="btn" disabled>ELRS DETECT</button>', 'button')
-          oneh('<div class="analysis"><span class="label">ФОРМА СИГНАЛА</span><strong id="signalClass">Накопление данных…</strong><small id="signalEvidence">Нужно несколько последовательных sweep</small></div>',
-               '<div class="analysis"><span class="label">ФОРМА СИГНАЛА</span><strong id="signalClass">Накопление данных…</strong><small id="signalEvidence">Нужно несколько последовательных sweep</small><div style="border-top:1px solid var(--hair);margin-top:9px;padding-top:9px"><span class="label">ELRS DETECTOR</span><strong id="elrsResult">Выбери marker</strong><small id="elrsEvidence">Packet Probe · RX-only</small></div></div>', 'ELRS status')
-          oneh('<div id="diagGrid" class="diagGrid"></div><pre id="log" class="log section">—</pre></details>',
-               '<div id="diagGrid" class="diagGrid"></div><div class="section"><div class="label">PACKET PROBE</div><pre id="packetLog" class="log">—</pre></div><pre id="log" class="log section">—</pre></details>', 'packet log')
-          oneh("diag:$('diagGrid'),log:$('log'),wfCount:$('waterfallCount')", "diag:$('diagGrid'),log:$('log'),wfCount:$('waterfallCount'),elrs:$('elrsDetect'),elrsResult:$('elrsResult'),elrsEvidence:$('elrsEvidence'),packetLog:$('packetLog')", 'ui refs')
-          oneh("let cap={bw:812500,minStep:100000,maxStep:10000000,minDwell:1,maxDwell:100,minAvg:1,maxAvg:32,maxSettle:50000,maxPoints:801},fwDiag={},lastP={duration:null,points:null};",
-               "let cap={bw:812500,minStep:100000,maxStep:10000000,minDwell:1,maxDwell:100,minAvg:1,maxAvg:32,maxSettle:50000,maxPoints:801,packetProbe:false},fwDiag={},lastP={duration:null,points:null},probeOn=false,packetRows=[];", 'probe state')
-          oneh("function chooseMarker(mhz,db){markerMHz=mhz;markerDb=Number.isFinite(db)?db:null;ui.markerF.textContent=Number.isFinite(mhz)?fmt(mhz)+' МГц':'—';ui.markerD.textContent=markerDb===null?'—':fmt(markerDb)+' dBm';ui.go.disabled=!Number.isFinite(mhz);drawSpectrum()}",
-               "function chooseMarker(mhz,db){markerMHz=mhz;markerDb=Number.isFinite(db)?db:null;ui.markerF.textContent=Number.isFinite(mhz)?fmt(mhz)+' МГц':'—';ui.markerD.textContent=markerDb===null?'—':fmt(markerDb)+' dBm';ui.go.disabled=!Number.isFinite(mhz)||probeOn;ui.elrs.disabled=!Number.isFinite(mhz)||!cap.packetProbe||probeOn;ui.elrsResult.textContent=Number.isFinite(mhz)?(cap.packetProbe?'Готов к проверке':'Firmware без Packet Probe'):'Выбери marker';drawSpectrum()}", 'choose marker')
-
-          insert="""function renderPacketLog(){ui.packetLog.textContent=packetRows.length?packetRows.slice(-30).join('\\n'):'—'}
-function setProbe(on){probeOn=on;ui.elrs.textContent=on?'■ STOP ELRS':'ELRS DETECT';ui.elrs.disabled=!on&&(!Number.isFinite(markerMHz)||!cap.packetProbe);ui.go.disabled=on||!Number.isFinite(markerMHz);ui.scan.disabled=on}
-function startElrs(){if(!Number.isFinite(markerMHz)||!cap.packetProbe)return;if(scanOn)stopScan();packetRows=[];renderPacketLog();setProbe(true);ui.elrsResult.textContent='ПОИСК ELRS…';ui.elrsEvidence.textContent=fmt(markerMHz)+' МГц · LoRa profiles';requestTune(markerMHz);send('Q,ELRS,'+Math.round(markerMHz*1e6)+',0,8000')}
-function stopElrs(){send('Q,X');setProbe(false)}
-"""
-          marker='function startScan(){'
-          if marker not in s: raise SystemExit('startScan marker missing')
-          s=s.replace(marker,insert+marker,1)
-
-          # extend parse before I block
-          token="if(p[0]==='I'){"
-          pre="""if(p[0]==='Q'&&p[1]==='STATE'){const st=p[2]||'';const prof=p[3]||'';if(st==='SEARCH'){setProbe(true);ui.elrsResult.textContent='ПОИСК ELRS…';ui.elrsEvidence.textContent=prof}else if(st==='PHY_LOCK'){setProbe(true);ui.elrsResult.textContent='PHY LOCK · '+prof;ui.elrsEvidence.textContent='получен аппаратно демодулированный пакет'}else if(st==='CONFIRMED'){setProbe(true);ui.elrsResult.textContent='ELRS ПОДТВЕРЖДЁН · '+prof;ui.elrsEvidence.textContent='повторяемые SYNC packet evidence'}else if(st==='TIMEOUT'||st==='STOPPED'||st==='ERROR'){setProbe(false);if(st!=='STOPPED')ui.elrsResult.textContent=st==='TIMEOUT'?'ELRS НЕ ПОДТВЕРЖДЁН':'Ошибка Packet Probe'}return}if(p[0]==='D'&&p.length>=10){packetRows.push(p.slice(1).join(','));renderPacketLog();return}if(p[0]==='E'&&p[1]==='ELRS'){const level=p[2],prof=p[3];ui.elrsResult.textContent=level==='CONFIRMED'?'ELRS ПОДТВЕРЖДЁН · '+prof:'ELRS НЕ ПОДТВЕРЖДЁН';ui.elrsEvidence.textContent='packets '+(p[4]||0)+' · sync '+(p[5]||0);return}"""
-          if token not in s: raise SystemExit('parse I marker missing')
-          s=s.replace(token,pre+token,1)
-          oneh("if(p[2]==='settle_us')cap.maxSettle=Number(p[4])}", "if(p[2]==='settle_us')cap.maxSettle=Number(p[4]);if(p[2]==='packet_probe'){cap.packetProbe=p[3]&&p[3]!=='NOT_YET_IMPLEMENTED';ui.elrs.disabled=!cap.packetProbe||!Number.isFinite(markerMHz)}}", 'cap parse')
-          oneh("ui.scan.onclick=()=>scanOn?stopScan():startScan();ui.go.onclick=", "ui.scan.onclick=()=>scanOn?stopScan():startScan();ui.elrs.onclick=()=>probeOn?stopElrs():startElrs();ui.go.onclick=", 'button handler')
-          oneh("const s={app:'0.5.1'", "const s={app:'0.6.0-dev1'", 'snapshot version')
-          oneh('FPV Club RF Finder v0.5.1 dev · RX-only · field hotfix', 'FPV Club RF Finder v0.6.0-dev1 · RX-only · ELRS Packet Probe', 'footer')
-          p.write_text(s,encoding='utf-8')
-
-          g=Path('rf_finder/android/app/build.gradle')
-          t=g.read_text(encoding='utf-8')
-          t=t.replace('versionCode 7','versionCode 8',1).replace("versionName '0.5.1'","versionName '0.6.0-dev1'",1)
-          g.write_text(t,encoding='utf-8')
-          PY
+      - name: Apply v0.6.0 dev1 source patch
+        run: python .github/scripts/rf_finder_v060_patch.py
 
       - name: Commit source pair
-        shell: bash
         run: |
-          git config user.name 'fpvclub-build'
-          git config user.email '30724643+arcanalord@users.noreply.github.com'
+          git config user.name fpvclub-build
+          git config user.email 30724643+arcanalord@users.noreply.github.com
           git add rf_finder/firmware/src/main.cpp rf_finder/android/app/src/main/assets/index.html rf_finder/android/app/build.gradle
           git commit -m 'RF Finder v0.6.0-dev1: add RX-only ELRS LoRa packet probe pair [skip ci]'
           git push origin HEAD:rf-finder-v0.6.0
 
       - uses: actions/setup-python@v6
-        with: {python-version: '3.11'}
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: python -m pip install --upgrade platformio
+
       - name: Build firmware
-        run: |
-          python -m pip install --upgrade platformio
-          cd rf_finder/firmware
-          pio run -e rf_finder_lr1121_c3
+        working-directory: rf_finder/firmware
+        run: pio run -e rf_finder_lr1121_c3
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+
       - name: Install Android SDK 36
         run: |
           export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
+
       - uses: gradle/actions/setup-gradle@v4
-        with: {gradle-version: '9.6.0'}
+        with:
+          gradle-version: '9.6.0'
+
       - name: Build Android
         working-directory: rf_finder/android
         run: gradle --no-daemon :app:assembleDebug
+
       - name: Prepare pair
         run: |
           mkdir -p out
           cp rf_finder/firmware/.pio/build/rf_finder_lr1121_c3/firmware.bin out/RF_Finder_DAKERFPV_LR1121_v0.6.0-dev1.bin
           cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/RF_Finder_Android_v0.6.0-dev1-debug.apk
-          sha256sum out/* > out/SHA256SUMS.txt
+          sha256sum out/RF_Finder_DAKERFPV_LR1121_v0.6.0-dev1.bin out/RF_Finder_Android_v0.6.0-dev1-debug.apk > out/SHA256SUMS.txt
+
       - uses: actions/upload-artifact@v7
         with:
           name: RF-Finder-v0.6.0-dev1-pair
