@@ -21,6 +21,20 @@ jobs:
           ref: rf-finder-v0.6.0
           fetch-depth: 0
 
+      - name: Normalize v0.6.0 CSS anchor
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('rf_finder/android/app/src/main/assets/index.html')
+          s=p.read_text(encoding='utf-8')
+          if '\n.rssi{' not in s:
+              if '}.rssi{' not in s:
+                  raise SystemExit('CSS anchor .rssi not found')
+              s=s.replace('}.rssi{','}\n.rssi{',1)
+              p.write_text(s,encoding='utf-8')
+          PY
+
       - name: Apply v0.6.1 source patch
         run: python .github/scripts/rf_finder_v061_patch.py
 
