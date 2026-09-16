@@ -1,4 +1,4 @@
-name: RF Finder v0.5.0
+name: RF Finder v0.5.1
 
 on:
   push:
@@ -9,9 +9,12 @@ on:
       - '.github/workflows/rf-finder-build-v3.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   firmware:
-    name: ESP32-C3 LR1121 firmware v0.5.0
+    name: ESP32-C3 LR1121 firmware v0.5.0-dev1
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -34,10 +37,90 @@ jobs:
           path: out/firmware/*
 
   android:
-    name: Android APK v0.5.0
+    name: Android APK v0.5.1
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: rf-finder-v0.5.0
+          fetch-depth: 0
+      - name: Apply field-test hotfix v0.5.1
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('rf_finder/android/app/src/main/assets/index.html')
+          s = p.read_text(encoding='utf-8')
+
+          if 'FPV Club RF Finder v0.5.1 dev' not in s:
+              def one(old, new, label):
+                  global s
+                  n = s.count(old)
+                  if n != 1:
+                      raise SystemExit(f'{label}: expected 1 match, got {n}')
+                  s = s.replace(old, new, 1)
+
+              one('ПИК ПРОХОДА', 'ПИК СЛЕЖЕНИЯ', 'bearing peak label')
+              one('<div class="control"><div class="label">PEAK HOLD</div><div class="chips"><button id="peakHold" class="chip active">Включён</button></div><div id="coverage" class="muted">покрытие 0%</div></div>',
+                  '<div class="control"><div class="label">СЛЕДЯЩИЙ ПИК</div><div class="chips"><button id="peakHold" class="chip active">Авто · 8с</button></div><div id="coverage" class="muted">покрытие 0%</div></div>',
+                  'tracking control')
+              one("let lo=2400,hi=2480,fixed=2440,center=2440,span=80,heading=null,compassAccuracy='UNRELIABLE',smoothing='normal',ema=null,peakHold=true,bestHeading=null,bestDb=-Infinity;",
+                  "let lo=2400,hi=2480,fixed=2440,center=2440,span=80,heading=null,compassAccuracy='UNRELIABLE',smoothing='normal',ema=null,peakHold=true,bestHeading=null,bestDb=-Infinity,bearingSamples=[],pendingTuneMHz=null,tuneAckTimer=null;\nconst TRACK_MS=8000;",
+                  'state line')
+              one("function resetPass(){bestHeading=null;bestDb=-Infinity;angleBins.fill(0);ui.bestH.textContent='—°';ui.bestP.textContent='— dBm';renderCompass()}",
+                  "function resetPass(){bestHeading=null;bestDb=-Infinity;bearingSamples=[];angleBins.fill(0);ui.bestH.textContent='—°';ui.bestP.textContent='— dBm';renderCompass()}",
+                  'reset pass')
+              one("ui.turn.textContent=!Number.isFinite(heading)?'Жду датчик компаса':!peakHold?'Peak Hold выключен':'Сделай полный проход';",
+                  "ui.turn.textContent=!Number.isFinite(heading)?'Жду датчик компаса':!peakHold?'Следящий пик выключен':'Наводись на максимум';",
+                  'compass hint')
+
+              old_update = "function updateRssi(raw){if(!Number.isFinite(raw)||raw>0||raw<-180)return;ema=ema===null?raw:alpha[smoothing]*raw+(1-alpha[smoothing])*ema;stats.n++;stats.min=Math.min(stats.min,raw);stats.max=Math.max(stats.max,raw);stats.mean+=(raw-stats.mean)/stats.n;history.push(ema);if(history.length>240)history.shift();ui.rssi.textContent=fmt(ema);ui.meter.style.width=clamp((ema+120)/90*100,0,100)+'%';renderStats();if(Number.isFinite(heading)){const bi=Math.floor((((heading%360)+360)%360)/5);angleBins[bi]++;const covered=angleBins.filter(n=>n>0).length/72*100;ui.coverage.textContent='покрытие '+Math.round(covered)+'%';if(peakHold&&ema>bestDb){bestDb=ema;bestHeading=heading;ui.bestH.textContent=Math.round(bestHeading)+'°';ui.bestP.textContent=fmt(bestDb)+' dBm'}}renderCompass();drawHistory()}"
+              new_update = "function updateBearingTracker(db){if(!peakHold||!Number.isFinite(heading))return;const now=performance.now(),h=((heading%360)+360)%360;bearingSamples.push({t:now,h,db});const cutoff=now-TRACK_MS;while(bearingSamples.length&&bearingSamples[0].t<cutoff)bearingSamples.shift();if(!bearingSamples.length)return;const floor=quantile(bearingSamples.map(x=>x.db),.25),bins=new Map();for(const x of bearingSamples){const bi=Math.floor(x.h/5);let b=bins.get(bi);if(!b)b={sum:0,n:0,max:-Infinity,last:0,cx:0,cy:0};b.sum+=x.db;b.n++;b.max=Math.max(b.max,x.db);b.last=Math.max(b.last,x.t);const r=x.h*Math.PI/180;b.cx+=Math.cos(r);b.cy+=Math.sin(r);bins.set(bi,b)}let pick=null;for(const b of bins.values()){const mean=b.sum/b.n,relative=Math.min(15,mean-floor),age=(now-b.last)/1000,score=relative-age*1.5+Math.min(b.n,4)*.12;if(!pick||score>pick.score)pick={b,score}}if(!pick)return;let h2=Math.atan2(pick.b.cy,pick.b.cx)*180/Math.PI;if(h2<0)h2+=360;bestHeading=h2;bestDb=pick.b.max;ui.bestH.textContent=Math.round(bestHeading)+'°';ui.bestP.textContent=fmt(bestDb)+' dBm'}\nfunction updateRssi(raw){if(!Number.isFinite(raw)||raw>0||raw<-180)return;ema=ema===null?raw:alpha[smoothing]*raw+(1-alpha[smoothing])*ema;stats.n++;stats.min=Math.min(stats.min,raw);stats.max=Math.max(stats.max,raw);stats.mean+=(raw-stats.mean)/stats.n;history.push(ema);if(history.length>240)history.shift();ui.rssi.textContent=fmt(ema);ui.meter.style.width=clamp((ema+120)/90*100,0,100)+'%';renderStats();if(Number.isFinite(heading)){const bi=Math.floor((((heading%360)+360)%360)/5);angleBins[bi]++;const covered=angleBins.filter(n=>n>0).length/72*100;ui.coverage.textContent='авто 8с · покрытие '+Math.round(covered)+'%';updateBearingTracker(ema)}renderCompass();drawHistory()}"
+              one(old_update, new_update, 'RSSI tracker')
+
+              one("function setCenter(v){center=Math.round(clamp(Number(v),lo,hi)*10)/10;renderWindow();drawSpectrum();drawWaterfall()}",
+                  "function setCenter(v){center=Math.round(clamp(Number(v),lo,hi)*10)/10;renderWindow();drawSpectrum();drawWaterfall()}\nfunction showTune(mhz){fixed=mhz;ui.freq.value=mhz;ui.fixed.textContent=fmt(mhz)+' МГц'}\nfunction requestTune(v){const mhz=Math.round(clamp(Number(v),lo,hi)*10)/10;pendingTuneMHz=mhz;showTune(mhz);clearTimeout(tuneAckTimer);send('F,'+Math.round(mhz*1e6));resetStats();resetPass();tuneAckTimer=setTimeout(()=>{if(pendingTuneMHz!==null){log('! FREQ ACK TIMEOUT '+fmt(pendingTuneMHz)+' МГц');pendingTuneMHz=null}},1800)}\nfunction acceptTune(mhz){pendingTuneMHz=null;clearTimeout(tuneAckTimer);showTune(mhz)}",
+                  'tune helpers')
+
+              one("if(p[0]==='R'&&p.length>=3){const hz=Number(p[1]),db=Number(p[2]);if(Number.isFinite(hz)){fixed=hz/1e6;ui.freq.value=fixed;ui.fixed.textContent=fmt(fixed)+' МГц'}updateRssi(db);return}",
+                  "if(p[0]==='R'&&p.length>=3){const hz=Number(p[1]),db=Number(p[2]),mhz=hz/1e6;if(Number.isFinite(hz)){if(pendingTuneMHz!==null&&Math.abs(mhz-pendingTuneMHz)>.051)return;if(pendingTuneMHz!==null)acceptTune(mhz);else showTune(mhz)}updateRssi(db);return}",
+                  'R frame tune guard')
+              one("if(p[0]==='A'){if(p[1]==='F'&&p[2]){fixed=Number(p[2])/1e6;ui.freq.value=fixed;ui.fixed.textContent=fmt(fixed)+' МГц'}if(p[1]==='GAIN')fwDiag.gain=p[2];renderDiag();return}",
+                  "if(p[0]==='A'){if(p[1]==='F'&&p[2])acceptTune(Number(p[2])/1e6);if(p[1]==='GAIN')fwDiag.gain=p[2];renderDiag();return}",
+                  'A,F ack')
+
+              old_freq = "ui.usb.onclick=()=>native&&AndroidSerial.connect();$('newPass').onclick=resetPass;ui.freq.oninput=e=>{fixed=Number(e.target.value);ui.fixed.textContent=fmt(fixed)+' МГц';clearTimeout(window._ft);window._ft=setTimeout(()=>{send('F,'+Math.round(fixed*1e6));resetStats();resetPass()},120)};$('minus').onclick=()=>{fixed=clamp(fixed-.1,lo,hi);ui.freq.value=fixed;send('F,'+Math.round(fixed*1e6));ui.fixed.textContent=fmt(fixed)+' МГц'};$('plus').onclick=()=>{fixed=clamp(fixed+.1,lo,hi);ui.freq.value=fixed;send('F,'+Math.round(fixed*1e6));ui.fixed.textContent=fmt(fixed)+' МГц'};"
+              new_freq = "ui.usb.onclick=()=>native&&AndroidSerial.connect();$('newPass').onclick=resetPass;ui.freq.oninput=e=>{pendingTuneMHz=Math.round(clamp(Number(e.target.value),lo,hi)*10)/10;showTune(pendingTuneMHz)};ui.freq.onchange=e=>requestTune(e.target.value);$('minus').onclick=()=>requestTune((pendingTuneMHz??fixed)-.1);$('plus').onclick=()=>requestTune((pendingTuneMHz??fixed)+.1);"
+              one(old_freq, new_freq, 'frequency controls')
+              one("$('peakHold').onclick=e=>{peakHold=!peakHold;e.currentTarget.classList.toggle('active',peakHold);e.currentTarget.textContent=peakHold?'Включён':'Выключен';if(!peakHold)resetPass()};",
+                  "$('peakHold').onclick=e=>{peakHold=!peakHold;e.currentTarget.classList.toggle('active',peakHold);e.currentTarget.textContent=peakHold?'Авто · 8с':'Выключен';resetPass()};",
+                  'tracking toggle')
+              one("ui.go.onclick=()=>{if(!Number.isFinite(markerMHz))return;if(scanOn)stopScan();fixed=markerMHz;ui.freq.value=fixed;ui.fixed.textContent=fmt(fixed)+' МГц';send('F,'+Math.round(fixed*1e6));document.querySelector('[data-view=\"bearing\"]').click()};",
+                  "ui.go.onclick=()=>{if(!Number.isFinite(markerMHz))return;if(scanOn)stopScan();requestTune(markerMHz);document.querySelector('[data-view=\"bearing\"]').click()};",
+                  'marker tune')
+              one("const s={app:'0.5.0'", "const s={app:'0.5.1'", 'snapshot version')
+              one('FPV Club RF Finder v0.5.0 dev · RX-only · не проверено на железе', 'FPV Club RF Finder v0.5.1 dev · RX-only · field hotfix', 'footer version')
+              p.write_text(s, encoding='utf-8')
+
+          g = Path('rf_finder/android/app/build.gradle')
+          t = g.read_text(encoding='utf-8')
+          if "versionName '0.5.1'" not in t:
+              if "versionCode 6" not in t or "versionName '0.5.0'" not in t:
+                  raise SystemExit('unexpected Android version')
+              t = t.replace('versionCode 6', 'versionCode 7', 1).replace("versionName '0.5.0'", "versionName '0.5.1'", 1)
+              g.write_text(t, encoding='utf-8')
+          PY
+      - name: Commit source hotfix
+        shell: bash
+        run: |
+          if ! git diff --quiet; then
+            git config user.name 'fpvclub-build'
+            git config user.email '30724643+arcanalord@users.noreply.github.com'
+            git add rf_finder/android/app/src/main/assets/index.html rf_finder/android/app/build.gradle
+            git commit -m 'RF Finder Android v0.5.1: fix reacquisition and frequency tuning [skip ci]'
+            git push origin HEAD:rf-finder-v0.5.0
+          fi
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -58,9 +141,9 @@ jobs:
       - name: Prepare Android artifact
         run: |
           mkdir -p out/android
-          cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/android/RF_Finder_Android_v0.5.0-debug.apk
-          sha256sum out/android/RF_Finder_Android_v0.5.0-debug.apk > out/android/RF_Finder_Android_v0.5.0-debug.apk.sha256
+          cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/android/RF_Finder_Android_v0.5.1-debug.apk
+          sha256sum out/android/RF_Finder_Android_v0.5.1-debug.apk > out/android/RF_Finder_Android_v0.5.1-debug.apk.sha256
       - uses: actions/upload-artifact@v7
         with:
-          name: RF-Finder-Android-v0.5.0
+          name: RF-Finder-Android-v0.5.1
           path: out/android/*
