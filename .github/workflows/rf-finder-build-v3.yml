@@ -1,17 +1,40 @@
-name: RF Finder Android v0.4.1
+name: RF Finder v0.5.0
 
 on:
   push:
     branches:
-      - rf-finder-android-v0.4.1
+      - rf-finder-v0.5.0
     paths:
-      - 'rf_finder/android/**'
+      - 'rf_finder/**'
       - '.github/workflows/rf-finder-build-v3.yml'
   workflow_dispatch:
 
 jobs:
+  firmware:
+    name: ESP32-C3 LR1121 firmware v0.5.0
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install PlatformIO
+        run: python -m pip install --upgrade platformio
+      - name: Build LR1121 firmware
+        working-directory: rf_finder/firmware
+        run: pio run -e rf_finder_lr1121_c3
+      - name: Prepare firmware artifact
+        run: |
+          mkdir -p out/firmware
+          cp rf_finder/firmware/.pio/build/rf_finder_lr1121_c3/firmware.bin out/firmware/RF_Finder_DAKERFPV_LR1121_v0.5.0-dev1.bin
+          sha256sum out/firmware/RF_Finder_DAKERFPV_LR1121_v0.5.0-dev1.bin > out/firmware/RF_Finder_DAKERFPV_LR1121_v0.5.0-dev1.bin.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: RF-Finder-DAKERFPV-LR1121-v0.5.0-dev1
+          path: out/firmware/*
+
   android:
-    name: Android APK v0.4.1
+    name: Android APK v0.5.0
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -35,9 +58,9 @@ jobs:
       - name: Prepare Android artifact
         run: |
           mkdir -p out/android
-          cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/android/RF_Finder_Android_v0.4.1-debug.apk
-          sha256sum out/android/RF_Finder_Android_v0.4.1-debug.apk > out/android/RF_Finder_Android_v0.4.1-debug.apk.sha256
+          cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/android/RF_Finder_Android_v0.5.0-debug.apk
+          sha256sum out/android/RF_Finder_Android_v0.5.0-debug.apk > out/android/RF_Finder_Android_v0.5.0-debug.apk.sha256
       - uses: actions/upload-artifact@v7
         with:
-          name: RF-Finder-Android-v0.4.1
+          name: RF-Finder-Android-v0.5.0
           path: out/android/*
