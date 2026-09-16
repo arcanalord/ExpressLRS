@@ -21,6 +21,26 @@ jobs:
           ref: rf-finder-v0.6.2
           fetch-depth: 0
 
+      - name: Normalize C++ newline anchors in patch script
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('.github/scripts/rf_finder_v062_patch.py')
+          s=p.read_text(encoding='utf-8')
+          targets=[
+              r'I,diag,recoveries,%lu\n", diag.recoveries',
+              r'I,diag,last_sweep_ms,%lu\n", diag.lastSweepDurationMs',
+              r'I,range,%lu,%lu\n", MIN_FREQ_HZ, MAX_FREQ_HZ',
+              r'A,F,%lu\n", fixedFreqHz',
+          ]
+          for t in targets:
+              if t not in s:
+                  raise SystemExit('missing patch anchor: '+t)
+              s=s.replace(t,t.replace(r'\n',r'\\n'))
+          p.write_text(s,encoding='utf-8')
+          PY
+
       - name: Apply v0.6.2 source patch
         run: python .github/scripts/rf_finder_v062_patch.py
 
