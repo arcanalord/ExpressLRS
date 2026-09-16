@@ -1,9 +1,9 @@
-name: RF Finder Android v0.4.0
+name: RF Finder Android v0.4.1
 
 on:
   push:
     branches:
-      - rf-finder-android-v0.4.0
+      - rf-finder-android-v0.4.1
     paths:
       - 'rf_finder/android/**'
       - '.github/workflows/rf-finder-build-v3.yml'
@@ -11,7 +11,7 @@ on:
 
 jobs:
   android:
-    name: Android APK v0.4.0
+    name: Android APK v0.4.1
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -35,9 +35,9 @@ jobs:
       - name: Prepare Android artifact
         run: |
           mkdir -p out/android
-          cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/android/RF_Finder_Android_v0.4.0-debug.apk
-          sha256sum out/android/RF_Finder_Android_v0.4.0-debug.apk > out/android/RF_Finder_Android_v0.4.0-debug.apk.sha256
+          cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/android/RF_Finder_Android_v0.4.1-debug.apk
+          sha256sum out/android/RF_Finder_Android_v0.4.1-debug.apk > out/android/RF_Finder_Android_v0.4.1-debug.apk.sha256
       - uses: actions/upload-artifact@v7
         with:
-          name: RF-Finder-Android-v0.4.0
+          name: RF-Finder-Android-v0.4.1
           path: out/android/*
