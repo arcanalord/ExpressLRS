@@ -56,8 +56,6 @@ jobs:
           grep -q 'compileSdk = 37' "$ROOT/platform_android/android_app/app/build.gradle.kts"
           grep -q 'targetSdk = 37' "$ROOT/platform_android/android_app/app/build.gradle.kts"
           grep -q 'TrackerBridge_nativeCreate' "$ROOT/platform_android/android_app/app/src/main/cpp/pointtrack_jni.cpp"
-          # Android 17/API 37 is not currently exposed by sdkmanager on hosted runners.
-          # Normalize only the Android SDK level; tracker/JNI/core sources are unchanged.
           sed -i 's/compileSdk = 37/compileSdk = 36/' "$ROOT/platform_android/android_app/app/build.gradle.kts"
           sed -i 's/targetSdk = 37/targetSdk = 36/' "$ROOT/platform_android/android_app/app/build.gradle.kts"
           grep -q 'compileSdk = 36' "$ROOT/platform_android/android_app/app/build.gradle.kts"
@@ -75,9 +73,18 @@ jobs:
       - name: Android debug build
         shell: bash
         run: |
-          set -euxo pipefail
+          set -uo pipefail
           cd "$ROOT/platform_android/android_app"
-          gradle --no-daemon --stacktrace :app:assembleDebug
+          gradle --no-daemon --stacktrace :app:assembleDebug > /tmp/pointtrack-gradle.log 2>&1
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            echo '=== COMPACT GRADLE ERRORS ==='
+            grep -E -i '(^e: |error:|FAILED|FAILURE:|Execution failed|CMake Error|ninja: error|undefined reference|Could not resolve|What went wrong)' /tmp/pointtrack-gradle.log | tail -n 160 || true
+            echo '=== GRADLE LOG TAIL ==='
+            tail -n 220 /tmp/pointtrack-gradle.log
+            exit "$rc"
+          fi
+          tail -n 80 /tmp/pointtrack-gradle.log
 
       - name: Verify APK
         shell: bash
