@@ -28,6 +28,8 @@ jobs:
           gradle-version: "9.4.1"
 
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
       - name: Install Android SDK pieces
         shell: bash
