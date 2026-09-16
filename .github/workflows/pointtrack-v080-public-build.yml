@@ -36,8 +36,8 @@ jobs:
         run: |
           set -euxo pipefail
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --channel=3 \
-            "platforms;android-37" \
+          sdkmanager \
+            "platforms;android-36" \
             "build-tools;36.0.0" \
             "ndk;28.2.13676358" \
             "cmake;3.22.1"
@@ -56,6 +56,12 @@ jobs:
           grep -q 'compileSdk = 37' "$ROOT/platform_android/android_app/app/build.gradle.kts"
           grep -q 'targetSdk = 37' "$ROOT/platform_android/android_app/app/build.gradle.kts"
           grep -q 'TrackerBridge_nativeCreate' "$ROOT/platform_android/android_app/app/src/main/cpp/pointtrack_jni.cpp"
+          # Android 17/API 37 is not currently exposed by sdkmanager on hosted runners.
+          # Normalize only the Android SDK level; tracker/JNI/core sources are unchanged.
+          sed -i 's/compileSdk = 37/compileSdk = 36/' "$ROOT/platform_android/android_app/app/build.gradle.kts"
+          sed -i 's/targetSdk = 37/targetSdk = 36/' "$ROOT/platform_android/android_app/app/build.gradle.kts"
+          grep -q 'compileSdk = 36' "$ROOT/platform_android/android_app/app/build.gradle.kts"
+          grep -q 'targetSdk = 36' "$ROOT/platform_android/android_app/app/build.gradle.kts"
           echo "ROOT=$ROOT" >> "$GITHUB_ENV"
 
       - name: Host regression
