@@ -1,0 +1,28 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'ru.fpvclub.rangerrf'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'ru.fpvclub.rangerrf'
+        minSdk 26
+        targetSdk 36
+        versionCode 3
+        versionName '0.3.0'
+    }
+
+    buildTypes {
+        debug { minifyEnabled false }
+        release { minifyEnabled false }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.github.mik3y:usb-serial-for-android:3.11.0'
+}
