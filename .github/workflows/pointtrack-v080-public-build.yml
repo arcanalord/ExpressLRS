@@ -75,8 +75,10 @@ jobs:
         run: |
           set -uo pipefail
           cd "$ROOT/platform_android/android_app"
+          set +e
           gradle --no-daemon --stacktrace :app:assembleDebug > /tmp/pointtrack-gradle.log 2>&1
           rc=$?
+          set -e
           if [ "$rc" -ne 0 ]; then
             echo '=== COMPACT GRADLE ERRORS ==='
             grep -E -i '(^e: |error:|FAILED|FAILURE:|Execution failed|CMake Error|ninja: error|undefined reference|Could not resolve|What went wrong)' /tmp/pointtrack-gradle.log | tail -n 160 || true
