@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <WiFi.h>
+#include <math.h>
 
 namespace hw {
 constexpr int SERIAL_RX = 20;
@@ -49,10 +50,15 @@ constexpr uint8_t LORA_IQ_STANDARD = 0x00;
 }
 
 static constexpr char FW_NAME[] = "fpvclub-rf-finder-lr1121";
-static constexpr char FW_VERSION[] = "0.6.1-dev1";
-static constexpr char PROTOCOL_VERSION[] = "0.6";
-static constexpr uint32_t MIN_FREQ_HZ = 2400000000UL;
-static constexpr uint32_t MAX_FREQ_HZ = 2480000000UL;
+static constexpr char FW_VERSION[] = "0.6.2-dev1";
+static constexpr char PROTOCOL_VERSION[] = "0.7";
+// DAKER board range proven in the field.  The extra 20 MHz is deliberately
+// marked EXPERIMENTAL: LR1121 silicon supports 2400-2500 MHz, but this board's
+// RF front-end/antenna has not been characterized there.
+static constexpr uint32_t VERIFIED_MIN_FREQ_HZ = 2400000000UL;
+static constexpr uint32_t VERIFIED_MAX_FREQ_HZ = 2480000000UL;
+static constexpr uint32_t EXPERIMENTAL_MIN_FREQ_HZ = 2400000000UL;
+static constexpr uint32_t EXPERIMENTAL_MAX_FREQ_HZ = 2500000000UL;
 static constexpr uint32_t DEFAULT_FREQ_HZ = 2440000000UL;
 static constexpr uint32_t SERIAL_BAUD = 115200;
 static constexpr uint8_t MIN_AVG_SAMPLES = 1;
@@ -89,18 +95,21 @@ struct Diagnostics {
     uint32_t uartCommands = 0;
     uint32_t unknownCommands = 0;
     uint32_t recoveries = 0;
+    uint32_t irqReadFail = 0;
+    uint32_t irqSpurious = 0;
+    uint32_t probeSourceReject = 0;
     uint32_t lastSweepDurationMs = 0;
 };
 static Diagnostics diag;
 
 struct SweepConfig {
-    uint32_t startHz = MIN_FREQ_HZ;
-    uint32_t stopHz = MAX_FREQ_HZ;
+    uint32_t startHz = VERIFIED_MIN_FREQ_HZ;
+    uint32_t stopHz = VERIFIED_MAX_FREQ_HZ;
     uint32_t stepHz = 1000000UL;
     uint32_t dwellMs = 2;
-    uint32_t currentHz = MIN_FREQ_HZ;
+    uint32_t currentHz = VERIFIED_MIN_FREQ_HZ;
     float peakDbm = -200.0f;
-    uint32_t peakHz = MIN_FREQ_HZ;
+    uint32_t peakHz = VERIFIED_MIN_FREQ_HZ;
     uint32_t sweepNumber = 0;
     uint32_t startedMs = 0;
     uint32_t pointsThisSweep = 0;
@@ -139,8 +148,18 @@ struct ProbeState {
     uint8_t lastUid3 = 0, lastUid4 = 0, lastUid5 = 0;
     uint8_t consistentSync = 0;
     bool confirmed = false;
+    bool trackOnly = false;
 };
 static ProbeState probe;
+
+struct ElrsLock {
+    bool valid = false;
+    size_t profile = 0;
+    uint8_t uid3 = 0, uid4 = 0, uid5 = 0;
+    uint8_t rateIndex = 0xFF;
+    uint8_t lastChannel = 0;
+};
+static ElrsLock elrsLock;
 
 static const char *modeName()
 {
@@ -231,9 +250,19 @@ static bool configureRfSwitch()
     return writeCommand(lr1121::SYS_SET_DIO_AS_RF_SWITCH, p, sizeof(p));
 }
 
+static bool isVerifiedFrequency(uint32_t freqHz)
+{
+    return freqHz >= VERIFIED_MIN_FREQ_HZ && freqHz <= VERIFIED_MAX_FREQ_HZ;
+}
+
+static bool isExperimentalFrequency(uint32_t freqHz)
+{
+    return freqHz >= EXPERIMENTAL_MIN_FREQ_HZ && freqHz <= EXPERIMENTAL_MAX_FREQ_HZ;
+}
+
 static bool setFrequency(uint32_t freqHz)
 {
-    if (freqHz < MIN_FREQ_HZ || freqHz > MAX_FREQ_HZ) return false;
+    if (!isExperimentalFrequency(freqHz)) return false;
     const uint8_t p[4] = {
         (uint8_t)(freqHz >> 24),
         (uint8_t)(freqHz >> 16),
@@ -281,6 +310,21 @@ static bool clearAllIrq()
     return writeCommand(lr1121::SYS_CLEAR_IRQ, p, sizeof(p));
 }
 
+// LR11xx GET IRQ is a full-duplex CLEAR_IRQ transaction.  This mirrors the
+// current ExpressLRS LR1121 driver: [01 14 FF FF FF FF] -> IRQ in bytes 2..5.
+static bool readAndClearIrqStatus(uint32_t &irq)
+{
+    uint8_t frame[6] = {0x01, 0x14, 0xFF, 0xFF, 0xFF, 0xFF};
+    if (!waitBusy()) { ++diag.irqReadFail; return false; }
+    selectRadio();
+    for (size_t i = 0; i < sizeof(frame); ++i) frame[i] = SPI.transfer(frame[i]);
+    deselectRadio();
+    if (!waitBusy()) { ++diag.irqReadFail; return false; }
+    irq = ((uint32_t)frame[2] << 24) | ((uint32_t)frame[3] << 16) |
+          ((uint32_t)frame[4] << 8) | frame[5];
+    return true;
+}
+
 static uint32_t elrsChannelHz(uint8_t channel)
 {
     // ExpressLRS ISM2G4 grid: 80 channels from 2400.4 to 2479.4 MHz inclusive.
@@ -319,15 +363,32 @@ static void stopProbe(const char *reason)
 
 static bool startProbe(uint32_t freqHz, uint32_t timeoutMs)
 {
-    if (freqHz < MIN_FREQ_HZ || freqHz > MAX_FREQ_HZ) return false;
+    // ELRS 2.4 grid itself remains 2400.4-2479.4 MHz even when generic tuning
+    // is allowed into the experimental 2480-2500 MHz window.
+    if (!isVerifiedFrequency(freqHz)) return false;
     probe = ProbeState{};
     probe.requestedFreqHz = freqHz;
     probe.timeoutMs = constrain(timeoutMs, 3000UL, 30000UL);
     probe.startedMs = millis();
-    // Start at the ELRS channel nearest the selected marker, then walk all 80 channels.
     int32_t c = (int32_t)((freqHz - 2400400000UL + 500000UL) / 1000000UL);
     probe.channel = (uint8_t)constrain(c, 0L, 79L);
     runMode = RunMode::PACKET_PROBE;
+    return configureProbeSlot();
+}
+
+static bool startTrack(uint32_t timeoutMs)
+{
+    if (!elrsLock.valid || elrsLock.profile >= PROBE_PROFILE_COUNT) return false;
+    probe = ProbeState{};
+    probe.timeoutMs = constrain(timeoutMs, 3000UL, 60000UL);
+    probe.startedMs = millis();
+    probe.profile = elrsLock.profile;
+    probe.channel = elrsLock.lastChannel;
+    probe.confirmed = true;
+    probe.trackOnly = true;
+    runMode = RunMode::PACKET_PROBE;
+    Serial.printf("Q,STATE,TRACK,%s,%lu
+", PROBE_PROFILES[probe.profile].name, elrsChannelHz(probe.channel));
     return configureProbeSlot();
 }
 
@@ -349,7 +410,6 @@ static void handleProbePacket()
     uint8_t b[20] = {0};
     const size_t total = (size_t)pr.payloadLen + 6;
     if (!writeCommand(lr1121::RADIO_GET_PACKET) || !readResponse(b, total)) {
-        clearAllIrq();
         enterContinuousRx();
         return;
     }
@@ -361,43 +421,59 @@ static void handleProbePacket()
     const uint8_t type = payload[0] & 0x03;
     const bool sync = (type == 2 && pr.payloadLen == 8);
     uint8_t rateIndex = 0xFF, fhssIndex = 0xFF;
+    bool uidMatch = false;
 
     if (sync) {
         ++probe.syncPackets;
-        // OTA_Packet4_s: byte0 is type/crcHigh; OTA_Sync_s starts at byte1.
         fhssIndex = payload[1];
         rateIndex = (payload[3] >> 4) & 0x0F;
-        if (rateIndex == pr.expectedRateIndex) {
+        uidMatch = elrsLock.valid && rateIndex == elrsLock.rateIndex &&
+                   payload[4] == elrsLock.uid3 && payload[5] == elrsLock.uid4 && payload[6] == elrsLock.uid5;
+
+        if (!probe.trackOnly && rateIndex == pr.expectedRateIndex) {
             if (payload[4] == probe.lastUid3 && payload[5] == probe.lastUid4 && payload[6] == probe.lastUid5) {
                 if (probe.consistentSync < 255) ++probe.consistentSync;
             } else {
-                probe.lastUid3 = payload[4];
-                probe.lastUid4 = payload[5];
-                probe.lastUid5 = payload[6];
+                probe.lastUid3 = payload[4]; probe.lastUid4 = payload[5]; probe.lastUid5 = payload[6];
                 probe.consistentSync = 1;
             }
         }
     }
 
-    const String hex = toHex(payload, pr.payloadLen);
-    Serial.printf("D,%lu,%lu,LORA,%s,%d,%.2f,type=%u,%u,%s\n",
-                  millis(), probe.activeProbeFreqHz, pr.name, rssi, snr, type, pr.payloadLen, hex.c_str());
-    Serial.printf("Q,STATE,PHY_LOCK,%s,%lu\n", pr.name, probe.activeProbeFreqHz);
+    // In TRACK mode only source-specific matching SYNC packets are measurement
+    // records.  This is intentionally sparse but prevents another LoRa/ELRS
+    // source from steering the bearing.
+    const bool measurement = !probe.trackOnly || uidMatch;
+    if (measurement) {
+        const String hex = toHex(payload, pr.payloadLen);
+        Serial.printf("D,%lu,%lu,LORA,%s,%d,%.2f,%s,%u,%s\n",
+                      millis(), probe.activeProbeFreqHz, pr.name, rssi, snr,
+                      uidMatch ? "ELRS_UID_MATCH" : (sync ? "SYNC" : "PACKET"), pr.payloadLen, hex.c_str());
+    } else {
+        ++diag.probeSourceReject;
+    }
 
-    // Strong protocol match: repeated hardware-demodulated ELRS-shaped SYNC packets,
-    // constant UID suffix, and rateIndex matching the active ELRS PHY profile.
-    // OTA CRC cannot be independently checked before the full UID-derived initializer is known.
-    if (!probe.confirmed && sync && rateIndex == pr.expectedRateIndex && probe.consistentSync >= 3) {
+    if (!probe.trackOnly) Serial.printf("Q,STATE,PHY_LOCK,%s,%lu\n", pr.name, probe.activeProbeFreqHz);
+
+    if (!probe.trackOnly && !probe.confirmed && sync && rateIndex == pr.expectedRateIndex && probe.consistentSync >= 3) {
         probe.confirmed = true;
-        Serial.printf("E,ELRS,CONFIRMED,%s,%lu,%lu,%u,%u\n",
-                      pr.name, probe.packets, probe.syncPackets, rateIndex, fhssIndex);
+        elrsLock.valid = true;
+        elrsLock.profile = probe.profile;
+        elrsLock.uid3 = payload[4]; elrsLock.uid4 = payload[5]; elrsLock.uid5 = payload[6];
+        elrsLock.rateIndex = rateIndex;
+        elrsLock.lastChannel = probe.channel;
+        Serial.printf("E,ELRS,CONFIRMED,%s,%lu,%lu,%u,%u,%02X%02X%02X\n",
+                      pr.name, probe.packets, probe.syncPackets, rateIndex, fhssIndex,
+                      elrsLock.uid3, elrsLock.uid4, elrsLock.uid5);
         Serial.printf("Q,STATE,CONFIRMED,%s,%lu\n", pr.name, probe.activeProbeFreqHz);
     }
 
-    clearAllIrq();
+    if (probe.trackOnly && uidMatch) {
+        elrsLock.lastChannel = probe.channel;
+        Serial.printf("Q,STATE,TRACK_PACKET,%s,%lu\n", pr.name, probe.activeProbeFreqHz);
+    }
     enterContinuousRx();
 }
-
 static void probeTick()
 {
     const uint32_t now = millis();
@@ -410,10 +486,16 @@ static void probeTick()
         return;
     }
 
-    if (digitalRead(hw::DIO1) == HIGH) handleProbePacket();
+    if (digitalRead(hw::DIO1) == HIGH) {
+        uint32_t irq = 0;
+        if (readAndClearIrqStatus(irq)) {
+            if (irq & lr1121::IRQ_RX_DONE) handleProbePacket();
+            else ++diag.irqSpurious;
+        }
+    }
 
-    // 12 ms slot gives a chance to catch 50-500 Hz packets while covering the full
-    // 80-channel grid in under one second per PHY. Start near marker, then walk grid.
+    // During TRACK keep the confirmed PHY and sweep the ELRS grid. During
+    // detection rotate PHY only after a full grid pass.
     if ((uint32_t)(now - probe.slotStartedMs) >= 12UL) {
         probe.channel = (uint8_t)((probe.channel + 1) % 80);
         if (probe.channel == 0 && !probe.confirmed) probe.profile = (probe.profile + 1) % PROBE_PROFILE_COUNT;
@@ -457,8 +539,8 @@ static bool initRadio(uint32_t &versionWord)
     if (!writeCommand(lr1121::SYS_SET_REGMODE, &regulator, 1)) return false;
 
     const uint8_t cal[2] = {
-        (uint8_t)(((MIN_FREQ_HZ / 1000000UL) - 1) / 4),
-        (uint8_t)(1 + ((MAX_FREQ_HZ / 1000000UL) + 1) / 4)
+        (uint8_t)(((EXPERIMENTAL_MIN_FREQ_HZ / 1000000UL) - 1) / 4),
+        (uint8_t)(1 + ((EXPERIMENTAL_MAX_FREQ_HZ / 1000000UL) + 1) / 4)
     };
     if (!writeCommand(lr1121::SYS_CALIBRATE_IMAGE, cal, sizeof(cal))) return false;
 
@@ -487,15 +569,15 @@ static bool readRssiDbm(float &dbm)
 
 static bool readAverageRssi(uint8_t samples, uint32_t gapUs, float &avg)
 {
-    float sum = 0.0f;
+    float sumPower = 0.0f;
     uint8_t good = 0;
     for (uint8_t i = 0; i < samples; ++i) {
         float v = 0.0f;
-        if (readRssiDbm(v)) { sum += v; ++good; }
+        if (readRssiDbm(v)) { sumPower += powf(10.0f, v / 10.0f); ++good; }
         if (i + 1 < samples) delayMicroseconds(gapUs);
     }
-    if (!good) return false;
-    avg = sum / good;
+    if (!good || sumPower <= 0.0f) return false;
+    avg = 10.0f * log10f(sumPower / good);
     return true;
 }
 
@@ -512,13 +594,22 @@ static void printDiagnostics()
     Serial.printf("I,diag,uart_commands,%lu\n", diag.uartCommands);
     Serial.printf("I,diag,unknown_commands,%lu\n", diag.unknownCommands);
     Serial.printf("I,diag,recoveries,%lu\n", diag.recoveries);
+    Serial.printf("I,diag,irq_read_fail,%lu
+", diag.irqReadFail);
+    Serial.printf("I,diag,irq_spurious,%lu
+", diag.irqSpurious);
+    Serial.printf("I,diag,source_reject,%lu
+", diag.probeSourceReject);
     Serial.printf("I,diag,last_sweep_ms,%lu\n", diag.lastSweepDurationMs);
 }
 
 static void printInfo()
 {
     Serial.printf("I,%s,%s,LR1121,RX_ONLY\n", FW_NAME, FW_VERSION);
-    Serial.printf("I,range,%lu,%lu\n", MIN_FREQ_HZ, MAX_FREQ_HZ);
+    Serial.printf("I,range,%lu,%lu
+", VERIFIED_MIN_FREQ_HZ, VERIFIED_MAX_FREQ_HZ);
+    Serial.printf("I,cap,experimental_range,%lu,%lu
+", EXPERIMENTAL_MIN_FREQ_HZ, EXPERIMENTAL_MAX_FREQ_HZ);
     Serial.printf("I,fixed,%lu\n", fixedFreqHz);
     Serial.printf("I,mode,%s\n", modeName());
     Serial.printf("I,config,avg_fixed,%u\n", fixedAvgSamples);
@@ -535,7 +626,8 @@ static void printInfo()
     Serial.println("I,cap,gain,NORMAL|BOOSTED");
     Serial.println("I,cap,packet_probe,ELRS_LORA_DEV1");
     Serial.println("I,cap,elrs_profiles,LORA500|LORA250|LORA150|LORA50");
-    Serial.println("I,protocol,F|S|X|I|A|D|G|T|Z,DIAG|Q,ELRS|Q,X");
+    Serial.println("I,cap,elrs_track,SYNC_UID_LOCK");
+    Serial.println("I,protocol,F|S|X|I|A|D|G|T|Z,DIAG|Q,ELRS|Q,TRACK|Q,X");
     printDiagnostics();
 }
 
@@ -547,7 +639,8 @@ static bool switchToFixed(uint32_t freqHz)
     }
     fixedFreqHz = freqHz;
     runMode = RunMode::FIXED;
-    Serial.printf("A,F,%lu\n", fixedFreqHz);
+    Serial.printf("A,F,%lu,%s
+", fixedFreqHz, isVerifiedFrequency(fixedFreqHz) ? "VERIFIED" : "EXPERIMENTAL");
     return true;
 }
 
@@ -555,7 +648,7 @@ static bool parseSweep(const String &line, SweepConfig &cfg)
 {
     unsigned long start = 0, stop = 0, step = 0, dwell = 0;
     if (sscanf(line.c_str(), "S,%lu,%lu,%lu,%lu", &start, &stop, &step, &dwell) != 4) return false;
-    if (start < MIN_FREQ_HZ || stop > MAX_FREQ_HZ || start >= stop) return false;
+    if (start < EXPERIMENTAL_MIN_FREQ_HZ || stop > EXPERIMENTAL_MAX_FREQ_HZ || start >= stop) return false;
     if (step < MIN_STEP_HZ || step > MAX_STEP_HZ) return false;
     if (dwell < MIN_DWELL_MS || dwell > MAX_DWELL_MS) return false;
     const uint32_t points = ((uint32_t)stop - (uint32_t)start) / (uint32_t)step + 1;
@@ -622,7 +715,7 @@ static void handleCommand(String line)
     if (line.startsWith("Q,ELRS,")) {
         unsigned long f = 0, window = 0, timeout = 0;
         if (sscanf(line.c_str(), "Q,ELRS,%lu,%lu,%lu", &f, &window, &timeout) != 3 ||
-            f < MIN_FREQ_HZ || f > MAX_FREQ_HZ) {
+            !isVerifiedFrequency((uint32_t)f)) {
             Serial.println("E,PROBE_ARGS");
             return;
         }
@@ -630,9 +723,15 @@ static void handleCommand(String line)
         if (!startProbe((uint32_t)f, (uint32_t)timeout)) Serial.println("E,PROBE_START");
         return;
     }
+    if (line.startsWith("Q,TRACK,")) {
+        const uint32_t timeout = strtoul(line.c_str() + 8, nullptr, 10);
+        if (!elrsLock.valid) { Serial.println("E,NO_ELRS_LOCK"); return; }
+        if (!startTrack(timeout)) Serial.println("E,TRACK_START");
+        return;
+    }
     if (line.startsWith("F,")) {
         const uint32_t f = strtoul(line.c_str() + 2, nullptr, 10);
-        if (f < MIN_FREQ_HZ || f > MAX_FREQ_HZ) { Serial.println("E,FREQ_RANGE"); return; }
+        if (!isExperimentalFrequency(f)) { Serial.println("E,FREQ_RANGE"); return; }
         switchToFixed(f);
         return;
     }

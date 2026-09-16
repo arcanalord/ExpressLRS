@@ -17,6 +17,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.Surface;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
@@ -136,7 +137,8 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
         if (deg < 0) deg += 360f;
         lastHeadingDeg = deg;
         lastHeadingAtMs = System.currentTimeMillis();
-        eval("window.onHeading && window.onHeading(" + String.format(Locale.US, "%.1f", deg) + ")");
+        long sensorMs = event.timestamp / 1000000L;
+        eval("window.onHeading && window.onHeading(" + String.format(Locale.US, "%.1f", deg) + "," + sensorMs + ")");
     }
 
     @Override public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -291,7 +293,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
             while ((nl = lineBuffer.indexOf("\n")) >= 0) {
                 String line = lineBuffer.substring(0, nl).replace("\r", "").trim();
                 lineBuffer.delete(0, nl + 1);
-                if (!line.isEmpty()) { ++rxLines; pushLine(line); }
+                if (!line.isEmpty()) { ++rxLines; pushLine(line, SystemClock.elapsedRealtime()); }
             }
             if (lineBuffer.length() > 8192) lineBuffer.delete(0, lineBuffer.length() - 4096);
         }
@@ -301,7 +303,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
         main.post(() -> disconnectUsb("USB/UART ошибка: " + e.getMessage()));
     }
 
-    private void pushLine(String line) { eval("window.onSerialLine && window.onSerialLine(" + JSONObject.quote(line) + ")"); }
+    private void pushLine(String line, long monoMs) { eval("window.onSerialLine && window.onSerialLine(" + JSONObject.quote(line) + "," + monoMs + ")"); }
     private void pushTx(String line) { eval("window.onSerialTx && window.onSerialTx(" + JSONObject.quote(line) + ")"); }
     private void pushStatus(String text, String state) { eval("window.onNativeStatus && window.onNativeStatus(" + JSONObject.quote(text) + "," + JSONObject.quote(state) + ")"); }
     private void eval(String js) { main.post(() -> { if (webView != null) webView.evaluateJavascript(js, null); }); }
