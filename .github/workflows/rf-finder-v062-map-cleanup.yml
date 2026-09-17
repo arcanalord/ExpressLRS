@@ -49,10 +49,6 @@ jobs:
           p=Path('rf_finder/android/app/src/main/assets/index.html')
           s=p.read_text(encoding='utf-8').replace("app:'0.6.2-dev2'","app:'0.6.2-dev4'").replace('FPV Club RF Finder v0.6.2-dev2 · RX-only · bearing mode recovery','FPV Club RF Finder v0.6.2-dev4 · RX-only · A/B map')
           p.write_text(s,encoding='utf-8')
-
-          p=Path('.github/workflows/rf-finder-v062.yml')
-          s=p.read_text(encoding='utf-8').replace("versionName.*0.6.2-dev3","versionName.*0.6.2-dev4").replace('RF_Finder_Android_v0.6.2-dev3-debug.apk','RF_Finder_Android_v0.6.2-dev4-debug.apk').replace('RF-Finder-v0.6.2-dev3-location','RF-Finder-v0.6.2-dev4-map')
-          p.write_text(s,encoding='utf-8')
           PY
           node --check rf_finder/android/app/src/main/assets/location.js
           grep -q 'android.permission.INTERNET' rf_finder/android/app/src/main/AndroidManifest.xml
@@ -65,7 +61,7 @@ jobs:
         run: |
           git config user.name arcanalord
           git config user.email 30724643+arcanalord@users.noreply.github.com
-          git add rf_finder/android .github/workflows/rf-finder-v062.yml
+          git add rf_finder/android
           git commit -m 'RF Finder v0.6.2-dev4: map-first A/B UX, remove replaced controls [skip ci]'
           git push
 
