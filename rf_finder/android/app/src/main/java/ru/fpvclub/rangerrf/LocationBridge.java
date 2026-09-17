@@ -3,10 +3,12 @@ package ru.fpvclub.rangerrf;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -16,6 +18,7 @@ import android.webkit.WebView;
 import org.json.JSONObject;
 
 import java.util.List;
+import java.util.Locale;
 
 public final class LocationBridge {
     private static final int REQUEST_LOCATION = 2401;
@@ -37,6 +40,22 @@ public final class LocationBridge {
     @JavascriptInterface
     public void requestFix() {
         main.post(this::requestFixOnMain);
+    }
+
+    @JavascriptInterface
+    public void openMap(double lat, double lon) {
+        main.post(() -> {
+            try {
+                String q = String.format(Locale.US, "geo:%.7f,%.7f?q=%.7f,%.7f(RF%%20target)", lat, lon, lat, lon);
+                Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(q));
+                activity.startActivity(i);
+            } catch (Exception first) {
+                try {
+                    String url = String.format(Locale.US, "https://www.openstreetmap.org/?mlat=%.7f&mlon=%.7f#map=18/%.7f/%.7f", lat, lon, lat, lon);
+                    activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                } catch (Exception ignored) {}
+            }
+        });
     }
 
     @JavascriptInterface
