@@ -14,7 +14,7 @@ function mount(){
  const old=$('rfLoc');if(old)old.remove();
  const bearing=$('bearing');if(!bearing)return;
  const host=document.createElement('article');host.id='rfLoc';host.className='card section';host.innerHTML=`
- <div class="head"><div><div class="label">ЛОКАЦИЯ</div><div class="muted rfLocSub">A/B · пассивная триангуляция · карта north-up</div></div><button id="rfLocReset" class="btn">Сброс</button></div>
+ <div class="head"><div><div class="label">ЛОКАЦИЯ</div><div class="muted rfLocSub">A/B · пассивная триангуляция · карта north-up</div></div></div>
  <div id="rfMap" class="rfMap" aria-label="Карта пеленгов">
   <div id="rfMapTiles" class="rfMapTiles"></div><svg id="rfMapOverlay" class="rfMapOverlay"></svg>
   <div class="rfMapBar"><span id="rfMapMode" class="rfMapMode">СХЕМА · жду A</span><div class="rfMapControls"><button id="rfMapMinus" aria-label="Уменьшить">−</button><button id="rfMapAuto" aria-label="Автомасштаб">◎</button><button id="rfMapPlus" aria-label="Увеличить">+</button></div></div>
@@ -24,12 +24,12 @@ function mount(){
   <div class="rfLocRow"><span class="rfLocBadge">A</span><div><b id="rfLocA">—</b><small id="rfLocAMeta">не записана</small></div></div>
   <div class="rfLocRow"><span class="rfLocBadge">B</span><div><b id="rfLocB">—</b><small id="rfLocBMeta">не записана</small></div></div>
  </div>
- <div class="rfLocActions"><button id="rfLocCapture" class="btn primary">ЗАПИСАТЬ A</button><button id="rfLocClear" class="btn">Очистить</button></div>
+ <div class="rfLocActions"><button id="rfLocCapture" class="btn primary">ЗАПИСАТЬ A</button><button id="rfLocClear" class="btn">Сброс</button></div>
  <div class="rfLocTarget"><div class="rfLocTargetHead"><span class="label">ОЦЕНКА ЦЕЛИ</span><button id="rfLocOpen" class="btn rfLocHidden">В КАРТЫ</button></div><strong id="rfLocTarget">—</strong><small id="rfLocQuality">Сначала запиши A, затем B</small></div>`;
- bearing.appendChild(host);
+ const controls=bearing.querySelector('.controls.section');bearing.insertBefore(host,controls||null);
  $('rfLocCapture').onclick=()=>capture(!points.A?'A':'B');
  const clear=()=>{points={A:null,B:null};pendingPoint=null;targetResult=null;manualZoom=0;persist();render();};
- $('rfLocReset').onclick=clear;$('rfLocClear').onclick=clear;
+ $('rfLocClear').onclick=clear;
  $('rfMapMinus').onclick=()=>{manualZoom=Math.max(-5,manualZoom-1);renderMap();};
  $('rfMapPlus').onclick=()=>{manualZoom=Math.min(5,manualZoom+1);renderMap();};
  $('rfMapAuto').onclick=()=>{manualZoom=0;renderMap();};
@@ -69,7 +69,7 @@ function toLL(x,y,lat0,lon0){const rad=Math.PI/180;return{lat:lat0+y/EARTH/rad,l
 function cross(ax,ay,bx,by){return ax*by-ay*bx;}
 function elrsUid(src){const m=String(src||'').match(/^ELRS\s+([0-9A-Fa-f]{6})\b/);return m?m[1].toUpperCase():null;}
 function triangulate(a,b){
- const ua=elrsUid(a.source),ub=elrsUid(b.source);if(ua||ub){if(!ua||!ub)return{ok:false,reason:'Одна из точек не имеет подтвержденного ELRS source-lock'};if(ua!==ub)return{ok:false,reason:'A и B относятся к разным ELRS UID'};}
+ const ua=elrsUid(a.source),ub=elrsUid(b.source),ae=String(a.source||'').startsWith('ELRS'),be=String(b.source||'').startsWith('ELRS');if(ae||be){if(!ua||!ub)return{ok:false,reason:'Для A и B нужен один подтвержденный ELRS UID'};if(ua!==ub)return{ok:false,reason:'A и B относятся к разным ELRS UID'};}else if(String(a.source||'')!==String(b.source||''))return{ok:false,reason:'A и B измерены на разных RF-источниках'};
  const lat0=(a.lat+b.lat)/2,lon0=(a.lon+b.lon)/2,A=toXY(a.lat,a.lon,lat0,lon0),B=toXY(b.lat,b.lon,lat0,lon0);
  const ar=a.bearing*Math.PI/180,br=b.bearing*Math.PI/180,dA={x:Math.sin(ar),y:Math.cos(ar)},dB={x:Math.sin(br),y:Math.cos(br)};
  const den=cross(dA.x,dA.y,dB.x,dB.y);if(Math.abs(den)<1e-4)return{ok:false,reason:'Пеленги почти параллельны'};
