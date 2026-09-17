@@ -1,0 +1,97 @@
+name: RF Finder v0.6.2 map cleanup
+
+on:
+  push:
+    branches: [rf-finder-v0.6.2]
+    paths: ['.github/workflows/rf-finder-v062-map-cleanup.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Replace old location UI cleanly
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('rf_finder/android/app/src/main/assets/location.js')
+          s=p.read_text(encoding='utf-8')
+          old='<div class="head"><div><div class="label">ЛОКАЦИЯ</div><div class="muted rfLocSub">A/B · пассивная триангуляция · карта north-up</div></div><button id="rfLocReset" class="btn">Сброс</button></div>'
+          new='<div class="head"><div><div class="label">ЛОКАЦИЯ</div><div class="muted rfLocSub">A/B · пассивная триангуляция · карта north-up</div></div></div>'
+          assert old in s
+          s=s.replace(old,new,1)
+          assert "bearing.appendChild(host);" in s
+          s=s.replace("bearing.appendChild(host);","const controls=bearing.querySelector('.controls.section');bearing.insertBefore(host,controls||null);",1)
+          assert "$('rfLocReset').onclick=clear;$('rfLocClear').onclick=clear;" in s
+          s=s.replace("$('rfLocReset').onclick=clear;$('rfLocClear').onclick=clear;","$('rfLocClear').onclick=clear;",1)
+          s=s.replace('<button id="rfLocClear" class="btn">Очистить</button>','<button id="rfLocClear" class="btn">Сброс</button>',1)
+          old="const ua=elrsUid(a.source),ub=elrsUid(b.source);if(ua||ub){if(!ua||!ub)return{ok:false,reason:'Одна из точек не имеет подтвержденного ELRS source-lock'};if(ua!==ub)return{ok:false,reason:'A и B относятся к разным ELRS UID'};}"
+          new="const ua=elrsUid(a.source),ub=elrsUid(b.source),ae=String(a.source||'').startsWith('ELRS'),be=String(b.source||'').startsWith('ELRS');if(ae||be){if(!ua||!ub)return{ok:false,reason:'Для A и B нужен один подтвержденный ELRS UID'};if(ua!==ub)return{ok:false,reason:'A и B относятся к разным ELRS UID'};}else if(String(a.source||'')!==String(b.source||''))return{ok:false,reason:'A и B измерены на разных RF-источниках'};"
+          assert old in s
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('rf_finder/android/app/src/main/AndroidManifest.xml')
+          s=p.read_text(encoding='utf-8')
+          if 'android.permission.INTERNET' not in s:
+              s=s.replace('<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />','<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',1)
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('rf_finder/android/app/build.gradle')
+          s=p.read_text(encoding='utf-8').replace('versionCode 12','versionCode 13').replace("versionName '0.6.2-dev3'","versionName '0.6.2-dev4'")
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('rf_finder/android/app/src/main/assets/index.html')
+          s=p.read_text(encoding='utf-8').replace("app:'0.6.2-dev2'","app:'0.6.2-dev4'").replace('FPV Club RF Finder v0.6.2-dev2 · RX-only · bearing mode recovery','FPV Club RF Finder v0.6.2-dev4 · RX-only · A/B map')
+          p.write_text(s,encoding='utf-8')
+
+          p=Path('.github/workflows/rf-finder-v062.yml')
+          s=p.read_text(encoding='utf-8').replace("versionName.*0.6.2-dev3","versionName.*0.6.2-dev4").replace('RF_Finder_Android_v0.6.2-dev3-debug.apk','RF_Finder_Android_v0.6.2-dev4-debug.apk').replace('RF-Finder-v0.6.2-dev3-location','RF-Finder-v0.6.2-dev4-map')
+          p.write_text(s,encoding='utf-8')
+          PY
+          node --check rf_finder/android/app/src/main/assets/location.js
+          grep -q 'android.permission.INTERNET' rf_finder/android/app/src/main/AndroidManifest.xml
+          grep -q "versionName '0.6.2-dev4'" rf_finder/android/app/build.gradle
+          test "$(grep -o 'id="rfLocReset"' rf_finder/android/app/src/main/assets/location.js | wc -l)" -eq 0
+          test "$(grep -o 'id="rfLocClear"' rf_finder/android/app/src/main/assets/location.js | wc -l)" -eq 1
+
+      - name: Commit source
+        shell: bash
+        run: |
+          git config user.name arcanalord
+          git config user.email 30724643+arcanalord@users.noreply.github.com
+          git add rf_finder/android .github/workflows/rf-finder-v062.yml
+          git commit -m 'RF Finder v0.6.2-dev4: map-first A/B UX, remove replaced controls [skip ci]'
+          git push
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK 36
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+      - name: Build Android
+        working-directory: rf_finder/android
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p out
+          cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/RF_Finder_Android_v0.6.2-dev4-debug.apk
+          sha256sum out/RF_Finder_Android_v0.6.2-dev4-debug.apk > out/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: RF-Finder-Android-v0.6.2-dev4-map
+          path: out/*
