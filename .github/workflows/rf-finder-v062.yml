@@ -124,6 +124,30 @@ jobs:
           python-version: '3.11'
       - name: Install PlatformIO
         run: python -m pip install --upgrade platformio
+
+      - name: Compile SX1280 Fusion backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > src/rf_fusion3_compile_probe.cpp <<'CPP'
+          #include "SX1280Driver.h"
+          #include "fusion3_profiles.h"
+          #include "fusion3_sx1280_backend.h"
+          void rfFusion3CompileProbe(SX1280Driver &radio) {
+              rf_fusion3::Sx1280RangingBackend backend(
+                  radio,
+                  rf_fusion3::kNodeA,
+                  rf_fusion3::kBenchFast,
+                  0,
+                  0
+              );
+              backend.setDefaultSigmaMm(1500);
+              backend.setCalibrationId("UNCAL");
+          }
+          CPP
+          cd src
+          PLATFORMIO_BUILD_FLAGS="-DRegulatory_Domain_ISM_2400 -I../rf_finder/sx1280_fusion"             pio run -e Unified_ESP32_2400_RX_via_UART
+
       - name: Build firmware
         working-directory: rf_finder/firmware
         run: pio run -e rf_finder_lr1121_c3
