@@ -611,6 +611,12 @@ static void printInfo()
     Serial.printf("I,config,settle_us,%lu\n", settleDelayUs);
     Serial.printf("I,config,gain,%s\n", rxBoosted ? "BOOSTED" : "NORMAL");
     Serial.printf("I,cap,protocol,%s\n", PROTOCOL_VERSION);
+    Serial.println("I,cap,hardware_profile,DAKER_LR1121");
+    Serial.println("I,cap,direction,1");
+    Serial.println("I,cap,instant_rssi,1");
+    Serial.println("I,cap,sweep,1");
+    Serial.println("I,cap,source_lock,1");
+    Serial.println("I,cap,ranging,0");
     Serial.printf("I,cap,step_hz,%lu,%lu\n", MIN_STEP_HZ, MAX_STEP_HZ);
     Serial.printf("I,cap,dwell_ms,%lu,%lu\n", MIN_DWELL_MS, MAX_DWELL_MS);
     Serial.printf("I,cap,avg_samples,%u,%u\n", MIN_AVG_SAMPLES, MAX_AVG_SAMPLES);
