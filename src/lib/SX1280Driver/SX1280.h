@@ -52,6 +52,7 @@ public:
     uint8_t GetRangingPowerDeltaIndicator(SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_1);
     void StartRangingMaster(SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
     void StartRangingSlave(SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
+    uint16_t ConsumeRangingIrqStatus();
 
 
     bool GetFrequencyErrorbool();
@@ -80,6 +81,7 @@ private:
     uint8_t pwrCurrent;
     uint8_t pwrPending;
     SX1280_RadioOperatingModes_t fallBackMode;
+    volatile uint16_t rangingIrqStatus;
 
     void SetMode(SX1280_RadioOperatingModes_t OPmode, SX12XX_Radio_Number_t radioNumber);
     void SetFIFOaddr(uint8_t txBaseAddr, uint8_t rxBaseAddr);
