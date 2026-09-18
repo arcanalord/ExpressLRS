@@ -96,3 +96,5 @@ jobs:
         with:
           name: RF-Finder-v0.6.2-dev5-fusion
           path: out/*
+
+# dev5 Station/Source/Fusion validation
