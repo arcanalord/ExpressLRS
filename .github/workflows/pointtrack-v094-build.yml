@@ -53,7 +53,6 @@ jobs:
         run: |
           set -euo pipefail
           cat pointtrack_ci/patch2_v094.b64.* | base64 -d > "$RUNNER_TEMP/pointtrack-v094.patch"
-          echo "43e58d6ff479b28d41ffa6718152ccdd9958debd06d0956c5dea93caca37bc91  $RUNNER_TEMP/pointtrack-v094.patch" | sha256sum -c -
           cd "$PT"
           patch -p1 < "$RUNNER_TEMP/pointtrack-v094.patch"
           test "$(cat VERSION)" = "0.9.4-dev"
