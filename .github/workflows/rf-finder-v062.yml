@@ -10,6 +10,10 @@ on:
       - 'rf_finder/protocol/**'
       - 'rf_finder/sx1280_fusion/**'
       - 'src/lib/SX1280Driver/**'
+      - 'src/include/target/RF_Fusion3_ESP32S3_Zero.h'
+      - 'src/targets/rf_finder_fusion3.ini'
+      - 'src/src/rf_fusion3_bench_main.cpp'
+      - 'src/platformio.ini'
       - '.github/workflows/rf-finder-v062.yml'
   workflow_dispatch:
 
