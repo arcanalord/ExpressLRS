@@ -35,8 +35,12 @@ jobs:
           grep -q 'ACCESS_FINE_LOCATION' rf_finder/android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.INTERNET' rf_finder/android/app/src/main/AndroidManifest.xml
           grep -q 'versionName.*0.6.2-dev5' rf_finder/android/app/build.gradle
-          test "$(grep -o 'id="rfLocClear"' rf_finder/android/app/src/main/assets/location.js | wc -l)" -eq 1
-          test "$(grep -o 'id="rfLocReset"' rf_finder/android/app/src/main/assets/location.js | wc -l)" -eq 0
+          grep -q 'СВОЙ МОДУЛЬ' rf_finder/android/app/src/main/assets/location.js
+          grep -q 'ЛЮБОЙ RF' rf_finder/android/app/src/main/assets/location.js
+          grep -q 'РАДИОДАЛЬНОСТЬ A↔B' rf_finder/android/app/src/main/assets/location.js
+          grep -q 'GPS — только необязательное' rf_finder/android/app/src/main/assets/location.js
+          ! grep -q 'ЗАПИСАТЬ A' rf_finder/android/app/src/main/assets/location.js
+          ! grep -q 'java.lang.reflect.Field' rf_finder/android/app/src/main/java/ru/fpvclub/rangerrf/LocationAwareActivity.java
 
       - name: RX-only invariant
         shell: bash
@@ -83,7 +87,7 @@ jobs:
           cp rf_finder/firmware/.pio/build/rf_finder_lr1121_c3/firmware.bin out/RF_Finder_DAKERFPV_LR1121_v0.6.2-dev1.bin
           cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/RF_Finder_Android_v0.6.2-dev5-debug.apk
           cd out
-          sha256sum RF_Finder_DAKERFPV_LR1121_v0.6.2-dev1.bin RF_Finder_Android_v0.6.2-dev4-debug.apk > SHA256SUMS.txt
+          sha256sum RF_Finder_DAKERFPV_LR1121_v0.6.2-dev1.bin RF_Finder_Android_v0.6.2-dev5-debug.apk > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v7
