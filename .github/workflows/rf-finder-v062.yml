@@ -1,4 +1,4 @@
-name: RF Finder v0.6.2 pair
+name: RF Finder v0.6.2 dev5 pair
 
 on:
   push:
@@ -38,6 +38,8 @@ jobs:
           grep -q 'СВОЙ МОДУЛЬ' rf_finder/android/app/src/main/assets/location.js
           grep -q 'ЛЮБОЙ RF' rf_finder/android/app/src/main/assets/location.js
           grep -q 'РАДИОДАЛЬНОСТЬ A↔B' rf_finder/android/app/src/main/assets/location.js
+          grep -q 'КОOРДИНАТЫ' rf_finder/android/app/src/main/assets/location.js || grep -q 'КООРДИНАТЫ' rf_finder/android/app/src/main/assets/location.js
+          grep -q 'Station / Source / Fusion' rf_finder/android/app/src/main/assets/index.html
           grep -q 'GPS — только необязательное' rf_finder/android/app/src/main/assets/location.js
           ! grep -q 'ЗАПИСАТЬ A' rf_finder/android/app/src/main/assets/location.js
           ! grep -q 'java.lang.reflect.Field' rf_finder/android/app/src/main/java/ru/fpvclub/rangerrf/LocationAwareActivity.java
