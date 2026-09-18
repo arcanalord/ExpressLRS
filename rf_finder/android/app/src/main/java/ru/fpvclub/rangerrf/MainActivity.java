@@ -54,7 +54,7 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
     private final float[] rotationMatrix = new float[9];
     private final float[] remappedMatrix = new float[9];
     private final float[] orientation = new float[3];
-    private WebView webView;
+    protected WebView webView;
     private UsbSerialPort serialPort;
     private SerialInputOutputManager ioManager;
     private UsbDevice connectedDevice;
@@ -99,10 +99,12 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setAllowFileAccess(true);
         webView.setWebChromeClient(new WebChromeClient());
+        configureWebView(webView);
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
                 pushStatus("USB-мост готов", "idle");
                 pushSensorState();
+                onWebUiReady();
                 main.postDelayed(MainActivity.this::connectUsb, 250);
             }
         });
@@ -111,6 +113,12 @@ public class MainActivity extends Activity implements SerialInputOutputManager.L
         registerUsbReceiver();
         webView.loadUrl("file:///android_asset/index.html");
     }
+
+    /** Extension hook for optional app features. Called before the local page is loaded. */
+    protected void configureWebView(WebView view) {}
+
+    /** Extension hook for optional app features. Called after the local page finishes loading. */
+    protected void onWebUiReady() {}
 
     @Override protected void onResume() {
         super.onResume();
