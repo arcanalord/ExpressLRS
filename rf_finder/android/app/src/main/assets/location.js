@@ -1,112 +1,105 @@
 (()=>{'use strict';
-if(window.__rfLocationLoaded)return;window.__rfLocationLoaded=true;
-const $=id=>document.getElementById(id);
-const STORE='rfFinder.location.v2',MAX_SESSION_MS=6*60*60*1000,TILE=256,EARTH=6371000;
-let points={A:null,B:null},pendingPoint=null,targetResult=null,manualZoom=0,mapEpoch=0;
+if(window.__rfFusionLoaded)return;window.__rfFusionLoaded=true;
+const $=id=>document.getElementById(id),STORE='rfFinder.fusion.v3',EARTH=6371000,TILE=256;
+let stations={A:newStation('A'),B:newStation('B')},sourceMode='ELRS',knownSourceId='',radioRangeM=null,target=null,pendingGps=null,placeId=null,mapView=null,zoomDelta=0,mapEpoch=0;
 
-function style(){
- const old=$('rf-location-style');if(old)old.remove();
- const s=document.createElement('style');s.id='rf-location-style';s.textContent=`
- #rfLoc{margin-top:14px}.rfLocSub{font-size:13px}.rfMap{position:relative;height:292px;overflow:hidden;border:1px solid var(--hair);border-radius:16px;background:#0A0D10;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:32px 32px}.rfMapTiles,.rfMapOverlay{position:absolute;inset:0;width:100%;height:100%}.rfMapTiles img{position:absolute;width:256px;height:256px;filter:grayscale(.25) brightness(.58) contrast(1.08);user-select:none;-webkit-user-drag:none}.rfMapOverlay{pointer-events:none}.rfMapBar{position:absolute;left:8px;right:8px;top:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;pointer-events:none}.rfMapMode{padding:5px 8px;border:1px solid rgba(255,255,255,.14);border-radius:9px;background:rgba(11,11,12,.82);font-size:12px;color:#D3D6DC;backdrop-filter:blur(8px)}.rfMapControls{display:flex;gap:6px;pointer-events:auto}.rfMapControls button{width:42px;height:42px;border-radius:11px;border:1px solid rgba(255,255,255,.18);background:rgba(17,19,22,.90);font-weight:800}.rfMapAttr{position:absolute;right:7px;bottom:5px;padding:2px 5px;border-radius:6px;background:rgba(0,0,0,.58);font-size:10px;color:#D7D7DC}.rfLocRows{margin-top:10px;border-top:1px solid var(--hair)}.rfLocRow{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--hair)}.rfLocBadge{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#1A1D22;border:1px solid var(--hair2);font-weight:800}.rfLocRow b{display:block;font:700 14px ui-monospace,monospace}.rfLocRow small{display:block;color:var(--muted);margin-top:2px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rfLocActions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:10px}.rfLocActions button{min-height:48px}.rfLocTarget{margin-top:10px;padding-top:10px;border-top:1px solid var(--hair)}.rfLocTargetHead{display:flex;justify-content:space-between;align-items:center;gap:8px}.rfLocTarget strong{display:block;font:750 19px ui-monospace,monospace;margin-top:3px;word-break:break-word}.rfLocTarget small{display:block;color:var(--muted);margin-top:4px}.rfLocWarn{color:var(--yellow)!important}.rfLocGood{color:var(--green)!important}.rfLocHidden{display:none!important}@media(max-width:620px){.rfMap{height:255px}.rfLocActions{grid-template-columns:1fr auto}}
- `;document.head.appendChild(s);
+function newStation(id){return{id:id,lat:null,lon:null,accuracyM:null,provider:null,bearing:null,bearingAt:null,rssi:null,sourceKey:null,sourceLabel:null};}
+function css(){
+ const s=document.createElement('style');s.id='rf-fusion-style';s.textContent=
+ '#rfFusion{margin-top:14px}.rfMode{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}.rfMode button{min-height:44px;border:1px solid var(--hair2);background:#191B1F;border-radius:12px;font-weight:700}.rfMode button.active{background:rgba(10,132,255,.18);border-color:rgba(10,132,255,.7)}'+
+ '.rfSource{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:10px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}.rfSource small,.rfStation small,.rfRange small{display:block;color:var(--muted);margin-top:3px}.rfSource input,.rfRange input,.rfManual input{min-height:44px;border:1px solid var(--hair2);border-radius:10px;background:#0B0D10;padding:0 9px}'+
+ '.rfMap{position:relative;height:290px;overflow:hidden;border:1px solid var(--hair);border-radius:16px;background:#0A0D10;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:32px 32px;margin-top:10px;touch-action:manipulation}.rfMapTiles,.rfMapOverlay{position:absolute;inset:0;width:100%;height:100%}.rfMapTiles img{position:absolute;width:256px;height:256px;filter:grayscale(.25) brightness(.58) contrast(1.08);user-select:none;-webkit-user-drag:none}.rfMapOverlay{pointer-events:none}.rfMapBar{position:absolute;left:8px;right:8px;top:8px;display:flex;justify-content:space-between;pointer-events:none}.rfMapCtl{display:flex;gap:6px;pointer-events:auto}.rfMapCtl button{width:44px;height:44px;border-radius:11px;border:1px solid rgba(255,255,255,.18);background:rgba(17,19,22,.92);font-weight:800}.rfMapState,.rfMapHint{padding:5px 8px;border-radius:9px;background:rgba(11,11,12,.84);font-size:12px;color:#D3D6DC}.rfMapHint{position:absolute;left:8px;bottom:8px}.rfAttr{position:absolute;right:7px;bottom:5px;font-size:10px;color:#D7D7DC;background:rgba(0,0,0,.58);padding:2px 5px;border-radius:6px}'+
+ '.rfStations{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.rfStation{border:1px solid var(--hair);border-radius:14px;padding:10px;background:#0E1013}.rfStationHead{display:flex;align-items:center;justify-content:space-between}.rfBadge{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800}.rfA{background:rgba(10,132,255,.18);color:#74B9FF}.rfB{background:rgba(255,214,10,.12);color:#FFD60A}.rfStation b{display:block;margin-top:7px;font:700 14px ui-monospace,monospace}.rfActions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.rfActions button{min-height:44px;padding:0 7px}.rfManual{display:none;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}.rfManual.open{display:grid}.rfManual input{width:100%;min-width:0}.rfManual button{grid-column:1/-1;min-height:44px}'+
+ '.rfMetrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}.rfMetric{padding:8px;border:1px solid var(--hair);border-radius:11px;background:#0B0D10;text-align:center}.rfMetric span{display:block;color:var(--muted);font-size:12px}.rfMetric b{display:block;font:700 14px ui-monospace,monospace;margin-top:2px}.rfRange{display:grid;grid-template-columns:1fr 120px;gap:8px;align-items:end;margin-top:10px}.rfRange input{width:100%;text-align:center}.rfTarget{margin-top:10px;padding-top:10px;border-top:1px solid var(--hair)}.rfTarget strong{display:block;font:750 19px ui-monospace,monospace;margin-top:3px}.rfGood{color:var(--green)!important}.rfWarn{color:var(--yellow)!important}.rfHidden{display:none!important}@media(max-width:620px){.rfMode,.rfStations{grid-template-columns:1fr}.rfMetrics{grid-template-columns:1fr 1fr}.rfMap{height:250px}.rfSource{grid-template-columns:1fr}}';
+ document.head.appendChild(s);
+}
+function stationHtml(id){
+ return '<div class="rfStation"><div class="rfStationHead"><span class="rfBadge rf'+id+'">'+id+'</span><span id="rf'+id+'State" class="muted">не готова</span></div>'+
+ '<b id="rf'+id+'Pos">позиция —</b><small id="rf'+id+'Meta">пеленг —</small>'+
+ '<div class="rfActions"><button class="btn primary" data-bearing="'+id+'">ПЕЛЕНГ</button><button class="btn" data-gps="'+id+'">GPS</button><button class="btn" data-place="'+id+'">НА КАРТЕ</button><button class="btn" data-manual="'+id+'">КООРДИНАТЫ</button></div>'+
+ '<div id="rfManual'+id+'" class="rfManual"><input id="rfLat'+id+'" inputmode="decimal" placeholder="lat"><input id="rfLon'+id+'" inputmode="decimal" placeholder="lon"><button class="btn" data-apply="'+id+'">ПРИМЕНИТЬ</button></div></div>';
 }
 function mount(){
- const old=$('rfLoc');if(old)old.remove();
- const bearing=$('bearing');if(!bearing)return;
- const host=document.createElement('article');host.id='rfLoc';host.className='card section';host.innerHTML=`
- <div class="head"><div><div class="label">ЛОКАЦИЯ</div><div class="muted rfLocSub">A/B · пассивная триангуляция · карта north-up</div></div></div>
- <div id="rfMap" class="rfMap" aria-label="Карта пеленгов">
-  <div id="rfMapTiles" class="rfMapTiles"></div><svg id="rfMapOverlay" class="rfMapOverlay"></svg>
-  <div class="rfMapBar"><span id="rfMapMode" class="rfMapMode">СХЕМА · жду A</span><div class="rfMapControls"><button id="rfMapMinus" aria-label="Уменьшить">−</button><button id="rfMapAuto" aria-label="Автомасштаб">◎</button><button id="rfMapPlus" aria-label="Увеличить">+</button></div></div>
-  <div class="rfMapAttr">© OpenStreetMap contributors</div>
- </div>
- <div class="rfLocRows">
-  <div class="rfLocRow"><span class="rfLocBadge">A</span><div><b id="rfLocA">—</b><small id="rfLocAMeta">не записана</small></div></div>
-  <div class="rfLocRow"><span class="rfLocBadge">B</span><div><b id="rfLocB">—</b><small id="rfLocBMeta">не записана</small></div></div>
- </div>
- <div class="rfLocActions"><button id="rfLocCapture" class="btn primary">ЗАПИСАТЬ A</button><button id="rfLocClear" class="btn">Сброс</button></div>
- <div class="rfLocTarget"><div class="rfLocTargetHead"><span class="label">ОЦЕНКА ЦЕЛИ</span><button id="rfLocOpen" class="btn rfLocHidden">В КАРТЫ</button></div><strong id="rfLocTarget">—</strong><small id="rfLocQuality">Сначала запиши A, затем B</small></div>`;
- const controls=bearing.querySelector('.controls.section');bearing.insertBefore(host,controls||null);
- $('rfLocCapture').onclick=()=>capture(!points.A?'A':'B');
- const clear=()=>{points={A:null,B:null};pendingPoint=null;targetResult=null;manualZoom=0;persist();render();};
- $('rfLocClear').onclick=clear;
- $('rfMapMinus').onclick=()=>{manualZoom=Math.max(-5,manualZoom-1);renderMap();};
- $('rfMapPlus').onclick=()=>{manualZoom=Math.min(5,manualZoom+1);renderMap();};
- $('rfMapAuto').onclick=()=>{manualZoom=0;renderMap();};
- $('rfLocOpen').onclick=()=>{if(!targetResult||!targetResult.ok)return;try{AndroidLocation.openMap(targetResult.lat,targetResult.lon);}catch(e){status('Не удалось открыть внешнюю карту','warn');}};
- restore();render();
+ const old=$('rfLoc')||$('rfFusion');if(old)old.remove();const host=$('bearing');if(!host)return;
+ const card=document.createElement('article');card.id='rfFusion';card.className='card section';
+ card.innerHTML='<div class="head"><div><div class="label">A/B/T · КАРТА И FUSION</div><div class="muted">Позиция и пеленг независимы. GPS — только необязательное уточнение точки.</div></div></div>'+
+ '<div class="label">ИСТОЧНИК</div><div class="rfMode"><button data-mode="KNOWN">СВОЙ МОДУЛЬ</button><button data-mode="ELRS">ELRS</button><button data-mode="RF">ЛЮБОЙ RF</button></div>'+
+ '<div class="rfSource"><div><strong id="rfSourceTitle">—</strong><small id="rfSourceMeta">—</small></div><input id="rfKnownId" class="rfHidden" placeholder="ID своего модуля"></div>'+
+ '<div id="rfMap" class="rfMap"><div id="rfMapTiles" class="rfMapTiles"></div><svg id="rfMapOverlay" class="rfMapOverlay"></svg><div class="rfMapBar"><span id="rfMapState" class="rfMapState">СХЕМА</span><div class="rfMapCtl"><button id="rfMinus">−</button><button id="rfAuto">◎</button><button id="rfPlus">+</button></div></div><div id="rfMapHint" class="rfMapHint">A: GPS или координаты</div><div class="rfAttr">© OpenStreetMap contributors</div></div>'+
+ '<div class="rfStations">'+stationHtml('A')+stationHtml('B')+'</div>'+
+ '<div class="rfMetrics"><div class="rfMetric"><span>BASE A–B</span><b id="rfBase">—</b></div><div class="rfMetric"><span>SYNC Δt</span><b id="rfSync">—</b></div><div class="rfMetric"><span>УГОЛ</span><b id="rfAngle">—</b></div><div class="rfMetric"><span>RANGE Δ</span><b id="rfRangeDelta">—</b></div></div>'+
+ '<div class="rfRange"><div><div class="label">РАДИОДАЛЬНОСТЬ A↔B · опционально</div><small>Контроль базы. Само по себе расстояние не задаёт 2D положение B.</small></div><input id="rfRadioRange" type="number" inputmode="decimal" min="0" step="0.1" placeholder="метры"></div>'+
+ '<div class="rfTarget"><div class="head"><span class="label">ЦЕЛЬ T</span><button id="rfOpenTarget" class="btn rfHidden">В КАРТЫ</button></div><strong id="rfTarget">—</strong><small id="rfQuality">Нужны позиции и пеленги A/B</small></div>';
+ const controls=host.querySelector('.controls.section');host.insertBefore(card,controls||null);bind();restore();render();
 }
-function parseDeg(id){const e=$(id);if(!e)return null;const m=(e.textContent||'').match(/(-?\d+(?:\.\d+)?)/);if(!m)return null;const v=Number(m[1]);return Number.isFinite(v)?((v%360)+360)%360:null;}
-function currentBearing(){const best=parseDeg('bestHeading');return Number.isFinite(best)?best:null;}
-function currentRssi(){const e=$('bestPass');if(!e)return null;const m=(e.textContent||'').match(/-?\d+(?:\.\d+)?/);const v=m?Number(m[0]):NaN;return Number.isFinite(v)?v:null;}
-function currentSource(){
- const log=$('log');if(log){const lines=(log.textContent||'').split(/\n/).reverse();for(const line of lines){if(line.includes('E,ELRS,CONFIRMED')){const p=line.replace(/^<\s*/,'').trim().split(',');const uid=p.length>=9?p[8].trim():'';return uid?'ELRS '+uid:'ELRS CONFIRMED';}}}
- const er=$('elrsResult');if(er&&/ПОДТВЕРЖД|CONFIRMED/i.test(er.textContent||''))return (er.textContent||'').trim();
- const f=$('fixedText');return f?'RF '+(f.textContent||'').trim():'RF source';
+function bind(){
+ document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{sourceMode=b.dataset.mode;clearBearings();persist();render();});
+ $('rfKnownId').onchange=e=>{knownSourceId=(e.target.value||'').trim();persist();render();};
+ document.querySelectorAll('[data-bearing]').forEach(b=>b.onclick=()=>captureBearing(b.dataset.bearing));
+ document.querySelectorAll('[data-gps]').forEach(b=>b.onclick=()=>gps(b.dataset.gps));
+ document.querySelectorAll('[data-place]').forEach(b=>b.onclick=()=>beginPlace(b.dataset.place));
+ document.querySelectorAll('[data-manual]').forEach(b=>b.onclick=()=>$('rfManual'+b.dataset.manual).classList.toggle('open'));
+ document.querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>manual(b.dataset.apply));
+ $('rfRadioRange').onchange=e=>{const v=Number(e.target.value);radioRangeM=Number.isFinite(v)&&v>0?v:null;persist();render();};
+ $('rfMinus').onclick=()=>{zoomDelta=Math.max(-5,zoomDelta-1);renderMap();};$('rfPlus').onclick=()=>{zoomDelta=Math.min(5,zoomDelta+1);renderMap();};$('rfAuto').onclick=()=>{zoomDelta=0;renderMap();};
+ $('rfMap').onclick=mapClick;$('rfOpenTarget').onclick=()=>{if(target&&target.ok&&typeof AndroidLocation!=='undefined')AndroidLocation.openMap(target.lat,target.lon);};
 }
-function capture(name){
- const bearing=currentBearing();if(!Number.isFinite(bearing)){status('Сначала получи устойчивый лучший пеленг','warn');return;}
- if(typeof AndroidLocation==='undefined'){status('Геолокация доступна только в Android APK','warn');return;}
- pendingPoint={name,bearing,rssi:currentRssi(),source:currentSource(),takenAt:Date.now()};
- status('Получаю свежий GPS fix для точки '+name+'…');
- try{AndroidLocation.requestFix();}catch(e){pendingPoint=null;status('Ошибка GPS: '+e,'warn');}
+function clearBearings(){['A','B'].forEach(id=>{let s=stations[id];s.bearing=null;s.bearingAt=null;s.rssi=null;s.sourceKey=null;s.sourceLabel=null;});target=null;}
+function numFrom(id){const e=$(id),m=e?(e.textContent||'').match(/-?\d+(?:\.\d+)?/):null,v=m?Number(m[0]):NaN;return Number.isFinite(v)?v:null;}
+function latestElrs(){
+ const log=$('log');if(log){const lines=(log.textContent||'').split(/\n/).reverse();for(const line of lines){if(line.includes('E,ELRS,CONFIRMED')){const p=line.trim().split(','),uid=p.length>=9?p[8].trim().toUpperCase():'';if(uid)return{key:'ELRS:'+uid,label:'ELRS '+uid};}}}return null;
 }
-window.onLocationFix=o=>{
- if(!pendingPoint)return;
- const lat=Number(o.lat),lon=Number(o.lon),timeMs=Number(o.timeMs),age=Number.isFinite(timeMs)?Date.now()-timeMs:0;
- if(!Number.isFinite(lat)||!Number.isFinite(lon)){pendingPoint=null;status('Некорректный GPS fix','warn');return;}
- if(o.cached&&Number.isFinite(age)&&age>120000){pendingPoint=null;status('GPS fix устарел ('+Math.round(age/1000)+' с). Нужна свежая позиция','warn');return;}
- const p={...pendingPoint,lat,lon,accuracyM:Number(o.accuracyM),altitudeM:Number(o.altitudeM),provider:o.provider||'',cached:!!o.cached,locationTimeMs:timeMs};
- points[pendingPoint.name]=p;if(pendingPoint.name==='A')points.B=null;pendingPoint=null;manualZoom=0;persist();render();
-};
-window.onLocationError=msg=>{pendingPoint=null;status(String(msg||'GPS ошибка'),'warn');};
-function status(text,kind=''){const q=$('rfLocQuality');if(!q)return;q.textContent=text;q.className=kind==='warn'?'rfLocWarn':kind==='good'?'rfLocGood':'';}
-function fmtCoord(v){return Number.isFinite(v)?v.toFixed(6):'—';}
-function fmtAge(ms){const d=Math.max(0,Date.now()-ms);if(d<60000)return Math.round(d/1000)+' с назад';if(d<3600000)return Math.round(d/60000)+' мин назад';return Math.round(d/3600000)+' ч назад';}
-function renderPoint(name,p){const main=$('rfLoc'+name),meta=$('rfLoc'+name+'Meta');if(!main||!meta)return;if(!p){main.textContent='—';meta.textContent='не записана';return;}main.textContent=`${fmtCoord(p.lat)}, ${fmtCoord(p.lon)} · ${p.bearing.toFixed(1)}°`;const acc=Number.isFinite(p.accuracyM)?`GPS ±${Math.round(p.accuracyM)} м`:'GPS ?';const r=Number.isFinite(p.rssi)?` · ${p.rssi.toFixed(1)} dBm`:'';meta.textContent=`${acc}${r} · ${p.source} · ${fmtAge(p.takenAt)}${p.cached?' · cached':''}`;}
-function toXY(lat,lon,lat0,lon0){const rad=Math.PI/180;return{x:(lon-lon0)*rad*EARTH*Math.cos(lat0*rad),y:(lat-lat0)*rad*EARTH};}
-function toLL(x,y,lat0,lon0){const rad=Math.PI/180;return{lat:lat0+y/EARTH/rad,lon:lon0+x/(EARTH*Math.cos(lat0*rad))/rad};}
+function source(){
+ if(sourceMode==='KNOWN')return knownSourceId?{ok:true,key:'KNOWN:'+knownSourceId,label:'СВОЙ '+knownSourceId}:{ok:false,label:'Укажи ID своего модуля'};
+ if(sourceMode==='ELRS'){const e=latestElrs();return e?{ok:true,key:e.key,label:e.label}:{ok:false,label:'ELRS: нужен CONFIRMED source-lock'};}
+ const f=$('fixedText');return{ok:true,key:'RF:'+((f&&f.textContent)||'unknown'),label:'RF '+((f&&f.textContent)||'unknown'),weak:true};
+}
+function captureBearing(id){
+ const b=numFrom('bestHeading');if(!Number.isFinite(b)){setQuality('Сначала получи устойчивый лучший пеленг','warn');return;}const src=source();if(!src.ok){setQuality(src.label,'warn');return;}
+ const s=stations[id];s.bearing=((b%360)+360)%360;s.bearingAt=Date.now();s.rssi=numFrom('bestPass');s.sourceKey=src.key;s.sourceLabel=src.label;persist();render();
+}
+function gps(id){if(typeof AndroidLocation==='undefined'){setQuality('GPS доступен только в Android APK','warn');return;}pendingGps=id;setQuality('Получаю GPS для '+id+'…');try{AndroidLocation.requestFix();}catch(e){pendingGps=null;setQuality('GPS ошибка','warn');}}
+window.onLocationFix=o=>{if(!pendingGps)return;const id=pendingGps;pendingGps=null;const lat=Number(o.lat),lon=Number(o.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon)){setQuality('Некорректный GPS fix','warn');return;}Object.assign(stations[id],{lat:lat,lon:lon,accuracyM:Number(o.accuracyM),provider:o.cached?'GNSS cached':'GNSS'});zoomDelta=0;persist();render();};
+window.onLocationError=m=>{pendingGps=null;setQuality(String(m||'GPS ошибка'),'warn');};
+function manual(id){const lat=Number($('rfLat'+id).value),lon=Number($('rfLon'+id).value);if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180){setQuality('Проверь координаты '+id,'warn');return;}Object.assign(stations[id],{lat:lat,lon:lon,accuracyM:null,provider:'MANUAL'});$('rfManual'+id).classList.remove('open');zoomDelta=0;persist();render();}
+function beginPlace(id){if(!mapView){setQuality('Сначала задай хотя бы одну позицию GPS или координатами','warn');return;}placeId=id;setQuality('Тапни по карте: поставить '+id);renderMap();}
+function mapClick(e){if(!placeId||!mapView)return;const r=$('rfMap').getBoundingClientRect(),wx=mapView.cx+(e.clientX-r.left-r.width/2),wy=mapView.cy+(e.clientY-r.top-r.height/2),ll=invMerc(wx,wy,mapView.z);Object.assign(stations[placeId],{lat:ll.lat,lon:ll.lon,accuracyM:null,provider:'MAP'});placeId=null;persist();render();}
+function setQuality(t,k){const e=$('rfQuality');if(!e)return;e.textContent=t;e.className=k==='warn'?'rfWarn':k==='good'?'rfGood':'';}
+function coord(v){return Number.isFinite(v)?v.toFixed(6):'—';}
+function age(ms){if(!Number.isFinite(ms))return '—';const d=Date.now()-ms;return d<60000?Math.round(d/1000)+' с':d<3600000?Math.round(d/60000)+' мин':Math.round(d/3600000)+' ч';}
+function ready(s){return Number.isFinite(s.lat)&&Number.isFinite(s.lon)&&Number.isFinite(s.bearing);}
+function renderStation(id){const s=stations[id],pos=Number.isFinite(s.lat),b=Number.isFinite(s.bearing);$('rf'+id+'Pos').textContent=pos?coord(s.lat)+', '+coord(s.lon)+' · '+(s.provider||'position'):'позиция —';$('rf'+id+'Meta').textContent=b?'пеленг '+s.bearing.toFixed(1)+'° · '+s.sourceLabel+' · RSSI '+(Number.isFinite(s.rssi)?s.rssi.toFixed(1):'—')+' · '+age(s.bearingAt):'пеленг —';$('rf'+id+'State').textContent=ready(s)?'готова':(pos||b?'частично':'не готова');}
+function xy(lat,lon,lat0,lon0){const r=Math.PI/180;return{x:(lon-lon0)*r*EARTH*Math.cos(lat0*r),y:(lat-lat0)*r*EARTH};}
+function ll(x,y,lat0,lon0){const r=Math.PI/180;return{lat:lat0+y/EARTH/r,lon:lon0+x/(EARTH*Math.cos(lat0*r))/r};}
 function cross(ax,ay,bx,by){return ax*by-ay*bx;}
-function elrsUid(src){const m=String(src||'').match(/^ELRS\s+([0-9A-Fa-f]{6})\b/);return m?m[1].toUpperCase():null;}
-function triangulate(a,b){
- const ua=elrsUid(a.source),ub=elrsUid(b.source),ae=String(a.source||'').startsWith('ELRS'),be=String(b.source||'').startsWith('ELRS');if(ae||be){if(!ua||!ub)return{ok:false,reason:'Для A и B нужен один подтвержденный ELRS UID'};if(ua!==ub)return{ok:false,reason:'A и B относятся к разным ELRS UID'};}else if(String(a.source||'')!==String(b.source||''))return{ok:false,reason:'A и B измерены на разных RF-источниках'};
- const lat0=(a.lat+b.lat)/2,lon0=(a.lon+b.lon)/2,A=toXY(a.lat,a.lon,lat0,lon0),B=toXY(b.lat,b.lon,lat0,lon0);
- const ar=a.bearing*Math.PI/180,br=b.bearing*Math.PI/180,dA={x:Math.sin(ar),y:Math.cos(ar)},dB={x:Math.sin(br),y:Math.cos(br)};
- const den=cross(dA.x,dA.y,dB.x,dB.y);if(Math.abs(den)<1e-4)return{ok:false,reason:'Пеленги почти параллельны'};
- const qx=B.x-A.x,qy=B.y-A.y,tA=cross(qx,qy,dB.x,dB.y)/den,tB=cross(qx,qy,dA.x,dA.y)/den;
- const X={x:A.x+tA*dA.x,y:A.y+tA*dA.y},ll=toLL(X.x,X.y,lat0,lon0);
- let angle=Math.abs(((a.bearing-b.bearing+540)%360)-180);angle=Math.min(angle,180-angle);
- const baseline=Math.hypot(B.x-A.x,B.y-A.y),gps=Math.hypot(Number.isFinite(a.accuracyM)?a.accuracyM:0,Number.isFinite(b.accuracyM)?b.accuracyM:0);
- const forward=tA>=0&&tB>=0,range=Math.max(Math.abs(tA),Math.abs(tB)),geom=Math.max(.20,Math.sin(Math.max(1,angle)*Math.PI/180));
- const bearingSigmaDeg=8,dirErr=range*Math.tan(bearingSigmaDeg*Math.PI/180)/geom,rough=Math.max(gps,Math.hypot(gps,dirErr));
- const minBase=Math.max(20,2*((Number.isFinite(a.accuracyM)?a.accuracyM:5)+(Number.isFinite(b.accuracyM)?b.accuracyM:5)));
- return{ok:true,lat:ll.lat,lon:ll.lon,tA,tB,angle,baseline,rough,forward,minBase,range,bearingSigmaDeg};
+function base(a,b){const lat0=(a.lat+b.lat)/2,lon0=(a.lon+b.lon)/2,A=xy(a.lat,a.lon,lat0,lon0),B=xy(b.lat,b.lon,lat0,lon0);return Math.hypot(B.x-A.x,B.y-A.y);}
+function solve(a,b){
+ if(!ready(a)||!ready(b))return{ok:false,reason:'Нужны позиции и пеленги A/B'};if(!a.sourceKey||a.sourceKey!==b.sourceKey)return{ok:false,reason:'A и B должны относиться к одному источнику'};
+ const lat0=(a.lat+b.lat)/2,lon0=(a.lon+b.lon)/2,A=xy(a.lat,a.lon,lat0,lon0),B=xy(b.lat,b.lon,lat0,lon0),ar=a.bearing*Math.PI/180,br=b.bearing*Math.PI/180,dA={x:Math.sin(ar),y:Math.cos(ar)},dB={x:Math.sin(br),y:Math.cos(br)},den=cross(dA.x,dA.y,dB.x,dB.y);if(Math.abs(den)<1e-4)return{ok:false,reason:'Пеленги почти параллельны'};
+ const qx=B.x-A.x,qy=B.y-A.y,tA=cross(qx,qy,dB.x,dB.y)/den,tB=cross(qx,qy,dA.x,dA.y)/den,p=ll(A.x+tA*dA.x,A.y+tA*dA.y,lat0,lon0);let angle=Math.abs(((a.bearing-b.bearing+540)%360)-180);angle=Math.min(angle,180-angle);const baseline=Math.hypot(B.x-A.x,B.y-A.y),dt=Math.abs(a.bearingAt-b.bearingAt),range=Math.max(Math.abs(tA),Math.abs(tB)),geom=Math.max(.2,Math.sin(Math.max(1,angle)*Math.PI/180)),pose=Math.hypot(Number.isFinite(a.accuracyM)?a.accuracyM:3,Number.isFinite(b.accuracyM)?b.accuracyM:3),rough=Math.hypot(pose,range*Math.tan(8*Math.PI/180)/geom);return{ok:true,lat:p.lat,lon:p.lon,angle:angle,baseline:baseline,dt:dt,range:range,rough:rough,forward:tA>=0&&tB>=0};
 }
-function persist(){try{if(!points.A&&!points.B)localStorage.removeItem(STORE);else localStorage.setItem(STORE,JSON.stringify({savedAt:Date.now(),points}));}catch(e){}}
-function restore(){try{const raw=localStorage.getItem(STORE);if(!raw)return;const s=JSON.parse(raw);if(!s||Date.now()-Number(s.savedAt)>MAX_SESSION_MS){localStorage.removeItem(STORE);return;}if(s.points)points={A:s.points.A||null,B:s.points.B||null};}catch(e){}}
 function render(){
- renderPoint('A',points.A);renderPoint('B',points.B);const target=$('rfLocTarget'),open=$('rfLocOpen'),capture=$('rfLocCapture');if(capture)capture.textContent=!points.A?'ЗАПИСАТЬ A':!points.B?'ЗАПИСАТЬ B':'ОБНОВИТЬ B';
- targetResult=null;if(open)open.classList.add('rfLocHidden');
- if(!points.A||!points.B){target.textContent='—';status(!points.A?'Сначала запиши A':'A записана · отойди минимум на 30–100 м и запиши B');renderMap();return;}
- const r=triangulate(points.A,points.B);targetResult=r;if(!r.ok){target.textContent='—';status(r.reason,'warn');renderMap();return;}
- target.textContent=`${fmtCoord(r.lat)}, ${fmtCoord(r.lon)}`;if(open)open.classList.remove('rfLocHidden');
- const geom=r.angle<20?'плохая геометрия':r.angle<35?'слабая геометрия':'геометрия OK',base=r.baseline<r.minBase?'база мала':'база OK',dir=r.forward?'вперёд':'пересечение позади луча';
- const good=r.forward&&r.angle>=35&&r.baseline>=r.minBase;
- status(`база ${Math.round(r.baseline)} м · угол ${r.angle.toFixed(1)}° · ${base} · ${geom} · ${dir} · оценка ±${Math.round(r.rough)} м`,good?'good':'warn');renderMap();
+ document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===sourceMode));$('rfKnownId').classList.toggle('rfHidden',sourceMode!=='KNOWN');$('rfKnownId').value=knownSourceId;
+ const src=source();$('rfSourceTitle').textContent=sourceMode==='KNOWN'?(src.ok?src.label:'СВОЙ МОДУЛЬ · укажи ID'):sourceMode==='ELRS'?(src.ok?src.label:'ELRS · source-lock не подтверждён'):'ЛЮБОЙ RF · без протокольной идентификации';$('rfSourceMeta').textContent=sourceMode==='RF'?'A/B можно сравнить, но identity источника не гарантирована.':'T строится только при одинаковом source_id A и B.';
+ renderStation('A');renderStation('B');const a=stations.A,b=stations.B,hasPos=Number.isFinite(a.lat)&&Number.isFinite(b.lat),bl=hasPos?base(a,b):null,dt=Number.isFinite(a.bearingAt)&&Number.isFinite(b.bearingAt)?Math.abs(a.bearingAt-b.bearingAt):null;
+ $('rfBase').textContent=Number.isFinite(bl)?Math.round(bl)+' м':'—';$('rfSync').textContent=Number.isFinite(dt)?(dt<1000?dt+' ms':(dt/1000).toFixed(1)+' s'):'—';$('rfRadioRange').value=Number.isFinite(radioRangeM)?radioRangeM:'';$('rfRangeDelta').textContent=Number.isFinite(bl)&&Number.isFinite(radioRangeM)?((radioRangeM-bl)>=0?'+':'')+(radioRangeM-bl).toFixed(1)+' м':'—';
+ target=solve(a,b);$('rfAngle').textContent=target.ok?target.angle.toFixed(1)+'°':'—';$('rfOpenTarget').classList.toggle('rfHidden',!target.ok);$('rfTarget').textContent=target.ok?coord(target.lat)+', '+coord(target.lon):'—';
+ if(!target.ok)setQuality(target.reason,'warn');else{const weak=sourceMode==='RF',good=target.forward&&target.angle>=35&&target.dt<=5000&&!weak;setQuality('base '+Math.round(target.baseline)+' м · Δt '+(target.dt<1000?target.dt+' ms':(target.dt/1000).toFixed(1)+' s')+' · угол '+target.angle.toFixed(1)+'° · оценка ±'+Math.round(target.rough)+' м'+(weak?' · identity RF не подтверждена':''),good?'good':'warn');}
+ persist();renderMap();
 }
-function mercWorld(lat,lon,z){lat=Math.max(-85.05112878,Math.min(85.05112878,lat));const n=TILE*Math.pow(2,z),x=(lon+180)/360*n,rad=lat*Math.PI/180,y=(1-Math.log(Math.tan(rad)+1/Math.cos(rad))/Math.PI)/2*n;return{x,y};}
-function mapItems(){const out=[];if(points.A)out.push({kind:'A',...points.A});if(points.B)out.push({kind:'B',...points.B});if(targetResult&&targetResult.ok&&targetResult.forward&&targetResult.range<50000)out.push({kind:'T',lat:targetResult.lat,lon:targetResult.lon,rough:targetResult.rough});return out;}
-function chooseView(items,w,h){if(!items.length)return null;let auto=17;if(items.length>1){for(let z=19;z>=2;z--){const ps=items.map(p=>mercWorld(p.lat,p.lon,z)),xs=ps.map(p=>p.x),ys=ps.map(p=>p.y);if(Math.max(...xs)-Math.min(...xs)<=Math.max(80,w-72)&&Math.max(...ys)-Math.min(...ys)<=Math.max(80,h-72)){auto=z;break;}}}const z=Math.max(2,Math.min(19,auto+manualZoom)),ps=items.map(p=>mercWorld(p.lat,p.lon,z)),xs=ps.map(p=>p.x),ys=ps.map(p=>p.y);return{z,cx:(Math.min(...xs)+Math.max(...xs))/2,cy:(Math.min(...ys)+Math.max(...ys))/2};}
+function persist(){try{localStorage.setItem(STORE,JSON.stringify({savedAt:Date.now(),stations:stations,sourceMode:sourceMode,knownSourceId:knownSourceId,radioRangeM:radioRangeM}));}catch(e){}}
+function restore(){try{const x=JSON.parse(localStorage.getItem(STORE)||'{}');if(!x.savedAt||Date.now()-x.savedAt>12*3600*1000)return;if(x.stations){stations.A=Object.assign(newStation('A'),x.stations.A||{});stations.B=Object.assign(newStation('B'),x.stations.B||{});}if(['KNOWN','ELRS','RF'].includes(x.sourceMode))sourceMode=x.sourceMode;knownSourceId=x.knownSourceId||'';const rr=Number(x.radioRangeM);radioRangeM=Number.isFinite(rr)&&rr>0?rr:null;}catch(e){}}
+function merc(lat,lon,z){lat=Math.max(-85.0511,Math.min(85.0511,lat));const n=TILE*Math.pow(2,z),r=lat*Math.PI/180;return{x:(lon+180)/360*n,y:(1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*n};}
+function invMerc(x,y,z){const n=TILE*Math.pow(2,z),lon=x/n*360-180,t=Math.PI*(1-2*y/n);return{lat:180/Math.PI*Math.atan(Math.sinh(t)),lon:lon};}
+function mapItems(){const a=[];['A','B'].forEach(id=>{const s=stations[id];if(Number.isFinite(s.lat)&&Number.isFinite(s.lon))a.push(s);});if(target&&target.ok&&target.forward&&target.range<50000)a.push({lat:target.lat,lon:target.lon});return a;}
+function choose(items,w,h){if(!items.length)return null;let auto=17;if(items.length>1)for(let z=19;z>=2;z--){const p=items.map(x=>merc(x.lat,x.lon,z)),xs=p.map(x=>x.x),ys=p.map(x=>x.y);if(Math.max(...xs)-Math.min(...xs)<w-70&&Math.max(...ys)-Math.min(...ys)<h-70){auto=z;break;}}const z=Math.max(2,Math.min(19,auto+zoomDelta)),p=items.map(x=>merc(x.lat,x.lon,z)),xs=p.map(x=>x.x),ys=p.map(x=>x.y);return{z:z,cx:(Math.min(...xs)+Math.max(...xs))/2,cy:(Math.min(...ys)+Math.max(...ys))/2};}
 function renderMap(){
- const map=$('rfMap'),tiles=$('rfMapTiles'),svg=$('rfMapOverlay'),mode=$('rfMapMode');if(!map||!tiles||!svg)return;const rect=map.getBoundingClientRect(),w=Math.max(10,Math.round(rect.width)),h=Math.max(10,Math.round(rect.height)),items=mapItems();mapEpoch++;const epoch=mapEpoch;tiles.innerHTML='';svg.innerHTML='';svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
- if(!items.length){mode.textContent='СХЕМА · жду A';return;}const view=chooseView(items,w,h);if(!view)return;const {z,cx,cy}=view,n=Math.pow(2,z);let loaded=0,failed=0;mode.textContent='OSM · z'+z;
- const minTx=Math.floor((cx-w/2)/TILE),maxTx=Math.floor((cx+w/2)/TILE),minTy=Math.floor((cy-h/2)/TILE),maxTy=Math.floor((cy+h/2)/TILE);
- for(let tx=minTx;tx<=maxTx;tx++)for(let ty=minTy;ty<=maxTy;ty++){if(ty<0||ty>=n)continue;const img=document.createElement('img'),wrapX=((tx%n)+n)%n;img.alt='';img.src=`https://tile.openstreetmap.org/${z}/${wrapX}/${ty}.png`;img.style.left=(tx*TILE-cx+w/2)+'px';img.style.top=(ty*TILE-cy+h/2)+'px';img.onload=()=>{if(epoch===mapEpoch){loaded++;mode.textContent='OSM · z'+z;}};img.onerror=()=>{if(epoch===mapEpoch){failed++;if(!loaded&&failed>2)mode.textContent='СХЕМА · offline';}};tiles.appendChild(img);}
- const project=p=>{const q=mercWorld(p.lat,p.lon,z);return{x:q.x-cx+w/2,y:q.y-cy+h/2}};const centerLat=items.reduce((s,p)=>s+p.lat,0)/items.length,mpp=156543.03392*Math.cos(centerLat*Math.PI/180)/Math.pow(2,z);let shapes='';
- if(points.A&&points.B){const a=project(points.A),b=project(points.B);shapes+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="rgba(255,255,255,.42)" stroke-width="2" stroke-dasharray="7 6"/>`;}
- for(const p of [points.A,points.B].filter(Boolean)){const q=project(p),isA=p===points.A,stroke=isA?'#0A84FF':'#FFD60A',acc=Number.isFinite(p.accuracyM)?Math.max(4,Math.min(80,p.accuracyM/mpp)):0,rad=p.bearing*Math.PI/180,dx=Math.sin(rad),dy=-Math.cos(rad),L=Math.hypot(w,h)*2.2;shapes+=acc?`<circle cx="${q.x}" cy="${q.y}" r="${acc}" fill="none" stroke="${stroke}" stroke-opacity=".35" stroke-width="1.5"/>`:'';shapes+=`<line x1="${q.x}" y1="${q.y}" x2="${q.x+dx*L}" y2="${q.y+dy*L}" stroke="${stroke}" stroke-width="3" stroke-opacity=".92"/><circle cx="${q.x}" cy="${q.y}" r="7" fill="${stroke}" stroke="#0B0B0C" stroke-width="3"/><text x="${q.x+11}" y="${q.y-10}" fill="#fff" font-size="13" font-weight="800" style="paint-order:stroke;stroke:#000;stroke-width:4px">${isA?'A':'B'} · ${Math.round(p.bearing)}°</text>`;}
- if(targetResult&&targetResult.ok&&targetResult.forward&&targetResult.range<50000){const t=project({lat:targetResult.lat,lon:targetResult.lon}),rr=Math.max(7,Math.min(120,targetResult.rough/mpp));shapes+=`<circle cx="${t.x}" cy="${t.y}" r="${rr}" fill="#30D158" fill-opacity=".10" stroke="#30D158" stroke-opacity=".75" stroke-width="2"/><circle cx="${t.x}" cy="${t.y}" r="8" fill="#30D158" stroke="#0B0B0C" stroke-width="3"/><path d="M ${t.x-13} ${t.y} H ${t.x+13} M ${t.x} ${t.y-13} V ${t.y+13}" stroke="#fff" stroke-width="2"/><text x="${t.x+12}" y="${t.y-12}" fill="#fff" font-size="13" font-weight="800" style="paint-order:stroke;stroke:#000;stroke-width:4px">ЦЕЛЬ</text>`;}
- svg.innerHTML=shapes;
+ const map=$('rfMap'),tiles=$('rfMapTiles'),svg=$('rfMapOverlay'),state=$('rfMapState'),hint=$('rfMapHint'),r=map.getBoundingClientRect(),w=Math.max(10,Math.round(r.width)),h=Math.max(10,Math.round(r.height)),items=mapItems();mapEpoch++;const ep=mapEpoch;tiles.innerHTML='';svg.innerHTML='';svg.setAttribute('viewBox','0 0 '+w+' '+h);if(!items.length){mapView=null;state.textContent='СХЕМА · нет позиций';hint.textContent='A: GPS или координаты';return;}mapView=choose(items,w,h);const z=mapView.z,cx=mapView.cx,cy=mapView.cy,n=Math.pow(2,z);let loaded=0,failed=0;state.textContent='OSM · z'+z;hint.textContent=placeId?'ТАП → поставить '+placeId:'GPS необязателен · точки можно ставить вручную';
+ for(let tx=Math.floor((cx-w/2)/TILE);tx<=Math.floor((cx+w/2)/TILE);tx++)for(let ty=Math.floor((cy-h/2)/TILE);ty<=Math.floor((cy+h/2)/TILE);ty++){if(ty<0||ty>=n)continue;const img=document.createElement('img'),xx=((tx%n)+n)%n;img.src='https://tile.openstreetmap.org/'+z+'/'+xx+'/'+ty+'.png';img.alt='';img.style.left=(tx*TILE-cx+w/2)+'px';img.style.top=(ty*TILE-cy+h/2)+'px';img.onload=()=>{if(ep===mapEpoch){loaded++;state.textContent='OSM · z'+z;}};img.onerror=()=>{if(ep===mapEpoch){failed++;if(!loaded&&failed>2)state.textContent='СХЕМА · offline';}};tiles.appendChild(img);}
+ const project=p=>{const q=merc(p.lat,p.lon,z);return{x:q.x-cx+w/2,y:q.y-cy+h/2}},center=items.reduce((s,p)=>s+p.lat,0)/items.length,mpp=156543.03392*Math.cos(center*Math.PI/180)/Math.pow(2,z);let sh='',a=stations.A,b=stations.B;
+ if(Number.isFinite(a.lat)&&Number.isFinite(b.lat)){const A=project(a),B=project(b),m={x:(A.x+B.x)/2,y:(A.y+B.y)/2};sh+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'" stroke="rgba(255,255,255,.5)" stroke-width="2" stroke-dasharray="7 6"/><text x="'+(m.x+7)+'" y="'+(m.y-7)+'" fill="#fff" font-size="13" font-weight="700" style="paint-order:stroke;stroke:#000;stroke-width:4px">'+Math.round(base(a,b))+' м</text>';}
+ ['A','B'].forEach(id=>{const s=stations[id];if(!Number.isFinite(s.lat))return;const q=project(s),col=id==='A'?'#0A84FF':'#FFD60A',acc=Number.isFinite(s.accuracyM)?Math.max(4,Math.min(80,s.accuracyM/mpp)):0;if(acc)sh+='<circle cx="'+q.x+'" cy="'+q.y+'" r="'+acc+'" fill="none" stroke="'+col+'" stroke-opacity=".32"/>';if(Number.isFinite(s.bearing)){const rr=s.bearing*Math.PI/180,L=Math.hypot(w,h)*2.2;sh+='<line x1="'+q.x+'" y1="'+q.y+'" x2="'+(q.x+Math.sin(rr)*L)+'" y2="'+(q.y-Math.cos(rr)*L)+'" stroke="'+col+'" stroke-width="3"/>';}sh+='<circle cx="'+q.x+'" cy="'+q.y+'" r="8" fill="'+col+'" stroke="#0B0B0C" stroke-width="3"/><text x="'+(q.x+12)+'" y="'+(q.y-11)+'" fill="#fff" font-size="13" font-weight="800" style="paint-order:stroke;stroke:#000;stroke-width:4px">'+id+(Number.isFinite(s.bearing)?' · '+Math.round(s.bearing)+'°':'')+'</text>';});
+ if(target&&target.ok&&target.forward&&target.range<50000){const t=project(target),rr=Math.max(7,Math.min(120,target.rough/mpp));sh+='<circle cx="'+t.x+'" cy="'+t.y+'" r="'+rr+'" fill="#30D158" fill-opacity=".10" stroke="#30D158" stroke-opacity=".75" stroke-width="2"/><circle cx="'+t.x+'" cy="'+t.y+'" r="8" fill="#30D158" stroke="#0B0B0C" stroke-width="3"/><text x="'+(t.x+12)+'" y="'+(t.y-12)+'" fill="#fff" font-size="13" font-weight="800" style="paint-order:stroke;stroke:#000;stroke-width:4px">T</text>';}svg.innerHTML=sh;
 }
-style();mount();setTimeout(()=>{if(!$('rfLoc'))mount();},600);window.addEventListener('resize',()=>requestAnimationFrame(renderMap));
+css();mount();window.addEventListener('resize',()=>requestAnimationFrame(renderMap));
 })();
