@@ -24,3 +24,7 @@
 
 // Keep the first ranging bench on the SX1280 internal PA only.
 #define POWER_OUTPUT_FIXED 0
+#define POWER_OUTPUT_DACWRITE 0
+#define POWER_OUTPUT_VALUES2 nullptr
+#define GPIO_PIN_RFamp_APC1 -1
+#define GPIO_PIN_RFamp_APC2 -1
