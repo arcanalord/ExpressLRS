@@ -107,6 +107,10 @@ public:
         radio_.ClearIrqStatus(SX1280_IRQ_RADIO_ALL, SX12XX_Radio_All);
     }
 
+    uint16_t consumeIrq() {
+        return radio_.ConsumeRangingIrqStatus();
+    }
+
     void setDefaultSigmaMm(uint32_t sigma_mm) {
         default_sigma_mm_ = sigma_mm ? sigma_mm : 1500;
     }
