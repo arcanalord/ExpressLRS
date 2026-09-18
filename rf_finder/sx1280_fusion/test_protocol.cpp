@@ -41,6 +41,7 @@ int main() {
 
     FakeRadio radio;
     Controller c(radio);
+    c.setSession("S1","T-001");
     assert(c.beginRange(cmd,1000));
     int reports=0;
     for(uint32_t t=1000;t<3000 && c.phase()!=RangingPhase::Idle;t+=10) {
@@ -49,6 +50,7 @@ int main() {
             assert(std::strcmp(rr.from,"A")==0);
             assert(std::strcmp(rr.to,"T")==0);
             assert(rr.calibrated_mm==41800);
+            assert(std::strcmp(rr.target_id,"T-001")==0);
         });
     }
     assert(reports==3);
