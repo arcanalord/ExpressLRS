@@ -129,7 +129,7 @@ function runSimulator(extra){
  const preset=$('f3SimPreset').value||'GOOD',bearingSigmaDeg=Math.max(.1,n($('f3SimBearingSigma').value)||2.5),rangeSigmaM=Math.max(.05,n($('f3SimRangeSigma').value)||.8);
  const origin=Number.isFinite(nodes.A.lat)&&Number.isFinite(nodes.A.lon)?{lat:nodes.A.lat,lon:nodes.A.lon}:{lat:.01,lon:.01};
  const sim=window.RFFusionSim.generate(preset,Object.assign({seed:Date.now()%100000,bearingSigmaDeg,rangeSigmaM,origin,targetId:nodes.T.deviceId},extra||{}));
- lastSimTruth=sim.truth;
+ lastSimTruth=sim.truth;if(measurementStore)measurementStore.clear(m=>m.meta&&m.meta.sim);
  const A=sim.poses.A,B=sim.poses.B;
  Object.assign(nodes.A,{lat:A.lat,lon:A.lon,accuracyM:A.accuracyM,provider:'SIM',bearing:sim.bearings.A.bearingDeg,bearingAt:sim.bearings.A.timestamp,rssi:-60});
  Object.assign(nodes.B,{lat:B.lat,lon:B.lon,accuracyM:B.accuracyM,provider:'SIM',bearing:sim.bearings.B.bearingDeg,bearingAt:sim.bearings.B.timestamp,rssi:-63});
@@ -171,7 +171,7 @@ function rangeIntersections(a,b,rA,rB){
  return[ll(px+rx,py+ry,lat0,lon0),ll(px-rx,py-ry,lat0,lon0)].map(p=>({lat:p.lat,lon:p.lon,method:'RANGE'}));
 }
 function geoDistancePoint(p,s){const lat0=(p.lat+s.lat)/2*Math.PI/180,dx=(p.lon-s.lon)*Math.PI/180*EARTH*Math.cos(lat0),dy=(p.lat-s.lat)*Math.PI/180*EARTH;return Math.hypot(dx,dy);}
-function solve(){
+function solveLegacy(){
  const a=nodes.A,b=nodes.B,bs=bearingSolve(a,b),ri=rangeIntersections(a,b,ranges.AT,ranges.BT);
  let p=null,method='';
  if(bs&&bs.forward){p=bs;method='BEARING';}
@@ -190,6 +190,47 @@ function solve(){
  const angle=bs?bs.angle:null;
  const good=(angle===null||angle>=30)&&(dt===null||dt<=5000)&&(rangeErr===null||rangeErr<=Math.max(3,.12*Math.max(ranges.AT||0,ranges.BT||0)));
  return{ok:true,lat:p.lat,lon:p.lon,method,baseM,dt,angle,rangeErr,predAT,predBT,good};
+}
+
+function latestMeasurementsForSolver(){
+ if(!measurementStore)return null;
+ const all=measurementStore.snapshot().slice().reverse(),targetId=nodes.T.deviceId,now=Date.now();
+ const pick=(kind,test)=>all.find(m=>m.kind===kind&&(!m.targetId||m.targetId===targetId)&&now-m.timestamp<=5000&&test(m));
+ const ba=pick('BEARING',m=>m.deviceId==='A'),bb=pick('BEARING',m=>m.deviceId==='B');
+ const ra=pick('RANGE',m=>(m.deviceId==='A'&&m.peerId==='T')||(m.deviceId==='T'&&m.peerId==='A'));
+ const rb=pick('RANGE',m=>(m.deviceId==='B'&&m.peerId==='T')||(m.deviceId==='T'&&m.peerId==='B'));
+ return{
+   bearings:[ba,bb].filter(Boolean).map(m=>Object.assign({anchorId:m.deviceId==='T'?m.peerId:m.deviceId},m)),
+   ranges:[ra,rb].filter(Boolean)
+ };
+}
+function solve(){
+ if(window.RFFusionSolver&&Number.isFinite(nodes.A.lat)&&Number.isFinite(nodes.B.lat)){
+   const recent=latestMeasurementsForSolver()||{bearings:[],ranges:[]};
+   if(!recent.bearings.length){
+     for(const id of ['A','B'])if(Number.isFinite(nodes[id].bearing))recent.bearings.push({kind:'BEARING',deviceId:id,anchorId:id,targetId:nodes.T.deviceId,timestamp:nodes[id].bearingAt||Date.now(),bearingDeg:nodes[id].bearing,sigmaDeg:8,quality:.7,health:'GOOD',valid:true});
+   }
+   if(!recent.ranges.length){
+     if(Number.isFinite(ranges.AT))recent.ranges.push({kind:'RANGE',deviceId:'A',peerId:'T',targetId:nodes.T.deviceId,timestamp:rangeAt.AT||Date.now(),rangeM:ranges.AT,sigmaM:1.5,quality:.7,health:'GOOD',valid:true});
+     if(Number.isFinite(ranges.BT))recent.ranges.push({kind:'RANGE',deviceId:'B',peerId:'T',targetId:nodes.T.deviceId,timestamp:rangeAt.BT||Date.now(),rangeM:ranges.BT,sigmaM:1.5,quality:.7,health:'GOOD',valid:true});
+   }
+   const r=window.RFFusionSolver.solve({
+     targetId:nodes.T.deviceId,
+     anchors:{A:nodes.A,B:nodes.B},
+     bearings:recent.bearings,
+     ranges:recent.ranges,
+     now:Date.now(),
+     maxAgeMs:5000
+   });
+   if(r.ok){
+     const rangeResiduals=(r.residuals||[]).filter(x=>x.kind==='RANGE'&&Number.isFinite(x.residualM));
+     r.rangeErr=rangeResiduals.length?rangeResiduals.reduce((a,x)=>a+Math.abs(x.residualM),0)/rangeResiduals.length:null;
+     r.dt=Number.isFinite(nodes.A.bearingAt)&&Number.isFinite(nodes.B.bearingAt)?Math.abs(nodes.A.bearingAt-nodes.B.bearingAt):null;
+     return r;
+   }
+   if(r.reason==='AMBIGUOUS_RANGE_ONLY'||r.reason==='INSUFFICIENT_USABLE_MEASUREMENTS'||r.reason==='POOR_GEOMETRY')return r;
+ }
+ return solveLegacy();
 }
 
 function renderAnchor(id){
@@ -211,7 +252,7 @@ function render(){
  $('f3Sync').textContent=Number.isFinite(dt)?(dt<1000?dt+' ms':(dt/1000).toFixed(1)+' s'):'—';
  target=solve();$('f3Angle').textContent=target.ok&&Number.isFinite(target.angle)?target.angle.toFixed(1)+'°':'—';$('f3RangeErr').textContent=target.ok&&Number.isFinite(target.rangeErr)?target.rangeErr.toFixed(1)+' м':'—';
  $('f3OpenTarget').classList.toggle('f3Hidden',!target.ok);$('f3Target').textContent=target.ok?coord(target.lat)+', '+coord(target.lon):'—';
- if(!target.ok)quality(target.reason,'warn');else{const ms=measurementSummary();quality(target.method+' · '+(target.good?'геометрия нормальная':'проверь геометрию')+(Number.isFinite(target.rangeErr)?' · ошибка range '+target.rangeErr.toFixed(1)+' м':'')+(ms?' · M '+ms.recent+'/'+ms.total:''),target.good?'good':'warn');}
+ if(!target.ok)quality(target.reason==='AMBIGUOUS_RANGE_ONLY'?'Две точки по дальностям — нужен пеленг':target.reason,'warn');else{const ms=measurementSummary(),unc=Number.isFinite(target.sigmaMajorM)?' · σ '+target.sigmaMajorM.toFixed(1)+'/'+target.sigmaMinorM.toFixed(1)+' м':'',geom=target.geometry?' · '+target.geometry:'';quality(target.method+geom+unc+(Number.isFinite(target.rangeErr)?' · range err '+target.rangeErr.toFixed(1)+' м':'')+(ms?' · M '+ms.recent+'/'+ms.total:''),target.good?'good':'warn');}
  persist();renderMap();
 }
 function persist(){try{localStorage.setItem(STORE,JSON.stringify({savedAt:Date.now(),nodes,ranges,rangeAt}));}catch(e){}}
@@ -226,10 +267,10 @@ function renderMap(){
  if(!items.length){mapView=null;state.textContent='СХЕМА · нет позиций';hint.textContent='Задай A через GPS/координаты';return;}
  mapView=choose(items,w,h);const z=mapView.z,cx=mapView.cx,cy=mapView.cy,N=Math.pow(2,z);let loaded=0,failed=0;state.textContent='OSM · z'+z;hint.textContent=placeId?'ТАП → поставить '+placeId:'A/B — якоря · T — расчёт';
  for(let tx=Math.floor((cx-w/2)/TILE);tx<=Math.floor((cx+w/2)/TILE);tx++)for(let ty=Math.floor((cy-h/2)/TILE);ty<=Math.floor((cy+h/2)/TILE);ty++){if(ty<0||ty>=N)continue;const img=document.createElement('img'),xx=((tx%N)+N)%N;img.src='https://tile.openstreetmap.org/'+z+'/'+xx+'/'+ty+'.png';img.alt='';img.style.left=(tx*TILE-cx+w/2)+'px';img.style.top=(ty*TILE-cy+h/2)+'px';img.onload=()=>{if(ep===mapEpoch){loaded++;state.textContent='OSM · z'+z;}};img.onerror=()=>{if(ep===mapEpoch){failed++;if(!loaded&&failed>2)state.textContent='СХЕМА · offline';}};tiles.appendChild(img);}
- const project=p=>{const q=merc(p.lat,p.lon,z);return{x:q.x-cx+w/2,y:q.y-cy+h/2}};let sh='',a=nodes.A,b=nodes.B;
+ const project=p=>{const q=merc(p.lat,p.lon,z);return{x:q.x-cx+w/2,y:q.y-cy+h/2}},mapLat=items.reduce((sum,p)=>sum+p.lat,0)/items.length,mpp=156543.03392*Math.cos(mapLat*Math.PI/180)/Math.pow(2,z);let sh='',a=nodes.A,b=nodes.B;
  if(Number.isFinite(a.lat)&&Number.isFinite(b.lat)){const A=project(a),B=project(b),m={x:(A.x+B.x)/2,y:(A.y+B.y)/2};sh+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'" stroke="rgba(255,255,255,.5)" stroke-width="2" stroke-dasharray="7 6"/><text x="'+(m.x+7)+'" y="'+(m.y-7)+'" fill="#fff" font-size="13" font-weight="700" style="paint-order:stroke;stroke:#000;stroke-width:4px">'+Math.round(dist(a,b))+' м</text>';}
  for(const id of ['A','B']){const s=nodes[id];if(!Number.isFinite(s.lat))continue;const q=project(s),col=s.color;if(Number.isFinite(s.bearing)){const rr=s.bearing*Math.PI/180,L=Math.hypot(w,h)*2.2;sh+='<line x1="'+q.x+'" y1="'+q.y+'" x2="'+(q.x+Math.sin(rr)*L)+'" y2="'+(q.y-Math.cos(rr)*L)+'" stroke="'+col+'" stroke-width="3"/>';}sh+='<circle cx="'+q.x+'" cy="'+q.y+'" r="8" fill="'+col+'" stroke="#0B0B0C" stroke-width="3"/><text x="'+(q.x+12)+'" y="'+(q.y-11)+'" fill="#fff" font-size="13" font-weight="800" style="paint-order:stroke;stroke:#000;stroke-width:4px">'+id+(Number.isFinite(s.bearing)?' · '+Math.round(s.bearing)+'°':'')+'</text>';}
- if(target&&target.ok){const t=project(target);sh+='<circle cx="'+t.x+'" cy="'+t.y+'" r="10" fill="#30D158" stroke="#0B0B0C" stroke-width="3"/><text x="'+(t.x+14)+'" y="'+(t.y-12)+'" fill="#fff" font-size="13" font-weight="800" style="paint-order:stroke;stroke:#000;stroke-width:4px">T · '+nodes.T.deviceId+'</text>';}svg.innerHTML=sh;
+ if(target&&target.ok){const t=project(target);if(Number.isFinite(target.sigmaMajorM)&&Number.isFinite(target.sigmaMinorM)){const rx=Math.max(5,Math.min(180,2*target.sigmaMajorM/mpp)),ry=Math.max(4,Math.min(180,2*target.sigmaMinorM/mpp)),rot=Number.isFinite(target.ellipseAngleDeg)?target.ellipseAngleDeg:0;sh+='<ellipse cx="'+t.x+'" cy="'+t.y+'" rx="'+rx+'" ry="'+ry+'" transform="rotate('+(-rot)+' '+t.x+' '+t.y+')" fill="#30D158" fill-opacity=".10" stroke="#30D158" stroke-opacity=".8" stroke-width="2"/>';}sh+='<circle cx="'+t.x+'" cy="'+t.y+'" r="10" fill="#30D158" stroke="#0B0B0C" stroke-width="3"/><text x="'+(t.x+14)+'" y="'+(t.y-12)+'" fill="#fff" font-size="13" font-weight="800" style="paint-order:stroke;stroke:#000;stroke-width:4px">T · '+nodes.T.deviceId+'</text>';}svg.innerHTML=sh;
 }
 
 css();mount();window.addEventListener('resize',()=>requestAnimationFrame(renderMap));
