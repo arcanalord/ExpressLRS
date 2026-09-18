@@ -31,21 +31,52 @@ jobs:
           PY
           node --check /tmp/rf_finder_ui.js
           node --check rf_finder/android/app/src/main/assets/measurements.js
+          node --check rf_finder/android/app/src/main/assets/fusion-solver.js
           node --check rf_finder/android/app/src/main/assets/fusion-sim.js
           node --check rf_finder/android/app/src/main/assets/fusion3.js
           grep -q 'LocationAwareActivity' rf_finder/android/app/src/main/AndroidManifest.xml
           grep -q 'ACCESS_FINE_LOCATION' rf_finder/android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.INTERNET' rf_finder/android/app/src/main/AndroidManifest.xml
-          grep -q "versionName '0.7.0-fusion3.2'" rf_finder/android/app/build.gradle
+          grep -q "versionName '0.7.0-fusion3.3'" rf_finder/android/app/build.gradle
           grep -q 'FUSION 3' rf_finder/android/app/src/main/assets/fusion3.js
           grep -q 'A↔T RANGE' rf_finder/android/app/src/main/assets/fusion3.js
           grep -q 'B↔T RANGE' rf_finder/android/app/src/main/assets/fusion3.js
           grep -q 'TARGET ID' rf_finder/android/app/src/main/assets/fusion3.js
           grep -q 'window.onFusionRange' rf_finder/android/app/src/main/assets/fusion3.js
           grep -q 'measurements.js' rf_finder/android/app/src/main/java/ru/fpvclub/rangerrf/LocationBridge.java
+          grep -q 'fusion-solver.js' rf_finder/android/app/src/main/java/ru/fpvclub/rangerrf/LocationBridge.java
           grep -q 'fusion-sim.js' rf_finder/android/app/src/main/java/ru/fpvclub/rangerrf/LocationBridge.java
           grep -q 'fusion3.js' rf_finder/android/app/src/main/java/ru/fpvclub/rangerrf/LocationBridge.java
           grep -q 'СИМУЛЯТОР / REPLAY' rf_finder/android/app/src/main/assets/fusion3.js
+          grep -q 'WLS_ENU' rf_finder/android/app/src/main/assets/fusion-solver.js
+
+          node - <<'NODE'
+          global.window=global;
+          require('./rf_finder/android/app/src/main/assets/measurements.js');
+          require('./rf_finder/android/app/src/main/assets/fusion-solver.js');
+          require('./rf_finder/android/app/src/main/assets/fusion-sim.js');
+          function run(name, extra) {
+            const s=RFFusionSim.generate(name,Object.assign({seed:42,bearingSigmaDeg:1.5,rangeSigmaM:.5,origin:{lat:.01,lon:.01},targetId:'T-001'},extra||{}));
+            const r=RFFusionSolver.solve({
+              targetId:'T-001',
+              anchors:{A:s.poses.A,B:s.poses.B},
+              bearings:[Object.assign({anchorId:'A'},s.bearings.A),Object.assign({anchorId:'B'},s.bearings.B)],
+              ranges:[s.ranges.AT,s.ranges.BT],
+              now:Date.now(),maxAgeMs:5000
+            });
+            if(!r.ok) throw new Error(name+' solve failed: '+r.reason);
+            const truth=s.truth.latLonT, R=6371000, p=(truth.lat+r.lat)/2*Math.PI/180;
+            const err=Math.hypot((r.lon-truth.lon)*Math.PI/180*R*Math.cos(p),(r.lat-truth.lat)*Math.PI/180*R);
+            console.log(name, 'error_m', err.toFixed(3), 'sigma', r.sigmaMajorM.toFixed(3), 'geometry', r.geometry);
+            if(name==='GOOD' && err>8) throw new Error('GOOD error too high '+err);
+            return {r,err};
+          }
+          run('GOOD');
+          run('WIDE');
+          const nlos=run('GOOD',{nlos:true});
+          if(!Number.isFinite(nlos.r.sigmaMajorM)) throw new Error('NLOS uncertainty missing');
+          NODE
+
           ! grep -q 'location.js' rf_finder/android/app/src/main/java/ru/fpvclub/rangerrf/LocationBridge.java
           ! grep -q 'java.lang.reflect.Field' rf_finder/android/app/src/main/java/ru/fpvclub/rangerrf/LocationAwareActivity.java
 
@@ -92,14 +123,14 @@ jobs:
           set -euo pipefail
           mkdir -p out
           cp rf_finder/firmware/.pio/build/rf_finder_lr1121_c3/firmware.bin out/RF_Finder_DAKERFPV_LR1121_v0.6.2-dev1.bin
-          cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/RF_Finder_Fusion3_v0.7.0-fusion3.2-debug.apk
+          cp rf_finder/android/app/build/outputs/apk/debug/app-debug.apk out/RF_Finder_Fusion3_v0.7.0-fusion3.3-debug.apk
           cd out
-          sha256sum RF_Finder_DAKERFPV_LR1121_v0.6.2-dev1.bin RF_Finder_Fusion3_v0.7.0-fusion3.1-debug.apk > SHA256SUMS.txt
+          sha256sum RF_Finder_DAKERFPV_LR1121_v0.6.2-dev1.bin RF_Finder_Fusion3_v0.7.0-fusion3.3-debug.apk > SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v7
         with:
-          name: RF-Finder-Fusion3-v0.7.0-fusion3.2
+          name: RF-Finder-Fusion3-v0.7.0-fusion3.3
           path: out/*
 
 # Fusion 3 A/B/T validation
