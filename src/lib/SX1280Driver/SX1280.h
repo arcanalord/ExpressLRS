@@ -36,6 +36,23 @@ public:
     void SetOutputPower(int8_t power);
     void startCWTest(uint32_t freq, SX12XX_Radio_Number_t radioNumber);
 
+    // Cooperative ranging support. Configuration is intentionally separate
+    // from the normal ExpressLRS LoRa/FLRC path.
+    bool ConfigRanging(uint8_t bw, uint8_t sf, uint8_t cr, uint32_t regfreq,
+                       uint8_t preambleLength, uint8_t headerType,
+                       uint8_t payloadLength, bool invertIQ, uint32_t interval);
+    void SetRangingRole(SX1280_RadioRangingRoles_t role, SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
+    void SetDeviceRangingAddress(uint32_t address, SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
+    void SetRangingRequestAddress(uint32_t address, SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
+    void SetRangingCalibration(uint16_t calibration, SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
+    void ClearRangingFilter(SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
+    void SetRangingFilterNumSamples(uint8_t samples, SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
+    double GetRangingResultMeters(SX1280_RangingResultType_t resultType, uint32_t bandwidthHz,
+                                  SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_1);
+    uint8_t GetRangingPowerDeltaIndicator(SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_1);
+    void StartRangingMaster(SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
+    void StartRangingSlave(SX12XX_Radio_Number_t radioNumber = SX12XX_Radio_All);
+
 
     bool GetFrequencyErrorbool();
     bool FrequencyErrorAvailable() const { return modeSupportsFei && (LastPacketSNRRaw > 0); }
