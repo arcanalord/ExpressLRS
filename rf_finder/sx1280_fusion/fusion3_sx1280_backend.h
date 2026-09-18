@@ -75,7 +75,7 @@ public:
 
     bool pollRange(RangeResult& out) override {
         if (!active_ || !master_) return false;
-        const uint16_t irq = radio_.GetIrqStatus(SX12XX_Radio_1);
+        const uint16_t irq = radio_.ConsumeRangingIrqStatus();
         if (irq & SX1280_IRQ_RANGING_MASTER_TIMEOUT) {
             radio_.ClearIrqStatus(SX1280_IRQ_RANGING_MASTER_TIMEOUT, SX12XX_Radio_1);
             active_ = false;
