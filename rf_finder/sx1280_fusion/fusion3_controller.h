@@ -38,10 +38,16 @@ class Controller {
 public:
     explicit Controller(RadioBackend& radio):radio_(radio){}
 
+    void setSession(const char* session_id,const char* target_id) {
+        std::snprintf(session_id_,sizeof(session_id_),"%s",session_id?session_id:"-");
+        std::snprintf(target_id_,sizeof(target_id_),"%s",target_id?target_id:"T-001");
+    }
+
     bool beginRange(const HostCommand& cmd,uint32_t now_ms) {
         if(cmd.type!=HostCommand::Type::Range || phase_!=RangingPhase::Idle)return false;
         std::snprintf(job_.from,sizeof(job_.from),"%s",cmd.from);
         std::snprintf(job_.to,sizeof(job_.to),"%s",cmd.to);
+        std::snprintf(job_.target_id,sizeof(job_.target_id),"%s",target_id_[0]?target_id_:"T-001");
         job_.requested=cmd.count;
         job_.completed=0;
         job_.started_ms=now_ms;
@@ -107,6 +113,8 @@ private:
     RangingJob job_{};
     uint32_t deadline_ms_=0;
     uint32_t sequence_=0;
+    char session_id_[33] = "-";
+    char target_id_[33] = "T-001";
 };
 
 } // namespace rf_fusion3
