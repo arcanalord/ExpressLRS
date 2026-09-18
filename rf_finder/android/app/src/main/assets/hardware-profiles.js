@@ -79,8 +79,20 @@ function applyInfoLine(state, line) {
     state.protocol = parts[3] || null;
   }
 
+  if (parts[1] === 'cap' && parts[2] === 'hardware_profile' && PROFILES[parts[3]]) {
+    if (state.selection === 'AUTO') {
+      state.activeId = parts[3];
+      state.capabilities = cloneCaps(PROFILES[parts[3]].capabilities);
+    }
+  }
+
+  const capMap = { direction:'direction', instant_rssi:'instantRssi', sweep:'sweep', source_lock:'sourceLock', ranging:'ranging' };
+  if (parts[1] === 'cap' && capMap[parts[2]]) {
+    state.capabilities[capMap[parts[2]]] = parts[3] === '1' || parts[3] === 'true' || parts[3] === 'YES';
+  }
+
   if (parts[1] === 'cap' && parts[2] === 'packet_probe') {
-    state.capabilities.packetProbe = !!parts[3] && parts[3] !== 'NOT_YET_IMPLEMENTED';
+    state.capabilities.packetProbe = !!parts[3] && parts[3] !== '0' && parts[3] !== 'NOT_YET_IMPLEMENTED';
   }
 
   return true;
