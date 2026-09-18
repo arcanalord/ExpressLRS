@@ -30,7 +30,11 @@ jobs:
           Path('/tmp/rf_finder_ui.js').write_text(s[a:b],encoding='utf-8')
           PY
           node --check /tmp/rf_finder_ui.js
-          grep -q "versionName '0.7.0-test1.1'" rf_finder/android/app/build.gradle
+          node --check rf_finder/android/app/src/main/assets/hardware-profiles.js
+          node --check rf_finder/android/app/src/main/assets/direction-core.js
+          grep -q 'hardware-profiles.js' rf_finder/android/app/src/main/assets/index.html
+          grep -q 'direction-core.js' rf_finder/android/app/src/main/assets/index.html
+          grep -q "versionName '0.7.0-test1.2'" rf_finder/android/app/build.gradle
           grep -q 'RF Finder Test 1' rf_finder/android/app/src/main/AndroidManifest.xml
 
       - name: RX-only invariant
