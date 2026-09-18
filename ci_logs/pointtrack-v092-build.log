@@ -21,28 +21,53 @@ Daemon will be stopped at the end of the build
 > Task :androidApp:generateDebugGlobalSynthetics
 > Task :androidApp:checkDebugDuplicateClasses
 > Task :androidApp:desugarDebugFileDependencies
-
 > Task :androidApp:compileDebugKotlin
-e: file:///home/runner/work/_temp/pointtrack/androidApp/src/main/java/com/fpvclub/pointtrack/TrackingOverlayView.kt:85:31 Smart cast to 'Double' is impossible, because 'measurementX' is a public API property declared in different module.
-e: file:///home/runner/work/_temp/pointtrack/androidApp/src/main/java/com/fpvclub/pointtrack/TrackingOverlayView.kt:85:51 Smart cast to 'Double' is impossible, because 'measurementY' is a public API property declared in different module.
-e: file:///home/runner/work/_temp/pointtrack/androidApp/src/main/java/com/fpvclub/pointtrack/TrackingOverlayView.kt:89:31 Smart cast to 'Double' is impossible, because 'predictedX' is a public API property declared in different module.
-e: file:///home/runner/work/_temp/pointtrack/androidApp/src/main/java/com/fpvclub/pointtrack/TrackingOverlayView.kt:89:49 Smart cast to 'Double' is impossible, because 'predictedY' is a public API property declared in different module.
-
-> Task :androidApp:compileDebugKotlin FAILED
 > Task :androidApp:mergeExtDexDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1789747977394.json
-
-[Incubating] Problems report is available at: file:///home/runner/work/_temp/pointtrack/build/reports/problems/problems-report.html
+> Task :androidApp:compileDebugJavaWithJavac NO-SOURCE
+> Task :androidApp:processDebugJavaRes
+> Task :androidApp:mergeLibDexDebug
+> Task :androidApp:mapDebugSourceSetPaths
+> Task :androidApp:checkDebugAarMetadata FAILED
+> Task :androidApp:compileDebugNavigationResources
+> Task :androidApp:mergeDebugJavaResource
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_4-1789748218073.json
 
 FAILURE: Build failed with an exception.
 
 * What went wrong:
-Execution failed for task ':androidApp:compileDebugKotlin' (registered by plugin 'com.android.internal.application').
-> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
-   > Kotlin compiler: SMARTCAST_IMPOSSIBLE
-       Kotlin compiler error
-         Smart cast to 'Double' is impossible, because 'measurementX' is a public API property declared in different module.
-         Location: /home/runner/work/_temp/pointtrack/androidApp/src/main/java/com/fpvclub/pointtrack/TrackingOverlayView.kt line 85
+Execution failed for task ':androidApp:checkDebugAarMetadata' (registered by plugin 'com.android.internal.application').
+> A failure occurred while executing com.android.build.gradle.internal.tasks.CheckAarMetadataWorkAction
+   > 2 issues were found when checking AAR metadata:
+     
+       1.  Dependency 'androidx.core:core:1.19.0' requires libraries and applications that
+           depend on it to compile against version 37 or later of the
+           Android APIs.
+     
+           :androidApp is currently compiled against android-36.
+     
+           Recommended action: Update this project to use a newer compileSdk
+           of at least 37, for example 37.2.
+     
+           Note that updating a library or application's compileSdk (which
+           allows newer APIs to be used) can be done separately from updating
+           targetSdk (which opts the app in to new runtime behavior) and
+           minSdk (which determines which devices the app can be installed
+           on).
+     
+       2.  Dependency 'androidx.core:core-ktx:1.19.0' requires libraries and applications that
+           depend on it to compile against version 37 or later of the
+           Android APIs.
+     
+           :androidApp is currently compiled against android-36.
+     
+           Recommended action: Update this project to use a newer compileSdk
+           of at least 37, for example 37.2.
+     
+           Note that updating a library or application's compileSdk (which
+           allows newer APIs to be used) can be done separately from updating
+           targetSdk (which opts the app in to new runtime behavior) and
+           minSdk (which determines which devices the app can be installed
+           on).
 
 * Try:
 > Run with --info or --debug option to get more log output.
@@ -50,7 +75,7 @@ Execution failed for task ':androidApp:compileDebugKotlin' (registered by plugin
 > Get more help at https://help.gradle.org.
 
 * Exception is:
-org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':androidApp:compileDebugKotlin' (registered by plugin 'com.android.internal.application').
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':androidApp:checkDebugAarMetadata' (registered by plugin 'com.android.internal.application').
 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:135)
 	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:288)
 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:133)
@@ -84,7 +109,7 @@ org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':android
 	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:376)
 	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
 	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
-Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing com.android.build.gradle.internal.tasks.CheckAarMetadataWorkAction
 	at org.gradle.workers.internal.DefaultWorkerExecutor$WorkItemExecution.waitForCompletion(DefaultWorkerExecutor.java:278)
 	at org.gradle.internal.work.DefaultAsyncWorkTracker.lambda$waitForItemsAndGatherFailures$2(DefaultAsyncWorkTracker.java:132)
 	at org.gradle.internal.Factories$1.create(Factories.java:30)
@@ -142,13 +167,8 @@ Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionExcept
 	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:28)
 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
 	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:189)
-	at org.gradle.internal.execution.steps.BuildCacheStep.executeAndStoreInCache(BuildCacheStep.java:145)
-	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$executeWithCache$4(BuildCacheStep.java:104)
-	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$executeWithCache$5(BuildCacheStep.java:104)
-	at org.gradle.internal.Try$Success.map(Try.java:170)
-	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithCache(BuildCacheStep.java:88)
-	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$0(BuildCacheStep.java:75)
-	at org.gradle.internal.Either$Left.fold(Either.java:116)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$1(BuildCacheStep.java:76)
+	at org.gradle.internal.Either$Right.fold(Either.java:176)
 	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:74)
 	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:49)
@@ -176,7 +196,7 @@ Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionExcept
 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:65)
 	at org.gradle.internal.execution.steps.CaptureMutableStateBeforeExecutionStep.execute(CaptureMutableStateBeforeExecutionStep.java:45)
 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeWithNonEmptySources(SkipEmptyMutableWorkStep.java:210)
-	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:90)
+	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:85)
 	at org.gradle.internal.execution.steps.SkipEmptyMutableWorkStep.executeMutable(SkipEmptyMutableWorkStep.java:53)
 	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:26)
 	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
@@ -203,10 +223,38 @@ Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionExcept
 	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
 	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
 	... 30 more
-Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Smart cast to 'Double' is impossible, because 'measurementX' is a public API property declared in different module.
-	at org.jetbrains.kotlin.gradle.plugin.diagnostics.DefaultCompilerDiagnosticsProblemsReporter.reportCompilerMessage(CompilerDiagnosticsProblemsReporter.kt:63)
-	at org.jetbrains.kotlin.compilerRunner.btapi.ProblemsApiCompilerMessageRenderer.replayTo(ProblemsApiCompilerMessageRenderer.kt:88)
-	at org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork.execute(BuildToolsApiCompilationWork.kt:251)
+Caused by: java.lang.RuntimeException: 2 issues were found when checking AAR metadata:
+
+  1.  Dependency 'androidx.core:core:1.19.0' requires libraries and applications that
+      depend on it to compile against version 37 or later of the
+      Android APIs.
+
+      :androidApp is currently compiled against android-36.
+
+      Recommended action: Update this project to use a newer compileSdk
+      of at least 37, for example 37.2.
+
+      Note that updating a library or application's compileSdk (which
+      allows newer APIs to be used) can be done separately from updating
+      targetSdk (which opts the app in to new runtime behavior) and
+      minSdk (which determines which devices the app can be installed
+      on).
+
+  2.  Dependency 'androidx.core:core-ktx:1.19.0' requires libraries and applications that
+      depend on it to compile against version 37 or later of the
+      Android APIs.
+
+      :androidApp is currently compiled against android-36.
+
+      Recommended action: Update this project to use a newer compileSdk
+      of at least 37, for example 37.2.
+
+      Note that updating a library or application's compileSdk (which
+      allows newer APIs to be used) can be done separately from updating
+      targetSdk (which opts the app in to new runtime behavior) and
+      minSdk (which determines which devices the app can be installed
+      on).
+	at com.android.build.gradle.internal.tasks.CheckAarMetadataWorkAction.execute(CheckAarMetadataTask.kt:251)
 	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:68)
 	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:64)
 	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:61)
@@ -240,5 +288,5 @@ Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Smart ca
 	... 2 more
 
 
-BUILD FAILED in 1m 5s
-15 actionable tasks: 13 executed, 2 up-to-date
+BUILD FAILED in 1m 13s
+21 actionable tasks: 19 executed, 2 up-to-date
