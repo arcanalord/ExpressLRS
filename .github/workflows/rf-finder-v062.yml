@@ -133,16 +133,33 @@ jobs:
           #include "SX1280Driver.h"
           #include "fusion3_profiles.h"
           #include "fusion3_sx1280_backend.h"
+          #include "fusion3_bench_node.h"
+          struct ProbeSink : rf_fusion3::LineSink {
+              void writeLine(const char*) override {}
+          };
           void rfFusion3CompileProbe(SX1280Driver &radio) {
-              rf_fusion3::Sx1280RangingBackend backend(
+              rf_fusion3::Sx1280RangingBackend backendA(
                   radio,
                   rf_fusion3::kNodeA,
                   rf_fusion3::kBenchFast,
                   0,
                   0
               );
-              backend.setDefaultSigmaMm(1500);
-              backend.setCalibrationId("UNCAL");
+              backendA.setDefaultSigmaMm(1500);
+              backendA.setCalibrationId("UNCAL");
+              ProbeSink sink;
+              rf_fusion3::BenchCoordinatorApp appA(backendA, sink);
+              (void)appA;
+
+              rf_fusion3::Sx1280RangingBackend backendT(
+                  radio,
+                  rf_fusion3::kNodeT,
+                  rf_fusion3::kBenchFast,
+                  0,
+                  0
+              );
+              rf_fusion3::BenchTargetApp appT(backendT, &sink);
+              (void)appT;
           }
           CPP
           cd src
@@ -180,6 +197,10 @@ jobs:
           cp rf_finder/protocol/FUSION3_SX1280_PROTOCOL.md out/protocol/
           cp rf_finder/sx1280_fusion/fusion3_protocol.h out/protocol/
           cp rf_finder/sx1280_fusion/fusion3_controller.h out/protocol/
+          cp rf_finder/sx1280_fusion/fusion3_profiles.h out/protocol/
+          cp rf_finder/sx1280_fusion/fusion3_sx1280_backend.h out/protocol/
+          cp rf_finder/sx1280_fusion/fusion3_bench_node.h out/protocol/
+          cp rf_finder/sx1280_fusion/README.md out/protocol/
           cp rf_finder/android/app/src/main/assets/sx1280-protocol.js out/core/
           cp rf_finder/android/app/src/main/assets/measurements.js out/core/
           cp rf_finder/android/app/src/main/assets/fusion-solver.js out/core/
