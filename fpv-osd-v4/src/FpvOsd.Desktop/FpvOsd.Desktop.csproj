@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>FPV-OSD-v4</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../FpvOsd.Core/FpvOsd.Core.csproj" />
+    <ProjectReference Include="../FpvOsd.Protocol/FpvOsd.Protocol.csproj" />
+    <ProjectReference Include="../FpvOsd.Platform.Abstractions/FpvOsd.Platform.Abstractions.csproj" />
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2" />
+  </ItemGroup>
+</Project>

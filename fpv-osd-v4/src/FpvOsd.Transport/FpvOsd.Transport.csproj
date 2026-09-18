@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><AssemblyName>FpvOsd.Transport</AssemblyName></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../FpvOsd.Protocol/FpvOsd.Protocol.csproj" />
+  </ItemGroup>
+</Project>

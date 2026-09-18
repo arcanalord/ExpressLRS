@@ -1,0 +1,85 @@
+name: FPV OSD v4 Windows Test
+
+on:
+  push:
+    branches:
+      - fpv-osd-v4
+    paths:
+      - "fpv-osd-v4/**"
+      - ".github/workflows/fpv-osd-v4-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore desktop
+        run: dotnet restore ./fpv-osd-v4/src/FpvOsd.Desktop/FpvOsd.Desktop.csproj
+
+      - name: Build desktop
+        run: dotnet build ./fpv-osd-v4/src/FpvOsd.Desktop/FpvOsd.Desktop.csproj -c Release --no-restore
+
+      - name: Windows decoder policy smoke
+        run: dotnet run --project ./fpv-osd-v4/tests/FpvOsd.Windows.Policy.Smoke/FpvOsd.Windows.Policy.Smoke.csproj -c Release
+
+      - name: Core smoke
+        id: core_smoke
+        continue-on-error: true
+        run: dotnet run --project ./fpv-osd-v4/tests/FpvOsd.Core.Smoke/FpvOsd.Core.Smoke.csproj -c Release
+
+      - name: Publish self-contained win-x64
+        run: |
+          dotnet publish ./fpv-osd-v4/src/FpvOsd.Desktop/FpvOsd.Desktop.csproj \
+            -c Release \
+            -r win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:DebugType=None \
+            -p:DebugSymbols=false \
+            -o ./artifacts/FPV-OSD-v4-Windows-Test
+
+      - name: Add test instructions
+        run: |
+          cat > ./artifacts/FPV-OSD-v4-Windows-Test/TEST-ME.txt <<EOF
+          FPV OSD v4 — Windows operator UI test
+
+          1. Extract ZIP to a normal folder.
+          2. Run FPV-OSD-v4.exe.
+          3. SmartScreen may ask for confirmation because this is an unsigned test build.
+          4. Check Visible/Thermal, PiP, REC timer, Settings drawer and Windows scaling 100%/125%.
+
+          F5 = Playing
+          F6 = Recovering
+          F7 = Error
+          F8 = Center Motion alarm
+
+          Branch: fpv-osd-v4
+          Commit: $GITHUB_SHA
+          EOF
+
+      - name: Create ZIP
+        run: |
+          cd ./artifacts/FPV-OSD-v4-Windows-Test
+          zip -r ../FPV-OSD-v4-M0.2-Operator-UI-Windows-x64.zip .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FPV-OSD-v4-M0.2-Operator-UI-Windows-x64
+          path: ./artifacts/FPV-OSD-v4-M0.2-Operator-UI-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14

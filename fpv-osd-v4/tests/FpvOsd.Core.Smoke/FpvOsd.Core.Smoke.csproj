@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/FpvOsd.Core/FpvOsd.Core.csproj" />
+    <ProjectReference Include="../../src/FpvOsd.Protocol/FpvOsd.Protocol.csproj" />
+    <ProjectReference Include="../../src/FpvOsd.Transport/FpvOsd.Transport.csproj" />
+    <ProjectReference Include="../../src/FpvOsd.Platform.Windows/FpvOsd.Platform.Windows.csproj" />
+  </ItemGroup>
+</Project>
