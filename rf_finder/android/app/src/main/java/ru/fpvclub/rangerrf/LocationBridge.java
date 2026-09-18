@@ -75,9 +75,9 @@ public final class LocationBridge {
     void injectUi() {
         main.post(() -> {
             if (webView == null) return;
-            String js = "(function(){if(document.getElementById('rf-location-feature'))return;" +
-                    "var s=document.createElement('script');s.id='rf-location-feature';" +
-                    "s.src='file:///android_asset/location.js';document.body.appendChild(s);})();";
+            String js = "(function(){if(document.getElementById('rf-fusion3-feature'))return;" +
+                    "var s=document.createElement('script');s.id='rf-fusion3-feature';" +
+                    "s.src='file:///android_asset/fusion3.js';document.body.appendChild(s);})();";
             webView.evaluateJavascript(js, null);
         });
     }
