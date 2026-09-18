@@ -63,6 +63,7 @@ SX1280Driver::SX1280Driver(): SX12xxDriverCommon()
     currOpmode = SX1280_MODE_SLEEP;
     lastSuccessfulPacketRadio = SX12XX_Radio_1;
     fallBackMode = SX1280_MODE_STDBY_RC;
+    rangingIrqStatus = 0;
 }
 
 void SX1280Driver::End()
@@ -284,6 +285,7 @@ uint8_t SX1280Driver::GetRangingPowerDeltaIndicator(SX12XX_Radio_Number_t radioN
 
 void SX1280Driver::StartRangingMaster(SX12XX_Radio_Number_t radioNumber)
 {
+    rangingIrqStatus = 0;
     SetRangingRole(SX1280_RANGING_ROLE_MASTER, radioNumber);
     CommitOutputPower();
     RFAMP.TXenable(radioNumber);
@@ -293,9 +295,19 @@ void SX1280Driver::StartRangingMaster(SX12XX_Radio_Number_t radioNumber)
 
 void SX1280Driver::StartRangingSlave(SX12XX_Radio_Number_t radioNumber)
 {
+    rangingIrqStatus = 0;
     SetRangingRole(SX1280_RANGING_ROLE_SLAVE, radioNumber);
     RFAMP.RXenable();
     SetMode(SX1280_MODE_RX, radioNumber);
+}
+
+uint16_t SX1280Driver::ConsumeRangingIrqStatus()
+{
+    noInterrupts();
+    const uint16_t status = rangingIrqStatus;
+    rangingIrqStatus = 0;
+    interrupts();
+    return status;
 }
 
 void SX1280Driver::Config(uint8_t bw, uint8_t sf, uint8_t cr, uint32_t regfreq,
@@ -882,6 +894,23 @@ void ICACHE_RAM_ATTR SX1280Driver::IsrCallback(SX12XX_Radio_Number_t radioNumber
     SX12XX_Radio_Number_t irqClearRadio = radioNumber;
 
     uint16_t irqStatus = instance->GetIrqStatus(radioNumber);
+
+    if (instance->packet_mode == SX1280_PACKET_TYPE_RANGING)
+    {
+        const uint16_t rangingMask = SX1280_IRQ_RANGING_SLAVE_RESPONSE_DONE |
+                                     SX1280_IRQ_RANGING_SLAVE_REQUEST_DISCARDED |
+                                     SX1280_IRQ_RANGING_MASTER_RESULT_VALID |
+                                     SX1280_IRQ_RANGING_MASTER_TIMEOUT |
+                                     SX1280_IRQ_RANGING_SLAVE_REQUEST_VALID;
+        const uint16_t rangingIrq = irqStatus & rangingMask;
+        if (rangingIrq != 0)
+        {
+            instance->rangingIrqStatus |= rangingIrq;
+            instance->ClearIrqStatus(rangingIrq, radioNumber);
+            return;
+        }
+    }
+
     if (irqStatus & SX1280_IRQ_TX_DONE)
     {
         RFAMP.TXRXdisable();
