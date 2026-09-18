@@ -76,8 +76,10 @@ public final class LocationBridge {
         main.post(() -> {
             if (webView == null) return;
             String js = "(function(){if(document.getElementById('rf-fusion3-feature'))return;" +
-                    "var s=document.createElement('script');s.id='rf-fusion3-feature';" +
-                    "s.src='file:///android_asset/fusion3.js';document.body.appendChild(s);})();";
+                    "function load(id,src,next){var s=document.createElement('script');s.id=id;s.src=src;s.onload=next||null;document.body.appendChild(s);}" +
+                    "load('rf-measurements','file:///android_asset/measurements.js',function(){" +
+                    "load('rf-fusion-sim','file:///android_asset/fusion-sim.js',function(){" +
+                    "load('rf-fusion3-feature','file:///android_asset/fusion3.js');});});})();";
             webView.evaluateJavascript(js, null);
         });
     }
