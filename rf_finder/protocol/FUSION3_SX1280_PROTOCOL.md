@@ -198,3 +198,37 @@ Before implementing full SX1280 ranging radio code:
 6. CI must test the parser and round-trip encode/decode.
 
 Only after this gate do we add the SX1280 master/slave RF state machine.
+
+
+## SX1280 verified implementation constraints
+
+Verified against Semtech SX1280 ranging documentation/reference API before implementing the driver primitives:
+
+- Ranging is a cooperative round-trip time-of-flight exchange between one Master and one Slave.
+- Packet type must be RANGING on both sides.
+- Ranging uses LoRa-style modulation parameters, but SF11/SF12 are not permitted.
+- Ranging bandwidths are restricted to 406.25 kHz, 812.5 kHz and 1625 kHz.
+- Master role value is 0x01; Slave is 0x00.
+- Slave enters RX; Master enters TX to start the ranging exchange.
+- Device ranging address and request ranging address are separate 32-bit registers.
+- The calibration register is per hardware/RF path; calibration must remain an explicit profile in Fusion 3.
+- Semtech notes transmitter group delay changes with programmed TX power, therefore the calibration profile must include TX power.
+- The existing ExpressLRS SX1280 driver in this branch has been extended with low-level ranging primitives, but the normal ELRS packet path is not implicitly treated as ranging.
+
+### Driver primitives added
+
+```
+ConfigRanging(...)
+SetRangingRole(...)
+SetDeviceRangingAddress(...)
+SetRangingRequestAddress(...)
+SetRangingCalibration(...)
+ClearRangingFilter(...)
+SetRangingFilterNumSamples(...)
+GetRangingResultMeters(...)
+GetRangingPowerDeltaIndicator(...)
+StartRangingMaster(...)
+StartRangingSlave(...)
+```
+
+These methods are deliberately low-level. Fusion 3's scheduler/controller owns the CONTROL → ARM → RANGE → RESULT → RETURN_TO_CONTROL state machine so that protocol logic is not hidden inside the generic radio driver.
