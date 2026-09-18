@@ -11,6 +11,8 @@ let nodes={
 let ranges={AB:null,AT:null,BT:null};
 let rangeAt={AB:null,AT:null,BT:null};
 let target=null,pendingGps=null,placeId=null,mapView=null,zoomDelta=0,mapEpoch=0;
+const measurementStore=window.RFFusionMeasurements?new window.RFFusionMeasurements.Store(1500):null;
+let lastSimTruth=null;
 
 function newAnchor(id,color){return{id,color,deviceId:id+'-001',lat:null,lon:null,accuracyM:null,provider:null,bearing:null,bearingAt:null,rssi:null};}
 function n(v){v=Number(v);return Number.isFinite(v)?v:null;}
@@ -26,7 +28,7 @@ function css(){
  const s=document.createElement('style');s.id='rf-fusion3-style';s.textContent=
  '#rfFusion3{margin-top:14px}.f3Head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.f3Mode{font-size:12px;color:var(--green);font-weight:700}.f3TargetId{display:grid;grid-template-columns:1fr 150px;gap:8px;align-items:end;margin-top:10px}.f3TargetId input,.f3Range input,.f3Manual input{min-height:44px;border:1px solid var(--hair2);border-radius:10px;background:#0B0D10;color:var(--text);padding:0 9px}.f3Map{position:relative;height:310px;overflow:hidden;border:1px solid var(--hair);border-radius:16px;background:#0A0D10;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:32px 32px;margin-top:10px;touch-action:manipulation}.f3Tiles,.f3Overlay{position:absolute;inset:0;width:100%;height:100%}.f3Tiles img{position:absolute;width:256px;height:256px;filter:grayscale(.22) brightness(.58) contrast(1.08);user-select:none;-webkit-user-drag:none}.f3Overlay{pointer-events:none}.f3MapBar{position:absolute;left:8px;right:8px;top:8px;display:flex;justify-content:space-between;pointer-events:none}.f3MapCtl{display:flex;gap:6px;pointer-events:auto}.f3MapCtl button{width:44px;height:44px;border-radius:11px;border:1px solid rgba(255,255,255,.18);background:rgba(17,19,22,.92);color:var(--text);font-weight:800}.f3MapState,.f3Hint{padding:5px 8px;border-radius:9px;background:rgba(11,11,12,.84);font-size:12px;color:#D3D6DC}.f3Hint{position:absolute;left:8px;bottom:8px}.f3Attr{position:absolute;right:7px;bottom:5px;font-size:10px;color:#D7D7DC;background:rgba(0,0,0,.58);padding:2px 5px;border-radius:6px}'+
  '.f3Nodes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}.f3Node{border:1px solid var(--hair);border-radius:14px;padding:10px;background:#0E1013}.f3NodeHead{display:flex;justify-content:space-between;align-items:center}.f3Badge{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-weight:800}.f3A{background:rgba(10,132,255,.18);color:#74B9FF}.f3B{background:rgba(255,214,10,.12);color:#FFD60A}.f3T{background:rgba(48,209,88,.14);color:#30D158}.f3Node b{display:block;margin-top:7px;font:700 14px ui-monospace,monospace}.f3Node small{display:block;color:var(--muted);margin-top:3px}.f3Actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.f3Actions button{min-height:44px;padding:0 7px}.f3Manual{display:none;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}.f3Manual.open{display:grid}.f3Manual input{width:100%;min-width:0}.f3Manual button{grid-column:1/-1;min-height:44px}'+
- '.f3Ranges{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.f3Range{border:1px solid var(--hair);border-radius:12px;padding:9px;background:#0B0D10}.f3Range input{width:100%;margin-top:5px;text-align:center;font:700 16px ui-monospace,monospace}.f3Range small{display:block;color:var(--muted);margin-top:4px}.f3Metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}.f3Metric{padding:8px;border:1px solid var(--hair);border-radius:11px;background:#0B0D10;text-align:center}.f3Metric span{display:block;color:var(--muted);font-size:12px}.f3Metric b{display:block;font:700 14px ui-monospace,monospace;margin-top:2px}.f3Result{margin-top:10px;padding-top:10px;border-top:1px solid var(--hair)}.f3Result strong{display:block;font:750 19px ui-monospace,monospace;margin-top:3px}.f3Good{color:var(--green)!important}.f3Warn{color:var(--yellow)!important}.f3Bad{color:var(--red)!important}.f3Hidden{display:none!important}@media(max-width:620px){.f3Nodes,.f3Ranges{grid-template-columns:1fr}.f3Metrics{grid-template-columns:1fr 1fr}.f3TargetId{grid-template-columns:1fr}.f3Map{height:280px}}';
+ '.f3Ranges{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.f3Range{border:1px solid var(--hair);border-radius:12px;padding:9px;background:#0B0D10}.f3Range input{width:100%;margin-top:5px;text-align:center;font:700 16px ui-monospace,monospace}.f3Range small{display:block;color:var(--muted);margin-top:4px}.f3Metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}.f3Metric{padding:8px;border:1px solid var(--hair);border-radius:11px;background:#0B0D10;text-align:center}.f3Metric span{display:block;color:var(--muted);font-size:12px}.f3Metric b{display:block;font:700 14px ui-monospace,monospace;margin-top:2px}.f3Sim{margin-top:10px;padding-top:10px;border-top:1px solid var(--hair)}.f3SimRow{display:grid;grid-template-columns:1fr 110px 110px;gap:8px;margin-top:8px}.f3Sim select,.f3Sim input{min-height:44px;border:1px solid var(--hair2);border-radius:10px;background:#0B0D10;color:var(--text);padding:0 9px}.f3SimActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.f3SimPre{margin:8px 0 0;max-height:130px;overflow:auto;white-space:pre-wrap;font:12px/1.4 ui-monospace,monospace;color:var(--muted)}.f3Result{margin-top:10px;padding-top:10px;border-top:1px solid var(--hair)}.f3Result strong{display:block;font:750 19px ui-monospace,monospace;margin-top:3px}.f3Good{color:var(--green)!important}.f3Warn{color:var(--yellow)!important}.f3Bad{color:var(--red)!important}.f3Hidden{display:none!important}@media(max-width:620px){.f3Nodes,.f3Ranges,.f3SimRow{grid-template-columns:1fr}.f3Metrics{grid-template-columns:1fr 1fr}.f3TargetId{grid-template-columns:1fr}.f3Map{height:280px}}';
  document.head.appendChild(s);
 }
 
@@ -55,6 +57,7 @@ function mount(){
  '<div class="f3Range"><div class="label">A↔T RANGE</div><input id="f3RangeAT" type="number" inputmode="decimal" min="0" step="0.1" placeholder="м"><small id="f3RangeATMeta">SX1280 / тест вручную</small></div>'+
  '<div class="f3Range"><div class="label">B↔T RANGE</div><input id="f3RangeBT" type="number" inputmode="decimal" min="0" step="0.1" placeholder="м"><small id="f3RangeBTMeta">SX1280 / тест вручную</small></div></div>'+
  '<div class="f3Metrics"><div class="f3Metric"><span>BASE A–B</span><b id="f3Base">—</b></div><div class="f3Metric"><span>SYNC Δt</span><b id="f3Sync">—</b></div><div class="f3Metric"><span>УГОЛ</span><b id="f3Angle">—</b></div><div class="f3Metric"><span>RANGE ERR</span><b id="f3RangeErr">—</b></div></div>'+
+ '<div class="f3Sim"><div class="label">СИМУЛЯТОР / REPLAY</div><small class="muted">Проверка математики без железа. Генерирует те же Measurement Contract, что и будущий SX1280.</small><div class="f3SimRow"><select id="f3SimPreset"><option value="GOOD">GOOD</option><option value="WIDE">WIDE</option><option value="BAD_GEOMETRY">BAD GEOMETRY</option><option value="CLOSE">CLOSE</option></select><input id="f3SimBearingSigma" type="number" min="0.1" step="0.1" value="2.5" title="bearing sigma, deg"><input id="f3SimRangeSigma" type="number" min="0.05" step="0.05" value="0.8" title="range sigma, m"></div><div class="f3SimActions"><button id="f3SimRun" class="btn primary">ЗАПУСТИТЬ</button><button id="f3SimNlos" class="btn">NLOS B</button><button id="f3SimOutlier" class="btn">OUTLIER A</button><button id="f3SimClear" class="btn">ОЧИСТИТЬ SIM</button></div><pre id="f3SimLog" class="f3SimPre">—</pre></div>'+
  '<div class="f3Result"><div class="head"><span class="label">ПОЗИЦИЯ T</span><button id="f3OpenTarget" class="btn f3Hidden">В КАРТЫ</button></div><strong id="f3Target">—</strong><small id="f3Quality">Нужны позиции A/B и измерения T</small></div>';
  const controls=host.querySelector('.controls.section');host.insertBefore(card,controls||null);bind();restore();render();
 }
@@ -74,10 +77,19 @@ function bind(){
  $('f3Auto').onclick=()=>{zoomDelta=0;renderMap();};
  $('f3Map').onclick=mapClick;
  $('f3OpenTarget').onclick=()=>{if(target&&target.ok&&typeof AndroidLocation!=='undefined')AndroidLocation.openMap(target.lat,target.lon);};
+ $('f3SimRun').onclick=()=>runSimulator({});
+ $('f3SimNlos').onclick=()=>runSimulator({nlos:true});
+ $('f3SimOutlier').onclick=()=>runSimulator({outlier:true});
+ $('f3SimClear').onclick=()=>{lastSimTruth=null;if(measurementStore)measurementStore.clear(m=>m.meta&&m.meta.sim);clearMeasurements();quality('SIM очищен','warn');$('f3SimLog').textContent='—';render();};
 }
 
-function setRange(key,value,source){
+function addMeasurement(m){if(measurementStore&&m)measurementStore.add(m);return m;}
+function setRange(key,value,source,meta){
  const v=n(value);ranges[key]=v&&v>0?v:null;rangeAt[key]=ranges[key]?Date.now():null;
+ if(ranges[key]&&window.RFFusionMeasurements){
+   const pair={AB:['A','B'],AT:['A','T'],BT:['B','T']}[key];
+   addMeasurement(window.RFFusionMeasurements.range({deviceId:pair[0],peerId:pair[1],targetId:nodes.T.deviceId,timestamp:rangeAt[key],rangeM:ranges[key],sigmaM:n(meta&&meta.sigmaM)||1.5,quality:n(meta&&meta.quality)||1,health:(meta&&meta.health)||undefined,losState:(meta&&meta.losState)||'UNKNOWN',calibrationId:(meta&&meta.calibrationId)||null,meta:Object.assign({source:source||'MANUAL'},meta||{})}));
+ }
  const m=$('f3Range'+key+'Meta');if(m)m.textContent=ranges[key]?(source+' · '+ranges[key].toFixed(1)+' м · сейчас'):(key==='AB'?'контроль базы':'SX1280 / тест вручную');
  persist();render();
 }
@@ -86,7 +98,7 @@ window.onFusionRange=(o)=>{
  if(targetId&&targetId!==nodes.T.deviceId)return;
  const key=(a+b==='AB'||a+b==='BA')?'AB':(a+b==='AT'||a+b==='TA')?'AT':(a+b==='BT'||a+b==='TB')?'BT':null;
  if(!key||!Number.isFinite(v)||v<=0)return;
- ranges[key]=v;rangeAt[key]=n(o.timeMs)||Date.now();nodes.T.online=true;nodes.T.lastSeen=rangeAt[key];persist();render();
+ setRange(key,v,'SX1280',{sigmaM:n(o.sigmaM)||1.5,quality:n(o.quality)||1,health:o.health,losState:o.losState||'UNKNOWN',calibrationId:o.calibrationId||null,sequence:o.sequence});nodes.T.online=true;nodes.T.lastSeen=rangeAt[key];persist();render();
 };
 
 function clearMeasurements(){
@@ -96,15 +108,50 @@ function clearMeasurements(){
 function numFrom(id){const e=$(id),m=e?(e.textContent||'').match(/-?\d+(?:\.\d+)?/):null,v=m?Number(m[0]):NaN;return Number.isFinite(v)?v:null;}
 function captureBearing(id){
  const b=numFrom('bestHeading');if(!Number.isFinite(b)){quality('Сначала получи устойчивый лучший пеленг','warn');return;}
- const s=nodes[id];s.bearing=((b%360)+360)%360;s.bearingAt=Date.now();s.rssi=numFrom('bestPass');nodes.T.online=true;nodes.T.lastSeen=Date.now();persist();render();
+ const s=nodes[id];s.bearing=((b%360)+360)%360;s.bearingAt=Date.now();s.rssi=numFrom('bestPass');
+ if(window.RFFusionMeasurements)addMeasurement(window.RFFusionMeasurements.bearing({deviceId:id,targetId:nodes.T.deviceId,timestamp:s.bearingAt,bearingDeg:s.bearing,sigmaDeg:8,rssiDbm:s.rssi,quality:.75,meta:{source:'LIVE_UI'}}));
+ nodes.T.online=true;nodes.T.lastSeen=Date.now();persist();render();
 }
 
 function gps(id){if(typeof AndroidLocation==='undefined'){quality('GPS доступен только в Android APK','warn');return;}pendingGps=id;quality('Получаю GPS для '+id+'…');try{AndroidLocation.requestFix();}catch(e){pendingGps=null;quality('GPS ошибка','warn');}}
-window.onLocationFix=o=>{if(!pendingGps)return;const id=pendingGps;pendingGps=null;const lat=n(o.lat),lon=n(o.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon)){quality('Некорректный GPS fix','warn');return;}Object.assign(nodes[id],{lat,lon,accuracyM:n(o.accuracyM),provider:o.cached?'GNSS cached':'GNSS'});zoomDelta=0;persist();render();};
+window.onLocationFix=o=>{if(!pendingGps)return;const id=pendingGps;pendingGps=null;const lat=n(o.lat),lon=n(o.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon)){quality('Некорректный GPS fix','warn');return;}Object.assign(nodes[id],{lat,lon,accuracyM:n(o.accuracyM),provider:o.cached?'GNSS cached':'GNSS'});
+ if(window.RFFusionMeasurements)addMeasurement(window.RFFusionMeasurements.pose({deviceId:id,targetId:nodes.T.deviceId,timestamp:n(o.timeMs)||Date.now(),lat,lon,accuracyM:n(o.accuracyM)||5,provider:nodes[id].provider,meta:{source:'GNSS'}}));
+ zoomDelta=0;persist();render();};
 window.onLocationError=m=>{pendingGps=null;quality(String(m||'GPS ошибка'),'warn');};
-function manual(id){const lat=n($('f3Lat'+id).value),lon=n($('f3Lon'+id).value);if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180){quality('Проверь координаты '+id,'warn');return;}Object.assign(nodes[id],{lat,lon,accuracyM:null,provider:'MANUAL'});$('f3Manual'+id).classList.remove('open');zoomDelta=0;persist();render();}
+function manual(id){const lat=n($('f3Lat'+id).value),lon=n($('f3Lon'+id).value);if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180){quality('Проверь координаты '+id,'warn');return;}Object.assign(nodes[id],{lat,lon,accuracyM:null,provider:'MANUAL'});
+ if(window.RFFusionMeasurements)addMeasurement(window.RFFusionMeasurements.pose({deviceId:id,targetId:nodes.T.deviceId,timestamp:Date.now(),lat,lon,accuracyM:3,provider:'MANUAL',meta:{source:'MANUAL'}}));
+ $('f3Manual'+id).classList.remove('open');zoomDelta=0;persist();render();}
 function beginPlace(id){if(!mapView){quality('Сначала задай одну позицию GPS или координатами','warn');return;}placeId=id;quality('Тапни по карте: поставить '+id);renderMap();}
 function mapClick(e){if(!placeId||!mapView)return;const r=$('f3Map').getBoundingClientRect(),wx=mapView.cx+(e.clientX-r.left-r.width/2),wy=mapView.cy+(e.clientY-r.top-r.height/2),p=invMerc(wx,wy,mapView.z);Object.assign(nodes[placeId],{lat:p.lat,lon:p.lon,accuracyM:null,provider:'MAP'});placeId=null;persist();render();}
+
+function runSimulator(extra){
+ if(!window.RFFusionSim||!window.RFFusionMeasurements){quality('Simulator module не загружен','bad');return;}
+ const preset=$('f3SimPreset').value||'GOOD',bearingSigmaDeg=Math.max(.1,n($('f3SimBearingSigma').value)||2.5),rangeSigmaM=Math.max(.05,n($('f3SimRangeSigma').value)||.8);
+ const origin=Number.isFinite(nodes.A.lat)&&Number.isFinite(nodes.A.lon)?{lat:nodes.A.lat,lon:nodes.A.lon}:{lat:.01,lon:.01};
+ const sim=window.RFFusionSim.generate(preset,Object.assign({seed:Date.now()%100000,bearingSigmaDeg,rangeSigmaM,origin,targetId:nodes.T.deviceId},extra||{}));
+ lastSimTruth=sim.truth;
+ const A=sim.poses.A,B=sim.poses.B;
+ Object.assign(nodes.A,{lat:A.lat,lon:A.lon,accuracyM:A.accuracyM,provider:'SIM',bearing:sim.bearings.A.bearingDeg,bearingAt:sim.bearings.A.timestamp,rssi:-60});
+ Object.assign(nodes.B,{lat:B.lat,lon:B.lon,accuracyM:B.accuracyM,provider:'SIM',bearing:sim.bearings.B.bearingDeg,bearingAt:sim.bearings.B.timestamp,rssi:-63});
+ for(const m of [A,B,sim.bearings.A,sim.bearings.B,sim.ranges.AB,sim.ranges.AT,sim.ranges.BT]){m.meta=Object.assign({},m.meta||{},{sim:true,preset});addMeasurement(m);}
+ ranges.AB=sim.ranges.AB.rangeM;ranges.AT=sim.ranges.AT.rangeM;ranges.BT=sim.ranges.BT.rangeM;
+ rangeAt.AB=sim.ranges.AB.timestamp;rangeAt.AT=sim.ranges.AT.timestamp;rangeAt.BT=sim.ranges.BT.timestamp;
+ nodes.T.online=true;nodes.T.lastSeen=Math.max(rangeAt.AT,rangeAt.BT);
+ zoomDelta=0;render();
+ const solved=target&&target.ok?target:null,err=solved?geoDistancePoint(solved,{lat:sim.truth.latLonT.lat,lon:sim.truth.latLonT.lon}):null;
+ $('f3SimLog').textContent=[
+  'preset '+preset+(extra&&extra.nlos?' · NLOS B':'')+(extra&&extra.outlier?' · OUTLIER A':''),
+  'truth T local: '+sim.truth.T.x.toFixed(1)+', '+sim.truth.T.y.toFixed(1)+' m',
+  'bearing A/B: '+sim.bearings.A.bearingDeg.toFixed(2)+'° / '+sim.bearings.B.bearingDeg.toFixed(2)+'°',
+  'range AB/AT/BT: '+sim.ranges.AB.rangeM.toFixed(2)+' / '+sim.ranges.AT.rangeM.toFixed(2)+' / '+sim.ranges.BT.rangeM.toFixed(2)+' m',
+  solved?'solve '+solved.method+' · error '+err.toFixed(2)+' m':'solve blocked: '+(target&&target.reason||'no solution'),
+  'health: A-range '+sim.ranges.AT.health+' · B-range '+sim.ranges.BT.health
+ ].join('\n');
+}
+function measurementSummary(){
+ if(!measurementStore)return null;const now=Date.now(),all=measurementStore.snapshot(),recent=all.filter(m=>now-m.timestamp<15000);
+ return{total:all.length,recent:recent.length,good:recent.filter(m=>m.health==='GOOD').length,suspect:recent.filter(m=>m.health==='SUSPECT').length,nlos:recent.filter(m=>m.health==='NLOS').length};
+}
 
 function bearingSolve(a,b){
  if(!Number.isFinite(a.lat)||!Number.isFinite(a.lon)||!Number.isFinite(b.lat)||!Number.isFinite(b.lon)||!Number.isFinite(a.bearing)||!Number.isFinite(b.bearing))return null;
@@ -164,7 +211,7 @@ function render(){
  $('f3Sync').textContent=Number.isFinite(dt)?(dt<1000?dt+' ms':(dt/1000).toFixed(1)+' s'):'—';
  target=solve();$('f3Angle').textContent=target.ok&&Number.isFinite(target.angle)?target.angle.toFixed(1)+'°':'—';$('f3RangeErr').textContent=target.ok&&Number.isFinite(target.rangeErr)?target.rangeErr.toFixed(1)+' м':'—';
  $('f3OpenTarget').classList.toggle('f3Hidden',!target.ok);$('f3Target').textContent=target.ok?coord(target.lat)+', '+coord(target.lon):'—';
- if(!target.ok)quality(target.reason,'warn');else quality(target.method+' · '+(target.good?'геометрия нормальная':'проверь геометрию')+(Number.isFinite(target.rangeErr)?' · ошибка range '+target.rangeErr.toFixed(1)+' м':''),target.good?'good':'warn');
+ if(!target.ok)quality(target.reason,'warn');else{const ms=measurementSummary();quality(target.method+' · '+(target.good?'геометрия нормальная':'проверь геометрию')+(Number.isFinite(target.rangeErr)?' · ошибка range '+target.rangeErr.toFixed(1)+' м':'')+(ms?' · M '+ms.recent+'/'+ms.total:''),target.good?'good':'warn');}
  persist();renderMap();
 }
 function persist(){try{localStorage.setItem(STORE,JSON.stringify({savedAt:Date.now(),nodes,ranges,rangeAt}));}catch(e){}}
