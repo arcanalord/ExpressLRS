@@ -226,8 +226,8 @@ void SX1280Driver::ClearRangingFilter(SX12XX_Radio_Number_t radioNumber)
 
 void SX1280Driver::SetRangingFilterNumSamples(uint8_t samples, SX12XX_Radio_Number_t radioNumber)
 {
-    if (samples < SX1280_DEFAULT_RANGING_FILTER_SIZE)
-        samples = SX1280_DEFAULT_RANGING_FILTER_SIZE;
+    if (samples < SX1280_MIN_RANGING_FILTER_SIZE)
+        samples = SX1280_MIN_RANGING_FILTER_SIZE;
     hal.WriteRegister(SX1280_REG_LR_RANGINGFILTERWINDOWSIZE, samples, radioNumber);
 }
 
