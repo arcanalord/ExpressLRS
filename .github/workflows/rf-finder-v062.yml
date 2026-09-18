@@ -52,6 +52,8 @@ jobs:
           grep -q 'СИМУЛЯТОР / REPLAY' rf_finder/android/app/src/main/assets/fusion3.js
           grep -q 'WLS_ENU' rf_finder/android/app/src/main/assets/fusion-solver.js
           grep -q 'F3,RANGE' rf_finder/protocol/FUSION3_SX1280_PROTOCOL.md
+          g++ -std=c++17 -Wall -Wextra -pedantic -I. rf_finder/sx1280_fusion/test_protocol.cpp -o /tmp/fusion3_protocol_test
+          /tmp/fusion3_protocol_test
 
           node - <<'NODE'
           global.window=global;
