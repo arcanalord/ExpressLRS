@@ -1,5 +1,9 @@
 name: Build ExpressLRS
-on: [push, pull_request]
+on:
+  push:
+    branches-ignore:
+      - fpv-tracker-android
+  pull_request:
 jobs:
   test:
     runs-on: ubuntu-latest
