@@ -1,0 +1,95 @@
+name: PointTrack Android v0.9.4 clean
+
+on:
+  push:
+    branches:
+      - pointtrack-android-v0.9.4-clean
+    paths:
+      - 'pointtrack_ci/clean_source_v094.b64.*'
+      - '.github/workflows/pointtrack-v094-clean-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: PointTrack v0.9.4 clean Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Restore exact clean v0.9.4 snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat pointtrack_ci/clean_source_v094.b64.* | base64 -d > "$RUNNER_TEMP/PointTrack_v0.9.4-dev_android_source.zip"
+          echo "93cee29dd0c2ebb52184f76211881a22c0aebf269ddeb1589943573d9e417e85  $RUNNER_TEMP/PointTrack_v0.9.4-dev_android_source.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/pointtrack"
+          unzip -q "$RUNNER_TEMP/PointTrack_v0.9.4-dev_android_source.zip" -d "$RUNNER_TEMP/pointtrack"
+          test -f "$RUNNER_TEMP/pointtrack/settings.gradle.kts"
+          test "$(cat "$RUNNER_TEMP/pointtrack/VERSION")" = "0.9.4-dev"
+          echo "PT=$RUNNER_TEMP/pointtrack" >> "$GITHUB_ENV"
+
+      - name: Core regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PT"
+          gradle --no-daemon :core:coreRegression --stacktrace
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PT"
+          gradle --no-daemon :androidApp:assembleDebug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="$PT/androidApp/build/outputs/apk/debug/androidApp-debug.apk"
+          test -s "$SRC"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$SRC" | grep "package: name='com.fpvclub.pointtrack'"
+          mkdir -p out/android
+          cp "$SRC" out/android/PointTrack_v0.9.4-dev-clean-debug.apk
+          sha256sum out/android/PointTrack_v0.9.4-dev-clean-debug.apk | tee out/android/PointTrack_v0.9.4-dev-clean-debug.apk.sha256
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: PointTrack-v0.9.4-dev-clean-Android
+          path: out/android/*
+          retention-days: 14
+
+      - name: Publish clean APK release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG='pointtrack-v0.9.4-dev-clean-android'
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/android/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" out/android/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA"               --title 'PointTrack v0.9.4-dev clean Android'               --notes 'Clean snapshot build. No patch layering. Temporal-coherence hybrid POINT/PATCH tracking. GYRO/IMU OFF.'
+          fi
