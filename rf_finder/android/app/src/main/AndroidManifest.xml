@@ -7,7 +7,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="RF Finder"
+        android:label="RF Finder Fusion 3"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <activity
