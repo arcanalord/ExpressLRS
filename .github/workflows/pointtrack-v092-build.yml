@@ -46,6 +46,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/pointtrack"
           unzip -q "$RUNNER_TEMP/PointTrack_v0.9.2-dev_android_source.zip" -d "$RUNNER_TEMP/pointtrack"
           test -f "$RUNNER_TEMP/pointtrack/settings.gradle.kts"
+          cp pointtrack_ci/TrackingOverlayView.kt "$RUNNER_TEMP/pointtrack/androidApp/src/main/java/com/fpvclub/pointtrack/TrackingOverlayView.kt"
           echo "PT=$RUNNER_TEMP/pointtrack" >> "$GITHUB_ENV"
 
       - name: Core regression
