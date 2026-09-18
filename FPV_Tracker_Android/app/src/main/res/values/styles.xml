@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.FPVTracker" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item><item name="android:windowLightStatusBar">false</item><item name="android:statusBarColor">#07111B</item><item name="android:navigationBarColor">#07111B</item><item name="android:colorAccent">#31D3F2</item>
+    </style>
+</resources>
