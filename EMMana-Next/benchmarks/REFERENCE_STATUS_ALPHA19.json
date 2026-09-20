@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.1",
+  "project_version": "0.1.0-alpha.19",
+  "independent_reference": {
+    "engine": "nec2c",
+    "local_status": "not_executed",
+    "local_reason": "container DNS cannot resolve external package/source hosts",
+    "ci_status": "workflow_prepared_not_executed",
+    "strict_gate": "B01 impedance",
+    "characterization_only": "B04 impedance until measured tolerance is adopted",
+    "loss_load_reference_status": "not_implemented_not_executed"
+  },
+  "internal_numerical_gates": {
+    "lapack_vs_bootstrap_parity": "pass",
+    "serial_vs_parallel_parity": "pass",
+    "linear_residual_gate": "pass"
+  },
+  "junction_validation": {
+    "internal_status": "pass",
+    "independent_reference_status": "not_executed"
+  },
+  "loss_load_validation": {
+    "internal_status": "pass",
+    "B08_copper": "finite-conductivity dissipation/efficiency/power-balance regression pass",
+    "B09_series_rlc": "RLC impedance + active resistor dissipation/power-balance regression pass",
+    "pure_reactive_load": "impedance changes with dissipated power approximately zero",
+    "independent_reference_status": "not_implemented_not_executed"
+  }
+}
