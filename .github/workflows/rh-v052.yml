@@ -22,7 +22,7 @@ jobs:
 
       - name: Download canonical source from Dropbox
         run: |
-          curl -L --fail --retry 3 'https://uc34f09cd3b56a3f14d697c58d76.dl.dropboxusercontent.com/cd/0/get/DIc0Hiw1W7SEt6C-E5CcXHLiHCuDnAMoqhGNHH0Cakwo5UWOQ-fP2tzwAWJ1mJuYXHC7ee_S24dYC4F4N32bYBj29PgHNBVN-T-xDguoWhbpgxK_6nXAID4OSGlOYyPkfVrSaIKq2bTJarJPmeq6pFzf91XeYX8Ky09jfpX5nD3tQg/file?c_luid=cfbe8875' -o /tmp/rh-source.zip
+          curl -L --fail --retry 3 'https://uc719d2217ec3c54e6c8b7eb98bb.dl.dropboxusercontent.com/cd/0/get/DIecukXgS4IMu8_6zs85jPiQ9CJeyOocpxx28z7eB8CehmhviJKg4w8CABPfL4V5BK-PdARybAnl1G7qxsujhpipHWdoQcRwMV0oXLQRkjWwYcOXdrcameSY2auGjaBOcVm_5U8yCrzAqAz8l8pxf4_wr5WRdzC3HS2zf-0mMNyzFA/file?c_luid=cfbe8875' -o /tmp/rh-source.zip
           echo "28878e53d8a6754af40fa577ec930d2af4fad67138723b1f7a28ef10e819105e  /tmp/rh-source.zip" | sha256sum -c -
           rm -rf tools/radio-horizon tools/radio-horizon-v052
           mkdir -p tools/radio-horizon-v052
