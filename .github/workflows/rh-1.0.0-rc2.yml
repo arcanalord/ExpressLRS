@@ -1,0 +1,84 @@
+name: Radio Horizon 1.0.0-rc2 APK
+on:
+  push:
+    branches: ["ci-radio-horizon-apk-v030"]
+    paths:
+      - ".github/workflows/rh-1.0.0-rc2.yml"
+      - "tools/radio-horizon-ci/trigger-rc2.txt"
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download canonical source from Dropbox
+        run: |
+          curl -L --fail --retry 3 'https://uce5ba260c1a29147a366a9f0fad.dl.dropboxusercontent.com/cd/0/get/DIf01U4B3yXPm-COYyNuJ5uN21Gsmb1hNxR-KvpW0hTrV4ey0uHzV-qSuHD9SlhKdCxW5ALX6kvOVVEbibaQbruk4i3bTWYQIS5GitcMjJlXL_gAZxs_6rTIVwleSfXSg9Vpk5j9FMchBLW3BE3hSnxGAzLBWphkzHkKNvUbE-8M0Q/file?c_luid=cfbe8875' -o /tmp/rh-source.zip
+          echo "5155009efb30d4218a83dff29acdc4dd6d49674d7e22abe20a9deec31d64960b  /tmp/rh-source.zip" | sha256sum -c -
+          rm -rf tools/radio-horizon tools/radio-horizon-rc2
+          mkdir -p tools/radio-horizon-rc2
+          unzip -q /tmp/rh-source.zip -d tools/radio-horizon-rc2
+          mv tools/radio-horizon-rc2/radio_horizon_v1.0.0-rc2 tools/radio-horizon
+          cp /tmp/rh-source.zip tools/radio-horizon/Radio_Horizon_SOURCE_CURRENT_v1.0.0-rc2.zip
+      - name: Vendor pinned MapLibre
+        working-directory: tools/radio-horizon
+        run: ./scripts/vendor-maplibre.sh
+      - name: Install Android SDK
+        run: |
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Run syntax and regression tests
+        working-directory: tools/radio-horizon
+        run: |
+          node --check web/app.mjs
+          node --check core/coordinates.mjs
+          node --check adapters/dem.mjs
+          npm test
+          cmp web/app.mjs android/app/src/main/assets/app/web/app.mjs
+          cmp web/index.html android/app/src/main/assets/app/web/index.html
+          cmp web/styles.css android/app/src/main/assets/app/web/styles.css
+          cmp core/coordinates.mjs android/app/src/main/assets/app/core/coordinates.mjs
+          cmp adapters/dem.mjs android/app/src/main/assets/app/adapters/dem.mjs
+      - name: Build APK
+        working-directory: tools/radio-horizon/android
+        run: gradle clean assembleDebug --stacktrace
+      - name: Verify APK and provenance
+        working-directory: tools/radio-horizon
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee APK_VERIFY.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee APK_BADGING.txt
+          sha256sum "$APK" | tee APK_SHA256.txt
+          {
+            echo "version=1.0.0-rc2"
+            echo "source_sha256=5155009efb30d4218a83dff29acdc4dd6d49674d7e22abe20a9deec31d64960b"
+            echo "git_ci_sha=$GITHUB_SHA"
+            echo "runner_arch=$(uname -m)"
+          } | tee BUILD_PROVENANCE.txt
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: radio-horizon-v1.0.0-rc2
+          path: |
+            tools/radio-horizon/android/app/build/outputs/apk/debug/app-debug.apk
+            tools/radio-horizon/Radio_Horizon_SOURCE_CURRENT_v1.0.0-rc2.zip
+            tools/radio-horizon/APK_VERIFY.txt
+            tools/radio-horizon/APK_BADGING.txt
+            tools/radio-horizon/APK_SHA256.txt
+            tools/radio-horizon/BUILD_PROVENANCE.txt
+            tools/radio-horizon/docs/QA_v1.0.0-rc2.md
+            tools/radio-horizon/docs/RELEASE_NOTES_v1.0.0-rc2.md
+            tools/radio-horizon/docs/SK42_COORDINATE_VIEWS.md
+          if-no-files-found: error
