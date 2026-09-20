@@ -1,0 +1,12 @@
+{
+  "schema_version": "0.1",
+  "name": "B05 L-junction topology fixture",
+  "frequency_hz": 299792458.0,
+  "wires": [
+    {"id":"leg_x","start_m":[-0.25,0,0],"end_m":[0,0,0],"radius_m":0.001,"segments":25},
+    {"id":"leg_z","start_m":[0,0,0],"end_m":[0,0,0.25],"radius_m":0.001,"segments":25}
+  ],
+  "feeds": [
+    {"wire_id":"leg_x","segment":12,"voltage_re_v":1.0,"voltage_im_v":0.0}
+  ]
+}
