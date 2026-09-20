@@ -1,0 +1,351 @@
+name: Radio Horizon APK v0.4.0 Standalone
+on:
+  push:
+    branches: ["ci-radio-horizon-apk-v030"]
+    paths:
+      - ".github/workflows/rh-standalone.yml"
+      - "tools/radio-horizon-ci/trigger-v040.txt"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      RH_DEV_URL: https://d2631c46-fdb3-405d-8a50-6f154593dcaf-00-1c39c2hognz8y.kira.replit.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Rehydrate base source
+        run: |
+          cat tools/radio-horizon-ci/source.part.* > source.b64
+          base64 -d source.b64 > source.tar.gz
+          mkdir -p tools/radio-horizon
+          tar -xzf source.tar.gz -C tools/radio-horizon
+
+      - name: Mirror current Replit frontend
+        run: |
+          python3 - <<'PY'
+          import os, re, ssl, urllib.request, urllib.parse, pathlib, collections
+          base = os.environ["RH_DEV_URL"].rstrip("/")
+          out = pathlib.Path("tools/radio-horizon/android/app/src/main/assets")
+          out.mkdir(parents=True, exist_ok=True)
+          q = collections.deque(["/"])
+          seen = set()
+          text_files = {}
+          max_files = 1200
+          prefixes = ("/src/", "/node_modules/", "/@vite/", "/@react-refresh", "/assets/")
+
+          def fetch(url):
+              req = urllib.request.Request(url, headers={"User-Agent":"RadioHorizonStandaloneBuilder/0.4.0"})
+              with urllib.request.urlopen(req, timeout=30, context=ssl.create_default_context()) as r:
+                  return r.read(), r.headers.get("Content-Type","")
+
+          def enqueue(ref, current):
+              if not ref or ref.startswith(("data:","blob:","mailto:","tel:","#")):
+                  return
+              u = urllib.parse.urljoin(base + current, ref)
+              pu, pb = urllib.parse.urlparse(u), urllib.parse.urlparse(base)
+              if pu.netloc != pb.netloc:
+                  return
+              path = pu.path or "/"
+              if path != "/" and not path.startswith(prefixes):
+                  return
+              q.append(path + (("?" + pu.query) if pu.query else ""))
+
+          while q and len(seen) < max_files:
+              ref = q.popleft()
+              pu = urllib.parse.urlparse(ref)
+              path = pu.path or "/"
+              if path in seen:
+                  continue
+              seen.add(path)
+              try:
+                  data, ctype = fetch(base + ref)
+              except Exception as e:
+                  print("WARN", ref, e)
+                  continue
+              rel = "index.html" if path == "/" else path.lstrip("/")
+              fp = out / rel
+              fp.parent.mkdir(parents=True, exist_ok=True)
+              fp.write_bytes(data)
+              is_text = any(x in ctype for x in ("text/","javascript","json","xml")) or fp.suffix.lower() in (".html",".js",".jsx",".ts",".tsx",".css",".json")
+              if not is_text:
+                  continue
+              try:
+                  txt = data.decode("utf-8")
+              except Exception:
+                  continue
+              text_files[path] = (fp, txt)
+              refs = set()
+              refs.update(re.findall(r'''(?:src|href)=["']([^"']+)["']''', txt))
+              refs.update(re.findall(r'''(?:from\s*|import\s*\(|import\s*)["']([^"']+)["']''', txt))
+              refs.update(re.findall(r'''["']((?:/src/|/node_modules/|/@vite/|/@react-refresh|/assets/)[^"'\` ]+)["']''', txt))
+              refs.update(re.findall(r'''url\((?:["']?)([^)"']+)''', txt))
+              for x in refs:
+                  enqueue(x, path)
+
+          idx = out / "index.html"
+          html = idx.read_text(encoding="utf-8")
+          html = re.sub(r'<script[^>]+src=["\']/@vite/client[^>]*></script>', '', html)
+          bridge = r"""
+          <script>
+          (() => {
+            const nativeFetch = window.fetch.bind(window);
+            let seq = 1;
+            const pending = new Map();
+            window.__rhTerrainResolve = (id, status, body) => {
+              const p = pending.get(String(id));
+              if (!p) return;
+              pending.delete(String(id));
+              p.resolve(new Response(body, {status:Number(status), headers:{"Content-Type":"application/json"}}));
+            };
+            window.__rhTerrainReject = (id, message) => {
+              const p = pending.get(String(id));
+              if (!p) return;
+              pending.delete(String(id));
+              p.reject(new TypeError(message || "Network request failed"));
+            };
+            window.fetch = (input, init = {}) => {
+              const raw = typeof input === "string" ? input : (input && input.url) || "";
+              let path = raw;
+              try { path = new URL(raw, location.href).pathname; } catch (_) {}
+              if (path === "/api/terrain/profile") {
+                const id = String(seq++);
+                return new Promise((resolve, reject) => {
+                  pending.set(id, {resolve, reject});
+                  try { AndroidTerrain.requestProfile(id, init && init.body ? String(init.body) : "{}"); }
+                  catch (e) { pending.delete(id); reject(e); }
+                });
+              }
+              return nativeFetch(input, init);
+            };
+          })();
+          </script>
+          """
+          pos = html.lower().find("</head>")
+          html = html[:pos] + bridge + html[pos:] if pos >= 0 else bridge + html
+
+          paths = sorted([p for p in seen if p != "/"], key=len, reverse=True)
+          def rewrite(txt):
+              for p in paths:
+                  txt = txt.replace('"' + p, '"/app' + p)
+                  txt = txt.replace("'" + p, "'/app" + p)
+                  txt = txt.replace("(" + p, "(/app" + p)
+              return txt
+          for p, (fp, txt) in text_files.items():
+              if p != "/":
+                  fp.write_text(rewrite(txt), encoding="utf-8")
+          idx.write_text(rewrite(html), encoding="utf-8")
+          print("Mirrored", len(seen), "paths")
+          PY
+
+      - name: Verify mirrored frontend
+        run: |
+          test -s tools/radio-horizon/android/app/src/main/assets/index.html
+          grep -q "AndroidTerrain.requestProfile" tools/radio-horizon/android/app/src/main/assets/index.html
+          find tools/radio-horizon/android/app/src/main/assets -type f | wc -l
+
+      - name: Patch Android project
+        run: |
+          sed -i "s/versionCode 3/versionCode 6/" tools/radio-horizon/android/app/build.gradle
+          sed -i "s/versionName '0.3.0'/versionName '0.4.0-standalone'/" tools/radio-horizon/android/app/build.gradle
+          if ! grep -q "androidx.webkit:webkit" tools/radio-horizon/android/app/build.gradle; then
+            if grep -q "^dependencies {" tools/radio-horizon/android/app/build.gradle; then
+              sed -i "/^dependencies {/a\\    implementation 'androidx.webkit:webkit:1.12.1'" tools/radio-horizon/android/app/build.gradle
+            else
+              printf "\ndependencies {\n    implementation 'androidx.webkit:webkit:1.12.1'\n}\n" >> tools/radio-horizon/android/app/build.gradle
+            fi
+          fi
+
+          cat > tools/radio-horizon/android/app/src/main/java/ru/fpvclub/radiohorizon/MainActivity.java <<'JAVA'
+          package ru.fpvclub.radiohorizon;
+
+          import android.annotation.SuppressLint;
+          import android.app.Activity;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.WebResourceResponse;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import androidx.webkit.WebViewAssetLoader;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+          import java.io.BufferedReader;
+          import java.io.InputStream;
+          import java.io.InputStreamReader;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.net.URLEncoder;
+          import java.nio.charset.StandardCharsets;
+          import java.util.ArrayList;
+          import java.util.List;
+          import java.util.Locale;
+
+          public class MainActivity extends Activity {
+              private WebView webView;
+              private WebViewAssetLoader assetLoader;
+
+              @SuppressLint({"SetJavaScriptEnabled","JavascriptInterface"})
+              @Override protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  webView = new WebView(this);
+                  setContentView(webView);
+                  assetLoader = new WebViewAssetLoader.Builder()
+                      .setDomain("appassets.androidplatform.net")
+                      .addPathHandler("/app/", path -> {
+                          try {
+                              InputStream is = getAssets().open(path);
+                              return new WebResourceResponse(mime(path), "UTF-8", is);
+                          } catch (Exception e) { return null; }
+                      }).build();
+
+                  WebSettings s = webView.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setDatabaseEnabled(true);
+                  s.setAllowFileAccess(false);
+                  s.setAllowContentAccess(true);
+                  s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+                  s.setCacheMode(WebSettings.LOAD_DEFAULT);
+                  s.setUserAgentString(s.getUserAgentString() + " RadioHorizonAndroid/0.4.0-standalone");
+                  WebView.setWebContentsDebuggingEnabled(true);
+                  webView.addJavascriptInterface(new TerrainBridge(), "AndroidTerrain");
+                  webView.setWebChromeClient(new WebChromeClient());
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                          Uri uri = request.getUrl();
+                          WebResourceResponse local = assetLoader.shouldInterceptRequest(uri);
+                          return local != null ? local : super.shouldInterceptRequest(view, request);
+                      }
+                      @Override public void onPageFinished(WebView view, String url) {
+                          view.evaluateJavascript("window.dispatchEvent(new Event('resize'));", null);
+                      }
+                  });
+                  webView.loadUrl("https://appassets.androidplatform.net/app/index.html");
+              }
+
+              private static String mime(String p) {
+                  String x = p.toLowerCase(Locale.ROOT);
+                  if (x.endsWith(".html")) return "text/html";
+                  if (x.endsWith(".js")||x.endsWith(".jsx")||x.endsWith(".ts")||x.endsWith(".tsx")) return "text/javascript";
+                  if (x.endsWith(".css")) return "text/css";
+                  if (x.endsWith(".json")) return "application/json";
+                  if (x.endsWith(".svg")) return "image/svg+xml";
+                  if (x.endsWith(".png")) return "image/png";
+                  if (x.endsWith(".jpg")||x.endsWith(".jpeg")) return "image/jpeg";
+                  if (x.endsWith(".webp")) return "image/webp";
+                  if (x.endsWith(".woff2")) return "font/woff2";
+                  if (x.endsWith(".woff")) return "font/woff";
+                  return "application/octet-stream";
+              }
+
+              private final class TerrainBridge {
+                  @JavascriptInterface public void requestProfile(String id, String body) {
+                      new Thread(() -> {
+                          try {
+                              JSONObject req = new JSONObject(body);
+                              JSONObject a = req.optJSONObject("pointA"), b = req.optJSONObject("pointB");
+                              int samples = req.has("samples") ? req.getInt("samples") : 80;
+                              if (a == null || b == null) { respond(id,400,error("pointA and pointB are required")); return; }
+                              double latA=a.getDouble("lat"), lonA=a.getDouble("lon"), latB=b.getDouble("lat"), lonB=b.getDouble("lon");
+                              if(latA<-90||latA>90||latB<-90||latB>90||lonA<-180||lonA>180||lonB<-180||lonB>180||samples<16||samples>160){
+                                  respond(id,400,error("Invalid coordinates or samples")); return;
+                              }
+                              List<Double> lats=new ArrayList<>(), lons=new ArrayList<>();
+                              for(int i=0;i<samples;i++){ double t=(double)i/(samples-1); lats.add(latA+(latB-latA)*t); lons.add(lonA+(lonB-lonA)*t); }
+                              List<Double> elev=new ArrayList<>();
+                              for(int start=0;start<samples;start+=100){
+                                  int end=Math.min(samples,start+100);
+                                  elev.addAll(fetchElevation(lats.subList(start,end),lons.subList(start,end)));
+                              }
+                              if(elev.size()!=samples){ respond(id,502,error("Copernicus DEM is temporarily unavailable")); return; }
+                              double total=haversine(latA,lonA,latB,lonB);
+                              JSONArray arr=new JSONArray();
+                              for(int i=0;i<samples;i++){
+                                  double t=(double)i/(samples-1);
+                                  JSONObject x=new JSONObject();
+                                  x.put("distanceM",total*t); x.put("lat",lats.get(i)); x.put("lon",lons.get(i)); x.put("elevationM",elev.get(i)); arr.put(x);
+                              }
+                              JSONObject out=new JSONObject();
+                              out.put("source","COPERNICUS_GLO_90");
+                              out.put("resolutionM",90);
+                              out.put("attribution","Copernicus DEM 2021 GLO-90 via Open-Meteo");
+                              out.put("samples",arr);
+                              respond(id,200,out.toString());
+                          } catch(Exception e){ respond(id,502,error("Copernicus DEM is temporarily unavailable")); }
+                      }).start();
+                  }
+
+                  private List<Double> fetchElevation(List<Double> lats,List<Double> lons)throws Exception{
+                      StringBuilder la=new StringBuilder(),lo=new StringBuilder();
+                      for(int i=0;i<lats.size();i++){ if(i>0){la.append(',');lo.append(',');} la.append(String.format(Locale.US,"%.7f",lats.get(i))); lo.append(String.format(Locale.US,"%.7f",lons.get(i))); }
+                      String u="https://api.open-meteo.com/v1/elevation?latitude="+URLEncoder.encode(la.toString(),StandardCharsets.UTF_8.name())+"&longitude="+URLEncoder.encode(lo.toString(),StandardCharsets.UTF_8.name());
+                      HttpURLConnection c=(HttpURLConnection)new URL(u).openConnection();
+                      c.setConnectTimeout(15000); c.setReadTimeout(25000); c.setRequestProperty("User-Agent","RadioHorizonAndroid/0.4.0");
+                      if(c.getResponseCode()!=200) throw new IllegalStateException("DEM");
+                      BufferedReader br=new BufferedReader(new InputStreamReader(c.getInputStream(),StandardCharsets.UTF_8));
+                      StringBuilder sb=new StringBuilder(); String line; while((line=br.readLine())!=null) sb.append(line); br.close(); c.disconnect();
+                      JSONArray a=new JSONObject(sb.toString()).getJSONArray("elevation");
+                      List<Double> out=new ArrayList<>(); for(int i=0;i<a.length();i++) out.add(a.getDouble(i)); return out;
+                  }
+
+                  private String error(String msg){ try{return new JSONObject().put("error",msg).toString();}catch(Exception e){return "{\"error\":\"DEM error\"}";} }
+                  private void respond(String id,int status,String body){ String js="window.__rhTerrainResolve("+JSONObject.quote(id)+","+status+","+JSONObject.quote(body)+");"; runOnUiThread(()->webView.evaluateJavascript(js,null)); }
+                  private double haversine(double lat1,double lon1,double lat2,double lon2){
+                      double r=6371000.0,p1=Math.toRadians(lat1),p2=Math.toRadians(lat2),dp=Math.toRadians(lat2-lat1),dl=Math.toRadians(lon2-lon1);
+                      double h=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)*Math.sin(dl/2);
+                      return 2*r*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+                  }
+              }
+
+              @Override protected void onResume(){ super.onResume(); if(webView!=null){webView.onResume();webView.evaluateJavascript("window.dispatchEvent(new Event('resize'));",null);} }
+              @Override public void onBackPressed(){ if(webView!=null&&webView.canGoBack())webView.goBack();else super.onBackPressed(); }
+              @Override protected void onDestroy(){ if(webView!=null){webView.removeJavascriptInterface("AndroidTerrain");webView.destroy();webView=null;}super.onDestroy(); }
+          }
+          JAVA
+
+          if ! grep -q "android.permission.INTERNET" tools/radio-horizon/android/app/src/main/AndroidManifest.xml; then
+            sed -i '/<manifest/a\    <uses-permission android:name="android.permission.INTERNET" />' tools/radio-horizon/android/app/src/main/AndroidManifest.xml
+          fi
+
+      - name: Install Android SDK
+        run: |
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Run core tests
+        working-directory: tools/radio-horizon
+        run: node --test tests/*.test.mjs
+
+      - name: Build standalone APK
+        working-directory: tools/radio-horizon/android
+        run: gradle assembleDebug --stacktrace
+
+      - name: Pack frontend mirror
+        run: |
+          cd tools/radio-horizon/android/app/src/main/assets
+          zip -r /tmp/Radio_Horizon_FRONTEND_MIRROR_v0.4.0.zip . >/dev/null
+          cp /tmp/Radio_Horizon_FRONTEND_MIRROR_v0.4.0.zip tools/radio-horizon/Radio_Horizon_FRONTEND_MIRROR_v0.4.0.zip
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: radio-horizon-v0.4.0-standalone
+          path: |
+            tools/radio-horizon/android/app/build/outputs/apk/debug/app-debug.apk
+            tools/radio-horizon/Radio_Horizon_FRONTEND_MIRROR_v0.4.0.zip
+          if-no-files-found: error
