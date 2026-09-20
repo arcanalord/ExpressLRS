@@ -266,6 +266,40 @@
         "emmana-next.result.zin",
         "emmana-next.error.nec2-not-run"
       ]
+    },
+    {
+      "id": "emmana-next.geometry.editor",
+      "title": "2D редактор геометрии",
+      "summary": "Редактирование wire-геометрии EMNX мышью в проекциях XY, XZ и YZ.",
+      "body": "Выберите проекцию и провод. Концы выбранного провода отмечены круглыми маркерами — перетаскивайте их мышью. Численные координаты, диаметр и segments можно менять справа. Кнопка «Назначить feed» переносит единственный источник в центральный сегмент выбранного провода. Удаление блокируется, если провод используется design_variables или design_constraints.",
+      "keywords": [
+        "geometry",
+        "wire",
+        "XY",
+        "XZ",
+        "YZ",
+        "feed",
+        "diameter",
+        "segments"
+      ],
+      "aliases": [
+        "геометрия",
+        "редактор антенны",
+        "провода"
+      ],
+      "category": "model",
+      "quickSteps": [
+        "Выберите XY, XZ или YZ",
+        "Щёлкните провод",
+        "Перетащите его конечную точку или измените числа",
+        "При необходимости назначьте feed",
+        "Нажмите Проверить модель, затем Расчёт"
+      ],
+      "relatedTopics": [
+        "emmana-next.overview",
+        "emmana-next.result.zin",
+        "emmana-next.ground.model"
+      ]
     }
   ]
 }

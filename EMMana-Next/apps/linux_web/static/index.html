@@ -103,11 +103,55 @@
 
     <nav class="workspace-tabs" aria-label="Разделы программы">
       <button type="button" data-view-tab="model">Модель</button>
+      <button type="button" data-view-tab="geometry">Геометрия</button>
       <button type="button" data-view-tab="solve" class="active">Расчёт</button>
       <button type="button" data-view-tab="optimize">Оптимизация</button>
       <button type="button" data-view-tab="measurement">Измерения</button>
     </nav>
 
+    <section class="geometry-view" data-view="geometry">
+      <div class="geometry-heading">
+        <div><small>ГЕОМЕТРИЯ</small><h2>2D редактор проводов</h2><p>XY / XZ / YZ · перетаскивайте концы проводов мышью. JSON EMNX обновляется сразу.</p></div>
+        <button class="inline-help" type="button" data-help-topic="emmana-next.geometry.editor">? Справка</button>
+      </div>
+      <div class="panel geometry-panel">
+        <div class="geometry-toolbar">
+          <div class="segmented geometry-projections" role="group" aria-label="Проекция">
+            <button type="button" data-geometry-projection="xy">XY</button>
+            <button type="button" data-geometry-projection="xz" class="active">XZ</button>
+            <button type="button" data-geometry-projection="yz">YZ</button>
+          </div>
+          <div class="geometry-actions">
+            <button id="geometry-add" class="secondary" type="button">+ Провод</button>
+            <button id="geometry-feed" class="secondary" type="button">Назначить feed</button>
+            <button id="geometry-delete" class="secondary danger-soft" type="button">Удалить</button>
+            <button id="geometry-check" class="primary" type="button">Проверить модель</button>
+          </div>
+        </div>
+        <div class="geometry-layout">
+          <div class="geometry-canvas-wrap">
+            <canvas id="geometry-canvas" width="1000" height="560" aria-label="2D редактор геометрии антенны"></canvas>
+            <div id="geometry-summary" class="geometry-summary">—</div>
+          </div>
+          <aside class="geometry-inspector" aria-label="Параметры выбранного провода">
+            <small>ВЫБРАННЫЙ ПРОВОД</small>
+            <h3 id="geometry-wire-id">—</h3>
+            <div class="geometry-coordinates">
+              <label>Start X, m<input id="geometry-sx" type="number" step="0.001"></label>
+              <label>Start Y, m<input id="geometry-sy" type="number" step="0.001"></label>
+              <label>Start Z, m<input id="geometry-sz" type="number" step="0.001"></label>
+              <label>End X, m<input id="geometry-ex" type="number" step="0.001"></label>
+              <label>End Y, m<input id="geometry-ey" type="number" step="0.001"></label>
+              <label>End Z, m<input id="geometry-ez" type="number" step="0.001"></label>
+              <label>Диаметр, mm<input id="geometry-diameter" type="number" min="0.01" step="0.1"></label>
+              <label>Segments<input id="geometry-segments" type="number" min="3" step="1"></label>
+            </div>
+            <div id="geometry-feed-status" class="geometry-feed-status">Feed не назначен этому проводу.</div>
+            <div class="note geometry-note">Редактор меняет только физические поля EMNX. Служебные Variant/Measurement данные сюда не записываются.</div>
+          </aside>
+        </div>
+      </div>
+    </section>
     <section class="cards metrics-cards" data-view="solve">
       <article><small>Zin</small><strong id="zin">—</strong><span>Ω</span></article>
       <article><small>VSWR</small><strong id="vswr">—</strong><span>50 Ω</span></article>
