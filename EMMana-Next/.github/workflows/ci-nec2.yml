@@ -1,0 +1,47 @@
+name: EMMana real NEC2 validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'benchmarks/**'
+      - 'tools/run_nec2_suite.py'
+      - 'CMakeLists.txt'
+      - '.github/workflows/ci-nec2.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'benchmarks/**'
+      - 'tools/run_nec2_suite.py'
+      - 'CMakeLists.txt'
+
+jobs:
+  nec2-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install numerical/reference dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ python3 libboost-dev libeigen3-dev liblapack-dev nec2c
+          nec2c -v || true
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DEMNEXT_REQUIRE_EIGEN=ON -DEMNEXT_REQUIRE_LAPACK=ON
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Internal regression gates
+        run: ctest --test-dir build --output-on-failure
+      - name: Real NEC2 cross-solver suite
+        run: python3 tools/run_nec2_suite.py --root . --emnext build/emnext --engine nec2c --json-report benchmarks/NEC2_REAL_CROSS_SOLVER.json
+      - name: Upload reference report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-nec2-cross-solver
+          path: benchmarks/NEC2_REAL_CROSS_SOLVER.json
+          if-no-files-found: warn
