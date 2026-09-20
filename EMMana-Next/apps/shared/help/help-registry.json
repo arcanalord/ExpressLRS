@@ -1,0 +1,209 @@
+{
+  "schemaVersion": "1.0",
+  "app": "emmana-next",
+  "fallbackTopic": "emmana-next.overview",
+  "errorMap": {
+    "INVALID_GROUND_TERMINAL": "emmana-next.error.invalid-ground-terminal",
+    "NEC2_NOT_RUN": "emmana-next.error.nec2-not-run",
+    "MODEL_CHECK_FAILED": "emmana-next.error.model-check-failed"
+  },
+  "topics": [
+    {
+      "id": "emmana-next.overview",
+      "title": "EMMana-Next",
+      "summary": "Расчёт и оптимизация проволочных антенн с проверяемым Wire-MoM ядром.",
+      "body": "Начните с готового примера или EMNX-модели, проверьте модель, затем выполните расчёт. Для инженерных выводов учитывайте статус независимой NEC2-проверки.",
+      "keywords": [
+        "антенна",
+        "Wire-MoM",
+        "расчёт",
+        "EMNX"
+      ],
+      "category": "overview",
+      "quickSteps": [
+        "Выберите пример или вставьте EMNX JSON",
+        "Нажмите Проверить модель",
+        "Запустите Рассчитать или Sweep",
+        "Проверьте Zin, VSWR, диаграмму и статус trust"
+      ]
+    },
+    {
+      "id": "emmana-next.ground.model",
+      "title": "Модель земли",
+      "summary": "Задаёт свободное пространство, идеальную PEC-землю или приближённую реальную землю.",
+      "body": "free-space отключает землю. pec-image-v1 использует зеркальный ток над идеальной проводящей плоскостью. homogeneous-halfspace-image-v1 использует комплексное коэффициентное image-приближение и пока не заменяет Sommerfeld/Norton.",
+      "keywords": [
+        "ground",
+        "земля",
+        "PEC",
+        "epsilon",
+        "sigma"
+      ],
+      "aliases": [
+        "грунт",
+        "реальная земля"
+      ],
+      "category": "ground",
+      "relatedTopics": [
+        "emmana-next.ground.pec",
+        "emmana-next.ground.real",
+        "emmana-next.benchmark.b02"
+      ]
+    },
+    {
+      "id": "emmana-next.ground.pec",
+      "title": "PEC ground",
+      "summary": "Идеальная бесконечная проводящая плоскость через image theory.",
+      "body": "Для PEC нижняя полусфера подавляется, потери земли равны нулю. Ground-terminal feed разрешён только в этом режиме на текущем этапе.",
+      "keywords": [
+        "PEC",
+        "image theory",
+        "идеальная земля"
+      ],
+      "category": "ground",
+      "relatedTopics": [
+        "emmana-next.benchmark.b02"
+      ]
+    },
+    {
+      "id": "emmana-next.ground.real",
+      "title": "Реальная земля",
+      "summary": "Однородное полупространство с относительной диэлектрической проницаемостью и проводимостью.",
+      "body": "Текущая alpha.20 модель использует complex-image approximation. Потери земли определяются через энергетическое замыкание. Для окончательных инженерных выводов требуется независимое сравнение с NEC2/полноволновым решателем.",
+      "keywords": [
+        "relative permittivity",
+        "conductivity",
+        "epsilon r",
+        "sigma",
+        "Sommerfeld",
+        "Norton"
+      ],
+      "category": "ground"
+    },
+    {
+      "id": "emmana-next.feed.ground-terminal",
+      "title": "Ground-terminal feed",
+      "summary": "Источник между концом провода и PEC-плоскостью.",
+      "body": "ground-terminal-start/end создаёт half-rooftop токовую базисную функцию на контакте с PEC. Конец провода должен точно лежать на ground plane. Для конечной проводимости этот режим пока запрещён до отдельной валидации.",
+      "keywords": [
+        "feed",
+        "ground terminal",
+        "monopole",
+        "источник"
+      ],
+      "category": "feed",
+      "relatedTopics": [
+        "emmana-next.benchmark.b02"
+      ]
+    },
+    {
+      "id": "emmana-next.result.zin",
+      "title": "Входной импеданс Zin",
+      "summary": "Комплексное отношение напряжения источника к входному току.",
+      "body": "Re(Zin) связан с активной мощностью, Im(Zin) показывает реактивную составляющую. Сравнивайте Zin только при одинаковых source semantics, сетке и модели среды.",
+      "keywords": [
+        "Zin",
+        "impedance",
+        "R",
+        "X"
+      ],
+      "category": "result"
+    },
+    {
+      "id": "emmana-next.result.vswr",
+      "title": "VSWR",
+      "summary": "КСВ относительно заданного опорного сопротивления, обычно 50 Ом.",
+      "body": "VSWR показывает согласование, но сам по себе не оценивает усиление, диаграмму или КПД. Для широкополосной оценки используйте Sweep.",
+      "keywords": [
+        "VSWR",
+        "КСВ",
+        "S11",
+        "50 ohm"
+      ],
+      "category": "result"
+    },
+    {
+      "id": "emmana-next.result.power-balance",
+      "title": "Power balance",
+      "summary": "Контроль энергетического баланса решения.",
+      "body": "Сравнивает принятую мощность с радиацией и моделируемыми потерями. Малый остаток является внутренним численным gate, но не заменяет независимую проверку физической модели.",
+      "keywords": [
+        "power balance",
+        "energy",
+        "residual",
+        "мощность"
+      ],
+      "category": "diagnostics"
+    },
+    {
+      "id": "emmana-next.result.efficiency",
+      "title": "Efficiency",
+      "summary": "Доля мощности, уходящая в излучение после моделируемых потерь.",
+      "body": "Для PEC без потерь эффективность близка к 100%. Для проводников, резистивных нагрузок и реальной земли она снижается. Смотрите одновременно dissipated power и ground loss.",
+      "keywords": [
+        "efficiency",
+        "КПД",
+        "loss",
+        "ground loss"
+      ],
+      "category": "result"
+    },
+    {
+      "id": "emmana-next.benchmark.b02",
+      "title": "B02: четвертьволновый монополь над PEC",
+      "summary": "Канонический benchmark для ground-terminal и image theory.",
+      "body": "Монополь длиной 0.25 lambda подключён к PEC-плоскости через ground-terminal-start. Основной внутренний gate: входной импеданс должен быть примерно половиной импеданса соответствующего симметричного полуволнового диполя, с малой разницей из-за source discretization.",
+      "keywords": [
+        "B02",
+        "monopole",
+        "quarter wave",
+        "image theory"
+      ],
+      "category": "benchmark",
+      "relatedTopics": [
+        "emmana-next.ground.pec",
+        "emmana-next.feed.ground-terminal"
+      ]
+    },
+    {
+      "id": "emmana-next.error.invalid-ground-terminal",
+      "title": "Некорректный ground-terminal",
+      "summary": "Источник ground-terminal не соответствует PEC-плоскости или концу провода.",
+      "body": "Проверьте ground.model=pec-image-v1, plane_z_m и координату start/end выбранного wire. Контактный конец должен лежать на плоскости с численным допуском модели.",
+      "keywords": [
+        "INVALID_GROUND_TERMINAL",
+        "ground terminal error"
+      ],
+      "category": "error",
+      "quickSteps": [
+        "Проверьте режим PEC",
+        "Проверьте plane_z_m",
+        "Проверьте start/end wire и feed.mode"
+      ]
+    },
+    {
+      "id": "emmana-next.error.nec2-not-run",
+      "title": "NEC2 ещё не запущен",
+      "summary": "Внутренние численные тесты прошли, но независимый решатель ещё не подтвердил результат.",
+      "body": "Не повышайте экспериментальный solver до release-authoritative. Запустите подготовленный NEC2 CI/reference suite и сохраните измеренные дельты R/X и provenance.",
+      "keywords": [
+        "NEC2_NOT_RUN",
+        "trust",
+        "reference"
+      ],
+      "category": "error"
+    },
+    {
+      "id": "emmana-next.error.model-check-failed",
+      "title": "Model check failed",
+      "summary": "Модель не прошла проверку геометрии, источника или параметров среды.",
+      "body": "Исправьте первую конкретную ошибку model-check, затем повторите проверку. Не запускайте solver, пока model-check не проходит.",
+      "keywords": [
+        "MODEL_CHECK_FAILED",
+        "model check",
+        "validation"
+      ],
+      "category": "error"
+    }
+  ]
+}
