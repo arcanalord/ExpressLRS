@@ -1,10 +1,10 @@
-name: Radio Horizon APK v0.3.1 Test Online
+name: Radio Horizon APK v0.3.2 Dev Preview
 on:
   push:
     branches: ["ci-radio-horizon-apk-v030"]
     paths:
       - ".github/workflows/radio-horizon-apk-temp.yml"
-      - "tools/radio-horizon-ci/trigger-v031.txt"
+      - "tools/radio-horizon-ci/trigger-v032.txt"
   workflow_dispatch:
 
 jobs:
@@ -25,10 +25,10 @@ jobs:
           base64 -d source.b64 > source.tar.gz
           mkdir -p tools/radio-horizon
           tar -xzf source.tar.gz -C tools/radio-horizon
-      - name: Apply v0.3.1 online-shell patch
+      - name: Apply v0.3.2 dev-preview shell patch
         run: |
-          sed -i "s/versionCode 3/versionCode 4/" tools/radio-horizon/android/app/build.gradle
-          sed -i "s/versionName '0.3.0'/versionName '0.3.1-test-online'/" tools/radio-horizon/android/app/build.gradle
+          sed -i "s/versionCode 3/versionCode 5/" tools/radio-horizon/android/app/build.gradle
+          sed -i "s/versionName '0.3.0'/versionName '0.3.2-dev-preview'/" tools/radio-horizon/android/app/build.gradle
           cat > tools/radio-horizon/android/app/src/main/java/ru/fpvclub/radiohorizon/MainActivity.java <<'JAVA'
           package ru.fpvclub.radiohorizon;
 
@@ -50,7 +50,8 @@ jobs:
           import android.widget.TextView;
 
           public class MainActivity extends Activity {
-              private static final String APP_URL = "https://crowded-fearless-trace.replit.app/";
+              private static final String APP_URL = "https://d2631c46-fdb3-405d-8a50-6f154593dcaf-00-1c39c2hognz8y.kira.replit.dev/";
+              private static final String APP_HOST = "d2631c46-fdb3-405d-8a50-6f154593dcaf-00-1c39c2hognz8y.kira.replit.dev";
               private WebView webView;
               private LinearLayout errorView;
               private ProgressBar progress;
@@ -63,18 +64,27 @@ jobs:
                   progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
                   progress.setMax(100);
                   root.addView(progress, new LinearLayout.LayoutParams(-1, 6));
+
                   webView = new WebView(this);
                   root.addView(webView, new LinearLayout.LayoutParams(-1, 0, 1));
+
                   errorView = new LinearLayout(this);
                   errorView.setOrientation(LinearLayout.VERTICAL);
                   errorView.setPadding(48,48,48,48);
                   errorView.setVisibility(View.GONE);
+
                   TextView errorText = new TextView(this);
-                  errorText.setText("Не удалось открыть Radio Horizon. Проверьте интернет и повторите.");
+                  errorText.setText("Не удалось открыть Radio Horizon dev-preview. Проверьте интернет и повторите.");
                   errorText.setTextSize(18);
+
                   Button retry = new Button(this);
                   retry.setText("Повторить");
-                  retry.setOnClickListener(v -> { errorView.setVisibility(View.GONE); webView.setVisibility(View.VISIBLE); webView.reload(); });
+                  retry.setOnClickListener(v -> {
+                      errorView.setVisibility(View.GONE);
+                      webView.setVisibility(View.VISIBLE);
+                      webView.reload();
+                  });
+
                   errorView.addView(errorText);
                   errorView.addView(retry);
                   root.addView(errorView, new LinearLayout.LayoutParams(-1, -2));
@@ -91,34 +101,40 @@ jobs:
                   settings.setSupportZoom(false);
                   settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
                   settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-                  settings.setUserAgentString(settings.getUserAgentString() + " RadioHorizonAndroid/0.3.1-test-online");
+                  settings.setUserAgentString(settings.getUserAgentString() + " RadioHorizonAndroid/0.3.2-dev-preview");
 
                   WebView.setWebContentsDebuggingEnabled(true);
+
                   webView.setWebChromeClient(new WebChromeClient() {
                       @Override public void onProgressChanged(WebView view, int newProgress) {
                           progress.setProgress(newProgress);
                           progress.setVisibility(newProgress >= 100 ? View.GONE : View.VISIBLE);
                       }
                   });
+
                   webView.setWebViewClient(new WebViewClient() {
                       @Override public void onPageStarted(WebView view, String url, Bitmap favicon) {
                           errorView.setVisibility(View.GONE);
                           webView.setVisibility(View.VISIBLE);
                       }
+
                       @Override public void onPageFinished(WebView view, String url) {
                           view.evaluateJavascript("window.dispatchEvent(new Event('resize'));", null);
                       }
+
                       @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                           if (request.isForMainFrame()) {
                               webView.setVisibility(View.GONE);
                               errorView.setVisibility(View.VISIBLE);
                           }
                       }
+
                       @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                           Uri uri = request.getUrl();
-                          return !("https".equals(uri.getScheme()) && "crowded-fearless-trace.replit.app".equals(uri.getHost()));
+                          return !("https".equals(uri.getScheme()) && APP_HOST.equals(uri.getHost()));
                       }
                   });
+
                   webView.loadUrl(APP_URL);
               }
 
@@ -136,7 +152,10 @@ jobs:
               }
 
               @Override protected void onDestroy() {
-                  if (webView != null) { webView.destroy(); webView = null; }
+                  if (webView != null) {
+                      webView.destroy();
+                      webView = null;
+                  }
                   super.onDestroy();
               }
           }
@@ -157,6 +176,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: radio-horizon-v0.3.1-test-online-apk
+          name: radio-horizon-v0.3.2-dev-preview-apk
           path: tools/radio-horizon/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
