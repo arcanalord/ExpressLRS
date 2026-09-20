@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev8  
+**Current version:** 0.1.0-alpha.20-rev9  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev8-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev9-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -96,3 +96,13 @@ Template synthesis is Product Domain logic and returns a pure EMNX model. Raw me
 ## Rev7 gate note
 
 Rev7 candidate was not promoted: Linux UI smoke exposed legacy seed schema 0.1 in synthesized output. Rev8 fixes this by normalizing synthesized template output to current EMNX schema 0.5 and model-checking the generated project.
+
+
+## Measurement pipeline — rev9
+
+- Touchstone S1P parser: `apps/shared/product/measurement.py`
+- Supported S1P encodings: RI / MA / DB; frequency units Hz/kHz/MHz/GHz; reference resistance R.
+- VNA CSV baseline parser: frequency + R/X columns.
+- Derived normalized fields: S11 complex/magnitude/dB/phase, Z=R+jX, VSWR.
+- Comparison engine: linear interpolation of measurement data to simulation sweep grid with delta R/X/VSWR/S11.
+- Unsupported Touchstone parameter types and keywords fail explicitly.

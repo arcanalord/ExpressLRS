@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -20,6 +21,9 @@ PRODUCT_REGISTRY = ROOT / "apps" / "shared" / "product" / "product-registry.json
 TEMPLATE_REGISTRY = ROOT / "apps" / "shared" / "product" / "template-registry.json"
 MATERIALS_REGISTRY = ROOT / "apps" / "shared" / "product" / "materials-registry.json"
 MEASUREMENT_SCHEMA = ROOT / "schemas" / "measurement-set-0.1.schema.json"
+MEASUREMENT_MODULE = ROOT / "apps" / "shared" / "product" / "measurement.py"
+_ms=importlib.util.spec_from_file_location("emnext_measurement",MEASUREMENT_MODULE)
+measurement=importlib.util.module_from_spec(_ms); _ms.loader.exec_module(measurement)
 DEFAULT_BINARY = ROOT / "build-linux" / "emnext"
 
 
@@ -194,10 +198,19 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path not in {"/api/model-check","/api/solve","/api/sweep","/api/optimize"}:
+        if parsed.path not in {"/api/model-check","/api/solve","/api/sweep","/api/optimize","/api/measurement/parse","/api/measurement/compare"}:
             self.send_json({"error":"Not found"},HTTPStatus.NOT_FOUND); return
         try:
-            body=self.read_json(); project=body.get("project")
+            body=self.read_json()
+            if parsed.path == "/api/measurement/parse":
+                fmt=str(body.get("format","touchstone-s1p")); text=str(body.get("text","")); name=str(body.get("source_name","inline"))
+                parsed_measurement=measurement.parse_touchstone_s1p(text,name) if fmt=="touchstone-s1p" else measurement.parse_vna_csv(text,name) if fmt=="vna-csv" else (_ for _ in ()).throw(ValueError("format must be touchstone-s1p or vna-csv"))
+                self.send_json({"ok":True,"measurement":parsed_measurement}); return
+            if parsed.path == "/api/measurement/compare":
+                ms=body.get("measurement"); sw=body.get("simulation_sweep")
+                if not isinstance(ms,dict) or not isinstance(sw,dict): raise ValueError("measurement and simulation_sweep must be objects")
+                self.send_json({"ok":True,"comparison":measurement.compare_measurement_to_simulation(ms,sw)}); return
+            project=body.get("project")
             if not isinstance(project,dict): raise ValueError("project must be a JSON object")
             kernel=body.get("kernel","reduced")
             if kernel not in {"reduced","exact"}: raise ValueError("kernel must be reduced or exact")

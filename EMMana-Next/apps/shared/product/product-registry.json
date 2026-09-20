@@ -103,7 +103,7 @@
       "description": "Tests, reference comparison, provenance and gate status."
     },
     "measurement_set": {
-      "status": "contract-implemented",
+      "status": "implemented-basic",
       "description": "Measured S/Z data stored beside, never over, simulated results."
     },
     "report_profile": {
@@ -170,7 +170,7 @@
     },
     {
       "id": "measurement-correlation",
-      "status": "contract-implemented",
+      "status": "parser-and-compare-engine",
       "priority": "high",
       "features": [
         "Touchstone import",
@@ -246,6 +246,7 @@
     "A build PASS is not a runtime PASS.",
     "A characterization measurement is not promoted to validation by widening tolerances after the fact.",
     "Every reported result carries source model, solver/backend and evidence status.",
-    "Template synthesis must return a pure EMNX project with no product-only fields."
+    "Template synthesis must return a pure EMNX project with no product-only fields.",
+    "Touchstone parser rejects unsupported parameters/keywords instead of guessing semantics."
   ]
 }

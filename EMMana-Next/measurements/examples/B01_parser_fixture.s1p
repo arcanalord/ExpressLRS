@@ -1,0 +1,5 @@
+! EMMana-Next rev9 parser regression fixture
+# MHz S RI R 50
+100 0.000000 0.000000
+150 0.3333333333 0.000000
+200 0.000000 0.000000
