@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fpv-club.ru/schemas/emnext/result-0.6.schema.json",
+  "title": "EMMana-Next ResultSet v0.6",
+  "type": "object",
+  "required": [
+    "schema_version", "solver_id", "solver_version", "solver_settings_id",
+    "model_hash_algorithm", "model_hash", "frequency_hz", "linear_solver_backend",
+    "linear_system_size", "linear_residual_relative", "junction_kcl_max_relative_error",
+    "environment_model", "ground_plane_z_m", "ground_relative_permittivity",
+    "ground_conductivity_s_per_m", "ground_dissipated_power_w"
+  ],
+  "properties": {
+    "schema_version": {"const": "0.6"},
+    "solver_id": {"type": "string", "minLength": 1},
+    "solver_version": {"type": "string", "minLength": 1},
+    "solver_settings_id": {"type": "string", "minLength": 1},
+    "model_hash_algorithm": {"type": "string", "minLength": 1},
+    "model_hash": {"type": "string", "minLength": 1},
+    "frequency_hz": {"type": "number", "exclusiveMinimum": 0},
+    "environment_model": {"type": "string", "minLength": 1},
+    "ground_plane_z_m": {"type": "number"},
+    "ground_relative_permittivity": {"type": "number", "minimum": 1.0},
+    "ground_conductivity_s_per_m": {"type": "number", "minimum": 0.0},
+    "segment_currents_a": {"type": "array", "items": {"$ref": "#/$defs/complex"}},
+    "feeds": {"type": "array", "items": {"$ref": "#/$defs/feed_result"}},
+    "pattern": {"type": "array", "items": {"$ref": "#/$defs/pattern_sample"}},
+    "accepted_power_w": {"type": "number"},
+    "radiated_power_w": {"type": "number"},
+    "dissipated_power_w": {"type": "number"},
+    "ground_dissipated_power_w": {"type": "number", "minimum": 0.0},
+    "efficiency": {"type": "number", "minimum": 0, "maximum": 1},
+    "power_balance_relative_error": {"type": "number"},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "linear_solver_backend": {"type": "string", "minLength": 1},
+    "linear_system_size": {"type": "integer", "minimum": 1},
+    "linear_residual_relative": {"type": "number", "minimum": 0},
+    "junction_kcl_max_relative_error": {"type": "number", "minimum": 0}
+  },
+  "$defs": {
+    "complex": {
+      "type": "object",
+      "required": ["re", "im"],
+      "properties": {"re": {"type": "number"}, "im": {"type": "number"}},
+      "additionalProperties": false
+    },
+    "feed_result": {
+      "type": "object",
+      "required": ["wire_id", "segment", "impedance_ohm", "admittance_s", "s11", "vswr"],
+      "properties": {
+        "wire_id": {"type": "string"},
+        "segment": {"type": "integer", "minimum": 0},
+        "impedance_ohm": {"$ref": "#/$defs/complex"},
+        "admittance_s": {"$ref": "#/$defs/complex"},
+        "s11": {"$ref": "#/$defs/complex"},
+        "vswr": {"type": "number", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "pattern_sample": {
+      "type": "object",
+      "required": ["theta_rad", "phi_rad", "gain_linear", "directivity_linear"],
+      "properties": {
+        "theta_rad": {"type": "number", "minimum": 0, "maximum": 3.141592653589793},
+        "phi_rad": {"type": "number", "minimum": 0, "exclusiveMaximum": 6.283185307179586},
+        "gain_linear": {"type": "number", "minimum": 0},
+        "directivity_linear": {"type": "number", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
