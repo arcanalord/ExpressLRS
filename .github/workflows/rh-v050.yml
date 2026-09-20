@@ -4,7 +4,7 @@ on:
     branches: ["ci-radio-horizon-apk-v030"]
     paths:
       - ".github/workflows/rh-v050.yml"
-      - "tools/radio-horizon-ci/trigger-v050.txt"
+      - "tools/radio-horizon-ci/trigger-v051.txt"
   workflow_dispatch:
 
 jobs:
