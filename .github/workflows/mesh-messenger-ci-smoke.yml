@@ -1,0 +1,21 @@
+name: Mesh Messenger CI Smoke
+
+on:
+  push:
+    branches:
+      - ci/mesh-messenger-v1.5-apk
+    paths:
+      - ".github/workflows/mesh-messenger-ci-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Runner smoke
+        run: |
+          echo "runner_ok"
+          uname -a
