@@ -63,7 +63,7 @@ jobs:
           sha256sum "$APK" | tee APK_SHA256.txt
           {
             echo "version=0.5.1"
-            echo "source_sha256=a5e0a80d8613428c984c49ab46d5a4c2ecc39af0cc8a078d779732cff6bfc3e9"
+            echo "source_sha256=cf9443f5cd31bdbfcb304e7564ab23e73e19791c77f09955a6a2354ec4c96289"
             echo "git_ci_sha=$GITHUB_SHA"
             echo "runner_arch=$(uname -m)"
             java -version 2>&1 | head -1
