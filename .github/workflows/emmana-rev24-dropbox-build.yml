@@ -1,0 +1,147 @@
+name: EMMana rev24 Dropbox Windows gate
+
+on:
+  push:
+    branches: [ emmana-next-alpha20 ]
+    paths:
+      - '.github/workflows/emmana-rev24-dropbox-build.yml'
+  workflow_dispatch:
+
+jobs:
+  windows-rev24:
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch exact rev24 source from Dropbox
+        shell: pwsh
+        run: |
+          $url = 'https://ucb10efdec7b9ea4f5d898b3f8a9.dl.dropboxusercontent.com/cd/0/get/DIifPxB5TkTJImZcDYvMNPTl-fy_B3W9rqFpfQRoyezNToQu_OhJ4NFUREcsAcnHMM-ayBtGbwJ_RsW0Li23fxr0UnkO4g0lxEqQVqWDDHV7wstXX4OnoxjhVIx__pTlzMxCLVg3u-XGZwO-mGwEgNYFitL4NjcJh4zkAsKFdREXgw/file?c_luid=cfbe8875'
+          Invoke-WebRequest -Uri $url -OutFile rev24.zip -TimeoutSec 120
+          $sha = (Get-FileHash rev24.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne 'f482f868af2c15dd150afe3c8486c5f2ce805c2224faf05748237625629d76e1') { throw "rev24 source SHA mismatch: $sha" }
+          Expand-Archive rev24.zip -DestinationPath src -Force
+          $version = (Get-Content src/emmana_rev23/VERSION).Trim()
+          if ($version -ne '0.1.0-alpha.20-rev24') { throw "Unexpected VERSION: $version" }
+          Write-Host "DROPBOX_SOURCE_PASS sha=$sha version=$version"
+
+      - name: Install C++ dependencies
+        shell: pwsh
+        working-directory: src/emmana_rev23
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-json:x64-windows-static eigen3:x64-windows-static
+
+      - name: Configure MSVC x64 with Eigen required
+        shell: pwsh
+        working-directory: src/emmana_rev23
+        run: cmake -S . -B build-win -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static -DEMNEXT_REQUIRE_EIGEN=ON
+
+      - name: Build
+        shell: pwsh
+        working-directory: src/emmana_rev23
+        run: cmake --build build-win --config Release --parallel 2
+
+      - name: Full regression gate
+        shell: pwsh
+        working-directory: src/emmana_rev23
+        run: ctest --test-dir build-win -C Release --output-on-failure
+
+      - name: Explicit UI regression gate
+        shell: pwsh
+        working-directory: src/emmana_rev23
+        run: |
+          python tests/test_primary_actions.py .
+          python tests/test_geometry_editor.py .
+          python tests/test_ui_surface_state.py .
+          python tests/test_help_registry.py .
+          python tests/test_measurement_pipeline.py .
+          python tests/test_product_workflow.py .
+          python tests/test_windows_launcher.py .
+
+      - name: Build portable launcher
+        shell: pwsh
+        working-directory: src/emmana_rev23
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller
+          python -m PyInstaller --noconfirm --clean --onefile --name EMMana-Next --hidden-import json --hidden-import hashlib --hidden-import importlib.util --hidden-import math --hidden-import subprocess --hidden-import tempfile --hidden-import urllib.parse --hidden-import http --hidden-import http.server --hidden-import cmath --hidden-import csv --hidden-import io --hidden-import re --hidden-import typing --add-binary "build-win/Release/emnext.exe;EMMana-Next" --add-data "apps;EMMana-Next/apps" --add-data "benchmarks;EMMana-Next/benchmarks" --add-data "schemas;EMMana-Next/schemas" --add-data "VERSION;EMMana-Next" apps/windows_launcher.py
+
+      - name: Portable runtime and API gate
+        shell: pwsh
+        working-directory: src/emmana_rev23
+        run: |
+          $port = 8799
+          $stdout = Join-Path $PWD "portable-stdout.log"
+          $stderr = Join-Path $PWD "portable-stderr.log"
+          $proc = Start-Process -FilePath "dist/EMMana-Next.exe" -ArgumentList "--no-browser","--port","$port" -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          try {
+            $health = $null
+            for ($i=0; $i -lt 60; $i++) {
+              Start-Sleep -Seconds 1
+              if ($proc.HasExited) { throw "Portable launcher exited early code=$($proc.ExitCode)" }
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2
+                if ($health.ok) { break }
+              } catch {}
+            }
+            if (-not $health -or -not $health.ok) { throw "Portable /api/health did not become ready" }
+            if ($health.version -ne '0.1.0-alpha.20-rev24') { throw "Wrong portable version: $($health.version)" }
+
+            $page = (Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 10).Content
+            foreach ($marker in @('geometry-canvas','geometry-3d-canvas','geometry-template-create','Частотный расчёт','Назначить питание')) {
+              if ($page -notmatch [regex]::Escape($marker)) { throw "Packaged UI missing: $marker" }
+            }
+            foreach ($forbidden in @('geometry-suммary','eммana-next','<suммary>','opt-quant-мм','opt-tol-мм')) {
+              if ($page -match [regex]::Escape($forbidden)) { throw "Packaged UI contains corrupted technical token: $forbidden" }
+            }
+
+            $app = (Invoke-WebRequest -Uri "http://127.0.0.1:$port/app.js" -TimeoutSec 10).Content
+            foreach ($marker in @('markResultsStale','Пересчитать','els.run.onclick=run','els.runSweep.onclick=runSweep')) {
+              if ($app -notmatch [regex]::Escape($marker)) { throw "Packaged app.js missing: $marker" }
+            }
+            Invoke-WebRequest -Uri "http://127.0.0.1:$port/geometry3d.js" -TimeoutSec 10 | Out-Null
+
+            $examples = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/examples" -TimeoutSec 10
+            $pick = $examples.examples | Where-Object { $_.file -match '51seg' } | Select-Object -First 1
+            if (-not $pick) { $pick = $examples.examples | Select-Object -First 1 }
+            if (-not $pick) { throw "No example models returned" }
+            $project = Invoke-RestMethod -Uri ("http://127.0.0.1:$port/api/example/" + [uri]::EscapeDataString($pick.file)) -TimeoutSec 10
+            $payload = @{ project=$project; kernel='reduced' } | ConvertTo-Json -Depth 100
+
+            $check = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/model-check" -ContentType "application/json" -Body $payload -TimeoutSec 30
+            if (-not $check.ok) { throw "Model check API failed" }
+
+            $solve = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/solve" -ContentType "application/json" -Body $payload -TimeoutSec 60
+            if (-not $solve.result -or -not $solve.result.feeds -or $solve.result.feeds.Count -lt 1) { throw "Solve API returned no feed result" }
+
+            $mhz = [double]$project.frequency_hz / 1000000.0
+            $sweepBody = @{ project=$project; kernel='reduced'; start_hz=($mhz*0.95*1000000.0); stop_hz=($mhz*1.05*1000000.0); points=5; parallel_workers=2 } | ConvertTo-Json -Depth 100
+            $sweep = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/sweep" -ContentType "application/json" -Body $sweepBody -TimeoutSec 90
+            if (-not $sweep.sweep -or $sweep.sweep.samples.Count -ne 5) { throw "Sweep API did not return 5 samples" }
+
+            Write-Host "WINDOWS_PORTABLE_REV24_PASS version=$($health.version) example=$($pick.file)"
+          } finally {
+            if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+            if (Test-Path $stdout) { Get-Content $stdout }
+            if (Test-Path $stderr) { Get-Content $stderr }
+          }
+
+      - name: Package Windows portable
+        shell: pwsh
+        working-directory: src/emmana_rev23
+        run: |
+          $version = (Get-Content VERSION).Trim()
+          $pkg = "dist/EMMana-Next-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          Copy-Item dist/EMMana-Next.exe $pkg/EMMana-Next.exe
+          Copy-Item build-win/Release/emnext.exe $pkg/emnext-cli.exe
+          Copy-Item VERSION $pkg/
+          @("EMMana-Next Portable Windows","","Запустите EMMana-Next.exe.","Программа работает локально на 127.0.0.1 и открывает браузер.","Отдельная установка Python не требуется.","","emnext-cli.exe предназначен для диагностики.") | Set-Content -Encoding UTF8 "$pkg/README-WINDOWS.txt"
+          Compress-Archive -Path "$pkg/*" -DestinationPath "$pkg.zip" -Force
+
+      - name: Upload verified Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-rev24-windows-x64
+          path: src/emmana_rev23/dist/EMMana-Next-0.1.0-alpha.20-rev24-windows-x64.zip
+          if-no-files-found: error
