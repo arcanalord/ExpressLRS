@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.3",
+  "name": "B09 series RLC loaded dipole",
+  "frequency_hz": 299792458.0,
+  "wires": [
+    {"id":"W1","start_m":[0.0,0.0,-0.25],"end_m":[0.0,0.0,0.25],"radius_m":0.001,"segments":51}
+  ],
+  "feeds": [
+    {"wire_id":"W1","segment":25,"voltage_re_v":1.0,"voltage_im_v":0.0}
+  ],
+  "loads": [
+    {"id":"L1","wire_id":"W1","segment":34,"resistance_ohm":10.0,"inductance_h":1.0e-8,"capacitance_f":1.0e-11}
+  ]
+}
