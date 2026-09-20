@@ -43,7 +43,9 @@ def main():
             if nec.returncode != 0:
                 rows.append({
                     'case':label,'project':filename,'strict':strict,'status':'nec2_failed',
-                    'returncode':nec.returncode,'stdout':nec.stdout,'stderr':nec.stderr
+                    'returncode':nec.returncode,'stdout':nec.stdout,'stderr':nec.stderr,
+                    'deck': deck.read_text(encoding='utf-8', errors='replace') if deck.exists() else '',
+                    'nec2_output_tail': out.read_text(encoding='utf-8', errors='replace')[-6000:] if out.exists() else ''
                 })
                 strict_ok = strict_ok and not strict
                 continue
