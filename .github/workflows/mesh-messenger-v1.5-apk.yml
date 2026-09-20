@@ -63,7 +63,24 @@ jobs:
           set -euo pipefail
           mkdir -p _mesh_source/dropbox
           curl -L --fail --retry 3 --retry-delay 2 "$DROPBOX_FOLDER_URL" -o _mesh_source/dropbox-folder.zip
-          unzip -q _mesh_source/dropbox-folder.zip -d _mesh_source/dropbox
+          python3 - <<'PY'
+          import pathlib, shutil, zipfile
+          archive = pathlib.Path("_mesh_source/dropbox-folder.zip")
+          out = pathlib.Path("_mesh_source/dropbox")
+          with zipfile.ZipFile(archive) as zf:
+              for info in zf.infolist():
+                  raw = info.filename.replace("\\", "/").lstrip("/")
+                  parts = [p for p in raw.split("/") if p not in ("", ".", "..")]
+                  if not parts:
+                      continue
+                  target = out.joinpath(*parts)
+                  if info.is_dir():
+                      target.mkdir(parents=True, exist_ok=True)
+                  else:
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      with zf.open(info) as src, target.open("wb") as dst:
+                          shutil.copyfileobj(src, dst)
+          PY
 
           SOURCE_ZIP="$(find _mesh_source/dropbox -type f -name 'SOURCE_CURRENT_v1.5.zip' -print -quit)"
           if [ -z "$SOURCE_ZIP" ]; then
