@@ -11,12 +11,13 @@ def main() -> int:
     args = sys.argv[1:]
     if len(args) >= 2 and not args[0].startswith("-"):
         output = Path(args[1])
-    else:
-        for arg in args:
-            if arg.startswith("-o"):
-                output = Path(arg[2:])
+    for i, arg in enumerate(args):
+        if arg == "-o" and i + 1 < len(args):
+            output = Path(args[i + 1])
+        elif arg.startswith("-o") and len(arg) > 2:
+            output = Path(arg[2:])
     if output is None:
-        print("fake-nec2c requires positional input/output or -o<path>", file=sys.stderr)
+        print("fake-nec2c requires positional input/output, -o <path>, or -o<path>", file=sys.stderr)
         return 2
     output.write_text(
         """                              - - - - - - FREQUENCY - - - - - -
