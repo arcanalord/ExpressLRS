@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).resolve().parent / "static"
 BENCHMARKS = ROOT / "benchmarks"
 PRODUCT_REGISTRY = ROOT / "apps" / "shared" / "product" / "product-registry.json"
+TEMPLATE_REGISTRY = ROOT / "apps" / "shared" / "product" / "template-registry.json"
+MATERIALS_REGISTRY = ROOT / "apps" / "shared" / "product" / "materials-registry.json"
+MEASUREMENT_SCHEMA = ROOT / "schemas" / "measurement-set-0.1.schema.json"
 DEFAULT_BINARY = ROOT / "build-linux" / "emnext"
 
 
@@ -81,6 +84,42 @@ def dmax_from_result(result: dict) -> float:
     return max(values, default=0.0)
 
 
+def load_json(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+def scale_xyz(v, scale: float):
+    return [float(x) * scale for x in v]
+
+def synthesize_template(template_id: str, target_frequency_hz: float) -> dict:
+    if not math.isfinite(target_frequency_hz) or target_frequency_hz <= 0:
+        raise ValueError("frequency_hz must be positive")
+    registry=load_json(TEMPLATE_REGISTRY)
+    item=next((x for x in registry.get("templates",[]) if x.get("id")==template_id),None)
+    if item is None: raise ValueError("unknown template")
+    if item.get("status")!="implemented": raise ValueError("template is not implemented")
+    project=load_json(ROOT/item["seed_model"])
+    seed_frequency=float(project["frequency_hz"])
+    scale=seed_frequency/target_frequency_hz
+    for wire in project.get("wires",[]):
+        wire["start_m"]=scale_xyz(wire["start_m"],scale)
+        wire["end_m"]=scale_xyz(wire["end_m"],scale)
+        wire["radius_m"]=float(wire["radius_m"])*scale
+    ground=project.get("ground")
+    if isinstance(ground,dict) and "plane_z_m" in ground:
+        ground["plane_z_m"]=float(ground["plane_z_m"])*scale
+    for feed in project.get("feeds",[]):
+        if "source_span_m" in feed: feed["source_span_m"]=float(feed["source_span_m"])*scale
+    for var in project.get("design_variables",[]):
+        if var.get("kind") in {"wire_length_m","wire_center_x_m"}:
+            var["min"]=float(var["min"])*scale; var["max"]=float(var["max"])*scale
+    for con in project.get("design_constraints",[]):
+        if con.get("kind") in {"min_center_x_gap_m","wire_length_order_min_delta_m","max_boom_length_m"}:
+            con["value"]=float(con["value"])*scale
+    project["frequency_hz"]=target_frequency_hz
+    project["name"]=f'{item["label"]} synthesized at {target_frequency_hz/1e6:.6f} MHz'
+    return {"template_id":template_id,"method":registry["synthesis_method"],"seed_model":item["seed_model"],"scale":scale,"project":project}
+
+
 class Handler(SimpleHTTPRequestHandler):
     server_version = "EMManaNextLinux/0.1"
     def __init__(self, *args, **kwargs): super().__init__(*args, directory=str(STATIC), **kwargs)
@@ -111,6 +150,26 @@ class Handler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/product-registry":
             try: self.send_json(json.loads(PRODUCT_REGISTRY.read_text(encoding="utf-8")))
             except Exception as e: self.send_json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if parsed.path == "/api/templates":
+            try: self.send_json(load_json(TEMPLATE_REGISTRY))
+            except Exception as e: self.send_json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if parsed.path == "/api/materials":
+            try: self.send_json(load_json(MATERIALS_REGISTRY))
+            except Exception as e: self.send_json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if parsed.path == "/api/measurement-contract":
+            try: self.send_json(load_json(MEASUREMENT_SCHEMA))
+            except Exception as e: self.send_json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+        if parsed.path.startswith("/api/template/"):
+            try:
+                template_id=urllib.parse.unquote(parsed.path.split("/api/template/",1)[1])
+                qs=urllib.parse.parse_qs(parsed.query)
+                frequency_hz=float(qs.get("frequency_hz",["0"])[0])
+                self.send_json(synthesize_template(template_id,frequency_hz))
+            except Exception as e: self.send_json({"error":str(e)},HTTPStatus.BAD_REQUEST)
             return
         if parsed.path == "/api/help-registry":
             p = ROOT / "apps" / "shared" / "help" / "help-registry.json"
