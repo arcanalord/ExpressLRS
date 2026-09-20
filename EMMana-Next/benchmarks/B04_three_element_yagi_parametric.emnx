@@ -1,0 +1,25 @@
+{
+  "schema_version": "0.2",
+  "name": "B04 three-element Yagi parametric optimizer model",
+  "frequency_hz": 299792458.0,
+  "wires": [
+    {"id":"REF","start_m":[0.0,0.0,-0.26],"end_m":[0.0,0.0,0.26],"radius_m":0.001,"segments":21},
+    {"id":"DRV","start_m":[0.2,0.0,-0.24],"end_m":[0.2,0.0,0.24],"radius_m":0.001,"segments":21},
+    {"id":"DIR1","start_m":[0.35,0.0,-0.225],"end_m":[0.35,0.0,0.225],"radius_m":0.001,"segments":21}
+  ],
+  "feeds":[{"wire_id":"DRV","segment":10,"voltage_re_v":1.0,"voltage_im_v":0.0}],
+  "design_variables":[
+    {"id":"reflector_length","kind":"wire_length_m","wire_id":"REF","min":0.49,"max":0.56},
+    {"id":"driven_length","kind":"wire_length_m","wire_id":"DRV","min":0.44,"max":0.52},
+    {"id":"director_length","kind":"wire_length_m","wire_id":"DIR1","min":0.4,"max":0.48},
+    {"id":"driven_x","kind":"wire_center_x_m","wire_id":"DRV","min":0.14,"max":0.26},
+    {"id":"director_x","kind":"wire_center_x_m","wire_id":"DIR1","min":0.28,"max":0.46}
+  ],
+  "design_constraints":[
+    {"id":"reflector_to_driven_gap","kind":"min_center_x_gap_m","wire_a":"REF","wire_b":"DRV","value":0.12},
+    {"id":"driven_to_director_gap","kind":"min_center_x_gap_m","wire_a":"DRV","wire_b":"DIR1","value":0.1},
+    {"id":"reflector_longer_than_driven","kind":"wire_length_order_min_delta_m","wire_a":"REF","wire_b":"DRV","value":0.02},
+    {"id":"driven_longer_than_director","kind":"wire_length_order_min_delta_m","wire_a":"DRV","wire_b":"DIR1","value":0.02},
+    {"id":"max_boom","kind":"max_boom_length_m","value":0.46}
+  ]
+}
