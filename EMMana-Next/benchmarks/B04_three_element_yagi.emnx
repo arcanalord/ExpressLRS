@@ -1,0 +1,13 @@
+{
+  "schema_version": "0.1",
+  "name": "B04 three-element Yagi sanity model",
+  "frequency_hz": 299792458.0,
+  "wires": [
+    {"id":"REF", "start_m":[0.0,0.0,-0.26], "end_m":[0.0,0.0,0.26], "radius_m":0.001, "segments":31},
+    {"id":"DRV", "start_m":[0.20,0.0,-0.24], "end_m":[0.20,0.0,0.24], "radius_m":0.001, "segments":31},
+    {"id":"DIR1","start_m":[0.35,0.0,-0.225],"end_m":[0.35,0.0,0.225],"radius_m":0.001, "segments":31}
+  ],
+  "feeds": [
+    {"wire_id":"DRV","segment":15,"voltage_re_v":1.0,"voltage_im_v":0.0}
+  ]
+}
