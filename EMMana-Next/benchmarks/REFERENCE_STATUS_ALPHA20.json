@@ -1,15 +1,33 @@
 {
   "schema_version": "0.2",
-  "project_version": "0.1.0-alpha.20-rev3",
+  "project_version": "0.1.0-alpha.20-rev4",
   "independent_reference": {
     "engine": "nec2c",
     "local_status": "not_executed",
-    "local_reason": "local container has no external DNS/package access; real NEC2 workflow is committed and ready for GitHub Actions",
-    "ci_status": "workflow_prepared_not_executed",
-    "strict_gate": "B01 input impedance (provisional |dR|/|dX| <= 3 ohm)",
-    "characterization_only": "B02 and B04 until first real nec2c measurements are recorded; finite-ground/loss-load remain separate external-validation work",
+    "local_reason": "local container has no external DNS/package access; authoritative independent-reference evidence comes from GitHub Actions",
+    "ci_status": "pass",
+    "strict_gate": "B01 input impedance PASS, provisional |dR|/|dX| <= 3 ohm",
+    "characterization_only": "B02 and B04 measured against real nec2c and within current provisional tolerances; finite-ground/loss-load remain separate external-validation work",
     "ground_reference_status": "not_executed",
-    "loss_load_reference_status": "not_executed"
+    "loss_load_reference_status": "not_executed",
+    "latest_ci_run_id": 35506144695,
+    "measured_deltas_ohm": {
+      "B01": {
+        "delta_r": -1.207684,
+        "delta_x": -2.140942,
+        "status": "pass_strict"
+      },
+      "B02": {
+        "delta_r": 0.289335,
+        "delta_x": -1.565283,
+        "status": "pass_characterization"
+      },
+      "B04": {
+        "delta_r": 2.330789,
+        "delta_x": -4.610689,
+        "status": "pass_characterization"
+      }
+    }
   },
   "internal_numerical_gates": {
     "bootstrap_core_regression": "pass",
@@ -20,7 +38,8 @@
     "linear_residual_gate": "pass",
     "linux_ui_api_smoke": "pass",
     "help_registry_content": "pass",
-    "help_registry_js": "pass"
+    "help_registry_js": "pass",
+    "ui_surface_state": "pass"
   },
   "ground_validation": {
     "B02_PEC": "pass",
@@ -31,8 +50,8 @@
     "limitation": "complex-image/quasistatic approximation; not Sommerfeld/Norton"
   },
   "release_status": {
-    "experimental_linux_alpha": "internal_gates_pass_ci_workflows_ready_external_reference_pending",
-    "authoritative_engineering_release": "blocked",
-    "windows_verification": "workflow_prepared_not_executed"
+    "experimental_linux_alpha": "internal_and_real_nec2_gates_pass",
+    "authoritative_engineering_release": "blocked_by_finite_ground_loss_load_kernel_policy_and_real_windows_runtime",
+    "windows_verification": "build_regression_package_pass_real_clean_run_pending"
   }
 }
