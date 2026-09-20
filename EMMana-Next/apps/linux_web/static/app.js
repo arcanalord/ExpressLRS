@@ -1,5 +1,5 @@
-const $=s=>document.querySelector(s);let kernel='reduced',lastResult=null,lastOptimizer=null,lastSweep=null,lastMeasurement=null,lastComparison=null;
-const els={status:$('#status'),run:$('#run'),runSweep:$('#run-sweep'),runOpt:$('#run-opt'),applyOpt:$('#apply-opt'),example:$('#example'),editor:$('#project-json'),name:$('#project-name'),meta:$('#project-meta'),zin:$('#zin'),vswr:$('#vswr'),dmax:$('#dmax'),eff:$('#eff'),accepted:$('#accepted'),radiated:$('#radiated'),dissipated:$('#dissipated'),balance:$('#balance'),diag:$('#diagnostics'),raw:$('#raw-result'),polar:$('#polar'),currents:$('#currents'),chip:$('#kernel-chip'),sweepChart:$('#sweep-chart'),sweepSummary:$('#sweep-summary'),sweepStart:$('#sweep-start'),sweepStop:$('#sweep-stop'),sweepPoints:$('#sweep-points'),parallelWorkers:$('#parallel-workers'),optAlg:$('#opt-alg'),optPop:$('#opt-pop'),optGen:$('#opt-gen'),optLocal:$('#opt-local'),optSeed:$('#opt-seed'),optWMatch:$('#opt-w-match'),optWGain:$('#opt-w-gain'),optWFb:$('#opt-w-fb'),optWSize:$('#opt-w-size'),optGainGuard:$('#opt-gain-guard'),optMaxVswr:$('#opt-max-vswr'),optBandStart:$('#opt-band-start'),optBandStop:$('#opt-band-stop'),optBandPoints:$('#opt-band-points'),optQuantMm:$('#opt-quant-mm'),optTolMm:$('#opt-tol-mm'),optRobustSamples:$('#opt-robust-samples'),optMcSamples:$('#opt-mc-samples'),optSummary:$('#opt-summary'),optVariables:$('#opt-variables'),optConstraints:$('#opt-constraints'),optMetrics:$('#opt-metrics'),optPareto:$('#opt-pareto'),optChart:$('#opt-chart'),measurementFile:$('#measurement-file'),measurementCalibration:$('#measurement-calibration'),measurementReferencePlane:$('#measurement-reference-plane'),measurementImport:$('#measurement-import'),measurementCompare:$('#measurement-compare'),measurementSummary:$('#measurement-summary'),measurementDr:$('#measurement-dr'),measurementDx:$('#measurement-dx'),measurementDvswr:$('#measurement-dvswr'),measurementDs11:$('#measurement-ds11'),measurementChart:$('#measurement-chart'),measurementTableBody:$('#measurement-table-body'),measurementProvenance:$('#measurement-provenance')};
+const $=s=>document.querySelector(s);let kernel='reduced',lastResult=null,lastOptimizer=null,lastSweep=null,lastMeasurement=null,lastComparison=null,lastMeasurementRawText='',lastVariant=null,lastMeasurementSet=null,lastReport=null;let variantHistory=[];
+const els={status:$('#status'),run:$('#run'),runSweep:$('#run-sweep'),runOpt:$('#run-opt'),applyOpt:$('#apply-opt'),example:$('#example'),editor:$('#project-json'),name:$('#project-name'),meta:$('#project-meta'),zin:$('#zin'),vswr:$('#vswr'),dmax:$('#dmax'),eff:$('#eff'),accepted:$('#accepted'),radiated:$('#radiated'),dissipated:$('#dissipated'),balance:$('#balance'),diag:$('#diagnostics'),raw:$('#raw-result'),polar:$('#polar'),currents:$('#currents'),chip:$('#kernel-chip'),sweepChart:$('#sweep-chart'),sweepSummary:$('#sweep-summary'),sweepStart:$('#sweep-start'),sweepStop:$('#sweep-stop'),sweepPoints:$('#sweep-points'),parallelWorkers:$('#parallel-workers'),optAlg:$('#opt-alg'),optPop:$('#opt-pop'),optGen:$('#opt-gen'),optLocal:$('#opt-local'),optSeed:$('#opt-seed'),optWMatch:$('#opt-w-match'),optWGain:$('#opt-w-gain'),optWFb:$('#opt-w-fb'),optWSize:$('#opt-w-size'),optGainGuard:$('#opt-gain-guard'),optMaxVswr:$('#opt-max-vswr'),optBandStart:$('#opt-band-start'),optBandStop:$('#opt-band-stop'),optBandPoints:$('#opt-band-points'),optQuantMm:$('#opt-quant-mm'),optTolMm:$('#opt-tol-mm'),optRobustSamples:$('#opt-robust-samples'),optMcSamples:$('#opt-mc-samples'),optSummary:$('#opt-summary'),optVariables:$('#opt-variables'),optConstraints:$('#opt-constraints'),optMetrics:$('#opt-metrics'),optPareto:$('#opt-pareto'),optChart:$('#opt-chart'),measurementFile:$('#measurement-file'),measurementCalibration:$('#measurement-calibration'),measurementReferencePlane:$('#measurement-reference-plane'),measurementImport:$('#measurement-import'),measurementCompare:$('#measurement-compare'),measurementSummary:$('#measurement-summary'),measurementDr:$('#measurement-dr'),measurementDx:$('#measurement-dx'),measurementDvswr:$('#measurement-dvswr'),measurementDs11:$('#measurement-ds11'),measurementChart:$('#measurement-chart'),measurementTableBody:$('#measurement-table-body'),measurementProvenance:$('#measurement-provenance'),variantName:$('#variant-name'),variantSave:$('#variant-save'),measurementBind:$('#measurement-bind'),reportGenerate:$('#report-generate'),reportDownload:$('#report-download'),workflowSummary:$('#workflow-summary'),variantHistory:$('#variant-history'),reportPreview:$('#report-preview')};
 function status(t,type=''){els.status.textContent=t;els.status.className='status '+type}
 function fmt(x,n=3){return Number.isFinite(Number(x))?Number(x).toFixed(n):'—'}
 async function api(url,opt){const r=await fetch(url,opt);let j={};try{j=await r.json()}catch{}if(!r.ok)throw new Error(j.error||j.stderr||`HTTP ${r.status}`);return j}
@@ -51,9 +51,9 @@ function renderMeasurementTable(cmp){
 async function importMeasurement(){
   try{
     const file=els.measurementFile.files?.[0];if(!file)throw new Error('Выберите файл .s1p или .csv');
-    const format=measurementFormat(file),text=await file.text();els.measurementImport.disabled=true;status('импорт measurement…');
+    const format=measurementFormat(file),text=await file.text();lastMeasurementRawText=text;els.measurementImport.disabled=true;status('импорт measurement…');
     const j=await api('/api/measurement/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({format,source_name:file.name,text})});
-    lastMeasurement=j.measurement;lastComparison=null;setMeasurementKpis(null);renderMeasurementTable(null);drawMeasurementComparison(null);renderMeasurementProvenance();
+    lastMeasurement=j.measurement;lastComparison=null;lastMeasurementSet=null;lastReport=null;setMeasurementKpis(null);renderMeasurementTable(null);drawMeasurementComparison(null);renderMeasurementProvenance();syncWorkflowButtons();
     els.measurementSummary.textContent=`${file.name} · ${lastMeasurement.samples?.length||0} points · ${measurementValue(lastMeasurement.reference_impedance_ohm,1)} Ω`;
     els.measurementCompare.disabled=!lastSweep;status(lastSweep?'измерение загружено · можно сравнить':'измерение загружено · сначала Sweep','ok');
   }catch(e){status('ошибка measurement','err');els.diag.textContent=String(e.message||e)}finally{els.measurementImport.disabled=false}
@@ -63,14 +63,82 @@ async function compareMeasurement(){
     if(!lastMeasurement)throw new Error('Сначала импортируйте измерение');if(!lastSweep)throw new Error('Сначала выполните Sweep');
     els.measurementCompare.disabled=true;status('сравнение measurement…');
     const j=await api('/api/measurement/compare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({measurement:lastMeasurement,sweep:lastSweep})});
-    lastComparison=j.comparison;setMeasurementKpis(lastComparison.summary);drawMeasurementComparison(lastComparison);renderMeasurementTable(lastComparison);renderMeasurementProvenance();
+    lastComparison=j.comparison;lastReport=null;setMeasurementKpis(lastComparison.summary);drawMeasurementComparison(lastComparison);renderMeasurementTable(lastComparison);renderMeasurementProvenance();syncWorkflowButtons();
     els.measurementSummary.textContent=`${lastComparison.overlap.points} aligned points · ${lastMeasurement.source?.name||'measurement'}`;status('measurement comparison готов','ok');
   }catch(e){status('ошибка сравнения','err');els.diag.textContent=String(e.message||e)}finally{els.measurementCompare.disabled=!lastMeasurement||!lastSweep}
+}
+const VARIANT_STORAGE_KEY='emnext.variantHistory.v1';
+function workflowShort(v,n=10){const s=String(v||'');return s.length>n?s.slice(0,n)+'…':s}
+function loadVariantHistory(){
+  try{const rows=JSON.parse(localStorage.getItem(VARIANT_STORAGE_KEY)||'[]');variantHistory=Array.isArray(rows)?rows.filter(x=>x&&x.variant_id&&x.immutability?.fingerprint).slice(0,8):[]}catch{variantHistory=[]}
+  renderVariantHistory()
+}
+function persistVariantHistory(){try{localStorage.setItem(VARIANT_STORAGE_KEY,JSON.stringify(variantHistory.slice(0,8)))}catch{}}
+function renderVariantHistory(){
+  if(!els.variantHistory)return;
+  if(!variantHistory.length){els.variantHistory.className='variant-history muted';els.variantHistory.textContent='Сохранённых вариантов пока нет.';return}
+  els.variantHistory.className='variant-history';
+  els.variantHistory.innerHTML=variantHistory.map((v,i)=>{const active=lastVariant?.immutability?.fingerprint===v.immutability?.fingerprint;const letter=String.fromCharCode(65+i);return `<button type="button" class="variant-row${active?' active':''}" data-variant-index="${i}"><span class="variant-letter">${letter}</span><span><b>${escapeHtml(v.name||v.variant_id)}</b><small>${escapeHtml(v.variant_id)} · model ${escapeHtml(workflowShort(v.model_ref?.model_hash,12))}</small></span><span class="variant-fp">${escapeHtml(workflowShort(v.immutability?.fingerprint,10))}</span></button>`}).join('');
+  els.variantHistory.querySelectorAll('[data-variant-index]').forEach(b=>b.onclick=()=>{const v=variantHistory[Number(b.dataset.variantIndex)];if(v){lastVariant=v;lastMeasurementSet=null;lastReport=null;els.variantName.value=v.name||v.variant_id;renderVariantHistory();renderReportPreview();syncWorkflowButtons();status('вариант выбран','ok')}})
+}
+function syncWorkflowButtons(){
+  if(!els.variantSave)return;
+  els.measurementBind.disabled=!(lastVariant&&lastMeasurement&&lastMeasurementRawText);
+  els.reportGenerate.disabled=!(lastVariant&&lastMeasurementSet&&lastSweep&&lastMeasurement&&lastComparison);
+  els.reportDownload.disabled=!lastReport?.markdown;
+  const bits=[];
+  if(lastVariant)bits.push('variant locked');
+  if(lastMeasurementSet)bits.push('measurement bound');
+  if(lastReport)bits.push('report ready');
+  els.workflowSummary.textContent=bits.length?bits.join(' · '):'вариант ещё не сохранён';
+  els.workflowSummary.classList.toggle('workflow-ok',!!lastReport);
+}
+function renderReportPreview(){
+  if(!els.reportPreview)return;
+  if(lastReport?.markdown){els.reportPreview.className='report-preview';els.reportPreview.textContent=lastReport.markdown;return}
+  els.reportPreview.className='report-preview muted';
+  if(lastMeasurementSet)els.reportPreview.textContent='MeasurementSet связан с '+lastMeasurementSet.variant_ref.variant_id+'. Выполните/проверьте сравнение и сформируйте отчёт.';
+  else if(lastVariant)els.reportPreview.textContent='Variant '+lastVariant.variant_id+' сохранён. Импортируйте measurement и привяжите его к этому варианту.';
+  else els.reportPreview.textContent='Сохраните вариант, привяжите measurement и выполните сравнение.';
+}
+async function saveVariant(){
+  try{
+    const p=project(),name=(els.variantName.value||p.name||'Design Variant').trim(),variant_id='variant-'+Date.now().toString(36);
+    els.variantSave.disabled=true;status('сохраняю immutable variant…');
+    const j=await api('/api/variant/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,variant_id,name,tags:['ui-rev16']})});
+    lastVariant=j.variant;lastMeasurementSet=null;lastReport=null;
+    variantHistory=[lastVariant,...variantHistory.filter(v=>v.immutability?.fingerprint!==lastVariant.immutability?.fingerprint)].slice(0,8);
+    persistVariantHistory();renderVariantHistory();renderReportPreview();syncWorkflowButtons();
+    status('variant сохранён · model hash locked','ok')
+  }catch(e){status('ошибка variant','err');els.diag.textContent=String(e.message||e)}finally{els.variantSave.disabled=false}
+}
+async function bindMeasurement(){
+  try{
+    if(!lastVariant)throw new Error('Сначала сохраните или выберите Variant');
+    if(!lastMeasurement||!lastMeasurementRawText)throw new Error('Сначала импортируйте measurement в этой вкладке');
+    els.measurementBind.disabled=true;status('привязка measurement…');
+    const measurement_id=(lastMeasurement.source?.name||'measurement').replace(/[^a-zA-Z0-9_.-]+/g,'-')+'-'+Date.now().toString(36);
+    const j=await api('/api/measurement/bind',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({variant:lastVariant,measurement:lastMeasurement,raw_text:lastMeasurementRawText,measurement_id,calibration:{type:els.measurementCalibration.value||'unknown',reference_plane_note:els.measurementReferencePlane.value.trim(),fixture_deembedded:false},provenance:{instrument_or_source:lastMeasurement.source?.name||'browser import',notes:'Bound in EMMana-Next rev16 UI'}})});
+    lastMeasurementSet=j.measurement_set;lastReport=null;renderReportPreview();syncWorkflowButtons();status('measurement привязан к variant','ok')
+  }catch(e){status('ошибка binding','err');els.diag.textContent=String(e.message||e)}finally{syncWorkflowButtons()}
+}
+async function generateReport(){
+  try{
+    if(!lastVariant||!lastMeasurementSet||!lastSweep||!lastMeasurement||!lastComparison)throw new Error('Нужны Variant, bound measurement, Sweep и сравнение');
+    els.reportGenerate.disabled=true;status('формирую engineering report…');
+    const j=await api('/api/report/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({variant:lastVariant,measurement_set:lastMeasurementSet,sweep:lastSweep,measurement:lastMeasurement,comparison:lastComparison})});
+    lastReport=j.report;renderReportPreview();syncWorkflowButtons();status('engineering report готов','ok')
+  }catch(e){status('ошибка report','err');els.diag.textContent=String(e.message||e)}finally{syncWorkflowButtons()}
+}
+function downloadReport(){
+  if(!lastReport?.markdown)return;
+  const blob=new Blob([lastReport.markdown],{type:'text/markdown;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=(lastVariant?.variant_id||'emnext-report')+'.md';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500)
 }
 function showResult(r){lastResult=r;const f=r.feeds?.[0],p=project(),lossy=(p.wires||[]).filter(w=>Number(w.conductivity_s_per_m||0)>0),loads=p.loads||[];const lossLines=[`Loss model: ${lossy.length?lossy.length+' finite-conductivity wire(s)':'PEC conductors'} · ${loads.length} lumped load(s)`];if(lossy.length)lossLines.push('Conductivity: '+lossy.map(w=>`${w.id||'?'}=${Number(w.conductivity_s_per_m).toExponential(3)} S/m`).join(', '));if(loads.length)lossLines.push('Loads: '+loads.map(x=>`${x.id||'?'}[${x.wire_id||'?'}:${x.segment_index??'?'}] R=${Number(x.resistance_ohm||0)}Ω L=${Number(x.inductance_h||0).toExponential(3)}H C=${Number(x.capacitance_f||0).toExponential(3)}F`).join('; '));els.zin.textContent=cpx(f?.impedance_ohm);els.vswr.textContent=fmt(f?.vswr,3);els.dmax.textContent=fmt(r.summary?.dmax_dbi,3);els.eff.textContent=fmt(100*(r.efficiency??0),3);els.accepted.textContent=Number(r.accepted_power_w||0).toExponential(3);els.radiated.textContent=Number(r.radiated_power_w||0).toExponential(3);els.dissipated.textContent=Number(r.dissipated_power_w||0).toExponential(3);els.balance.textContent=(r.power_balance_relative_error??0).toExponential(2);els.raw.textContent=JSON.stringify(r,null,2);els.diag.textContent=[`Solver: ${r.solver_id} v${r.solver_version}`,`Settings: ${r.solver_settings_id}`,`Model hash: ${r.model_hash}`,...lossLines,`Accepted power: ${r.accepted_power_w} W`,`Radiated power: ${r.radiated_power_w} W`,`Dissipated power: ${r.dissipated_power_w} W`,`Efficiency: ${fmt(100*(r.efficiency??0),4)}%`,'',...(r.warnings||[]).map(x=>'⚠ '+x)].join('\n');drawPolar(r);drawCurrents(r)}
 async function run(){try{const p=project();updateMeta(p);document.body.classList.add('busy');els.run.disabled=true;status('расчёт…');const j=await api('/api/solve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,kernel})});showResult(j.result);status('расчёт завершён','ok')}catch(e){status('ошибка','err');els.diag.textContent=String(e.message||e)}finally{document.body.classList.remove('busy');els.run.disabled=false}}
 async function check(){try{const p=project();status('проверка…');const j=await api('/api/model-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,kernel})});els.diag.textContent=j.stdout+(j.stderr?'\n'+j.stderr:'');status(j.ok?'модель корректна':'модель с ошибками',j.ok?'ok':'err')}catch(e){status('ошибка','err');els.diag.textContent=String(e.message||e)}}
-document.querySelectorAll('[data-kernel]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-kernel]').forEach(x=>x.classList.remove('active'));b.classList.add('active');kernel=b.dataset.kernel;els.chip.textContent=kernel==='reduced'?'REDUCED':'EXACT VALIDATION'});els.run.onclick=run;els.runSweep.onclick=runSweep;els.runOpt.onclick=runOptimize;els.applyOpt.onclick=applyBest;$('#check').onclick=check;els.example.onchange=loadExample;els.measurementImport.onclick=importMeasurement;els.measurementCompare.onclick=compareMeasurement;els.measurementCalibration.onchange=renderMeasurementProvenance;els.measurementReferencePlane.oninput=renderMeasurementProvenance;
+document.querySelectorAll('[data-kernel]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-kernel]').forEach(x=>x.classList.remove('active'));b.classList.add('active');kernel=b.dataset.kernel;els.chip.textContent=kernel==='reduced'?'REDUCED':'EXACT VALIDATION'});els.run.onclick=run;els.runSweep.onclick=runSweep;els.runOpt.onclick=runOptimize;els.applyOpt.onclick=applyBest;$('#check').onclick=check;els.example.onchange=loadExample;els.measurementImport.onclick=importMeasurement;els.measurementCompare.onclick=compareMeasurement;els.measurementCalibration.onchange=renderMeasurementProvenance;els.measurementReferencePlane.oninput=renderMeasurementProvenance;els.variantSave.onclick=saveVariant;els.measurementBind.onclick=bindMeasurement;els.reportGenerate.onclick=generateReport;els.reportDownload.onclick=downloadReport;loadVariantHistory();syncWorkflowButtons();
 (async()=>{try{const h=await api('/api/health');$('#version').textContent=`Linux Lab · ${h.version}`;await loadReferenceStatus();const e=await api('/api/examples');e.examples.forEach(x=>{const o=document.createElement('option');o.value=x.file;o.textContent=x.name;els.example.appendChild(o)});const preferred=e.examples.find(x=>x.file.includes('51seg'))||e.examples[0];if(preferred)els.example.value=preferred.file;await loadExample();await run();await runSweep()}catch(e){status('не готово','err');els.diag.textContent=String(e.message||e)}})();
 
 // ---- alpha.20 runtime UX: ground controls, mobile drawer, unified Help Registry ----

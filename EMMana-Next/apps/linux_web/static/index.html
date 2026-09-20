@@ -141,6 +141,30 @@
       </div>
     </section>
 
+    <section class="panel workflow-panel" id="workflow-panel">
+      <div class="panel-head">
+        <div><small>ENGINEERING WORKFLOW</small><h2>Variant → Measurement → Report</h2></div>
+        <div class="workflow-head-actions"><span id="workflow-summary">вариант ещё не сохранён</span><button class="inline-help" type="button" data-help-topic="emmana-next.workflow.report">? Справка</button></div>
+      </div>
+      <div class="workflow-toolbar">
+        <label>Variant name<input id="variant-name" type="text" placeholder="Например: B01 lab · v1"></label>
+        <button id="variant-save" class="secondary" type="button">1 · Сохранить вариант</button>
+        <button id="measurement-bind" class="secondary" type="button" disabled>2 · Привязать измерение</button>
+        <button id="report-generate" class="primary" type="button" disabled>3 · Сформировать отчёт</button>
+        <button id="report-download" class="secondary" type="button" disabled>Markdown</button>
+      </div>
+      <div class="workflow-grid">
+        <div class="workflow-card">
+          <div class="measurement-subhead">VARIANTS A/B/C</div>
+          <div id="variant-history" class="variant-history muted">Сохранённых вариантов пока нет.</div>
+        </div>
+        <div class="workflow-card report-card">
+          <div class="measurement-subhead">ENGINEERING REPORT</div>
+          <div id="report-preview" class="report-preview muted">Сохраните вариант, привяжите measurement и выполните сравнение.</div>
+        </div>
+      </div>
+    </section>
+
     <section class="panel optimizer-panel">
       <div class="panel-head"><div><small>PARAMETRIC OPTIMIZER</small><h2>Global → Local · robust band worst-case · Pareto</h2></div><span id="opt-summary">ещё не запускался</span></div>
       <div class="optimizer-grid">

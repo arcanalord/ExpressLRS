@@ -235,6 +235,37 @@
         "emmana-next.result.zin",
         "emmana-next.result.vswr"
       ]
+    },
+    {
+      "id": "emmana-next.workflow.report",
+      "title": "Variant → Measurement → Report",
+      "summary": "Фиксирует точную модель, связывает с ней конкретное измерение и формирует воспроизводимый инженерный отчёт.",
+      "body": "Сохранить вариант вызывает model-check и фиксирует model hash + immutable fingerprint. Привязать измерение создаёт MeasurementSet с SHA-256 raw-файла и нормализованных данных. Сформировать отчёт связывает Variant, MeasurementSet, Sweep, correlation и текущий evidence status. Отчёт не меняет solver trust и не заменяет simulation измерением.",
+      "keywords": [
+        "DesignVariant",
+        "MeasurementSet",
+        "report",
+        "fingerprint",
+        "model hash",
+        "SHA-256"
+      ],
+      "aliases": [
+        "инженерный отчёт",
+        "вариант антенны",
+        "привязать измерение"
+      ],
+      "category": "workflow",
+      "quickSteps": [
+        "Сохраните Variant для текущей EMNX-модели",
+        "Импортируйте S1P/CSV и выполните Sweep + Сравнить",
+        "Нажмите Привязать измерение",
+        "Нажмите Сформировать отчёт и при необходимости сохраните Markdown"
+      ],
+      "relatedTopics": [
+        "emmana-next.measurement.compare",
+        "emmana-next.result.zin",
+        "emmana-next.error.nec2-not-run"
+      ]
     }
   ]
 }

@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev15  
+**Current version:** 0.1.0-alpha.20-rev16  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev15-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev16-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -163,3 +163,13 @@ Rev15 reconciles the valid rev10–rev14 history with the later canonical measur
 - Engineering Report v0.1 binds simulation, measurement correlation and recorded evidence status without modifying solver trust.
 - New API: /api/variant/create, /api/measurement/bind, /api/report/generate.
 - Solver physics and EMNX schema are unchanged.
+
+
+## Rev16 — real UI workflow for immutable engineering evidence
+
+- Existing Measurement workspace now exposes one linear workflow: Save Variant → Bind Measurement → Generate Report.
+- Variant history A/B/C is session/local metadata only; raw VNA/S1P bytes are not persisted to localStorage.
+- Save Variant always calls backend model-check and uses the solver model hash.
+- Measurement binding uses the current tab raw measurement text so the backend can hash the actual imported asset.
+- Report preview renders the backend-generated Markdown and can download it as .md.
+- No new backend endpoint, solver physics, EMNX schema, or parallel measurement contract was introduced.
