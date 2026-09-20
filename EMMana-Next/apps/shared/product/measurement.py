@@ -140,7 +140,13 @@ def parse_vna_csv(text: str, source_name: str="measurement.csv", reference_imped
     phase_h=_find_header(headers,["s11phasedeg","s11phase","phasedeg","phase"])
     r_h=_find_header(headers,["resistanceohm","resistance","rohms","rohm","r"])
     x_h=_find_header(headers,["reactanceohm","reactance","xohms","xohm","x"])
-    if not ((real_h and imag_h) or (db_h and phase_h) or (r_h and x_h)):
+    if real_h and imag_h:
+        profile="s11-ri"
+    elif db_h and phase_h:
+        profile="s11-db-phase"
+    elif r_h and x_h:
+        profile="impedance-rx"
+    else:
         raise ValueError("VNA CSV needs S11 real/imag, S11 dB/phase, or R/X columns")
     fscale=_frequency_scale_from_header(freq_h)
     samples=[]
@@ -160,7 +166,7 @@ def parse_vna_csv(text: str, source_name: str="measurement.csv", reference_imped
     _validate_samples(samples)
     return {
         "schema_version":"0.1",
-        "source":{"format":"vna-csv","name":source_name},
+        "source":{"format":"vna-csv","name":source_name,"profile":profile},
         "parameter":"S11",
         "reference_impedance_ohm":float(reference_impedance_ohm),
         "samples":samples
@@ -174,7 +180,7 @@ def parse_measurement(fmt: str, text: str, source_name: str="", reference_impeda
     raise ValueError("unsupported measurement format")
 
 
-def _interp(samples: list[dict], frequency_hz: float) -> dict | None:
+def _interp(samples: list[dict], frequency_hz: float, reference_impedance_ohm: float=50.0) -> dict | None:
     if frequency_hz<samples[0]["frequency_hz"] or frequency_hz>samples[-1]["frequency_hz"]: return None
     lo=0; hi=len(samples)-1
     while lo<=hi:
@@ -190,7 +196,7 @@ def _interp(samples: list[dict], frequency_hz: float) -> dict | None:
     zim=lerp(a["impedance_ohm"]["im"],b["impedance_ohm"]["im"])
     sre=lerp(a["s11"]["re"],b["s11"]["re"]); sim=lerp(a["s11"]["im"],b["s11"]["im"])
     gamma=complex(sre,sim)
-    out=_derive_sample(frequency_hz,gamma,50.0)
+    out=_derive_sample(frequency_hz,gamma,reference_impedance_ohm)
     out["impedance_ohm"]={"re":zre,"im":zim}
     return out
 
@@ -231,7 +237,7 @@ def compare_measurement_to_sweep(measurement: dict, sweep: dict) -> dict:
     rows=[]; drs=[]; dxs=[]; ddbs=[]; dvswrs=[]
     for sim in ss:
         f=float(sim["frequency_hz"])
-        meas=_interp(ms,f)
+        meas=_interp(ms,f,float(measurement.get("reference_impedance_ohm",50.0)))
         if meas is None: continue
         sr=float(sim["impedance_ohm"]["re"]); sx=float(sim["impedance_ohm"]["im"])
         mr=float(meas["impedance_ohm"]["re"]); mx=float(meas["impedance_ohm"]["im"])

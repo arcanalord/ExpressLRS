@@ -62,7 +62,7 @@
     {
       "id": "measurement",
       "label": "Measurement",
-      "status": "planned",
+      "status": "implemented",
       "owns": [
         "VNA/Touchstone import",
         "simulation-vs-measurement comparison"
@@ -71,7 +71,7 @@
     {
       "id": "report",
       "label": "Report",
-      "status": "planned",
+      "status": "implemented-basic",
       "owns": [
         "engineering report",
         "variant comparison",
@@ -95,20 +95,27 @@
       "description": "Requested analyses, goals and evidence policy."
     },
     "design_variant": {
-      "status": "planned",
-      "description": "Named immutable candidate linked to one EMNX model hash."
+      "status": "implemented",
+      "description": "Named immutable candidate linked to one EMNX model hash.",
+      "format": "design-variant-0.1"
     },
     "evidence_bundle": {
       "status": "implemented",
       "description": "Tests, reference comparison, provenance and gate status."
     },
     "measurement_set": {
-      "status": "parser-and-comparison-implemented",
-      "description": "Measured S/Z data stored beside, never over, simulated results."
+      "status": "implemented-v0.2",
+      "description": "Measured S/Z data stored beside, never over, simulated results.",
+      "format": "measurement-set-0.2"
     },
     "report_profile": {
-      "status": "planned",
+      "status": "implemented-basic",
       "description": "Defines engineering report contents without changing solver behavior."
+    },
+    "engineering_report": {
+      "status": "implemented-basic",
+      "format": "engineering-report-0.1",
+      "description": "Derived immutable report binding one DesignVariant, one MeasurementSet, simulation correlation and recorded evidence status."
     }
   },
   "capability_groups": [
@@ -170,13 +177,15 @@
     },
     {
       "id": "measurement-correlation",
-      "status": "parser-and-comparison-implemented",
+      "status": "implemented",
       "priority": "high",
       "features": [
         "Touchstone import",
         "VNA CSV import",
         "overlay",
-        "delta metrics"
+        "delta metrics",
+        "variant binding",
+        "resonance shift"
       ]
     },
     {
@@ -219,6 +228,18 @@
         "batch variants",
         "artifact retention"
       ]
+    },
+    {
+      "id": "engineering-report",
+      "status": "implemented-basic",
+      "priority": "high",
+      "features": [
+        "DesignVariant identity",
+        "MeasurementSet binding",
+        "correlation summary",
+        "evidence status",
+        "Markdown export"
+      ]
     }
   ],
   "trust_levels": [
@@ -247,6 +268,8 @@
     "A characterization measurement is not promoted to validation by widening tolerances after the fact.",
     "Every reported result carries source model, solver/backend and evidence status.",
     "Template synthesis must return a pure EMNX project with no product-only fields.",
-    "Touchstone parser rejects unsupported parameters/keywords instead of guessing semantics."
+    "Touchstone parser rejects unsupported parameters/keywords instead of guessing semantics.",
+    "A MeasurementSet v0.2 is bound to one immutable DesignVariant fingerprint and expected model hash.",
+    "Engineering reports are derived artifacts and cannot upgrade solver trust beyond recorded evidence gates."
   ]
 }

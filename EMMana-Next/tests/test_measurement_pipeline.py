@@ -11,6 +11,7 @@ ri=parse_touchstone_s1p((fixtures/"touchstone_ri.s1p").read_text(),"ri.s1p")
 ma=parse_touchstone_s1p((fixtures/"touchstone_ma.s1p").read_text(),"ma.s1p")
 db=parse_touchstone_s1p((fixtures/"touchstone_db.s1p").read_text(),"db.s1p")
 csvm=parse_vna_csv((fixtures/"vna_s11.csv").read_text(),"vna.csv")
+assert csvm["source"]["profile"]=="s11-ri"
 
 for other in (ma,db,csvm):
     assert len(other["samples"])==len(ri["samples"])==3
