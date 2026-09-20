@@ -1,0 +1,89 @@
+name: Radio Horizon v0.5.5 APK
+on:
+  push:
+    branches: ["ci-radio-horizon-apk-v030"]
+    paths:
+      - ".github/workflows/rh-v055.yml"
+      - "tools/radio-horizon-ci/trigger-v055.txt"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download canonical source from Dropbox
+        run: |
+          curl -L --fail --retry 3 'https://uce964f114e262ce8a72fa353e1b.dl.dropboxusercontent.com/cd/0/get/DIdlUQi50Vnm531fNcjL4fgMWlP-gCdpWMj6cB1P7DRJ7B-HQE-a5M0Yg4YIHaa3dCrCefdKsldlBzAUYzfptEdyoJmbGD-3tKbcWm9p7beaDBplkIX-Sdr_ZI33nSkEWiqenRAe3D3fWCnJTt3I_DxJ1A2ZKPpcKUCxdrL2ETqPzQ/file?c_luid=cfbe8875' -o /tmp/rh-source.zip
+          echo "8ad5cdba47b649d157cb22763f9826d565270db14321272ad7cbd68adb570b15  /tmp/rh-source.zip" | sha256sum -c -
+          rm -rf tools/radio-horizon tools/radio-horizon-v054
+          mkdir -p tools/radio-horizon-v054
+          unzip -q /tmp/rh-source.zip -d tools/radio-horizon-v054
+          mv tools/radio-horizon-v054/radio_horizon_v0.5.5 tools/radio-horizon
+          cp /tmp/rh-source.zip tools/radio-horizon/Radio_Horizon_SOURCE_CURRENT_v0.5.5.zip
+
+      - name: Vendor pinned MapLibre
+        working-directory: tools/radio-horizon
+        run: ./scripts/vendor-maplibre.sh
+
+      - name: Install Android SDK
+        run: |
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Run syntax and regression tests
+        working-directory: tools/radio-horizon
+        run: |
+          node --check web/app.mjs
+          node --check adapters/dem.mjs
+          npm test
+          cmp web/app.mjs android/app/src/main/assets/app/web/app.mjs
+          cmp adapters/dem.mjs android/app/src/main/assets/app/adapters/dem.mjs
+
+      - name: Build APK
+        working-directory: tools/radio-horizon/android
+        run: gradle clean assembleDebug --stacktrace
+
+      - name: Verify APK and provenance
+        working-directory: tools/radio-horizon
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -v 4 "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" | tee APK_VERIFY.txt
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | tee APK_BADGING.txt
+          sha256sum "$APK" | tee APK_SHA256.txt
+          {
+            echo "version=0.5.5"
+            echo "source_sha256=f72669cfed82465a69ad3b02dbf94a672ac233ad3234fa921469aa44e89e23ed"
+            echo "git_ci_sha=$GITHUB_SHA"
+            echo "runner_arch=$(uname -m)"
+            java -version 2>&1 | head -1
+            gradle --version | sed -n '1,8p'
+          } | tee BUILD_PROVENANCE.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: radio-horizon-v0.5.5
+          path: |
+            tools/radio-horizon/android/app/build/outputs/apk/debug/app-debug.apk
+            tools/radio-horizon/Radio_Horizon_SOURCE_CURRENT_v0.5.5.zip
+            tools/radio-horizon/APK_VERIFY.txt
+            tools/radio-horizon/APK_BADGING.txt
+            tools/radio-horizon/APK_SHA256.txt
+            tools/radio-horizon/BUILD_PROVENANCE.txt
+            tools/radio-horizon/docs/QA_v0.5.5.md
+          if-no-files-found: error
