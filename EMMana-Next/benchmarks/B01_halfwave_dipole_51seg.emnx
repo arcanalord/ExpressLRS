@@ -1,0 +1,22 @@
+{
+  "schema_version": "0.1",
+  "name": "B01 half-wave dipole lambda=1m, 51 segments",
+  "frequency_hz": 299792458.0,
+  "wires": [
+    {
+      "id": "W1",
+      "start_m": [0.0, 0.0, -0.25],
+      "end_m": [0.0, 0.0, 0.25],
+      "radius_m": 0.001,
+      "segments": 51
+    }
+  ],
+  "feeds": [
+    {
+      "wire_id": "W1",
+      "segment": 25,
+      "voltage_re_v": 1.0,
+      "voltage_im_v": 0.0
+    }
+  ]
+}
