@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev16  
+**Current version:** 0.1.0-alpha.20-rev17  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev16-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev17-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -173,3 +173,13 @@ Rev15 reconciles the valid rev10–rev14 history with the later canonical measur
 - Measurement binding uses the current tab raw measurement text so the backend can hash the actual imported asset.
 - Report preview renders the backend-generated Markdown and can download it as .md.
 - No new backend endpoint, solver physics, EMNX schema, or parallel measurement contract was introduced.
+
+
+## Rev17 — simplified user workflow
+
+- Main desktop workspace is reduced to four real sections: Model, Calculation, Optimization, Measurements.
+- No empty Geometry tab is exposed before the graphical editor exists.
+- Low-level solver/ground/optimizer tuning is collapsed into Technical details.
+- Independent reference/trust status moved out of the top bar into Technical details.
+- Measurement and immutable report internals remain implemented but are presented with simpler user wording.
+- No solver physics, EMNX schema, measurement contract, or API change.

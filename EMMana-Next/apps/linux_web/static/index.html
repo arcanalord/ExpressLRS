@@ -16,7 +16,6 @@
       <div><b>EMMana-Next</b><small id="version">Linux Lab</small></div>
     </div>
     <div class="top-actions">
-      <span id="reference-status" class="status">trust…</span>
       <span id="status" class="status">загрузка…</span>
       <button id="help-trigger" class="secondary help-trigger desktop-help" type="button" data-help-topic="emmana-next.overview">? Справка</button>
       <button id="help-trigger-mobile" class="secondary icon-button mobile-help" type="button" aria-label="Справка" data-help-topic="emmana-next.overview">?</button>
@@ -26,10 +25,11 @@
 
   <aside id="sidebar" class="sidebar" aria-label="Параметры расчёта">
     <div class="sidebar-mobile-head mobile-only"><b>Параметры</b><button id="sidebar-close" class="icon-button" type="button" aria-label="Закрыть параметры">×</button></div>
+
     <div class="section-title">ПРОЕКТ</div>
     <label>Пример<select id="example"><option value="">—</option></select></label>
 
-    <div class="section-title">GROUND</div>
+    <div class="section-title">ЗЕМЛЯ</div>
     <label>Модель земли
       <select id="ground-mode">
         <option value="free-space">Free space</option>
@@ -37,52 +37,61 @@
         <option value="homogeneous-halfspace-image-v1">Real ground · experimental</option>
       </select>
     </label>
-    <div class="ground-fields">
-      <label>Plane Z, m<input id="ground-plane" type="number" step="0.001" value="0"></label>
-      <label>εr<input id="ground-epsr" type="number" step="0.1" min="1" value="13"></label>
-      <label>σ, S/m<input id="ground-sigma" type="number" step="0.001" min="0" value="0.005"></label>
-    </div>
     <button class="inline-help" type="button" data-help-topic="emmana-next.ground.model">? Как работает земля</button>
 
-    <div class="section-title">SOLVER</div>
-    <div class="segmented" role="group" aria-label="Kernel">
-      <button type="button" data-kernel="reduced" class="active">Reduced</button>
-      <button type="button" data-kernel="exact">Exact validation</button>
-    </div>
-    <button id="check" class="secondary full" type="button">Проверить модель</button>
-
-    <div class="section-title sweep-title">SWEEP</div>
-    <div class="sweep-fields">
+    <div class="section-title sweep-title">РАСЧЁТ ПО ЧАСТОТЕ</div>
+    <div class="sweep-fields basic-sweep-fields">
       <label>От, MHz<input id="sweep-start" type="number" step="0.1" value="270"></label>
       <label>До, MHz<input id="sweep-stop" type="number" step="0.1" value="330"></label>
       <label>Точек<input id="sweep-points" type="number" min="2" max="81" value="21"></label>
-      <label>Workers<input id="parallel-workers" type="number" min="1" max="16" value="4"></label>
     </div>
     <button id="run-sweep" class="secondary full" type="button">Частотный Sweep</button>
 
-    <div class="section-title optimizer-title">OPTIMIZER</div>
+    <div class="section-title optimizer-title">ОПТИМИЗАЦИЯ</div>
     <label>Алгоритм<select id="opt-alg"><option value="staged">PSO → Nelder–Mead</option><option value="pso">PSO</option><option value="de">Differential Evolution</option></select></label>
-    <div class="optimizer-fields">
-      <label>Популяция<input id="opt-pop" type="number" min="4" max="32" value="10"></label>
-      <label>Поколений<input id="opt-gen" type="number" min="1" max="30" value="6"></label>
-      <label>Local iter<input id="opt-local" type="number" min="0" max="40" value="12"></label>
-      <label>Seed<input id="opt-seed" type="number" min="0" value="42"></label>
-      <label>W match<input id="opt-w-match" type="number" min="0" value="40"></label>
-      <label>W gain<input id="opt-w-gain" type="number" min="0" value="30"></label>
-      <label>W F/B<input id="opt-w-fb" type="number" min="0" value="20"></label>
-      <label>W size<input id="opt-w-size" type="number" min="0" value="10"></label>
-      <label>Gain loss max, dB<input id="opt-gain-guard" type="number" min="0" value="0.5" step="0.1"></label>
-      <label>VSWR max<input id="opt-max-vswr" type="number" min="1" value="2" step="0.1"></label>
-      <label>Band от, MHz<input id="opt-band-start" type="number" value="297" step="0.1"></label>
-      <label>Band до, MHz<input id="opt-band-stop" type="number" value="303" step="0.1"></label>
-      <label>Band точек<input id="opt-band-points" type="number" min="1" max="11" value="3"></label>
-      <label>Шаг изготовления, mm<input id="opt-quant-mm" type="number" min="0" value="1" step="0.1"></label>
-      <label>Допуск ±, mm<input id="opt-tol-mm" type="number" min="0" value="1" step="0.1"></label>
-      <label>Robust samples<input id="opt-robust-samples" type="number" min="0" max="16" value="4"></label>
-      <label>Monte Carlo<input id="opt-mc-samples" type="number" min="0" max="128" value="24"></label>
-    </div>
     <button id="run-opt" class="secondary full" type="button">Оптимизировать</button>
-    <div class="note">Linux-проверочная версия. Расчёт выполняет тот же C++ Wire-MoM core. Real-ground в alpha.20 — experimental complex-image approximation, не Sommerfeld/Norton.</div>
+
+    <details id="technical-details" class="technical-details">
+      <summary>Технические детали</summary>
+      <div class="technical-status"><span>Проверка:</span><strong id="reference-status" class="status">trust…</strong></div>
+
+      <div class="section-title">GROUND · ADVANCED</div>
+      <div class="ground-fields">
+        <label>Plane Z, m<input id="ground-plane" type="number" step="0.001" value="0"></label>
+        <label>εr<input id="ground-epsr" type="number" step="0.1" min="1" value="13"></label>
+        <label>σ, S/m<input id="ground-sigma" type="number" step="0.001" min="0" value="0.005"></label>
+      </div>
+
+      <div class="section-title">SOLVER</div>
+      <div class="segmented" role="group" aria-label="Kernel">
+        <button type="button" data-kernel="reduced" class="active">Reduced</button>
+        <button type="button" data-kernel="exact">Exact validation</button>
+      </div>
+      <button id="check" class="secondary full" type="button">Проверить модель</button>
+      <label class="technical-workers">Workers<input id="parallel-workers" type="number" min="1" max="16" value="4"></label>
+
+      <div class="section-title">OPTIMIZER · ADVANCED</div>
+      <div class="optimizer-fields">
+        <label>Популяция<input id="opt-pop" type="number" min="4" max="32" value="10"></label>
+        <label>Поколений<input id="opt-gen" type="number" min="1" max="30" value="6"></label>
+        <label>Local iter<input id="opt-local" type="number" min="0" max="40" value="12"></label>
+        <label>Seed<input id="opt-seed" type="number" min="0" value="42"></label>
+        <label>W match<input id="opt-w-match" type="number" min="0" value="40"></label>
+        <label>W gain<input id="opt-w-gain" type="number" min="0" value="30"></label>
+        <label>W F/B<input id="opt-w-fb" type="number" min="0" value="20"></label>
+        <label>W size<input id="opt-w-size" type="number" min="0" value="10"></label>
+        <label>Gain loss max, dB<input id="opt-gain-guard" type="number" min="0" value="0.5" step="0.1"></label>
+        <label>VSWR max<input id="opt-max-vswr" type="number" min="1" value="2" step="0.1"></label>
+        <label>Band от, MHz<input id="opt-band-start" type="number" value="297" step="0.1"></label>
+        <label>Band до, MHz<input id="opt-band-stop" type="number" value="303" step="0.1"></label>
+        <label>Band точек<input id="opt-band-points" type="number" min="1" max="11" value="3"></label>
+        <label>Шаг изготовления, mm<input id="opt-quant-mm" type="number" min="0" value="1" step="0.1"></label>
+        <label>Допуск ±, mm<input id="opt-tol-mm" type="number" min="0" value="1" step="0.1"></label>
+        <label>Robust samples<input id="opt-robust-samples" type="number" min="0" max="16" value="4"></label>
+        <label>Monte Carlo<input id="opt-mc-samples" type="number" min="0" max="128" value="24"></label>
+      </div>
+      <div class="note">Расчёт выполняет C++ Wire-MoM core. Real-ground в alpha.20 остаётся experimental и не считается авторитетной моделью.</div>
+    </details>
   </aside>
   <div id="sidebar-backdrop" class="backdrop" hidden></div>
 
@@ -92,7 +101,14 @@
       <span id="kernel-chip" class="chip">REDUCED</span>
     </section>
 
-    <section class="cards metrics-cards">
+    <nav class="workspace-tabs" aria-label="Разделы программы">
+      <button type="button" data-view-tab="model">Модель</button>
+      <button type="button" data-view-tab="solve" class="active">Расчёт</button>
+      <button type="button" data-view-tab="optimize">Оптимизация</button>
+      <button type="button" data-view-tab="measurement">Измерения</button>
+    </nav>
+
+    <section class="cards metrics-cards" data-view="solve">
       <article><small>Zin</small><strong id="zin">—</strong><span>Ω</span></article>
       <article><small>VSWR</small><strong id="vswr">—</strong><span>50 Ω</span></article>
       <article><small>Dmax</small><strong id="dmax">—</strong><span>dBi</span></article>
@@ -103,12 +119,12 @@
       <article><small>Power balance</small><strong id="balance">—</strong><span>relative</span></article>
     </section>
 
-    <section class="panel sweep-panel">
+    <section class="panel sweep-panel" data-view="solve">
       <div class="panel-head"><div><small>FREQUENCY SWEEP</small><h2>S11 / VSWR / Zin</h2></div><span id="sweep-summary">ещё не рассчитан</span></div>
       <canvas id="sweep-chart" width="1000" height="300"></canvas>
     </section>
 
-    <section class="panel measurement-panel" id="measurement-panel">
+    <section class="panel measurement-panel" id="measurement-panel" data-view="measurement">
       <div class="panel-head">
         <div><small>MEASUREMENT CORRELATION</small><h2>Simulation vs Measurement</h2></div>
         <div class="measurement-head-actions"><span id="measurement-summary">измерение не загружено</span><button class="inline-help" type="button" data-help-topic="emmana-next.measurement.compare">? Справка</button></div>
@@ -141,7 +157,7 @@
       </div>
     </section>
 
-    <section class="panel workflow-panel" id="workflow-panel">
+    <section class="panel workflow-panel" id="workflow-panel" data-view="measurement">
       <div class="panel-head">
         <div><small>ENGINEERING WORKFLOW</small><h2>Variant → Measurement → Report</h2></div>
         <div class="workflow-head-actions"><span id="workflow-summary">вариант ещё не сохранён</span><button class="inline-help" type="button" data-help-topic="emmana-next.workflow.report">? Справка</button></div>
@@ -165,7 +181,7 @@
       </div>
     </section>
 
-    <section class="panel optimizer-panel">
+    <section class="panel optimizer-panel" data-view="optimize">
       <div class="panel-head"><div><small>PARAMETRIC OPTIMIZER</small><h2>Global → Local · robust band worst-case · Pareto</h2></div><span id="opt-summary">ещё не запускался</span></div>
       <div class="optimizer-grid">
         <div><h3>Переменные / Constraints</h3><div id="opt-variables" class="muted">В проекте нет design_variables.</div><div id="opt-constraints" class="muted"></div></div>
@@ -175,12 +191,16 @@
       </div>
     </section>
 
-    <section class="grid2">
+    <section class="grid2" data-view="solve">
       <article class="panel"><div class="panel-head"><div><small>FAR FIELD</small><h2>Диаграмма направленности</h2></div><span>φ = 0°</span></div><canvas id="polar" width="600" height="330"></canvas></article>
       <article class="panel"><div class="panel-head"><div><small>CURRENT</small><h2>Токи по сегментам</h2></div><span>|I|</span></div><canvas id="currents" width="600" height="330"></canvas></article>
     </section>
 
-    <section class="grid2 lower">
+    <section class="view-note" data-view="model">
+      <div><small>МОДЕЛЬ</small><strong>EMNX и диагностика</strong></div>
+      <span>Графический редактор геометрии — следующий этап.</span>
+    </section>
+    <section class="grid2 lower" data-view="model">
       <article class="panel editor"><div class="panel-head"><div><small>EMNX</small><h2>Модель</h2></div><span>JSON</span></div><textarea id="project-json" spellcheck="false" aria-label="EMNX JSON"></textarea></article>
       <article class="panel"><div class="panel-head"><div><small>DIAGNOSTICS</small><h2>Проверка и предупреждения</h2></div><button id="diag-help" class="inline-help" type="button" data-help-topic="emmana-next.result.power-balance">? Справка</button></div><pre id="diagnostics">Расчёт ещё не запускался.</pre><details><summary>ResultSet JSON</summary><pre id="raw-result">—</pre></details></article>
     </section>
