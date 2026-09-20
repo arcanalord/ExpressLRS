@@ -19,30 +19,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Download canonical source from Dropbox
         run: |
-          curl -L --fail --retry 3 'https://uce58ae4b2f13e9e1b55ee4d874c.dl.dropboxusercontent.com/cd/0/get/DIcWFKeCyWp9unMh_hrlHQqD3xU_Z_H2OkQ4ubbZVOiXoTaQumkeVAbbX6EU_JPPy9aLgg9uG5XcRCxd3XR8o3GoXA2Ujcd3JgNSzdPt7AqiEZEzzGZHo8ypsh92rgExYT_f7dvP6W_HX97YJtBXHkPRx-G6PR87CUQ0MtbvYdAPnQ/file?c_luid=cfbe8875' -o /tmp/rh-source.zip
+          curl -L --fail --retry 3 'https://uc049385aac9b4e224939d87f046.dl.dropboxusercontent.com/cd/0/get/DIdP8C7RTclEQRhbddpt_b_bj6QwCFbvloGEe17yDTIODegopHeUS8lBQhUspxhBv0ugVx3GEMJ1FJHmF1YhALD8mQQkkCntWiaX-o9GTxk7pdsxt48y2zGYcwX-Y5OB0IZkZ-uDuNExH4bpqW9Ldk5FU0Shi_mstvHMs1V5Vd19ZQ/file?c_luid=cfbe8875' -o /tmp/rh-source.zip
           echo "f72669cfed82465a69ad3b02dbf94a672ac233ad3234fa921469aa44e89e23ed  /tmp/rh-source.zip" | sha256sum -c -
           rm -rf tools/radio-horizon tools/radio-horizon-v054
           mkdir -p tools/radio-horizon-v054
           unzip -q /tmp/rh-source.zip -d tools/radio-horizon-v054
           mv tools/radio-horizon-v054/radio_horizon_v0.5.4 tools/radio-horizon
           cp /tmp/rh-source.zip tools/radio-horizon/Radio_Horizon_SOURCE_CURRENT_v0.5.4.zip
-
       - name: Vendor pinned MapLibre
         working-directory: tools/radio-horizon
         run: ./scripts/vendor-maplibre.sh
-
       - name: Install Android SDK
         run: |
           yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
           /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-
       - name: Run syntax and regression tests
         working-directory: tools/radio-horizon
         run: |
@@ -51,11 +46,9 @@ jobs:
           npm test
           cmp web/app.mjs android/app/src/main/assets/app/web/app.mjs
           cmp adapters/dem.mjs android/app/src/main/assets/app/adapters/dem.mjs
-
       - name: Build APK
         working-directory: tools/radio-horizon/android
         run: gradle clean assembleDebug --stacktrace
-
       - name: Verify APK and provenance
         working-directory: tools/radio-horizon
         run: |
@@ -70,10 +63,7 @@ jobs:
             echo "source_sha256=f72669cfed82465a69ad3b02dbf94a672ac233ad3234fa921469aa44e89e23ed"
             echo "git_ci_sha=$GITHUB_SHA"
             echo "runner_arch=$(uname -m)"
-            java -version 2>&1 | head -1
-            gradle --version | sed -n '1,8p'
           } | tee BUILD_PROVENANCE.txt
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -85,5 +75,4 @@ jobs:
             tools/radio-horizon/APK_BADGING.txt
             tools/radio-horizon/APK_SHA256.txt
             tools/radio-horizon/BUILD_PROVENANCE.txt
-            tools/radio-horizon/docs/QA_v0.5.4.md
           if-no-files-found: error
