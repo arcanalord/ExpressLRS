@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fpv-club.ru/schemas/emnext/project-0.4.schema.json",
+  "title": "EMMana-Next Project v0.4",
+  "type": "object",
+  "required": ["schema_version", "name", "frequency_hz", "wires"],
+  "properties": {
+    "schema_version": {"const": "0.4"},
+    "name": {"type": "string", "minLength": 1},
+    "frequency_hz": {"type": "number", "exclusiveMinimum": 0},
+    "ground": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "enum": ["free-space", "pec-image-v1", "homogeneous-halfspace-image-v1"],
+          "default": "free-space"
+        },
+        "plane_z_m": {"type": "number", "default": 0.0},
+        "relative_permittivity": {"type": "number", "minimum": 1.0, "default": 13.0},
+        "conductivity_s_per_m": {"type": "number", "minimum": 0.0, "default": 0.005}
+      },
+      "additionalProperties": false
+    },
+    "wires": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "start_m", "end_m", "radius_m", "segments"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "start_m": {"$ref": "#/$defs/vec3"},
+          "end_m": {"$ref": "#/$defs/vec3"},
+          "radius_m": {"type": "number", "exclusiveMinimum": 0},
+          "segments": {"type": "integer", "minimum": 3},
+          "conductivity_s_per_m": {"type": "number", "minimum": 0.0, "default": 0.0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "feeds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["wire_id", "segment"],
+        "properties": {
+          "wire_id": {"type": "string"},
+          "segment": {"type": "integer", "minimum": 0},
+          "voltage_re_v": {"type": "number", "default": 1.0},
+          "voltage_im_v": {"type": "number", "default": 0.0},
+          "source_span_m": {"type": "number", "minimum": 0.0, "default": 0.0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "loads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "wire_id", "segment"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "wire_id": {"type": "string", "minLength": 1},
+          "segment": {"type": "integer", "minimum": 0},
+          "resistance_ohm": {"type": "number", "minimum": 0.0, "default": 0.0},
+          "inductance_h": {"type": "number", "minimum": 0.0, "default": 0.0},
+          "capacitance_f": {"type": "number", "minimum": 0.0, "default": 0.0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "design_variables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "wire_id", "min", "max"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["wire_length_m", "wire_center_x_m"]},
+          "wire_id": {"type": "string", "minLength": 1},
+          "min": {"type": "number"},
+          "max": {"type": "number"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "design_constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "value"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "kind": {"enum": ["min_center_x_gap_m", "wire_length_order_min_delta_m", "max_boom_length_m"]},
+          "wire_a": {"type": "string"},
+          "wire_b": {"type": "string"},
+          "value": {"type": "number", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "$defs": {
+    "vec3": {
+      "type": "array",
+      "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number"}],
+      "minItems": 3,
+      "maxItems": 3
+    }
+  },
+  "additionalProperties": false
+}
