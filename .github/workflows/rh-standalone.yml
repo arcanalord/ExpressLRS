@@ -338,8 +338,7 @@ jobs:
       - name: Pack frontend mirror
         run: |
           cd tools/radio-horizon/android/app/src/main/assets
-          zip -r /tmp/Radio_Horizon_FRONTEND_MIRROR_v0.4.0.zip . >/dev/null
-          cp /tmp/Radio_Horizon_FRONTEND_MIRROR_v0.4.0.zip tools/radio-horizon/Radio_Horizon_FRONTEND_MIRROR_v0.4.0.zip
+          zip -r "$GITHUB_WORKSPACE/tools/radio-horizon/Radio_Horizon_FRONTEND_MIRROR_v0.4.0.zip" . >/dev/null
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
