@@ -39,9 +39,12 @@ def main():
                 rows.append({'case':label,'project':filename,'strict':strict,'status':'export_failed','stderr':exp.stderr})
                 strict_ok = strict_ok and not strict
                 continue
-            nec=run([engine,f'-i{deck}',f'-o{out}'])
+            nec=run([engine,str(deck),str(out)])
             if nec.returncode != 0:
-                rows.append({'case':label,'project':filename,'strict':strict,'status':'nec2_failed','stderr':nec.stderr})
+                rows.append({
+                    'case':label,'project':filename,'strict':strict,'status':'nec2_failed',
+                    'returncode':nec.returncode,'stdout':nec.stdout,'stderr':nec.stderr
+                })
                 strict_ok = strict_ok and not strict
                 continue
             parsed=run([str(ns.emnext),'parse-nec',str(out)])
