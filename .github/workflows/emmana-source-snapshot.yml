@@ -21,7 +21,23 @@ jobs:
           mkdir -p dist
           zip -qr "dist/EMMana-Next-${version}-source.zip" EMMana-Next \
             -x 'EMMana-Next/build/*' 'EMMana-Next/build-win/*' 'EMMana-Next/dist/*'
-          sha256sum "dist/EMMana-Next-${version}-source.zip" > "dist/EMMana-Next-${version}-source.zip.sha256"
+          archive_sha="$(sha256sum "dist/EMMana-Next-${version}-source.zip" | awk '{print $1}')"
+          printf '%s  %s\n' "$archive_sha" "EMMana-Next-${version}-source.zip" > "dist/EMMana-Next-${version}-source.zip.sha256"
+          VERSION="$version" ARCHIVE_SHA="$archive_sha" python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          version=os.environ["VERSION"]
+          manifest={
+              "schema_version":"0.1",
+              "version":version,
+              "repository":os.environ.get("GITHUB_REPOSITORY",""),
+              "ref":os.environ.get("GITHUB_REF",""),
+              "git_sha":os.environ.get("GITHUB_SHA",""),
+              "archive":f"EMMana-Next-{version}-source.zip",
+              "archive_sha256":os.environ["ARCHIVE_SHA"]
+          }
+          Path(f"dist/EMMana-Next-{version}-source-manifest.json").write_text(json.dumps(manifest,indent=2)+"\n")
+          PY
       - name: Upload exact source snapshot
         uses: actions/upload-artifact@v4
         with:
@@ -29,4 +45,5 @@ jobs:
           path: |
             dist/EMMana-Next-*-source.zip
             dist/EMMana-Next-*-source.zip.sha256
+            dist/EMMana-Next-*-source-manifest.json
           if-no-files-found: error

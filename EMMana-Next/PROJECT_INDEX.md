@@ -1,8 +1,8 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev6  
+**Current version:** 0.1.0-alpha.20-rev7  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
-**Current commit:** `ad417be8cfdd2e815575102f261b0ffcdaf6d5bc`  
+**Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
 **Git/CI mirror:** GitHub `arcanalord/ExpressLRS`, branch `emmana-next-alpha20`  
 **Updated:** 2026-09-20
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev6-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev7-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -79,3 +79,15 @@ Current registry: `apps/shared/product/product-registry.json`
 Analysis-plan contract: `schemas/analysis-plan-0.1.schema.json`  
 World-product review: `docs/research/WORLD_PRODUCT_PATTERNS_2026.md`  
 Decision: `docs/adr/ADR-0022-product-domain-layer.md`
+
+
+## Templates / materials / measurements — rev7
+
+- Template registry: `apps/shared/product/template-registry.json`
+- Implemented synthesis: half-wave dipole, PEC quarter-wave monopole, 3-element Yagi
+- Materials/ground registry: `apps/shared/product/materials-registry.json`
+- Measurement contract: `schemas/measurement-set-0.1.schema.json`
+- Measurement example: `measurements/examples/B01_vna.measurement.json`
+- ADR: `docs/adr/ADR-0023-template-material-measurement-sidecars.md`
+
+Template synthesis is Product Domain logic and returns a pure EMNX model. Raw measurements are sidecar assets and never overwrite simulated data.
