@@ -1,28 +1,36 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import importlib.util, math, sys
+import json, math, sys
 from pathlib import Path
 root=Path(sys.argv[1])
-path=root/"apps/shared/product/measurement.py"
-spec=importlib.util.spec_from_file_location("emnext_measurement",path); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-ri="# MHz S RI R 50\n100 0 0\n150 0.3333333333 0\n200 0 0\n"
-p=m.parse_touchstone_s1p(ri)
-assert len(p["points"])==3 and p["reference_ohm"]==50
-assert abs(p["points"][1]["z_ohm"]["re"]-100)<1e-6 and abs(p["points"][1]["z_ohm"]["im"])<1e-9
-ma="# GHZ S MA R 50\n0.1 0.5 90\n"
-q=m.parse_touchstone_s1p(ma)
-assert abs(q["points"][0]["s11"]["re"])<1e-9 and abs(q["points"][0]["s11"]["im"]-0.5)<1e-9
-db="# MHz S DB R 50\n100 -6.020599913 0\n"
-d=m.parse_touchstone_s1p(db);assert abs(d["points"][0]["s11"]["mag"]-0.5)<1e-6
-csv="frequency_hz,R_ohm,X_ohm\n100000000,50,0\n150000000,100,0\n200000000,50,0\n"
-v=m.parse_vna_csv(csv);assert len(v["points"])==3 and v["source_profile"]=="impedance-rx"
-csv_ri="Frequency_Hz,S11_Real,S11_Imaginary\n100000000,0,0\n150000000,0.3333333333,0\n200000000,0,0\n"
-vri=m.parse_vna_csv(csv_ri);assert vri["source_profile"]=="s11-ri" and abs(vri["points"][1]["z_ohm"]["re"]-100)<1e-6
-csv_db="Frequency_Hz,S11_dB,S11_Phase_Deg\n100000000,-6.020599913,0\n"
-vdb=m.parse_vna_csv(csv_db);assert vdb["source_profile"]=="s11-db-phase" and abs(vdb["points"][0]["s11"]["mag"]-0.5)<1e-6
-sim={"samples":[{"frequency_hz":100e6,"impedance_ohm":{"re":50,"im":0}},{"frequency_hz":150e6,"impedance_ohm":{"re":90,"im":10}},{"frequency_hz":200e6,"impedance_ohm":{"re":50,"im":0}}]}
-cmp=m.compare_measurement_to_simulation(v,sim)
-assert cmp["summary"]["overlap_points"]==3
-assert abs(cmp["points"][1]["delta"]["r_ohm"]+10)<1e-9
-assert abs(cmp["points"][1]["delta"]["x_ohm"]-10)<1e-9
-print("MEASUREMENT PIPELINE PASS",cmp["summary"])
+sys.path.insert(0,str(root/"apps/shared/product"))
+from measurement import parse_touchstone_s1p, parse_vna_csv, compare_measurement_to_sweep
+
+fixtures=root/"measurements/fixtures"
+ri=parse_touchstone_s1p((fixtures/"touchstone_ri.s1p").read_text(),"ri.s1p")
+ma=parse_touchstone_s1p((fixtures/"touchstone_ma.s1p").read_text(),"ma.s1p")
+db=parse_touchstone_s1p((fixtures/"touchstone_db.s1p").read_text(),"db.s1p")
+csvm=parse_vna_csv((fixtures/"vna_s11.csv").read_text(),"vna.csv")
+
+for other in (ma,db,csvm):
+    assert len(other["samples"])==len(ri["samples"])==3
+    for a,b in zip(ri["samples"],other["samples"]):
+        assert abs(a["frequency_hz"]-b["frequency_hz"])<1e-6
+        assert abs(a["s11"]["re"]-b["s11"]["re"])<1e-8
+        assert abs(a["s11"]["im"]-b["s11"]["im"])<1e-8
+
+sweep={
+ "resonance_frequency_hz":120000000.0,
+ "samples":[
+   {"frequency_hz":100000000.0,"impedance_ohm":ri["samples"][0]["impedance_ohm"],"s11":ri["samples"][0]["s11"],"vswr":ri["samples"][0]["vswr"]},
+   {"frequency_hz":105000000.0,"impedance_ohm":{"re":65.0,"im":10.0},"s11":{"re":0.15,"im":0.075},"vswr":1.4},
+   {"frequency_hz":110000000.0,"impedance_ohm":ri["samples"][1]["impedance_ohm"],"s11":ri["samples"][1]["s11"],"vswr":ri["samples"][1]["vswr"]},
+   {"frequency_hz":120000000.0,"impedance_ohm":ri["samples"][2]["impedance_ohm"],"s11":ri["samples"][2]["s11"],"vswr":ri["samples"][2]["vswr"]}
+ ]
+}
+cmp=compare_measurement_to_sweep(ri,sweep)
+assert cmp["overlap"]["points"]==4
+assert cmp["summary"]["delta_r_ohm"]["count"]==4
+assert abs(cmp["summary"]["resonance_shift_hz"])<1e-6
+assert abs(cmp["samples"][0]["delta"]["r_ohm"])<1e-9
+print("MEASUREMENT PIPELINE PASS",json.dumps(cmp["summary"],sort_keys=True))

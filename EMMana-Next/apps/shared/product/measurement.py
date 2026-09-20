@@ -1,183 +1,267 @@
 from __future__ import annotations
-import cmath, csv, io, math
+
+import cmath
+import csv
+import io
+import math
+import re
 from typing import Iterable
 
-_UNIT_SCALE={"HZ":1.0,"KHZ":1e3,"MHZ":1e6,"GHZ":1e9}
+_FREQ_SCALE={"HZ":1.0,"KHZ":1e3,"MHZ":1e6,"GHZ":1e9}
 
-def _finite(x: float) -> bool:
-    return math.isfinite(x)
 
-def _s11_to_derived(gamma: complex, z0: float) -> dict:
+def _finite_or_none(value: float):
+    return value if math.isfinite(value) else None
+
+
+def _derive_sample(frequency_hz: float, gamma: complex, z0: float) -> dict:
     mag=abs(gamma)
-    if mag >= 1.0:
-        vswr=math.inf
+    s11_db=20.0*math.log10(mag) if mag>0 else -300.0
+    vswr=(1.0+mag)/(1.0-mag) if mag<1.0 else None
+    den=1.0-gamma
+    if abs(den)<1e-15:
+        zr=zi=None
     else:
-        vswr=(1.0+mag)/max(1e-15,1.0-mag)
-    if abs(1.0-gamma) < 1e-15:
-        z=complex(math.inf, math.inf)
-    else:
-        z=z0*(1.0+gamma)/(1.0-gamma)
-    db=-math.inf if mag == 0 else 20.0*math.log10(mag)
+        z=z0*(1.0+gamma)/den
+        zr=_finite_or_none(float(z.real)); zi=_finite_or_none(float(z.imag))
     return {
-        "s11":{"re":gamma.real,"im":gamma.imag,"mag":mag,"db":db,"phase_deg":math.degrees(cmath.phase(gamma))},
-        "z_ohm":{"re":z.real,"im":z.imag},
-        "vswr":vswr
+        "frequency_hz":float(frequency_hz),
+        "s11":{"re":float(gamma.real),"im":float(gamma.imag)},
+        "s11_db":float(s11_db),
+        "vswr":_finite_or_none(vswr) if vswr is not None else None,
+        "impedance_ohm":{"re":zr,"im":zi}
     }
 
-def parse_touchstone_s1p(text: str, source_name: str="inline.s1p") -> dict:
+
+def _validate_samples(samples: list[dict]) -> None:
+    if not samples:
+        raise ValueError("measurement has no samples")
+    prev=None
+    for sample in samples:
+        f=float(sample["frequency_hz"])
+        if not math.isfinite(f) or f<=0:
+            raise ValueError("measurement frequency must be positive and finite")
+        if prev is not None and f<=prev:
+            raise ValueError("measurement frequencies must be strictly increasing")
+        prev=f
+
+
+def _touchstone_option(line: str) -> tuple[str,str,str,float]:
+    tokens=line[1:].strip().upper().split()
     unit="GHZ"; parameter="S"; data_format="MA"; z0=50.0
-    version="1.0"; points=[]; option_seen=False
-    for raw in text.replace("\r\n","\n").replace("\r","\n").split("\n"):
+    i=0
+    while i<len(tokens):
+        token=tokens[i]
+        if token in _FREQ_SCALE: unit=token
+        elif token in {"S","Y","Z","H","G"}: parameter=token
+        elif token in {"RI","MA","DB"}: data_format=token
+        elif token=="R":
+            if i+1>=len(tokens): raise ValueError("Touchstone R requires a reference resistance")
+            z0=float(tokens[i+1]); i+=1
+        i+=1
+    if z0<=0 or not math.isfinite(z0): raise ValueError("Touchstone reference resistance must be positive")
+    return unit,parameter,data_format,z0
+
+
+def parse_touchstone_s1p(text: str, source_name: str="measurement.s1p") -> dict:
+    unit="GHZ"; parameter="S"; data_format="MA"; z0=50.0
+    number_of_ports=1
+    in_network_data=True
+    samples=[]
+    for raw in text.splitlines():
         line=raw.split("!",1)[0].strip()
         if not line: continue
-        if line.startswith("["):
-            low=line.lower()
-            if low.startswith("[version]"):
-                parts=line.split()
-                if len(parts)>=2: version=parts[-1]
-            elif low.startswith("[reference]"):
-                parts=line.replace("[Reference]","").replace("[reference]","").split()
-                if parts: z0=float(parts[0])
-            elif low.startswith("[number of ports]"):
-                parts=line.split("]",1)[-1].split()
-                if parts and int(parts[0]) != 1: raise ValueError("Only 1-port Touchstone is supported in rev9")
-            elif low.startswith("[network data]") or low.startswith("[end]") or low.startswith("[number of frequencies]"):
-                continue
-            else:
-                raise ValueError(f"Unsupported Touchstone keyword: {line}")
-            continue
         if line.startswith("#"):
-            toks=line[1:].upper().split()
-            if len(toks) < 3: raise ValueError("Invalid Touchstone option line")
-            unit,parameter,data_format=toks[0],toks[1],toks[2]
-            if unit not in _UNIT_SCALE: raise ValueError(f"Unsupported frequency unit: {unit}")
-            if parameter != "S": raise ValueError("Only S-parameters are supported in rev9")
-            if data_format not in {"RI","MA","DB"}: raise ValueError(f"Unsupported Touchstone data format: {data_format}")
-            if "R" in toks:
-                i=toks.index("R")
-                if i+1>=len(toks): raise ValueError("Missing reference resistance after R")
-                z0=float(toks[i+1])
-            if not (_finite(z0) and z0>0): raise ValueError("Reference resistance must be positive")
-            option_seen=True
+            unit,parameter,data_format,z0=_touchstone_option(line); continue
+        if line.startswith("["):
+            m=re.match(r"^\[([^\]]+)\]\s*(.*)$",line)
+            if not m: continue
+            key=m.group(1).strip().lower(); value=m.group(2).strip()
+            if key=="number of ports" and value:
+                number_of_ports=int(value)
+            elif key=="reference" and value:
+                z0=float(value.split()[0])
+            elif key=="network data":
+                in_network_data=True
+            elif key=="end":
+                in_network_data=False
             continue
-        vals=line.replace(","," ").split()
-        if len(vals) != 3:
-            raise ValueError("S1P data row must contain frequency and one complex pair")
-        f,a,b=map(float,vals)
-        if not all(_finite(x) for x in (f,a,b)): raise ValueError("Non-finite Touchstone value")
-        hz=f*_UNIT_SCALE[unit]
-        if data_format=="RI": gamma=complex(a,b)
-        elif data_format=="MA": gamma=cmath.rect(a,math.radians(b))
-        else: gamma=cmath.rect(10.0**(a/20.0),math.radians(b))
-        row={"frequency_hz":hz}
-        row.update(_s11_to_derived(gamma,z0))
-        points.append(row)
-    if not points: raise ValueError("Touchstone file contains no S1P data")
-    if any(points[i]["frequency_hz"]<=points[i-1]["frequency_hz"] for i in range(1,len(points))):
-        raise ValueError("Touchstone frequencies must be strictly increasing")
+        if not in_network_data: continue
+        if number_of_ports!=1: raise ValueError("first parser scope supports 1-port Touchstone only")
+        if parameter!="S": raise ValueError("first parser scope supports S-parameter Touchstone only")
+        parts=line.replace(","," ").split()
+        if len(parts)<3: continue
+        f=float(parts[0])*_FREQ_SCALE[unit]
+        a=float(parts[1]); b=float(parts[2])
+        if data_format=="RI":
+            gamma=complex(a,b)
+        else:
+            mag=10.0**(a/20.0) if data_format=="DB" else a
+            gamma=cmath.rect(mag,math.radians(b))
+        samples.append(_derive_sample(f,gamma,z0))
+    _validate_samples(samples)
     return {
-        "schema_version":"0.1","source_format":"touchstone-s1p","touchstone_version":version,
-        "source_name":source_name,"option_line_seen":option_seen,"reference_ohm":z0,
-        "points":points
+        "schema_version":"0.1",
+        "source":{"format":"touchstone-s1p","name":source_name},
+        "parameter":"S11",
+        "reference_impedance_ohm":z0,
+        "samples":samples
     }
 
-def parse_vna_csv(text: str, source_name: str="inline.csv") -> dict:
+
+def _header_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+","",value.lower())
+
+
+def _find_header(headers: list[str], candidates: Iterable[str]):
+    mapping={_header_key(h):h for h in headers}
+    for c in candidates:
+        if c in mapping: return mapping[c]
+    return None
+
+
+def _frequency_scale_from_header(header: str) -> float:
+    key=_header_key(header)
+    if "ghz" in key: return 1e9
+    if "mhz" in key: return 1e6
+    if "khz" in key: return 1e3
+    return 1.0
+
+
+def parse_vna_csv(text: str, source_name: str="measurement.csv", reference_impedance_ohm: float=50.0) -> dict:
+    if reference_impedance_ohm<=0: raise ValueError("reference_impedance_ohm must be positive")
     reader=csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames: raise ValueError("CSV header is required")
-    def norm(name: str) -> str:
-        return "".join(ch for ch in name.strip().lower() if ch.isalnum())
-    names={norm(n):n for n in reader.fieldnames}
-    def key(*alts):
-        for a in alts:
-            k=norm(a)
-            if k in names:return names[k]
-        return None
-    fk=key("frequency_hz","frequency","freq_hz","freq")
-    rk=key("r_ohm","resistance_ohm","resistance","r")
-    xk=key("x_ohm","reactance_ohm","reactance","x")
-    rek=key("s11_real","s11real","s11_re","real")
-    imk=key("s11_imaginary","s11_imag","s11imaginary","s11_im","imaginary","imag")
-    dbk=key("s11_db","s11db","return_loss_db")
-    phk=key("s11_phase_deg","s11phase_deg","phase_deg","phase")
-    if not fk: raise ValueError("VNA CSV requires a frequency column")
-    if rk and xk: profile="impedance-rx"
-    elif rek and imk: profile="s11-ri"
-    elif dbk and phk: profile="s11-db-phase"
-    else: raise ValueError("VNA CSV requires R/X, S11 Real/Imag, or S11 dB/Phase columns")
-    rows=[]; z0=50.0
-    for src in reader:
-        f=float(src[fk])
-        if not (_finite(f) and f>0): raise ValueError("VNA CSV frequency must be positive and finite")
-        if profile=="impedance-rx":
-            r=float(src[rk]); x=float(src[xk])
-            if not all(_finite(v) for v in (r,x)): raise ValueError("Non-finite VNA CSV impedance value")
-            z=complex(r,x); gamma=(z-z0)/(z+z0) if abs(z+z0)>1e-15 else complex(1,0)
-            derived=_s11_to_derived(gamma,z0)
-        elif profile=="s11-ri":
-            re=float(src[rek]); im=float(src[imk])
-            if not all(_finite(v) for v in (re,im)): raise ValueError("Non-finite VNA CSV S11 value")
-            derived=_s11_to_derived(complex(re,im),z0)
+    headers=reader.fieldnames or []
+    freq_h=_find_header(headers,["frequencyhz","frequency","freqhz","freq","frequencykhz","frequencymhz","frequencyghz"])
+    if not freq_h: raise ValueError("VNA CSV frequency column not recognized")
+    real_h=_find_header(headers,["s11real","s11re","real","reals11"])
+    imag_h=_find_header(headers,["s11imaginary","s11imag","s11im","imaginary","imag","ims11"])
+    db_h=_find_header(headers,["s11db","s11logmagdb","logmagdb","s11magnitude db".replace(" ",""),"s11logmag"])
+    phase_h=_find_header(headers,["s11phasedeg","s11phase","phasedeg","phase"])
+    r_h=_find_header(headers,["resistanceohm","resistance","rohms","rohm","r"])
+    x_h=_find_header(headers,["reactanceohm","reactance","xohms","xohm","x"])
+    if not ((real_h and imag_h) or (db_h and phase_h) or (r_h and x_h)):
+        raise ValueError("VNA CSV needs S11 real/imag, S11 dB/phase, or R/X columns")
+    fscale=_frequency_scale_from_header(freq_h)
+    samples=[]
+    for row in reader:
+        if not row or not str(row.get(freq_h,"")).strip(): continue
+        f=float(row[freq_h])*fscale
+        if real_h and imag_h:
+            gamma=complex(float(row[real_h]),float(row[imag_h]))
+        elif db_h and phase_h:
+            gamma=cmath.rect(10.0**(float(row[db_h])/20.0),math.radians(float(row[phase_h])))
         else:
-            db=float(src[dbk]); phase=float(src[phk])
-            if not all(_finite(v) for v in (db,phase)): raise ValueError("Non-finite VNA CSV S11 value")
-            derived=_s11_to_derived(cmath.rect(10.0**(db/20.0),math.radians(phase)),z0)
-        rows.append({"frequency_hz":f,"z_ohm":derived["z_ohm"],"s11":derived["s11"],"vswr":derived["vswr"]})
-    if not rows: raise ValueError("VNA CSV contains no data")
-    rows.sort(key=lambda x:x["frequency_hz"])
-    if any(rows[i]["frequency_hz"]<=rows[i-1]["frequency_hz"] for i in range(1,len(rows))):
-        raise ValueError("VNA CSV frequencies must be unique")
-    return {"schema_version":"0.1","source_format":"vna-csv","source_profile":profile,"source_name":source_name,"reference_ohm":z0,"points":rows}
-
-def _interp(points: list[dict], f: float, field: str) -> float:
-    if f < points[0]["frequency_hz"] or f > points[-1]["frequency_hz"]:
-        raise ValueError("comparison frequency is outside measured range")
-    for p in points:
-        if p["frequency_hz"]==f: return float(p[field])
-    for a,b in zip(points,points[1:]):
-        fa,fb=a["frequency_hz"],b["frequency_hz"]
-        if fa <= f <= fb:
-            t=(f-fa)/(fb-fa)
-            return float(a[field])+(float(b[field])-float(a[field]))*t
-    raise ValueError("interpolation failed")
-
-def _flatten_measurement(points: list[dict]) -> list[dict]:
-    return [{
-      "frequency_hz":p["frequency_hz"],
-      "r_ohm":p["z_ohm"]["re"],"x_ohm":p["z_ohm"]["im"],
-      "vswr":p["vswr"],"s11_db":p["s11"]["db"]
-    } for p in points]
-
-def normalize_simulation_sweep(sweep: dict, reference_ohm: float=50.0) -> list[dict]:
-    rows=[]
-    samples=sweep.get("samples",[])
-    for s in samples:
-        zsrc=s.get("impedance_ohm") or (s.get("feeds") or [{}])[0].get("impedance_ohm")
-        if not zsrc: raise ValueError("Simulation sweep sample has no impedance")
-        z=complex(float(zsrc["re"]),float(zsrc["im"]))
-        gamma=(z-reference_ohm)/(z+reference_ohm) if abs(z+reference_ohm)>1e-15 else complex(1,0)
-        d=_s11_to_derived(gamma,reference_ohm)
-        rows.append({"frequency_hz":float(s["frequency_hz"]),"r_ohm":z.real,"x_ohm":z.imag,"vswr":d["vswr"],"s11_db":d["s11"]["db"]})
-    if not rows: raise ValueError("Simulation sweep contains no samples")
-    return rows
-
-def compare_measurement_to_simulation(measurement: dict, simulation_sweep: dict) -> dict:
-    mp=_flatten_measurement(measurement["points"])
-    sp=normalize_simulation_sweep(simulation_sweep,float(measurement.get("reference_ohm",50.0)))
-    rows=[]
-    for s in sp:
-        f=s["frequency_hz"]
-        if f < mp[0]["frequency_hz"] or f > mp[-1]["frequency_hz"]: continue
-        m={k:_interp(mp,f,k) for k in ("r_ohm","x_ohm","vswr","s11_db")}
-        rows.append({
-          "frequency_hz":f,
-          "simulation":{k:s[k] for k in ("r_ohm","x_ohm","vswr","s11_db")},
-          "measurement":m,
-          "delta":{"r_ohm":s["r_ohm"]-m["r_ohm"],"x_ohm":s["x_ohm"]-m["x_ohm"],"vswr":s["vswr"]-m["vswr"],"s11_db":s["s11_db"]-m["s11_db"]}
-        })
-    if not rows: raise ValueError("Simulation and measurement ranges do not overlap")
-    def maxabs(key): return max(abs(r["delta"][key]) for r in rows)
+            z=complex(float(row[r_h]),float(row[x_h]))
+            den=z+reference_impedance_ohm
+            if abs(den)<1e-15: raise ValueError("cannot convert VNA R/X sample to S11")
+            gamma=(z-reference_impedance_ohm)/den
+        samples.append(_derive_sample(f,gamma,reference_impedance_ohm))
+    _validate_samples(samples)
     return {
-      "schema_version":"0.1","alignment":"measurement-linear-interpolation-to-simulation-grid",
-      "points":rows,
-      "summary":{"overlap_points":len(rows),"max_abs_delta_r_ohm":maxabs("r_ohm"),"max_abs_delta_x_ohm":maxabs("x_ohm"),"max_abs_delta_vswr":maxabs("vswr"),"max_abs_delta_s11_db":maxabs("s11_db")}
+        "schema_version":"0.1",
+        "source":{"format":"vna-csv","name":source_name},
+        "parameter":"S11",
+        "reference_impedance_ohm":float(reference_impedance_ohm),
+        "samples":samples
+    }
+
+
+def parse_measurement(fmt: str, text: str, source_name: str="", reference_impedance_ohm: float=50.0) -> dict:
+    fmt=fmt.lower()
+    if fmt=="touchstone-s1p": return parse_touchstone_s1p(text,source_name or "measurement.s1p")
+    if fmt=="vna-csv": return parse_vna_csv(text,source_name or "measurement.csv",reference_impedance_ohm)
+    raise ValueError("unsupported measurement format")
+
+
+def _interp(samples: list[dict], frequency_hz: float) -> dict | None:
+    if frequency_hz<samples[0]["frequency_hz"] or frequency_hz>samples[-1]["frequency_hz"]: return None
+    lo=0; hi=len(samples)-1
+    while lo<=hi:
+        mid=(lo+hi)//2
+        fm=samples[mid]["frequency_hz"]
+        if fm<frequency_hz: lo=mid+1
+        elif fm>frequency_hz: hi=mid-1
+        else: return samples[mid]
+    a=samples[hi]; b=samples[lo]
+    t=(frequency_hz-a["frequency_hz"])/(b["frequency_hz"]-a["frequency_hz"])
+    def lerp(x,y): return float(x)+(float(y)-float(x))*t
+    zre=lerp(a["impedance_ohm"]["re"],b["impedance_ohm"]["re"])
+    zim=lerp(a["impedance_ohm"]["im"],b["impedance_ohm"]["im"])
+    sre=lerp(a["s11"]["re"],b["s11"]["re"]); sim=lerp(a["s11"]["im"],b["s11"]["im"])
+    gamma=complex(sre,sim)
+    out=_derive_sample(frequency_hz,gamma,50.0)
+    out["impedance_ohm"]={"re":zre,"im":zim}
+    return out
+
+
+def _s11_db(s11: dict) -> float:
+    mag=math.hypot(float(s11["re"]),float(s11["im"]))
+    return 20.0*math.log10(mag) if mag>0 else -300.0
+
+
+def _resonance(samples: list[dict]) -> float | None:
+    usable=[s for s in samples if s.get("impedance_ohm",{}).get("im") is not None]
+    if not usable: return None
+    for a,b in zip(usable,usable[1:]):
+        xa=float(a["impedance_ohm"]["im"]); xb=float(b["impedance_ohm"]["im"])
+        if xa==0: return float(a["frequency_hz"])
+        if xa*xb<=0 and xa!=xb:
+            t=-xa/(xb-xa)
+            return float(a["frequency_hz"])+t*(float(b["frequency_hz"])-float(a["frequency_hz"]))
+    return float(min(usable,key=lambda s:abs(float(s["impedance_ohm"]["im"])))["frequency_hz"])
+
+
+def _summary(values: list[float]) -> dict:
+    if not values: return {"count":0,"mean":None,"mae":None,"rms":None,"max_abs":None}
+    return {
+        "count":len(values),
+        "mean":sum(values)/len(values),
+        "mae":sum(abs(v) for v in values)/len(values),
+        "rms":math.sqrt(sum(v*v for v in values)/len(values)),
+        "max_abs":max(abs(v) for v in values)
+    }
+
+
+def compare_measurement_to_sweep(measurement: dict, sweep: dict) -> dict:
+    ms=measurement.get("samples") or []
+    ss=sweep.get("samples") or []
+    _validate_samples(ms)
+    if not ss: raise ValueError("simulation sweep has no samples")
+    rows=[]; drs=[]; dxs=[]; ddbs=[]; dvswrs=[]
+    for sim in ss:
+        f=float(sim["frequency_hz"])
+        meas=_interp(ms,f)
+        if meas is None: continue
+        sr=float(sim["impedance_ohm"]["re"]); sx=float(sim["impedance_ohm"]["im"])
+        mr=float(meas["impedance_ohm"]["re"]); mx=float(meas["impedance_ohm"]["im"])
+        dr=sr-mr; dx=sx-mx
+        sdb=_s11_db(sim["s11"]); mdb=float(meas["s11_db"]); ddb=sdb-mdb
+        sim_vswr=sim.get("vswr"); meas_vswr=meas.get("vswr")
+        dvswr=(float(sim_vswr)-float(meas_vswr)) if sim_vswr is not None and meas_vswr is not None else None
+        rows.append({
+            "frequency_hz":f,
+            "simulation":{"r_ohm":sr,"x_ohm":sx,"s11_db":sdb,"vswr":sim_vswr},
+            "measurement":{"r_ohm":mr,"x_ohm":mx,"s11_db":mdb,"vswr":meas_vswr},
+            "delta":{"r_ohm":dr,"x_ohm":dx,"s11_db":ddb,"vswr":dvswr}
+        })
+        drs.append(dr); dxs.append(dx); ddbs.append(ddb)
+        if dvswr is not None and math.isfinite(dvswr): dvswrs.append(dvswr)
+    if not rows: raise ValueError("simulation and measurement frequency ranges do not overlap")
+    mres=_resonance(ms)
+    sres=float(sweep.get("resonance_frequency_hz")) if sweep.get("resonance_frequency_hz") is not None else _resonance(ss)
+    return {
+        "schema_version":"0.1",
+        "alignment":"interpolate-measured-to-simulation",
+        "overlap":{"start_hz":rows[0]["frequency_hz"],"stop_hz":rows[-1]["frequency_hz"],"points":len(rows)},
+        "summary":{
+            "delta_r_ohm":_summary(drs),
+            "delta_x_ohm":_summary(dxs),
+            "delta_s11_db":_summary(ddbs),
+            "delta_vswr":_summary(dvswrs),
+            "measurement_resonance_hz":mres,
+            "simulation_resonance_hz":sres,
+            "resonance_shift_hz":(sres-mres) if sres is not None and mres is not None else None
+        },
+        "samples":rows
     }
