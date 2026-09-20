@@ -46,11 +46,28 @@ const _updateMeta=updateMeta;updateMeta=function(p){_updateMeta(p);syncGroundFro
 Object.values(groundEls).filter(Boolean).forEach(x=>x.addEventListener('change',applyGroundControls));
 
 const sidebar=$('#sidebar'),sidebarBackdrop=$('#sidebar-backdrop');
-function setSidebar(open){if(!sidebar)return;sidebar.classList.toggle('open',open);sidebarBackdrop.hidden=!open;document.body.style.overflow=open?'hidden':''}
-$('#mobile-menu')?.addEventListener('click',()=>setSidebar(true));$('#sidebar-close')?.addEventListener('click',()=>setSidebar(false));sidebarBackdrop?.addEventListener('click',()=>setSidebar(false));
-
 let helpData=null,helpTopics=new Map(),activeHelpTopic='emmana-next.overview',quickReturnTopic='emmana-next.overview';
 const qh=$('#quick-help'),hb=$('#help-backdrop'),fh=$('#full-help');
+
+// One owner for transient surfaces: never stack sidebar, Quick Help and Full Help.
+const surfaceState={sidebar:false,quickHelp:false,fullHelp:false};
+function syncSurfaceState(){
+  sidebar?.classList.toggle('open',surfaceState.sidebar);
+  if(sidebarBackdrop)sidebarBackdrop.hidden=!surfaceState.sidebar;
+  if(qh)qh.hidden=!surfaceState.quickHelp;
+  if(fh)fh.hidden=!surfaceState.fullHelp;
+  if(hb)hb.hidden=!(surfaceState.quickHelp||surfaceState.fullHelp);
+  document.body.style.overflow=(surfaceState.sidebar||surfaceState.quickHelp||surfaceState.fullHelp)?'hidden':'';
+}
+function showSurface(name){
+  surfaceState.sidebar=name==='sidebar';
+  surfaceState.quickHelp=name==='quickHelp';
+  surfaceState.fullHelp=name==='fullHelp';
+  syncSurfaceState();
+}
+function closeSurface(name){if(name in surfaceState)surfaceState[name]=false;syncSurfaceState()}
+function setSidebar(open){if(!sidebar)return;open?showSurface('sidebar'):closeSurface('sidebar')}
+$('#mobile-menu')?.addEventListener('click',()=>setSidebar(true));$('#sidebar-close')?.addEventListener('click',()=>setSidebar(false));sidebarBackdrop?.addEventListener('click',()=>setSidebar(false));
 function helpTopic(id){return helpTopics.get(id)||helpTopics.get(helpData?.fallbackTopic)||null}
 function resolveHelp(value){
   if(!helpData)return null;if(helpTopics.has(value))return helpTopics.get(value);const mapped=helpData.errorMap?.[value];if(mapped&&helpTopics.has(mapped))return helpTopics.get(mapped);
@@ -63,9 +80,9 @@ function openQuickHelp(id='emmana-next.overview'){
   const t=resolveHelp(id);if(!t)return;activeHelpTopic=t.id;quickReturnTopic=t.id;
   $('#quick-help-title').textContent=t.title;$('#quick-help-summary').textContent=t.summary||'';$('#quick-help-body').textContent=t.body||'';
   const steps=$('#quick-help-steps');steps.innerHTML='';for(const s of t.quickSteps||[]){const li=document.createElement('li');li.textContent=s;steps.appendChild(li)}steps.hidden=!(t.quickSteps||[]).length;
-  relatedButtons(t,$('#quick-help-related'));qh.hidden=false;hb.hidden=false;history.replaceState(null,'',`${location.pathname}?topic=${encodeURIComponent(t.id)}${location.hash||''}`);
+  relatedButtons(t,$('#quick-help-related'));showSurface('quickHelp');history.replaceState(null,'',`${location.pathname}?topic=${encodeURIComponent(t.id)}${location.hash||''}`);
 }
-function closeQuickHelp(){qh.hidden=true;if(fh.hidden)hb.hidden=true}
+function closeQuickHelp(){closeSurface('quickHelp')}
 function helpSearch(q){
   const s=String(q||'').trim().toLowerCase();const rows=[...helpTopics.values()].filter(t=>!s||[t.id,t.title,t.summary,t.body,...(t.keywords||[]),...(t.aliases||[])].some(v=>String(v||'').toLowerCase().includes(s)));
   return rows.sort((a,b)=>a.category.localeCompare(b.category)||a.title.localeCompare(b.title));
@@ -76,14 +93,14 @@ function renderTopicList(q=''){
 function showFullTopic(id){
   const t=resolveHelp(id);if(!t)return;activeHelpTopic=t.id;$('#full-help-category').textContent=(t.category||'help').toUpperCase();$('#full-help-title').textContent=t.title;$('#full-help-summary').textContent=t.summary||'';$('#full-help-body').textContent=t.body||'';relatedButtons(t,$('#full-help-related'));renderTopicList($('#help-search').value);history.replaceState(null,'',`${location.pathname}?topic=${encodeURIComponent(t.id)}${location.hash||''}`);
 }
-function openFullHelp(){const t=helpTopic(activeHelpTopic)||helpTopic(helpData?.fallbackTopic);if(!t)return;qh.hidden=true;fh.hidden=false;hb.hidden=false;renderTopicList();showFullTopic(t.id);setTimeout(()=>$('#help-search')?.focus(),0)}
-function closeFullHelp(){fh.hidden=true;hb.hidden=true;document.body.style.overflow=''}
+function openFullHelp(){const t=helpTopic(activeHelpTopic)||helpTopic(helpData?.fallbackTopic);if(!t)return;showSurface('fullHelp');renderTopicList();showFullTopic(t.id);setTimeout(()=>$('#help-search')?.focus(),0)}
+function closeFullHelp(){closeSurface('fullHelp')}
 function topicForError(text){const s=String(text||'').toLowerCase();if(s.includes('ground-terminal')||s.includes('ground terminal'))return helpData?.errorMap?.INVALID_GROUND_TERMINAL;if(s.includes('nec2')&&s.includes('not'))return helpData?.errorMap?.NEC2_NOT_RUN;if(s.includes('model')&&(s.includes('invalid')||s.includes('error')||s.includes('failed')))return helpData?.errorMap?.MODEL_CHECK_FAILED;return 'emmana-next.overview'}
 
 async function initHelp(){
   try{helpData=await api('/api/help-registry');helpTopics=new Map((helpData.topics||[]).map(t=>[t.id,t]));const initial=new URL(location.href).searchParams.get('topic')||helpData.fallbackTopic;activeHelpTopic=resolveHelp(initial)?.id||helpData.fallbackTopic;
     document.querySelectorAll('[data-help-topic]').forEach(b=>b.addEventListener('click',()=>openQuickHelp(b.dataset.helpTopic)));
-    $('#quick-help-close')?.addEventListener('click',closeQuickHelp);$('#help-full-open')?.addEventListener('click',openFullHelp);$('#full-help-close')?.addEventListener('click',closeFullHelp);$('#full-help-back')?.addEventListener('click',()=>{fh.hidden=true;openQuickHelp(quickReturnTopic)});$('#help-search')?.addEventListener('input',e=>renderTopicList(e.target.value));hb?.addEventListener('click',()=>{if(!fh.hidden)closeFullHelp();else closeQuickHelp()});
+    $('#quick-help-close')?.addEventListener('click',closeQuickHelp);$('#help-full-open')?.addEventListener('click',openFullHelp);$('#full-help-close')?.addEventListener('click',closeFullHelp);$('#full-help-back')?.addEventListener('click',()=>openQuickHelp(quickReturnTopic));$('#help-search')?.addEventListener('input',e=>renderTopicList(e.target.value));hb?.addEventListener('click',()=>{if(surfaceState.fullHelp)closeFullHelp();else if(surfaceState.quickHelp)closeQuickHelp()});
     const observer=new MutationObserver(()=>{const b=$('#diag-help');if(b)b.dataset.helpTopic=topicForError(els.diag?.textContent||'')});if(els.diag)observer.observe(els.diag,{childList:true,subtree:true,characterData:true});
   }catch(e){console.warn('Help Registry unavailable',e)}
 }
