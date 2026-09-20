@@ -100,6 +100,10 @@ int main() {
 
     const std::string deck=reference::export_nec2_deck(b01);
     require(deck.find("GW 1 51")!=std::string::npos && deck.find("EX 0 1 26 0")!=std::string::npos,"NEC2 export");
+    const auto ce_pos=deck.find("CE\n");
+    const auto wire_comment_pos=deck.find("CM WIRE 1 = W1");
+    require(ce_pos!=std::string::npos && wire_comment_pos!=std::string::npos && wire_comment_pos<ce_pos,"NEC2 comments must precede CE");
+    require(deck.find("CM ",ce_pos+3)==std::string::npos,"NEC2 geometry/control section must not contain CM cards");
     const std::string js=io::result_to_json(r01);
     require(js.find("ground_dissipated_power_w")!=std::string::npos && js.find("fnv1a64-emnext-model-v5")!=std::string::npos,"ResultSet provenance");
 

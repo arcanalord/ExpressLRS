@@ -49,12 +49,14 @@ std::string export_nec2_deck(const Project& project) {
     if (project.ground.model == "homogeneous-halfspace-image-v1") {
         out << "CM NOTE: independent NEC2 reference uses GN 2 Sommerfeld/Norton, not EMMana-Next image approximation\n";
     }
+    for (std::size_t i = 0; i < project.wires.size(); ++i) {
+        out << "CM WIRE " << (i + 1) << " = " << project.wires[i].id << "\n";
+    }
     out << "CE\n";
 
     for (std::size_t i = 0; i < project.wires.size(); ++i) {
         const auto& w = project.wires[i];
         const int tag = static_cast<int>(i + 1);
-        out << "CM WIRE " << tag << " = " << w.id << "\n";
         out << "GW " << tag << ' ' << w.segments << ' '
             << w.start.x << ' ' << w.start.y << ' ' << w.start.z << ' '
             << w.end.x << ' ' << w.end.y << ' ' << w.end.z << ' '
