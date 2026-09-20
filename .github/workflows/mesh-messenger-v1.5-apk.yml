@@ -1,18 +1,18 @@
-name: Mesh Messenger v1.5 APK
+name: Mesh Messenger v1.5.1 APK
 
 on:
   push:
     branches:
-      - ci/mesh-messenger-v1.5-apk
+      - ci/mesh-messenger-v1.5.1-apk
     paths:
-      - ".github/workflows/mesh-messenger-v1.5-apk.yml"
+      - ".github/workflows/mesh-messenger-v1.5.1-apk.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: mesh-messenger-v1.5-apk
+  group: mesh-messenger-v1.5.1-apk
   cancel-in-progress: true
 
 env:
@@ -101,13 +101,38 @@ jobs:
 
           echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
 
-      - name: Verify source metadata
+      - name: Verify v1.5 baseline and apply v1.5.1 build patch
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'versionCode = 16' "$ANDROID_DIR/app/build.gradle.kts"
-          grep -q 'versionName = "1.5"' "$ANDROID_DIR/app/build.gradle.kts"
-          grep -q 'applicationId = "org.fpvclub.mesh"' "$ANDROID_DIR/app/build.gradle.kts"
+          BUILD_FILE="$ANDROID_DIR/app/build.gradle.kts"
+          grep -q 'versionCode = 16' "$BUILD_FILE"
+          grep -q 'versionName = "1.5"' "$BUILD_FILE"
+          grep -q 'applicationId = "org.fpvclub.mesh"' "$BUILD_FILE"
+          grep -q 'kotlinOptions { jvmTarget = "17" }' "$BUILD_FILE"
+
+          python3 - "$BUILD_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          p = Path(sys.argv[1])
+          s = p.read_text()
+          old = '    kotlinOptions { jvmTarget = "17" }\n'
+          if old not in s:
+              raise SystemExit("expected v1.5 kotlinOptions line not found")
+          s = s.replace(old, '')
+          needle = '}\n\ndependencies {'
+          repl = '''}\n\nkotlin {\n    compilerOptions {\n        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")\n    }\n}\n\ndependencies {'''
+          if needle not in s:
+              raise SystemExit("dependencies boundary not found")
+          s = s.replace(needle, repl, 1)
+          s = s.replace('versionCode = 16', 'versionCode = 17')
+          s = s.replace('versionName = "1.5"', 'versionName = "1.5.1"')
+          p.write_text(s)
+          PY
+
+          grep -q 'versionCode = 17' "$BUILD_FILE"
+          grep -q 'versionName = "1.5.1"' "$BUILD_FILE"
+          grep -q 'jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")' "$BUILD_FILE"
           java -version
           gradle --version
 
@@ -129,18 +154,18 @@ jobs:
           aapt dump badging "$APK" | tee _mesh_source/aapt-badging.txt
 
           grep -q "package: name='org.fpvclub.mesh'" _mesh_source/aapt-badging.txt
-          grep -q "versionCode='16'" _mesh_source/aapt-badging.txt
-          grep -q "versionName='1.5'" _mesh_source/aapt-badging.txt
+          grep -q "versionCode='17'" _mesh_source/aapt-badging.txt
+          grep -q "versionName='1.5.1'" _mesh_source/aapt-badging.txt
 
           sha256sum "$APK" | tee _mesh_source/APK_SHA256.txt
-          cp "$APK" _mesh_source/MeshMessenger-v1.5-debug.apk
+          cp "$APK" _mesh_source/MeshMessenger-v1.5.1-debug.apk
 
       - name: Write build provenance
         shell: bash
         run: |
           set -euo pipefail
           {
-            echo "Mesh Messenger v1.5 GitHub Actions build"
+            echo "Mesh Messenger v1.5.1 GitHub Actions build"
             echo "repository=$GITHUB_REPOSITORY"
             echo "ref=$GITHUB_REF"
             echo "commit=$GITHUB_SHA"
@@ -149,8 +174,8 @@ jobs:
             echo "gradle=$GRADLE_VERSION"
             echo "build_tools=$BUILD_TOOLS_VERSION"
             echo "application_id=org.fpvclub.mesh"
-            echo "version_name=1.5"
-            echo "version_code=16"
+            echo "version_name=1.5.1"
+            echo "version_code=17"
             echo
             java -version 2>&1
             echo
@@ -162,7 +187,7 @@ jobs:
         with:
           name: mesh-messenger-v1.5-debug-apk
           path: |
-            _mesh_source/MeshMessenger-v1.5-debug.apk
+            _mesh_source/MeshMessenger-v1.5.1-debug.apk
             _mesh_source/APK_SHA256.txt
             _mesh_source/aapt-badging.txt
             _mesh_source/BUILD_PROVENANCE.txt
