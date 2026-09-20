@@ -1,0 +1,21 @@
+{
+  "schema_version": "0.4",
+  "name": "B02A horizontal half-wave dipole over homogeneous real ground alpha.20",
+  "frequency_hz": 299792458.0,
+  "ground": {
+    "model": "homogeneous-halfspace-image-v1",
+    "plane_z_m": 0.0,
+    "relative_permittivity": 13.0,
+    "conductivity_s_per_m": 0.005
+  },
+  "wires": [
+    {
+      "id": "W1",
+      "start_m": [-0.25, 0.0, 0.25],
+      "end_m": [0.25, 0.0, 0.25],
+      "radius_m": 0.001,
+      "segments": 51
+    }
+  ],
+  "feeds": [{"wire_id": "W1", "segment": 25}]
+}
