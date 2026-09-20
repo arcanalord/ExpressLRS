@@ -204,12 +204,12 @@ class Handler(SimpleHTTPRequestHandler):
             body=self.read_json()
             if parsed.path == "/api/measurement/parse":
                 fmt=str(body.get("format","touchstone-s1p")); text=str(body.get("text","")); name=str(body.get("source_name","inline"))
-                parsed_measurement=measurement.parse_touchstone_s1p(text,name) if fmt=="touchstone-s1p" else measurement.parse_vna_csv(text,name) if fmt=="vna-csv" else (_ for _ in ()).throw(ValueError("format must be touchstone-s1p or vna-csv"))
+                parsed_measurement=measurement.parse_measurement(fmt,text,name,float(body.get("reference_impedance_ohm",50.0)))
                 self.send_json({"ok":True,"measurement":parsed_measurement}); return
             if parsed.path == "/api/measurement/compare":
-                ms=body.get("measurement"); sw=body.get("simulation_sweep")
-                if not isinstance(ms,dict) or not isinstance(sw,dict): raise ValueError("measurement and simulation_sweep must be objects")
-                self.send_json({"ok":True,"comparison":measurement.compare_measurement_to_simulation(ms,sw)}); return
+                ms=body.get("measurement"); sw=body.get("sweep")
+                if not isinstance(ms,dict) or not isinstance(sw,dict): raise ValueError("measurement and sweep must be objects")
+                self.send_json({"ok":True,"comparison":measurement.compare_measurement_to_sweep(ms,sw)}); return
             project=body.get("project")
             if not isinstance(project,dict): raise ValueError("project must be a JSON object")
             kernel=body.get("kernel","reduced")

@@ -140,3 +140,13 @@ CSV import now auto-detects three simple schemas:
 - Frequency + S11 dB/Phase
 
 No vendor-specific adapter layer and no UI mode selector were added. Parsed measurements expose source_profile for provenance.
+
+
+## Measurement correlation — rev9
+
+Canonical normalized contract now uses `samples`, nested `source`, and `reference_impedance_ohm` only. Legacy parallel field names were removed from server/UI.
+
+- Touchstone S1P: RI / MA / DB, Hz/kHz/MHz/GHz, reference R
+- VNA CSV: S11 real/imag, S11 dB/phase, or R/X
+- Comparison alignment: measurement interpolated onto simulation sweep frequencies within overlap
+- Metrics: delta R, delta X, delta S11 dB, delta VSWR and resonance shift

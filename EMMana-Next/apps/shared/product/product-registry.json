@@ -103,7 +103,7 @@
       "description": "Tests, reference comparison, provenance and gate status."
     },
     "measurement_set": {
-      "status": "implemented-basic",
+      "status": "parser-and-comparison-implemented",
       "description": "Measured S/Z data stored beside, never over, simulated results."
     },
     "report_profile": {
@@ -170,7 +170,7 @@
     },
     {
       "id": "measurement-correlation",
-      "status": "parser-and-compare-engine",
+      "status": "parser-and-comparison-implemented",
       "priority": "high",
       "features": [
         "Touchstone import",

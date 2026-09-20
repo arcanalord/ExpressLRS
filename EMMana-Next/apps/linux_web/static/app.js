@@ -25,15 +25,15 @@ async function runSweep(){try{const p=project();updateMeta(p);const startHz=Numb
 function measurementFormat(file){const n=String(file?.name||'').toLowerCase();if(n.endsWith('.csv'))return 'vna-csv';if(n.endsWith('.s1p'))return 'touchstone-s1p';throw new Error('Поддерживаются только .s1p и .csv')}
 function measurementValue(v,n=3){return Number.isFinite(Number(v))?Number(v).toFixed(n):'—'}
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function setMeasurementKpis(summary){els.measurementDr.textContent=measurementValue(summary?.max_abs_delta_r_ohm);els.measurementDx.textContent=measurementValue(summary?.max_abs_delta_x_ohm);els.measurementDvswr.textContent=measurementValue(summary?.max_abs_delta_vswr);els.measurementDs11.textContent=measurementValue(summary?.max_abs_delta_s11_db)}
+function setMeasurementKpis(summary){els.measurementDr.textContent=measurementValue(summary?.delta_r_ohm?.max_abs);els.measurementDx.textContent=measurementValue(summary?.delta_x_ohm?.max_abs);els.measurementDvswr.textContent=measurementValue(summary?.delta_vswr?.max_abs);els.measurementDs11.textContent=measurementValue(summary?.delta_s11_db?.max_abs)}
 function renderMeasurementProvenance(){
   if(!lastMeasurement){els.measurementProvenance.textContent='Загрузите измерение. Raw asset останется отдельным от simulation.';return}
   const m=lastMeasurement,cal=els.measurementCalibration.value||'unknown',plane=els.measurementReferencePlane.value.trim()||'не указан';
-  els.measurementProvenance.innerHTML=[['Source',m.source_name||'—'],['Format',m.source_format||'—'],['Reference',measurementValue(m.reference_ohm,1)+' Ω'],['Calibration',cal],['Reference plane',plane],['Points',String(m.points?.length||0)]].map(([k,v])=>`<div class="measurement-prov-row"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join('');
+  els.measurementProvenance.innerHTML=[['Source',m.source?.name||'—'],['Format',m.source?.format||'—'],['Reference',measurementValue(m.reference_impedance_ohm,1)+' Ω'],['Calibration',cal],['Reference plane',plane],['Points',String(m.samples?.length||0)]].map(([k,v])=>`<div class="measurement-prov-row"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join('');
 }
 function drawMeasurementComparison(cmp){
   const c=els.measurementChart,ctx=c.getContext('2d'),W=c.width,H=c.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#0b0d11';ctx.fillRect(0,0,W,H);
-  const pts=cmp?.points||[];if(pts.length<2){ctx.fillStyle='#8992a3';ctx.font='12px system-ui';ctx.fillText('Недостаточно общих точек для графика.',24,30);return}
+  const pts=cmp?.samples||[];if(pts.length<2){ctx.fillStyle='#8992a3';ctx.font='12px system-ui';ctx.fillText('Недостаточно общих точек для графика.',24,30);return}
   const padL=58,padR=28,padT=32,padB=38,x0=pts[0].frequency_hz,x1=pts[pts.length-1].frequency_hz;
   const values=pts.flatMap(p=>[Number(p.simulation.s11_db),Number(p.measurement.s11_db)]).filter(Number.isFinite);let ymin=Math.min(-10,...values),ymax=Math.max(0,...values);if(ymin<-80)ymin=-80;if(ymax>5)ymax=5;
   const X=f=>padL+(W-padL-padR)*(f-x0)/(x1-x0||1),Y=v=>padT+(H-padT-padB)*(ymax-v)/(ymax-ymin||1);
@@ -44,7 +44,7 @@ function drawMeasurementComparison(cmp){
   ctx.fillStyle='#5ba0ff';ctx.fillText('Simulation S11',padL,18);ctx.fillStyle='#43d17c';ctx.fillText('Measurement S11',padL+118,18);
 }
 function renderMeasurementTable(cmp){
-  const pts=cmp?.points||[];if(!pts.length){els.measurementTableBody.innerHTML='<tr><td colspan="7" class="muted">Нет сравнения.</td></tr>';return}
+  const pts=cmp?.samples||[];if(!pts.length){els.measurementTableBody.innerHTML='<tr><td colspan="7" class="muted">Нет сравнения.</td></tr>';return}
   const maxRows=8,step=Math.max(1,Math.floor(pts.length/maxRows)),rows=[];for(let i=0;i<pts.length&&rows.length<maxRows;i+=step)rows.push(pts[i]);if(rows[rows.length-1]!==pts[pts.length-1]&&rows.length<maxRows)rows.push(pts[pts.length-1]);
   els.measurementTableBody.innerHTML=rows.map(p=>`<tr><td>${measurementValue(p.frequency_hz/1e6,3)}</td><td>${measurementValue(p.simulation.r_ohm)}</td><td>${measurementValue(p.measurement.r_ohm)}</td><td>${measurementValue(p.delta.r_ohm)}</td><td>${measurementValue(p.simulation.x_ohm)}</td><td>${measurementValue(p.measurement.x_ohm)}</td><td>${measurementValue(p.delta.x_ohm)}</td></tr>`).join('');
 }
@@ -54,7 +54,7 @@ async function importMeasurement(){
     const format=measurementFormat(file),text=await file.text();els.measurementImport.disabled=true;status('импорт measurement…');
     const j=await api('/api/measurement/parse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({format,source_name:file.name,text})});
     lastMeasurement=j.measurement;lastComparison=null;setMeasurementKpis(null);renderMeasurementTable(null);drawMeasurementComparison(null);renderMeasurementProvenance();
-    els.measurementSummary.textContent=`${file.name} · ${lastMeasurement.points?.length||0} points · ${measurementValue(lastMeasurement.reference_ohm,1)} Ω`;
+    els.measurementSummary.textContent=`${file.name} · ${lastMeasurement.samples?.length||0} points · ${measurementValue(lastMeasurement.reference_impedance_ohm,1)} Ω`;
     els.measurementCompare.disabled=!lastSweep;status(lastSweep?'измерение загружено · можно сравнить':'измерение загружено · сначала Sweep','ok');
   }catch(e){status('ошибка measurement','err');els.diag.textContent=String(e.message||e)}finally{els.measurementImport.disabled=false}
 }
@@ -62,9 +62,9 @@ async function compareMeasurement(){
   try{
     if(!lastMeasurement)throw new Error('Сначала импортируйте измерение');if(!lastSweep)throw new Error('Сначала выполните Sweep');
     els.measurementCompare.disabled=true;status('сравнение measurement…');
-    const j=await api('/api/measurement/compare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({measurement:lastMeasurement,simulation_sweep:lastSweep})});
+    const j=await api('/api/measurement/compare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({measurement:lastMeasurement,sweep:lastSweep})});
     lastComparison=j.comparison;setMeasurementKpis(lastComparison.summary);drawMeasurementComparison(lastComparison);renderMeasurementTable(lastComparison);renderMeasurementProvenance();
-    els.measurementSummary.textContent=`${lastComparison.summary.overlap_points} aligned points · ${lastMeasurement.source_name||'measurement'}`;status('measurement comparison готов','ok');
+    els.measurementSummary.textContent=`${lastComparison.overlap.points} aligned points · ${lastMeasurement.source?.name||'measurement'}`;status('measurement comparison готов','ok');
   }catch(e){status('ошибка сравнения','err');els.diag.textContent=String(e.message||e)}finally{els.measurementCompare.disabled=!lastMeasurement||!lastSweep}
 }
 function showResult(r){lastResult=r;const f=r.feeds?.[0],p=project(),lossy=(p.wires||[]).filter(w=>Number(w.conductivity_s_per_m||0)>0),loads=p.loads||[];const lossLines=[`Loss model: ${lossy.length?lossy.length+' finite-conductivity wire(s)':'PEC conductors'} · ${loads.length} lumped load(s)`];if(lossy.length)lossLines.push('Conductivity: '+lossy.map(w=>`${w.id||'?'}=${Number(w.conductivity_s_per_m).toExponential(3)} S/m`).join(', '));if(loads.length)lossLines.push('Loads: '+loads.map(x=>`${x.id||'?'}[${x.wire_id||'?'}:${x.segment_index??'?'}] R=${Number(x.resistance_ohm||0)}Ω L=${Number(x.inductance_h||0).toExponential(3)}H C=${Number(x.capacitance_f||0).toExponential(3)}F`).join('; '));els.zin.textContent=cpx(f?.impedance_ohm);els.vswr.textContent=fmt(f?.vswr,3);els.dmax.textContent=fmt(r.summary?.dmax_dbi,3);els.eff.textContent=fmt(100*(r.efficiency??0),3);els.accepted.textContent=Number(r.accepted_power_w||0).toExponential(3);els.radiated.textContent=Number(r.radiated_power_w||0).toExponential(3);els.dissipated.textContent=Number(r.dissipated_power_w||0).toExponential(3);els.balance.textContent=(r.power_balance_relative_error??0).toExponential(2);els.raw.textContent=JSON.stringify(r,null,2);els.diag.textContent=[`Solver: ${r.solver_id} v${r.solver_version}`,`Settings: ${r.solver_settings_id}`,`Model hash: ${r.model_hash}`,...lossLines,`Accepted power: ${r.accepted_power_w} W`,`Radiated power: ${r.radiated_power_w} W`,`Dissipated power: ${r.dissipated_power_w} W`,`Efficiency: ${fmt(100*(r.efficiency??0),4)}%`,'',...(r.warnings||[]).map(x=>'⚠ '+x)].join('\n');drawPolar(r);drawCurrents(r)}
