@@ -44,17 +44,27 @@ jobs:
         shell: pwsh
         run: |
           $port = 8799
-          $proc = Start-Process -FilePath "dist/EMMana-Next.exe" -ArgumentList "--no-browser","--port","$port" -PassThru -WindowStyle Hidden
+          $stdout = Join-Path $PWD "portable-stdout.log"
+          $stderr = Join-Path $PWD "portable-stderr.log"
+          $proc = Start-Process -FilePath "dist/EMMana-Next.exe" -ArgumentList "--no-browser","--port","$port" -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
           try {
             $ok = $false
             for ($i=0; $i -lt 45; $i++) {
               Start-Sleep -Seconds 1
+              if ($proc.HasExited) {
+                Write-Host "Portable launcher exited early code=$($proc.ExitCode)"
+                break
+              }
               try {
                 $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2
                 if ($health.ok -and $health.version -eq (Get-Content VERSION).Trim()) { $ok = $true; break }
               } catch {}
             }
-            if (-not $ok) { throw "Portable launcher /api/health did not become ready" }
+            if (-not $ok) {
+              if (Test-Path $stdout) { Write-Host "--- portable stdout ---"; Get-Content $stdout }
+              if (Test-Path $stderr) { Write-Host "--- portable stderr ---"; Get-Content $stderr }
+              throw "Portable launcher /api/health did not become ready"
+            }
             $page = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 5
             if ($page.Content -notmatch "geometry-canvas") { throw "Portable UI missing geometry editor" }
             if ($page.Content -notmatch "geometry-template-create") { throw "Portable UI missing template workflow" }
