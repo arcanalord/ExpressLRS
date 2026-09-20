@@ -1,4 +1,4 @@
-name: Mesh Messenger v1.5.2 APK
+name: Mesh Messenger v1.5.3 APK
 
 on:
   push:
@@ -12,11 +12,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: mesh-messenger-v1.5.2-apk
+  group: mesh-messenger-v1.5.3-apk
   cancel-in-progress: true
 
 env:
-  SOURCE_SHA256: 1aeae2eec49b264a21004990e6827cd68d6ad00ae09d9065f95cab8d2809e054
+  SOURCE_SHA256: 4fce4e3de181ede39be0842a4c140caae4d7042064282c4c1a77ee02dac832c4
   DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
   GRADLE_VERSION: "8.13"
   BUILD_TOOLS_VERSION: "35.0.0"
@@ -45,19 +45,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "ANDROID_HOME=$ANDROID_HOME"
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n 1)"
-          if [ -z "$SDKMANAGER" ]; then
-            echo "sdkmanager not found under $ANDROID_HOME/cmdline-tools" >&2
-            find "$ANDROID_HOME" -maxdepth 4 -type f -name sdkmanager -print || true
-            exit 1
-          fi
-          echo "SDKMANAGER=$SDKMANAGER"
+          test -n "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
 
-      - name: Download exact v1.5 source from Dropbox
+      - name: Download exact v1.5.3 source from Dropbox
         shell: bash
         run: |
           set -euo pipefail
@@ -65,112 +59,48 @@ jobs:
           curl -L --fail --retry 3 --retry-delay 2 "$DROPBOX_FOLDER_URL" -o _mesh_source/dropbox-folder.zip
           python3 - <<'PY'
           import pathlib, shutil, zipfile
-          archive = pathlib.Path("_mesh_source/dropbox-folder.zip")
-          out = pathlib.Path("_mesh_source/dropbox")
+          archive=pathlib.Path("_mesh_source/dropbox-folder.zip")
+          out=pathlib.Path("_mesh_source/dropbox")
           with zipfile.ZipFile(archive) as zf:
               for info in zf.infolist():
-                  raw = info.filename.replace("\\", "/").lstrip("/")
-                  parts = [p for p in raw.split("/") if p not in ("", ".", "..")]
+                  raw=info.filename.replace("\\","/").lstrip("/")
+                  parts=[p for p in raw.split("/") if p not in ("",".","..")]
                   if not parts:
                       continue
-                  target = out.joinpath(*parts)
+                  target=out.joinpath(*parts)
                   if info.is_dir():
-                      target.mkdir(parents=True, exist_ok=True)
+                      target.mkdir(parents=True,exist_ok=True)
                   else:
-                      target.parent.mkdir(parents=True, exist_ok=True)
-                      with zf.open(info) as src, target.open("wb") as dst:
-                          shutil.copyfileobj(src, dst)
+                      target.parent.mkdir(parents=True,exist_ok=True)
+                      with zf.open(info) as src,target.open("wb") as dst:
+                          shutil.copyfileobj(src,dst)
           PY
 
-          SOURCE_ZIP="$(find _mesh_source/dropbox -type f -name 'SOURCE_CURRENT_v1.5.zip' -print -quit)"
-          if [ -z "$SOURCE_ZIP" ]; then
-            echo "SOURCE_CURRENT_v1.5.zip was not found in Dropbox export" >&2
-            find _mesh_source/dropbox -maxdepth 5 -type f -print | sort
-            exit 1
-          fi
-
+          SOURCE_ZIP="$(find _mesh_source/dropbox -type f -name 'SOURCE_CURRENT_v1.5.3.zip' -print -quit)"
+          test -n "$SOURCE_ZIP"
           echo "$SOURCE_SHA256  $SOURCE_ZIP" | sha256sum -c -
-          cp "$SOURCE_ZIP" _mesh_source/SOURCE_CURRENT_v1.5.zip
-          unzip -q _mesh_source/SOURCE_CURRENT_v1.5.zip -d _mesh_source/unpacked
+          cp "$SOURCE_ZIP" _mesh_source/SOURCE_CURRENT_v1.5.3.zip
+          unzip -q _mesh_source/SOURCE_CURRENT_v1.5.3.zip -d _mesh_source/unpacked
 
           ANDROID_DIR="$(find _mesh_source/unpacked -type d -name android-app -print -quit)"
-          if [ -z "$ANDROID_DIR" ]; then
-            echo "android-app directory was not found in source archive" >&2
-            exit 1
-          fi
-
+          test -n "$ANDROID_DIR"
           echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
 
-      - name: Verify v1.5 baseline and apply v1.5.2 startup hotfix
+      - name: Verify exact v1.5.3 metadata and contracts
         shell: bash
         run: |
           set -euo pipefail
           BUILD_FILE="$ANDROID_DIR/app/build.gradle.kts"
           MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
-
-          grep -q 'versionCode = 16' "$BUILD_FILE"
-          grep -q 'versionName = "1.5"' "$BUILD_FILE"
+          GATT_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/ble/AndroidGattBackend.kt"
           grep -q 'applicationId = "org.fpvclub.mesh"' "$BUILD_FILE"
-          grep -q 'kotlinOptions { jvmTarget = "17" }' "$BUILD_FILE"
-          grep -q 'startMeshService();createMessageChannel();setupWebView()' "$MAIN_FILE"
-
-          python3 - "$BUILD_FILE" "$MAIN_FILE" <<'PY'
-          from pathlib import Path
-          import sys
-
-          build = Path(sys.argv[1])
-          main = Path(sys.argv[2])
-
-          s = build.read_text()
-          old = '    kotlinOptions { jvmTarget = "17" }\n'
-          if old not in s:
-              raise SystemExit("expected v1.5 kotlinOptions line not found")
-          s = s.replace(old, '')
-          needle = '}\n\ndependencies {'
-          repl = '''}\n\nkotlin {\n    compilerOptions {\n        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")\n    }\n}\n\ndependencies {'''
-          if needle not in s:
-              raise SystemExit("dependencies boundary not found")
-          s = s.replace(needle, repl, 1)
-          s = s.replace('versionCode = 16', 'versionCode = 18')
-          s = s.replace('versionName = "1.5"', 'versionName = "1.5.2"')
-          build.write_text(s)
-
-          s = main.read_text()
-          s = s.replace(
-              '        startMeshService();createMessageChannel();setupWebView()\n',
-              '        createMessageChannel();setupWebView();maybeStartMeshService()\n',
-              1
-          )
-          old = '''    private fun startMeshService(){val i=Intent(this,MeshConnectionService::class.java);if(Build.VERSION.SDK_INT>=26)startForegroundService(i) else startService(i)}\n\n    private fun missingRuntimePermissions():List<String>{\n'''
-          new = '''    private fun hasBleRuntimePermissions():Boolean=when{\n        Build.VERSION.SDK_INT>=31 -> checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)==PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED\n        else -> checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED\n    }\n\n    private fun maybeStartMeshService(){\n        if(!hasBleRuntimePermissions())return\n        val i=Intent(this,MeshConnectionService::class.java)\n        try{if(Build.VERSION.SDK_INT>=26)startForegroundService(i) else startService(i)}catch(_:SecurityException){}\n    }\n\n    private fun missingRuntimePermissions():List<String>{\n'''
-          if old not in s:
-              raise SystemExit("expected v1.5 startup service block not found")
-          s = s.replace(old, new, 1)
-
-          old = '        if(need.isEmpty())after(true,emptyList())else{permissionContinuation=after;requestPermissions(need.toTypedArray(),permissionRequest)}\n'
-          new = '        if(need.isEmpty()){maybeStartMeshService();after(true,emptyList())}else{permissionContinuation=after;requestPermissions(need.toTypedArray(),permissionRequest)}\n'
-          if old not in s:
-              raise SystemExit("permission request anchor not found")
-          s = s.replace(old, new, 1)
-
-          old = '            val cont=permissionContinuation;permissionContinuation=null;cont?.invoke(denied.isEmpty(),denied)\n'
-          new = '            if(hasBleRuntimePermissions())maybeStartMeshService()\n            val cont=permissionContinuation;permissionContinuation=null;cont?.invoke(denied.isEmpty(),denied)\n'
-          if old not in s:
-              raise SystemExit("permission result anchor not found")
-          s = s.replace(old, new, 1)
-          main.write_text(s)
-          PY
-
-          grep -q 'versionCode = 18' "$BUILD_FILE"
-          grep -q 'versionName = "1.5.2"' "$BUILD_FILE"
+          grep -q 'versionCode = 19' "$BUILD_FILE"
+          grep -q 'versionName = "1.5.3"' "$BUILD_FILE"
           grep -q 'jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")' "$BUILD_FILE"
           grep -q 'createMessageChannel();setupWebView();maybeStartMeshService()' "$MAIN_FILE"
-          grep -q 'if(!hasBleRuntimePermissions())return' "$MAIN_FILE"
-          grep -q 'if(hasBleRuntimePermissions())maybeStartMeshService()' "$MAIN_FILE"
-          if grep -q 'startMeshService();createMessageChannel();setupWebView()' "$MAIN_FILE"; then
-            echo "unsafe startup ordering still present" >&2
-            exit 1
-          fi
+          grep -q 'scannerAvailable' "$MAIN_FILE"
+          grep -q 'repeat(8)' "$GATT_FILE"
+          grep -q 'BLE_SCAN_FAILED_' "$GATT_FILE"
           java -version
           gradle --version
 
@@ -186,36 +116,31 @@ jobs:
           set -euo pipefail
           APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
-
           zipalign -c -v 4 "$APK"
           apksigner verify --verbose "$APK"
           aapt dump badging "$APK" | tee _mesh_source/aapt-badging.txt
-
           grep -q "package: name='org.fpvclub.mesh'" _mesh_source/aapt-badging.txt
-          grep -q "versionCode='18'" _mesh_source/aapt-badging.txt
-          grep -q "versionName='1.5.2'" _mesh_source/aapt-badging.txt
-
+          grep -q "versionCode='19'" _mesh_source/aapt-badging.txt
+          grep -q "versionName='1.5.3'" _mesh_source/aapt-badging.txt
           sha256sum "$APK" | tee _mesh_source/APK_SHA256.txt
-          cp "$APK" _mesh_source/MeshMessenger-v1.5.2-debug.apk
+          cp "$APK" _mesh_source/MeshMessenger-v1.5.3-debug.apk
 
       - name: Write build provenance
         shell: bash
         run: |
           set -euo pipefail
           {
-            echo "Mesh Messenger v1.5.2 GitHub Actions build"
+            echo "Mesh Messenger v1.5.3 GitHub Actions build"
             echo "repository=$GITHUB_REPOSITORY"
             echo "ref=$GITHUB_REF"
             echo "commit=$GITHUB_SHA"
             echo "runner_os=$RUNNER_OS"
-            echo "base_source_sha256=$SOURCE_SHA256"
-            echo "build_patch=Kotlin compilerOptions migration + Android 14+ BLE FGS startup guard + versionName 1.5.2 + versionCode 18"
-            echo "build_patch_commit=$GITHUB_SHA"
+            echo "source_sha256=$SOURCE_SHA256"
             echo "gradle=$GRADLE_VERSION"
             echo "build_tools=$BUILD_TOOLS_VERSION"
             echo "application_id=org.fpvclub.mesh"
-            echo "version_name=1.5.2"
-            echo "version_code=18"
+            echo "version_name=1.5.3"
+            echo "version_code=19"
             echo
             java -version 2>&1
             echo
@@ -225,9 +150,9 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mesh-messenger-v1.5.2-debug-apk
+          name: mesh-messenger-v1.5.3-debug-apk
           path: |
-            _mesh_source/MeshMessenger-v1.5.2-debug.apk
+            _mesh_source/MeshMessenger-v1.5.3-debug.apk
             _mesh_source/APK_SHA256.txt
             _mesh_source/aapt-badging.txt
             _mesh_source/BUILD_PROVENANCE.txt
