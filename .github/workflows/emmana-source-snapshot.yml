@@ -1,0 +1,32 @@
+name: EMMana source snapshot
+
+on:
+  push:
+    branches: [ emmana-next-alpha20 ]
+    paths:
+      - 'EMMana-Next/**'
+      - '.github/workflows/emmana-source-snapshot.yml'
+  workflow_dispatch:
+
+jobs:
+  source-snapshot:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package exact source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(cat EMMana-Next/VERSION)"
+          mkdir -p dist
+          zip -qr "dist/EMMana-Next-${version}-source.zip" EMMana-Next \
+            -x 'EMMana-Next/build/*' 'EMMana-Next/build-win/*' 'EMMana-Next/dist/*'
+          sha256sum "dist/EMMana-Next-${version}-source.zip" > "dist/EMMana-Next-${version}-source.zip.sha256"
+      - name: Upload exact source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-source-snapshot
+          path: |
+            dist/EMMana-Next-*-source.zip
+            dist/EMMana-Next-*-source.zip.sha256
+          if-no-files-found: error
