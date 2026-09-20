@@ -27,7 +27,9 @@ jobs:
       - name: Build
         run: cmake --build build --parallel 2
       - name: Internal regression gates
-        run: ctest --test-dir build --output-on-failure
+        run: |
+          chmod +x tests/fake_nec2c.py
+          ctest --test-dir build --output-on-failure
       - name: Real NEC2 cross-solver suite
         run: python3 tools/run_nec2_suite.py --root . --emnext build/emnext --engine nec2c --json-report benchmarks/NEC2_REAL_CROSS_SOLVER.json
       - name: Upload reference report
