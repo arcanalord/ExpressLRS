@@ -1,10 +1,10 @@
-name: Radio Horizon APK Temp Build
+name: Radio Horizon APK v0.3.1 Test Online
 on:
   push:
     branches: ["ci-radio-horizon-apk-v030"]
     paths:
-      - "tools/radio-horizon-ci/**"
       - ".github/workflows/radio-horizon-apk-temp.yml"
+      - "tools/radio-horizon-ci/trigger-v031.txt"
   workflow_dispatch:
 
 jobs:
@@ -19,12 +19,128 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Rehydrate source
+      - name: Rehydrate base source
         run: |
           cat tools/radio-horizon-ci/source.part.* > source.b64
           base64 -d source.b64 > source.tar.gz
           mkdir -p tools/radio-horizon
           tar -xzf source.tar.gz -C tools/radio-horizon
+      - name: Apply v0.3.1 online-shell patch
+        run: |
+          sed -i "s/versionCode 3/versionCode 4/" tools/radio-horizon/android/app/build.gradle
+          sed -i "s/versionName '0.3.0'/versionName '0.3.1-test-online'/" tools/radio-horizon/android/app/build.gradle
+          cat > tools/radio-horizon/android/app/src/main/java/ru/fpvclub/radiohorizon/MainActivity.java <<'JAVA'
+          package ru.fpvclub.radiohorizon;
+
+          import android.annotation.SuppressLint;
+          import android.app.Activity;
+          import android.graphics.Bitmap;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.view.View;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebResourceError;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+          import android.widget.Button;
+          import android.widget.LinearLayout;
+          import android.widget.ProgressBar;
+          import android.widget.TextView;
+
+          public class MainActivity extends Activity {
+              private static final String APP_URL = "https://crowded-fearless-trace.replit.app/";
+              private WebView webView;
+              private LinearLayout errorView;
+              private ProgressBar progress;
+
+              @SuppressLint("SetJavaScriptEnabled")
+              @Override protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  LinearLayout root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+                  progress.setMax(100);
+                  root.addView(progress, new LinearLayout.LayoutParams(-1, 6));
+                  webView = new WebView(this);
+                  root.addView(webView, new LinearLayout.LayoutParams(-1, 0, 1));
+                  errorView = new LinearLayout(this);
+                  errorView.setOrientation(LinearLayout.VERTICAL);
+                  errorView.setPadding(48,48,48,48);
+                  errorView.setVisibility(View.GONE);
+                  TextView errorText = new TextView(this);
+                  errorText.setText("Не удалось открыть Radio Horizon. Проверьте интернет и повторите.");
+                  errorText.setTextSize(18);
+                  Button retry = new Button(this);
+                  retry.setText("Повторить");
+                  retry.setOnClickListener(v -> { errorView.setVisibility(View.GONE); webView.setVisibility(View.VISIBLE); webView.reload(); });
+                  errorView.addView(errorText);
+                  errorView.addView(retry);
+                  root.addView(errorView, new LinearLayout.LayoutParams(-1, -2));
+                  setContentView(root);
+
+                  WebSettings settings = webView.getSettings();
+                  settings.setJavaScriptEnabled(true);
+                  settings.setDomStorageEnabled(true);
+                  settings.setDatabaseEnabled(true);
+                  settings.setAllowFileAccess(false);
+                  settings.setAllowContentAccess(true);
+                  settings.setBuiltInZoomControls(false);
+                  settings.setDisplayZoomControls(false);
+                  settings.setSupportZoom(false);
+                  settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+                  settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+                  settings.setUserAgentString(settings.getUserAgentString() + " RadioHorizonAndroid/0.3.1-test-online");
+
+                  WebView.setWebContentsDebuggingEnabled(true);
+                  webView.setWebChromeClient(new WebChromeClient() {
+                      @Override public void onProgressChanged(WebView view, int newProgress) {
+                          progress.setProgress(newProgress);
+                          progress.setVisibility(newProgress >= 100 ? View.GONE : View.VISIBLE);
+                      }
+                  });
+                  webView.setWebViewClient(new WebViewClient() {
+                      @Override public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                          errorView.setVisibility(View.GONE);
+                          webView.setVisibility(View.VISIBLE);
+                      }
+                      @Override public void onPageFinished(WebView view, String url) {
+                          view.evaluateJavascript("window.dispatchEvent(new Event('resize'));", null);
+                      }
+                      @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                          if (request.isForMainFrame()) {
+                              webView.setVisibility(View.GONE);
+                              errorView.setVisibility(View.VISIBLE);
+                          }
+                      }
+                      @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                          Uri uri = request.getUrl();
+                          return !("https".equals(uri.getScheme()) && "crowded-fearless-trace.replit.app".equals(uri.getHost()));
+                      }
+                  });
+                  webView.loadUrl(APP_URL);
+              }
+
+              @Override protected void onResume() {
+                  super.onResume();
+                  if (webView != null) {
+                      webView.onResume();
+                      webView.evaluateJavascript("window.dispatchEvent(new Event('resize'));", null);
+                  }
+              }
+
+              @Override public void onBackPressed() {
+                  if (webView != null && webView.canGoBack()) webView.goBack();
+                  else super.onBackPressed();
+              }
+
+              @Override protected void onDestroy() {
+                  if (webView != null) { webView.destroy(); webView = null; }
+                  super.onDestroy();
+              }
+          }
+          JAVA
       - name: Install Android SDK
         run: |
           yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
@@ -41,6 +157,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: radio-horizon-v0.3.0-debug-apk
+          name: radio-horizon-v0.3.1-test-online-apk
           path: tools/radio-horizon/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
