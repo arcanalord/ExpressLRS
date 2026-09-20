@@ -37,7 +37,8 @@ def main():
             templates=get_json(base+'/api/templates');assert any(x['id']=='halfwave-dipole' and x['status']=='implemented' for x in templates['templates'])
             materials=get_json(base+'/api/materials');assert any(x['id']=='copper' for x in materials['conductors'])
             contract=get_json(base+'/api/measurement-contract');assert contract['title']=='EMMana-Next Measurement Set v0.1'
-            syn=get_json(base+'/api/template/halfwave-dipole?frequency_hz=150000000');assert syn['template_id']=='halfwave-dipole' and abs(syn['project']['frequency_hz']-150000000)<1e-6 and syn['project']['schema_version'] in {'0.4','0.5'}
+            syn=get_json(base+'/api/template/halfwave-dipole?frequency_hz=150000000');assert syn['template_id']=='halfwave-dipole' and abs(syn['project']['frequency_hz']-150000000)<1e-6 and syn['project']['schema_version']=='0.5'
+            syncheck=post_json(base+'/api/model-check',{'project':syn['project'],'kernel':'reduced'},30);assert syncheck['ok'] and 'MODEL OK' in syncheck['stdout']
             examples=get_json(base+'/api/examples')['examples'];names={x['file'] for x in examples};assert 'B02_quarterwave_monopole_over_pec.emnx' in names and 'B01_halfwave_dipole_51seg.emnx' in names
             trust=get_json(base+'/api/reference-status');assert trust['independent_reference']['engine']=='nec2c'
             check=post_json(base+'/api/model-check',{'project':b01,'kernel':'reduced'},30);assert check['ok'] and 'MODEL OK' in check['stdout']

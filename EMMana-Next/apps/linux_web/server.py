@@ -115,6 +115,7 @@ def synthesize_template(template_id: str, target_frequency_hz: float) -> dict:
     for con in project.get("design_constraints",[]):
         if con.get("kind") in {"min_center_x_gap_m","wire_length_order_min_delta_m","max_boom_length_m"}:
             con["value"]=float(con["value"])*scale
+    project["schema_version"]="0.5"
     project["frequency_hz"]=target_frequency_hz
     project["name"]=f'{item["label"]} synthesized at {target_frequency_hz/1e6:.6f} MHz'
     return {"template_id":template_id,"method":registry["synthesis_method"],"seed_model":item["seed_model"],"scale":scale,"project":project}
