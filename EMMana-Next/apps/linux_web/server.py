@@ -22,8 +22,14 @@ TEMPLATE_REGISTRY = ROOT / "apps" / "shared" / "product" / "template-registry.js
 MATERIALS_REGISTRY = ROOT / "apps" / "shared" / "product" / "materials-registry.json"
 MEASUREMENT_SCHEMA = ROOT / "schemas" / "measurement-set-0.1.schema.json"
 MEASUREMENT_MODULE = ROOT / "apps" / "shared" / "product" / "measurement.py"
+WORKFLOW_MODULE = ROOT / "apps" / "shared" / "product" / "workflow_artifacts.py"
+DESIGN_VARIANT_SCHEMA = ROOT / "schemas" / "design-variant-0.1.schema.json"
+MEASUREMENT_SET_V2_SCHEMA = ROOT / "schemas" / "measurement-set-0.2.schema.json"
+ENGINEERING_REPORT_SCHEMA = ROOT / "schemas" / "engineering-report-0.1.schema.json"
 _ms=importlib.util.spec_from_file_location("emnext_measurement",MEASUREMENT_MODULE)
 measurement=importlib.util.module_from_spec(_ms); _ms.loader.exec_module(measurement)
+_ws=importlib.util.spec_from_file_location("emnext_workflow",WORKFLOW_MODULE)
+workflow=importlib.util.module_from_spec(_ws); _ws.loader.exec_module(workflow)
 DEFAULT_BINARY = ROOT / "build-linux" / "emnext"
 
 
@@ -168,6 +174,9 @@ class Handler(SimpleHTTPRequestHandler):
             try: self.send_json(load_json(MEASUREMENT_SCHEMA))
             except Exception as e: self.send_json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
+        if parsed.path == "/api/design-variant-contract": self.send_json(load_json(DESIGN_VARIANT_SCHEMA)); return
+        if parsed.path == "/api/measurement-set-contract": self.send_json(load_json(MEASUREMENT_SET_V2_SCHEMA)); return
+        if parsed.path == "/api/engineering-report-contract": self.send_json(load_json(ENGINEERING_REPORT_SCHEMA)); return
         if parsed.path.startswith("/api/template/"):
             try:
                 template_id=urllib.parse.unquote(parsed.path.split("/api/template/",1)[1])
@@ -198,7 +207,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path not in {"/api/model-check","/api/solve","/api/sweep","/api/optimize","/api/measurement/parse","/api/measurement/compare"}:
+        if parsed.path not in {"/api/model-check","/api/solve","/api/sweep","/api/optimize","/api/measurement/parse","/api/measurement/compare","/api/variant/create","/api/measurement/bind","/api/report/generate"}:
             self.send_json({"error":"Not found"},HTTPStatus.NOT_FOUND); return
         try:
             body=self.read_json()
@@ -210,8 +219,30 @@ class Handler(SimpleHTTPRequestHandler):
                 ms=body.get("measurement"); sw=body.get("sweep")
                 if not isinstance(ms,dict) or not isinstance(sw,dict): raise ValueError("measurement and sweep must be objects")
                 self.send_json({"ok":True,"comparison":measurement.compare_measurement_to_sweep(ms,sw)}); return
+            if parsed.path == "/api/measurement/bind":
+                variant=body.get("variant"); ms=body.get("measurement"); raw_text=body.get("raw_text")
+                if not isinstance(variant,dict) or not isinstance(ms,dict) or not isinstance(raw_text,str): raise ValueError("variant, measurement and raw_text are required")
+                calibration=body.get("calibration") if isinstance(body.get("calibration"),dict) else {}
+                provenance=body.get("provenance") if isinstance(body.get("provenance"),dict) else {}
+                bound=workflow.create_measurement_set(str(body.get("measurement_id","measurement-1")),variant,ms,raw_text,calibration,provenance)
+                self.send_json({"ok":True,"measurement_set":bound}); return
+            if parsed.path == "/api/report/generate":
+                variant=body.get("variant"); mset=body.get("measurement_set"); sw=body.get("sweep"); ms=body.get("measurement"); cmp=body.get("comparison")
+                if not all(isinstance(x,dict) for x in (variant,mset,sw,ms,cmp)): raise ValueError("variant, measurement_set, sweep, measurement and comparison are required")
+                candidates=sorted(BENCHMARKS.glob("REFERENCE_STATUS_ALPHA*.json")); ref=load_json(candidates[-1]) if candidates else {}
+                report=workflow.generate_engineering_report(variant,mset,sw,ms,cmp,ref)
+                self.send_json({"ok":True,"report":report}); return
             project=body.get("project")
             if not isinstance(project,dict): raise ValueError("project must be a JSON object")
+            if parsed.path == "/api/variant/create":
+                with tempfile.TemporaryDirectory(prefix="emnext-variant-") as td:
+                    project_path=Path(td)/"project.emnx"; project_path.write_text(json.dumps(project,ensure_ascii=False,indent=2),encoding="utf-8")
+                    proc=subprocess.run([str(self.emnext),"model-check",str(project_path)],text=True,capture_output=True,timeout=30)
+                    if proc.returncode!=0: self.send_json({"ok":False,"stdout":proc.stdout,"stderr":proc.stderr},HTTPStatus.UNPROCESSABLE_ENTITY); return
+                    model_hash=next((line.split("Model hash:",1)[1].strip() for line in proc.stdout.splitlines() if line.startswith("Model hash:")),None)
+                    if not model_hash: raise ValueError("model-check did not return model hash")
+                    variant=workflow.create_design_variant(str(body.get("variant_id","variant-1")),str(body.get("name",project.get("name","Design Variant"))),model_hash,str(body.get("model_hash_algorithm","fnv1a64-emnext-model-v3")),body.get("parent_variant_id"),body.get("tags") if isinstance(body.get("tags"),list) else [],str(body.get("notes","")))
+                    self.send_json({"ok":True,"variant":variant,"model_check_stdout":proc.stdout}); return
             kernel=body.get("kernel","reduced")
             if kernel not in {"reduced","exact"}: raise ValueError("kernel must be reduced or exact")
             parallel_workers=int(body.get("parallel_workers", os.environ.get("EMNEXT_PARALLEL_WORKERS","4") if os.environ.get("EMNEXT_PARALLEL_WORKERS","auto") != "auto" else 4))
