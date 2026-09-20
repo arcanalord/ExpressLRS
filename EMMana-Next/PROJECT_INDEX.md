@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev17  
+**Current version:** 0.1.0-alpha.20-rev18  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev17-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev18-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -183,3 +183,16 @@ Rev15 reconciles the valid rev10–rev14 history with the later canonical measur
 - Independent reference/trust status moved out of the top bar into Technical details.
 - Measurement and immutable report internals remain implemented but are presented with simpler user wording.
 - No solver physics, EMNX schema, measurement contract, or API change.
+
+
+## Rev18 — 2D wire geometry editor
+
+- Geometry tab is now real and therefore appears in the workspace navigation.
+- Three projections: XY / XZ / YZ.
+- Wire selection by click; endpoint dragging changes only the two visible axes and preserves the hidden coordinate.
+- Numeric Start/End XYZ, diameter and segment editing.
+- Add wire, delete wire, assign the single supported feed, model-check.
+- Delete refuses wires referenced by optimizer design_variables/design_constraints.
+- Raw EMNX JSON remains the physical source of truth; no parallel geometry model is introduced.
+- No 3D/WebGL stack in rev18.
+- Solver physics, schemas and backend APIs are unchanged.

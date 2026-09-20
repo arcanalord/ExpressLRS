@@ -105,7 +105,7 @@ async function saveVariant(){
   try{
     const p=project(),name=(els.variantName.value||p.name||'Design Variant').trim(),variant_id='variant-'+Date.now().toString(36);
     els.variantSave.disabled=true;status('сохраняю immutable variant…');
-    const j=await api('/api/variant/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,variant_id,name,tags:['ui-rev16']})});
+    const j=await api('/api/variant/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,variant_id,name,tags:['ui-rev18']})});
     lastVariant=j.variant;lastMeasurementSet=null;lastReport=null;
     variantHistory=[lastVariant,...variantHistory.filter(v=>v.immutability?.fingerprint!==lastVariant.immutability?.fingerprint)].slice(0,8);
     persistVariantHistory();renderVariantHistory();renderReportPreview();syncWorkflowButtons();

@@ -186,6 +186,13 @@ if(EMNEXT_BUILD_TESTS)
               ${CMAKE_SOURCE_DIR}
     )
 
+    add_test(
+      NAME emnext_geometry_editor
+      COMMAND ${Python3_EXECUTABLE}
+              ${CMAKE_SOURCE_DIR}/tests/test_geometry_editor.py
+              ${CMAKE_SOURCE_DIR}
+    )
+
     find_program(EMNEXT_NODE_EXECUTABLE node)
     if(EMNEXT_NODE_EXECUTABLE)
       add_test(
