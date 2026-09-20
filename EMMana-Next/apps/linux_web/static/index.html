@@ -115,6 +115,12 @@
         <button class="inline-help" type="button" data-help-topic="emmana-next.geometry.editor">? Справка</button>
       </div>
       <div class="panel geometry-panel">
+        <div class="geometry-template-bar">
+          <label>Шаблон<select id="geometry-template"><option value="">Загрузка…</option></select></label>
+          <label>Частота, MHz<input id="geometry-template-frequency" type="number" min="0.001" step="0.001"></label>
+          <button id="geometry-template-create" class="primary" type="button">Создать и рассчитать</button>
+          <span id="geometry-template-status">Dipole · GP · Yagi · Loop</span>
+        </div>
         <div class="geometry-toolbar">
           <div class="segmented geometry-projections" role="group" aria-label="Проекция">
             <button type="button" data-geometry-projection="xy">XY</button>

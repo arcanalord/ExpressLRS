@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev18  
+**Current version:** 0.1.0-alpha.20-rev19  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev18-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev19-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -196,3 +196,14 @@ Rev15 reconciles the valid rev10–rev14 history with the later canonical measur
 - Raw EMNX JSON remains the physical source of truth; no parallel geometry model is introduced.
 - No 3D/WebGL stack in rev18.
 - Solver physics, schemas and backend APIs are unchanged.
+
+
+## Rev19 — four starter antenna templates
+
+- Geometry workspace exposes one compact Template bar.
+- Implemented choices come from the existing Template Registry, not a second UI-owned list.
+- User-facing starter set: Half-wave Dipole, quarter-wave GP/monopole over PEC, 3-element Yagi, Square full-wave Loop.
+- Button “Создать и рассчитать” replaces the current model only after confirmation, performs model-check and a single solve.
+- Square Loop is marked experimental until independent reference validation is added.
+- Existing Dipole reference-validated and GP/Yagi characterized statuses are preserved.
+- No solver/API/schema architecture change.
