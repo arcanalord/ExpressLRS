@@ -15,7 +15,11 @@ assert abs(q["points"][0]["s11"]["re"])<1e-9 and abs(q["points"][0]["s11"]["im"]
 db="# MHz S DB R 50\n100 -6.020599913 0\n"
 d=m.parse_touchstone_s1p(db);assert abs(d["points"][0]["s11"]["mag"]-0.5)<1e-6
 csv="frequency_hz,R_ohm,X_ohm\n100000000,50,0\n150000000,100,0\n200000000,50,0\n"
-v=m.parse_vna_csv(csv);assert len(v["points"])==3
+v=m.parse_vna_csv(csv);assert len(v["points"])==3 and v["source_profile"]=="impedance-rx"
+csv_ri="Frequency_Hz,S11_Real,S11_Imaginary\n100000000,0,0\n150000000,0.3333333333,0\n200000000,0,0\n"
+vri=m.parse_vna_csv(csv_ri);assert vri["source_profile"]=="s11-ri" and abs(vri["points"][1]["z_ohm"]["re"]-100)<1e-6
+csv_db="Frequency_Hz,S11_dB,S11_Phase_Deg\n100000000,-6.020599913,0\n"
+vdb=m.parse_vna_csv(csv_db);assert vdb["source_profile"]=="s11-db-phase" and abs(vdb["points"][0]["s11"]["mag"]-0.5)<1e-6
 sim={"samples":[{"frequency_hz":100e6,"impedance_ohm":{"re":50,"im":0}},{"frequency_hz":150e6,"impedance_ohm":{"re":90,"im":10}},{"frequency_hz":200e6,"impedance_ohm":{"re":50,"im":0}}]}
 cmp=m.compare_measurement_to_simulation(v,sim)
 assert cmp["summary"]["overlap_points"]==3

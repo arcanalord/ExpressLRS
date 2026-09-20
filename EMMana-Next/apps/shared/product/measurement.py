@@ -84,26 +84,49 @@ def parse_touchstone_s1p(text: str, source_name: str="inline.s1p") -> dict:
 def parse_vna_csv(text: str, source_name: str="inline.csv") -> dict:
     reader=csv.DictReader(io.StringIO(text))
     if not reader.fieldnames: raise ValueError("CSV header is required")
-    names={n.strip().lower():n for n in reader.fieldnames}
+    def norm(name: str) -> str:
+        return "".join(ch for ch in name.strip().lower() if ch.isalnum())
+    names={norm(n):n for n in reader.fieldnames}
     def key(*alts):
         for a in alts:
-            if a in names:return names[a]
+            k=norm(a)
+            if k in names:return names[k]
         return None
     fk=key("frequency_hz","frequency","freq_hz","freq")
     rk=key("r_ohm","resistance_ohm","resistance","r")
     xk=key("x_ohm","reactance_ohm","reactance","x")
-    if not (fk and rk and xk): raise ValueError("VNA CSV requires frequency_hz/frequency, R and X columns")
-    rows=[]
+    rek=key("s11_real","s11real","s11_re","real")
+    imk=key("s11_imaginary","s11_imag","s11imaginary","s11_im","imaginary","imag")
+    dbk=key("s11_db","s11db","return_loss_db")
+    phk=key("s11_phase_deg","s11phase_deg","phase_deg","phase")
+    if not fk: raise ValueError("VNA CSV requires a frequency column")
+    if rk and xk: profile="impedance-rx"
+    elif rek and imk: profile="s11-ri"
+    elif dbk and phk: profile="s11-db-phase"
+    else: raise ValueError("VNA CSV requires R/X, S11 Real/Imag, or S11 dB/Phase columns")
+    rows=[]; z0=50.0
     for src in reader:
-        f=float(src[fk]); r=float(src[rk]); x=float(src[xk])
-        if not all(_finite(v) for v in (f,r,x)): raise ValueError("Non-finite VNA CSV value")
-        z=complex(r,x); gamma=(z-50.0)/(z+50.0) if abs(z+50.0)>1e-15 else complex(1,0)
-        row={"frequency_hz":f,"z_ohm":{"re":r,"im":x}}
-        row.update({"s11":_s11_to_derived(gamma,50.0)["s11"],"vswr":_s11_to_derived(gamma,50.0)["vswr"]})
-        rows.append(row)
+        f=float(src[fk])
+        if not (_finite(f) and f>0): raise ValueError("VNA CSV frequency must be positive and finite")
+        if profile=="impedance-rx":
+            r=float(src[rk]); x=float(src[xk])
+            if not all(_finite(v) for v in (r,x)): raise ValueError("Non-finite VNA CSV impedance value")
+            z=complex(r,x); gamma=(z-z0)/(z+z0) if abs(z+z0)>1e-15 else complex(1,0)
+            derived=_s11_to_derived(gamma,z0)
+        elif profile=="s11-ri":
+            re=float(src[rek]); im=float(src[imk])
+            if not all(_finite(v) for v in (re,im)): raise ValueError("Non-finite VNA CSV S11 value")
+            derived=_s11_to_derived(complex(re,im),z0)
+        else:
+            db=float(src[dbk]); phase=float(src[phk])
+            if not all(_finite(v) for v in (db,phase)): raise ValueError("Non-finite VNA CSV S11 value")
+            derived=_s11_to_derived(cmath.rect(10.0**(db/20.0),math.radians(phase)),z0)
+        rows.append({"frequency_hz":f,"z_ohm":derived["z_ohm"],"s11":derived["s11"],"vswr":derived["vswr"]})
     if not rows: raise ValueError("VNA CSV contains no data")
     rows.sort(key=lambda x:x["frequency_hz"])
-    return {"schema_version":"0.1","source_format":"vna-csv","source_name":source_name,"reference_ohm":50.0,"points":rows}
+    if any(rows[i]["frequency_hz"]<=rows[i-1]["frequency_hz"] for i in range(1,len(rows))):
+        raise ValueError("VNA CSV frequencies must be unique")
+    return {"schema_version":"0.1","source_format":"vna-csv","source_profile":profile,"source_name":source_name,"reference_ohm":z0,"points":rows}
 
 def _interp(points: list[dict], f: float, field: str) -> float:
     if f < points[0]["frequency_hz"] or f > points[-1]["frequency_hz"]:

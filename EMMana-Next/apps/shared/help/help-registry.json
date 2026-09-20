@@ -209,7 +209,7 @@
       "id": "emmana-next.measurement.compare",
       "title": "Simulation vs Measurement",
       "summary": "Сравнивает частотный Sweep EMMana-Next с отдельным файлом измерений S1P или VNA CSV.",
-      "body": "Импорт measurement не изменяет EMNX и не заменяет simulation. Выполните Sweep на диапазоне, который пересекается с измерением, затем нажмите Сравнить. Дельты считаются как simulation − measurement; measurement линейно интерполируется на частотную сетку simulation.",
+      "body": "Импорт measurement не изменяет EMNX и не заменяет simulation. S1P поддерживает RI/MA/DB. CSV автоматически распознаёт Frequency + R/X, Frequency + S11 Real/Imag или Frequency + S11 dB/Phase. Выполните Sweep на пересекающемся диапазоне, затем нажмите Сравнить. Дельты считаются как simulation − measurement; measurement линейно интерполируется на частотную сетку simulation.",
       "keywords": [
         "measurement",
         "S1P",

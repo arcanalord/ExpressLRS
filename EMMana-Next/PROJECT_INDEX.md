@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev13  
+**Current version:** 0.1.0-alpha.20-rev14  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev13-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev14-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -130,3 +130,13 @@ Measurement provenance now HTML-escapes user-controlled file names and reference
 ## Rev13 integration-gate fix
 
 The measurement UI and rev12 provenance escaping are unchanged. The Linux integration smoke now uses an S1P fixture at 285/300/315 MHz so it overlaps the existing 285–315 MHz simulation sweep. Non-overlapping measurement/simulation ranges remain a hard API error.
+
+
+## VNA CSV profiles — rev14
+
+CSV import now auto-detects three simple schemas:
+- Frequency + R/X
+- Frequency + S11 Real/Imag
+- Frequency + S11 dB/Phase
+
+No vendor-specific adapter layer and no UI mode selector were added. Parsed measurements expose source_profile for provenance.
