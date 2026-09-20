@@ -1,0 +1,81 @@
+{
+  "schema_version": "0.5",
+  "name": "T04 square full-wave loop lambda=1m",
+  "frequency_hz": 299792458,
+  "ground": {
+    "model": "free-space",
+    "plane_z_m": 0,
+    "relative_permittivity": 13,
+    "conductivity_s_per_m": 0.005
+  },
+  "wires": [
+    {
+      "id": "W1",
+      "start_m": [
+        -0.125,
+        0,
+        -0.125
+      ],
+      "end_m": [
+        0.125,
+        0,
+        -0.125
+      ],
+      "radius_m": 0.001,
+      "segments": 11
+    },
+    {
+      "id": "W2",
+      "start_m": [
+        0.125,
+        0,
+        -0.125
+      ],
+      "end_m": [
+        0.125,
+        0,
+        0.125
+      ],
+      "radius_m": 0.001,
+      "segments": 11
+    },
+    {
+      "id": "W3",
+      "start_m": [
+        0.125,
+        0,
+        0.125
+      ],
+      "end_m": [
+        -0.125,
+        0,
+        0.125
+      ],
+      "radius_m": 0.001,
+      "segments": 11
+    },
+    {
+      "id": "W4",
+      "start_m": [
+        -0.125,
+        0,
+        0.125
+      ],
+      "end_m": [
+        -0.125,
+        0,
+        -0.125
+      ],
+      "radius_m": 0.001,
+      "segments": 11
+    }
+  ],
+  "feeds": [
+    {
+      "wire_id": "W1",
+      "segment": 5,
+      "voltage_re_v": 1,
+      "voltage_im_v": 0
+    }
+  ]
+}

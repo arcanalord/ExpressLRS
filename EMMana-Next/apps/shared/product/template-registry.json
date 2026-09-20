@@ -80,6 +80,31 @@
       ]
     },
     {
+      "id": "square-loop",
+      "label": "Square full-wave loop",
+      "status": "implemented",
+      "seed_model": "benchmarks/T04_square_fullwave_loop.emnx",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental",
+      "parameters": [
+        {
+          "id": "frequency_hz",
+          "type": "number",
+          "min": 1000000,
+          "max": 3000000000
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "single-band loop antenna",
+        "geometry-editor starter"
+      ]
+    },
+    {
       "id": "moxon",
       "label": "Moxon rectangle",
       "status": "planned",
