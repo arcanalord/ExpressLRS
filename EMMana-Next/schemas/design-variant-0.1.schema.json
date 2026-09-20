@@ -1,0 +1,17 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://fpv-club.ru/schemas/emnext/design-variant-0.1.schema.json",
+  "title":"EMMana-Next DesignVariant v0.1",
+  "type":"object",
+  "required":["schema_version","variant_id","name","model_ref","lineage","annotations","immutability"],
+  "properties":{
+    "schema_version":{"const":"0.1"},
+    "variant_id":{"type":"string","minLength":1},
+    "name":{"type":"string","minLength":1},
+    "model_ref":{"type":"object","required":["model_hash_algorithm","model_hash"],"properties":{"model_hash_algorithm":{"type":"string","minLength":1},"model_hash":{"type":"string","minLength":1}},"additionalProperties":false},
+    "lineage":{"type":"object","required":["parent_variant_id"],"properties":{"parent_variant_id":{"type":["string","null"]}},"additionalProperties":false},
+    "annotations":{"type":"object","required":["tags","notes"],"properties":{"tags":{"type":"array","uniqueItems":true,"items":{"type":"string"}},"notes":{"type":"string"}},"additionalProperties":false},
+    "immutability":{"type":"object","required":["fingerprint_algorithm","fingerprint"],"properties":{"fingerprint_algorithm":{"const":"sha256-canonical-json-v1"},"fingerprint":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"additionalProperties":false}
+  },
+  "additionalProperties":false
+}

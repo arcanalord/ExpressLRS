@@ -1,0 +1,18 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://fpv-club.ru/schemas/emnext/measurement-set-0.2.schema.json",
+  "title":"EMMana-Next Measurement Set v0.2",
+  "type":"object",
+  "required":["schema_version","measurement_id","variant_ref","source","normalized","calibration","provenance","immutability"],
+  "properties":{
+    "schema_version":{"const":"0.2"},
+    "measurement_id":{"type":"string","minLength":1},
+    "variant_ref":{"type":"object","required":["variant_id","variant_fingerprint","model_hash_algorithm","expected_model_hash"],"properties":{"variant_id":{"type":"string","minLength":1},"variant_fingerprint":{"type":"string","pattern":"^[0-9a-f]{64}$"},"model_hash_algorithm":{"type":"string","minLength":1},"expected_model_hash":{"type":"string","minLength":1}},"additionalProperties":false},
+    "source":{"type":"object","required":["format","name","raw_sha256"],"properties":{"format":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"profile":{"type":["string","null"]},"raw_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"additionalProperties":false},
+    "normalized":{"type":"object","required":["parameter","reference_impedance_ohm","sample_count","data_sha256"],"properties":{"parameter":{"type":"string","minLength":1},"reference_impedance_ohm":{"type":"number","exclusiveMinimum":0},"sample_count":{"type":"integer","minimum":1},"data_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"additionalProperties":false},
+    "calibration":{"type":"object","required":["type","reference_plane_note","fixture_deembedded"],"properties":{"type":{"enum":["unknown","SOL","SOLT","TRL","other"]},"reference_plane_note":{"type":"string"},"fixture_deembedded":{"type":"boolean"}},"additionalProperties":false},
+    "provenance":{"type":"object","required":["instrument_or_source","operator","measured_at","notes"],"properties":{"instrument_or_source":{"type":"string","minLength":1},"operator":{"type":"string"},"measured_at":{"type":"string"},"notes":{"type":"string"}},"additionalProperties":false},
+    "immutability":{"type":"object","required":["fingerprint_algorithm","fingerprint"],"properties":{"fingerprint_algorithm":{"const":"sha256-canonical-json-v1"},"fingerprint":{"type":"string","pattern":"^[0-9a-f]{64}$"}},"additionalProperties":false}
+  },
+  "additionalProperties":false
+}

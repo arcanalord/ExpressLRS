@@ -1,0 +1,20 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://fpv-club.ru/schemas/emnext/engineering-report-0.1.schema.json",
+  "title":"EMMana-Next Engineering Report v0.1",
+  "type":"object",
+  "required":["schema_version","variant_ref","measurement_ref","simulation","measurement","correlation","evidence","limitations","immutability","markdown"],
+  "properties":{
+    "schema_version":{"const":"0.1"},
+    "variant_ref":{"type":"object"},
+    "measurement_ref":{"type":"object"},
+    "simulation":{"type":"object"},
+    "measurement":{"type":"object"},
+    "correlation":{"type":"object"},
+    "evidence":{"type":"object"},
+    "limitations":{"type":"array","items":{"type":"string"}},
+    "immutability":{"type":"object"},
+    "markdown":{"type":"string"}
+  },
+  "additionalProperties":false
+}
