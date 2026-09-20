@@ -39,7 +39,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --disable-pip-version-check pyinstaller
-          python -m PyInstaller --noconfirm --clean --onefile --name EMMana-Next --add-binary "build-win/Release/emnext.exe;EMMana-Next" --add-data "apps;EMMana-Next/apps" --add-data "benchmarks;EMMana-Next/benchmarks" --add-data "schemas;EMMana-Next/schemas" --add-data "VERSION;EMMana-Next" apps/windows_launcher.py
+          python -m PyInstaller --noconfirm --clean --onefile --name EMMana-Next --hidden-import json --hidden-import hashlib --hidden-import importlib.util --hidden-import math --hidden-import subprocess --hidden-import tempfile --hidden-import urllib.parse --hidden-import http --hidden-import http.server --hidden-import cmath --hidden-import csv --hidden-import io --hidden-import re --hidden-import typing --add-binary "build-win/Release/emnext.exe;EMMana-Next" --add-data "apps;EMMana-Next/apps" --add-data "benchmarks;EMMana-Next/benchmarks" --add-data "schemas;EMMana-Next/schemas" --add-data "VERSION;EMMana-Next" apps/windows_launcher.py
       - name: Portable launcher runtime gate
         shell: pwsh
         run: |
