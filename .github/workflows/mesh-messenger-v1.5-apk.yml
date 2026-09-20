@@ -41,13 +41,12 @@ jobs:
         with:
           gradle-version: "8.13"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android SDK 36
         shell: bash
         run: |
           set -euo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          command -v sdkmanager
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
@@ -57,10 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _mesh_source/dropbox
-          curl -L --fail --retry 3 --retry-delay 2 \
-            "$DROPBOX_FOLDER_URL" \
-            -o _mesh_source/dropbox-folder.zip
-
+          curl -L --fail --retry 3 --retry-delay 2 "$DROPBOX_FOLDER_URL" -o _mesh_source/dropbox-folder.zip
           unzip -q _mesh_source/dropbox-folder.zip -d _mesh_source/dropbox
 
           SOURCE_ZIP="$(find _mesh_source/dropbox -type f -name 'SOURCE_CURRENT_v1.5.zip' -print -quit)"
