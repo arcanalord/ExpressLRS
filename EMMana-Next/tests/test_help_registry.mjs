@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+const root=process.argv[2] || path.resolve(path.dirname(new URL(import.meta.url).pathname),'..');
+const data=JSON.parse(fs.readFileSync(path.join(root,'apps/shared/help/help-registry.json'),'utf8'));
+const mod=await import(pathToFileURL(path.join(root,'apps/shared/help/help-registry.js')).href);
+const r=new mod.HelpRegistry(data);
+if(r.get('emmana-next.result.zin')?.id!=='emmana-next.result.zin') throw new Error('get failed');
+if(r.resolve('INVALID_GROUND_TERMINAL')?.id!=='emmana-next.error.invalid-ground-terminal') throw new Error('error map failed');
+if(r.resolve('unknown')?.id!==data.fallbackTopic) throw new Error('fallback failed');
+if(!r.search('B02').some(x=>x.id==='emmana-next.benchmark.b02')) throw new Error('B02 search failed');
+if(!r.search('ground').some(x=>x.id==='emmana-next.ground.model')) throw new Error('ground search failed');
+if(mod.topicFromLocation('http://localhost/help?topic=emmana-next.result.vswr',data.fallbackTopic)!=='emmana-next.result.vswr') throw new Error('deep link failed');
+console.log('HELP REGISTRY JS PASS');
