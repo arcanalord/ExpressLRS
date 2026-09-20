@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev14  
+**Current version:** 0.1.0-alpha.20-rev15  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev14-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev15-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -150,3 +150,16 @@ Canonical normalized contract now uses `samples`, nested `source`, and `referenc
 - VNA CSV: S11 real/imag, S11 dB/phase, or R/X
 - Comparison alignment: measurement interpolated onto simulation sweep frequencies within overlap
 - Metrics: delta R, delta X, delta S11 dB, delta VSWR and resonance shift
+
+
+## Rev15 — baseline reconciliation + immutable engineering artifacts
+
+Rev15 reconciles the valid rev10–rev14 history with the later canonical measurement-contract commits. Git history is preserved; no force-reset is used.
+
+- Canonical runtime measurement fields remain samples, nested source, and reference_impedance_ohm.
+- Generic VNA CSV profile detection is preserved as source.profile, not restored as a parallel legacy field.
+- DesignVariant v0.1 binds a named candidate to one exact EMNX model hash and immutable fingerprint.
+- MeasurementSet v0.2 binds raw and normalized measurement SHA-256 values to exactly one DesignVariant/model hash.
+- Engineering Report v0.1 binds simulation, measurement correlation and recorded evidence status without modifying solver trust.
+- New API: /api/variant/create, /api/measurement/bind, /api/report/generate.
+- Solver physics and EMNX schema are unchanged.
