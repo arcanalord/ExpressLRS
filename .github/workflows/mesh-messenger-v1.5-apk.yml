@@ -1,0 +1,151 @@
+name: Mesh Messenger v1.5 APK
+
+on:
+  push:
+    branches:
+      - ci/mesh-messenger-v1.5-apk
+    paths:
+      - ".github/workflows/mesh-messenger-v1.5-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-messenger-v1.5-apk
+  cancel-in-progress: true
+
+env:
+  SOURCE_SHA256: 1aeae2eec49b264a21004990e6827cd68d6ad00ae09d9065f95cab8d2809e054
+  DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
+  GRADLE_VERSION: "8.13"
+  BUILD_TOOLS_VERSION: "35.0.0"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout CI branch
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Download exact v1.5 source from Dropbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _mesh_source/dropbox
+          curl -L --fail --retry 3 --retry-delay 2 \
+            "$DROPBOX_FOLDER_URL" \
+            -o _mesh_source/dropbox-folder.zip
+
+          unzip -q _mesh_source/dropbox-folder.zip -d _mesh_source/dropbox
+
+          SOURCE_ZIP="$(find _mesh_source/dropbox -type f -name 'SOURCE_CURRENT_v1.5.zip' -print -quit)"
+          if [ -z "$SOURCE_ZIP" ]; then
+            echo "SOURCE_CURRENT_v1.5.zip was not found in Dropbox export" >&2
+            find _mesh_source/dropbox -maxdepth 5 -type f -print | sort
+            exit 1
+          fi
+
+          echo "$SOURCE_SHA256  $SOURCE_ZIP" | sha256sum -c -
+          cp "$SOURCE_ZIP" _mesh_source/SOURCE_CURRENT_v1.5.zip
+          unzip -q _mesh_source/SOURCE_CURRENT_v1.5.zip -d _mesh_source/unpacked
+
+          ANDROID_DIR="$(find _mesh_source/unpacked -type d -name android-app -print -quit)"
+          if [ -z "$ANDROID_DIR" ]; then
+            echo "android-app directory was not found in source archive" >&2
+            exit 1
+          fi
+
+          echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
+
+      - name: Verify source metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'versionCode = 16' "$ANDROID_DIR/app/build.gradle.kts"
+          grep -q 'versionName = "1.5"' "$ANDROID_DIR/app/build.gradle.kts"
+          grep -q 'applicationId = "org.fpvclub.mesh"' "$ANDROID_DIR/app/build.gradle.kts"
+          java -version
+          gradle --version
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p "$ANDROID_DIR" --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose "$APK"
+          aapt dump badging "$APK" | tee _mesh_source/aapt-badging.txt
+
+          grep -q "package: name='org.fpvclub.mesh'" _mesh_source/aapt-badging.txt
+          grep -q "versionCode='16'" _mesh_source/aapt-badging.txt
+          grep -q "versionName='1.5'" _mesh_source/aapt-badging.txt
+
+          sha256sum "$APK" | tee _mesh_source/APK_SHA256.txt
+          cp "$APK" _mesh_source/MeshMessenger-v1.5-debug.apk
+
+      - name: Write build provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Mesh Messenger v1.5 GitHub Actions build"
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "ref=$GITHUB_REF"
+            echo "commit=$GITHUB_SHA"
+            echo "runner_os=$RUNNER_OS"
+            echo "source_sha256=$SOURCE_SHA256"
+            echo "gradle=$GRADLE_VERSION"
+            echo "build_tools=$BUILD_TOOLS_VERSION"
+            echo "application_id=org.fpvclub.mesh"
+            echo "version_name=1.5"
+            echo "version_code=16"
+            echo
+            java -version 2>&1
+            echo
+            gradle --version
+          } > _mesh_source/BUILD_PROVENANCE.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesh-messenger-v1.5-debug-apk
+          path: |
+            _mesh_source/MeshMessenger-v1.5-debug.apk
+            _mesh_source/APK_SHA256.txt
+            _mesh_source/aapt-badging.txt
+            _mesh_source/BUILD_PROVENANCE.txt
+          if-no-files-found: error
+          retention-days: 30
