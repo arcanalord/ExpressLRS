@@ -9,7 +9,7 @@ ids=re.findall(r'\bid="([^"]+)"',html)
 dups=sorted({x for x in ids if ids.count(x)>1})
 assert not dups, f'duplicate DOM ids: {dups}'
 for marker in ('geometry-canvas','geometry-add','geometry-feed','geometry-delete','geometry-sx','geometry-ex','geometry-diameter','geometry-segments'): assert marker in html, marker
-for marker in ("geometryAxes={xy:[0,1,'X','Y'],xz:[0,2,'X','Z'],yz:[1,2,'Y','Z']}",'function renderGeometry','function geometryPointerDown','function geometryPointerMove','function addGeometryWire','function deleteGeometryWire','function assignGeometryFeed',"const hidden=[0,1,2].find"): assert marker in js, marker
+for marker in ("geometryAxes={xy:[0,1,'X','Y'],xz:[0,2,'X','Z'],yz:[1,2,'Y','Z']}",'function renderGeometry','function geometryPointerDown','function geometryPointerMove','function addGeometryWire','function deleteGeometryWire','function assignGeometryFeed',"hidden=[0,1,2].find"): assert marker in js, marker
 assert "new Set(['model','geometry','solve','optimize','measurement'])" in js
 assert 'three.js' not in html.lower() and 'webgl' not in js.lower()
 print('GEOMETRY EDITOR STRUCTURE PASS: 2D projections, unique DOM ids, no hidden 3D stack')
