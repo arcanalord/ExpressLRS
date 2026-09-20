@@ -1,229 +1,149 @@
-
-  
-    
-      ☰
-      EM
-
-      EMMana-NextLinux Lab
-
-    
-
-    
-      trust…
-      загрузка…
-      ? Справка
-      ?
-      Рассчитать
-    
-
-  
-
-  
-    Параметры×
-
-    ПРОЕКТ
-
-    Пример—
-
-
-
-    GROUND
-
-    Модель земли
-      Free space
-PEC ground
-Real ground · experimental
-
-
-    
-    
-      Plane Z, m
-      εr
-      σ, S/m
-    
-
-    ? Как работает земля
-
-    SOLVER
-
-    
-      Reduced
-      Exact validation
-    
-
-    Проверить модель
-
-    SWEEP
-
-    
-      От, MHz
-      До, MHz
-      Точек
-      Workers
-    
-
-    Частотный Sweep
-
-    OPTIMIZER
-
-    АлгоритмPSO → Nelder–Mead
-PSO
-Differential Evolution
-
-
-    
-      Популяция
-      Поколений
-      Local iter
-      Seed
-      W match
-      W gain
-      W F/B
-      W size
-      Gain loss max, dB
-      VSWR max
-      Band от, MHz
-      Band до, MHz
-      Band точек
-      Шаг изготовления, mm
-      Допуск ±, mm
-      Robust samples
-      Monte Carlo
-    
-
-    Оптимизировать
-    Linux-проверочная версия. Расчёт выполняет тот же C++ Wire-MoM core. Real-ground в alpha.20 — experimental complex-image approximation, не Sommerfeld/Norton.
-
-  
-  
-
-
-  
-    
-      ТЕКУЩАЯ МОДЕЛЬ—
-
-—
-
-
-
-      REDUCED
-    
-
-    
-      Zin—Ω
-      VSWR—50 Ω
-      Dmax—dBi
-      Efficiency—%
-      Accepted—W
-      Radiated—W
-      Dissipated—W
-      Power balance—relative
-    
-
-    
-      FREQUENCY SWEEPS11 / VSWR / Zin
-
-
-ещё не рассчитан
-
-      
-    
-
-    
-      PARAMETRIC OPTIMIZERGlobal → Local · robust band worst-case · Pareto
-
-
-ещё не запускался
-
-      
-        Переменные / Constraints
-
-В проекте нет design_variables.
-
-
-
-        Balanced result
-
-—
-Применить balanced
-
-        Pareto варианты
-
-—
-
-
-        История
-
-
-
-      
-
-    
-
-    
-      FAR FIELDДиаграмма направленности
-
-
-φ = 0°
-
-      CURRENTТоки по сегментам
-
-
-|I|
-
-    
-
-    
-      EMNXМодель
-
-
-JSON
-
-      DIAGNOSTICSПроверка и предупреждения
-
-
-? Справка
-Расчёт ещё не запускался.
-
-ResultSet JSON—
-
-
-    
-  
-
-
-
-
-  QUICK HELPСправка
-
-
-×
-
-  
-
-
-
-
-
-
-  Расширенная справка
-
-
-
-
-
-  EMMana-Next HELPРасширенная справка
-
-
-×
-  
-    
-
-    ← Назад к краткой—
-
-
-
-
-
-
-  
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>EMMana-Next · Linux Lab</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <button id="mobile-menu" class="icon-button mobile-only" type="button" aria-label="Открыть параметры">☰</button>
+      <div class="logo" aria-hidden="true">EM</div>
+      <div><b>EMMana-Next</b><small id="version">Linux Lab</small></div>
+    </div>
+    <div class="top-actions">
+      <span id="reference-status" class="status">trust…</span>
+      <span id="status" class="status">загрузка…</span>
+      <button id="help-trigger" class="secondary help-trigger desktop-help" type="button" data-help-topic="emmana-next.overview">? Справка</button>
+      <button id="help-trigger-mobile" class="secondary icon-button mobile-help" type="button" aria-label="Справка" data-help-topic="emmana-next.overview">?</button>
+      <button id="run" class="primary" type="button">Рассчитать</button>
+    </div>
+  </header>
+
+  <aside id="sidebar" class="sidebar" aria-label="Параметры расчёта">
+    <div class="sidebar-mobile-head mobile-only"><b>Параметры</b><button id="sidebar-close" class="icon-button" type="button" aria-label="Закрыть параметры">×</button></div>
+    <div class="section-title">ПРОЕКТ</div>
+    <label>Пример<select id="example"><option value="">—</option></select></label>
+
+    <div class="section-title">GROUND</div>
+    <label>Модель земли
+      <select id="ground-mode">
+        <option value="free-space">Free space</option>
+        <option value="pec-image-v1">PEC ground</option>
+        <option value="homogeneous-halfspace-image-v1">Real ground · experimental</option>
+      </select>
+    </label>
+    <div class="ground-fields">
+      <label>Plane Z, m<input id="ground-plane" type="number" step="0.001" value="0"></label>
+      <label>εr<input id="ground-epsr" type="number" step="0.1" min="1" value="13"></label>
+      <label>σ, S/m<input id="ground-sigma" type="number" step="0.001" min="0" value="0.005"></label>
+    </div>
+    <button class="inline-help" type="button" data-help-topic="emmana-next.ground.model">? Как работает земля</button>
+
+    <div class="section-title">SOLVER</div>
+    <div class="segmented" role="group" aria-label="Kernel">
+      <button type="button" data-kernel="reduced" class="active">Reduced</button>
+      <button type="button" data-kernel="exact">Exact validation</button>
+    </div>
+    <button id="check" class="secondary full" type="button">Проверить модель</button>
+
+    <div class="section-title sweep-title">SWEEP</div>
+    <div class="sweep-fields">
+      <label>От, MHz<input id="sweep-start" type="number" step="0.1" value="270"></label>
+      <label>До, MHz<input id="sweep-stop" type="number" step="0.1" value="330"></label>
+      <label>Точек<input id="sweep-points" type="number" min="2" max="81" value="21"></label>
+      <label>Workers<input id="parallel-workers" type="number" min="1" max="16" value="4"></label>
+    </div>
+    <button id="run-sweep" class="secondary full" type="button">Частотный Sweep</button>
+
+    <div class="section-title optimizer-title">OPTIMIZER</div>
+    <label>Алгоритм<select id="opt-alg"><option value="staged">PSO → Nelder–Mead</option><option value="pso">PSO</option><option value="de">Differential Evolution</option></select></label>
+    <div class="optimizer-fields">
+      <label>Популяция<input id="opt-pop" type="number" min="4" max="32" value="10"></label>
+      <label>Поколений<input id="opt-gen" type="number" min="1" max="30" value="6"></label>
+      <label>Local iter<input id="opt-local" type="number" min="0" max="40" value="12"></label>
+      <label>Seed<input id="opt-seed" type="number" min="0" value="42"></label>
+      <label>W match<input id="opt-w-match" type="number" min="0" value="40"></label>
+      <label>W gain<input id="opt-w-gain" type="number" min="0" value="30"></label>
+      <label>W F/B<input id="opt-w-fb" type="number" min="0" value="20"></label>
+      <label>W size<input id="opt-w-size" type="number" min="0" value="10"></label>
+      <label>Gain loss max, dB<input id="opt-gain-guard" type="number" min="0" value="0.5" step="0.1"></label>
+      <label>VSWR max<input id="opt-max-vswr" type="number" min="1" value="2" step="0.1"></label>
+      <label>Band от, MHz<input id="opt-band-start" type="number" value="297" step="0.1"></label>
+      <label>Band до, MHz<input id="opt-band-stop" type="number" value="303" step="0.1"></label>
+      <label>Band точек<input id="opt-band-points" type="number" min="1" max="11" value="3"></label>
+      <label>Шаг изготовления, mm<input id="opt-quant-mm" type="number" min="0" value="1" step="0.1"></label>
+      <label>Допуск ±, mm<input id="opt-tol-mm" type="number" min="0" value="1" step="0.1"></label>
+      <label>Robust samples<input id="opt-robust-samples" type="number" min="0" max="16" value="4"></label>
+      <label>Monte Carlo<input id="opt-mc-samples" type="number" min="0" max="128" value="24"></label>
+    </div>
+    <button id="run-opt" class="secondary full" type="button">Оптимизировать</button>
+    <div class="note">Linux-проверочная версия. Расчёт выполняет тот же C++ Wire-MoM core. Real-ground в alpha.20 — experimental complex-image approximation, не Sommerfeld/Norton.</div>
+  </aside>
+  <div id="sidebar-backdrop" class="backdrop" hidden></div>
+
+  <main class="workspace">
+    <section class="hero">
+      <div><small>ТЕКУЩАЯ МОДЕЛЬ</small><h1 id="project-name">—</h1><p id="project-meta">—</p></div>
+      <span id="kernel-chip" class="chip">REDUCED</span>
+    </section>
+
+    <section class="cards metrics-cards">
+      <article><small>Zin</small><strong id="zin">—</strong><span>Ω</span></article>
+      <article><small>VSWR</small><strong id="vswr">—</strong><span>50 Ω</span></article>
+      <article><small>Dmax</small><strong id="dmax">—</strong><span>dBi</span></article>
+      <article><small>Efficiency</small><strong id="eff">—</strong><span>%</span></article>
+      <article><small>Accepted</small><strong id="accepted">—</strong><span>W</span></article>
+      <article><small>Radiated</small><strong id="radiated">—</strong><span>W</span></article>
+      <article><small>Dissipated</small><strong id="dissipated">—</strong><span>W</span></article>
+      <article><small>Power balance</small><strong id="balance">—</strong><span>relative</span></article>
+    </section>
+
+    <section class="panel sweep-panel">
+      <div class="panel-head"><div><small>FREQUENCY SWEEP</small><h2>S11 / VSWR / Zin</h2></div><span id="sweep-summary">ещё не рассчитан</span></div>
+      <canvas id="sweep-chart" width="1000" height="300"></canvas>
+    </section>
+
+    <section class="panel optimizer-panel">
+      <div class="panel-head"><div><small>PARAMETRIC OPTIMIZER</small><h2>Global → Local · robust band worst-case · Pareto</h2></div><span id="opt-summary">ещё не запускался</span></div>
+      <div class="optimizer-grid">
+        <div><h3>Переменные / Constraints</h3><div id="opt-variables" class="muted">В проекте нет design_variables.</div><div id="opt-constraints" class="muted"></div></div>
+        <div><h3>Balanced result</h3><div id="opt-metrics" class="muted">—</div><button id="apply-opt" class="secondary full opt-apply" type="button" hidden>Применить balanced</button></div>
+        <div><h3>Pareto варианты</h3><div id="opt-pareto" class="pareto-list muted">—</div></div>
+        <div><h3>История</h3><canvas id="opt-chart" width="550" height="190"></canvas></div>
+      </div>
+    </section>
+
+    <section class="grid2">
+      <article class="panel"><div class="panel-head"><div><small>FAR FIELD</small><h2>Диаграмма направленности</h2></div><span>φ = 0°</span></div><canvas id="polar" width="600" height="330"></canvas></article>
+      <article class="panel"><div class="panel-head"><div><small>CURRENT</small><h2>Токи по сегментам</h2></div><span>|I|</span></div><canvas id="currents" width="600" height="330"></canvas></article>
+    </section>
+
+    <section class="grid2 lower">
+      <article class="panel editor"><div class="panel-head"><div><small>EMNX</small><h2>Модель</h2></div><span>JSON</span></div><textarea id="project-json" spellcheck="false" aria-label="EMNX JSON"></textarea></article>
+      <article class="panel"><div class="panel-head"><div><small>DIAGNOSTICS</small><h2>Проверка и предупреждения</h2></div><button id="diag-help" class="inline-help" type="button" data-help-topic="emmana-next.result.power-balance">? Справка</button></div><pre id="diagnostics">Расчёт ещё не запускался.</pre><details><summary>ResultSet JSON</summary><pre id="raw-result">—</pre></details></article>
+    </section>
+  </main>
+</div>
+
+<aside id="quick-help" class="quick-help" hidden aria-label="Краткая справка" aria-live="polite">
+  <div class="help-head"><div><small>QUICK HELP</small><h2 id="quick-help-title">Справка</h2></div><button id="quick-help-close" class="icon-button" type="button" aria-label="Закрыть справку">×</button></div>
+  <p id="quick-help-summary"></p><div id="quick-help-body" class="help-body"></div><ol id="quick-help-steps" class="help-steps"></ol><div id="quick-help-related" class="help-related"></div>
+  <button id="help-full-open" class="primary full" type="button">Расширенная справка</button>
+</aside>
+<div id="help-backdrop" class="backdrop help-backdrop" hidden></div>
+
+<section id="full-help" class="full-help" hidden aria-label="Расширенная справка">
+  <header class="full-help-head"><div><small>EMMana-Next HELP</small><h2>Расширенная справка</h2></div><button id="full-help-close" class="icon-button" type="button" aria-label="Закрыть расширенную справку">×</button></header>
+  <div class="full-help-layout">
+    <aside class="help-index"><input id="help-search" type="search" placeholder="Поиск: VSWR, земля, B02…" aria-label="Поиск по справке"><div id="help-topic-list" class="help-topic-list"></div></aside>
+    <article class="help-article"><button id="full-help-back" class="inline-help" type="button">← Назад к краткой</button><small id="full-help-category"></small><h2 id="full-help-title">—</h2><p id="full-help-summary"></p><div id="full-help-body" class="help-body"></div><div id="full-help-related" class="help-related"></div></article>
+  </div>
+</section>
+<script src="/app.js" defer></script>
+</body>
+</html>
