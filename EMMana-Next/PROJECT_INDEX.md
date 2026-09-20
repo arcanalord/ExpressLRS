@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev4  
+**Current version:** 0.1.0-alpha.20-rev5  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Current commit:** `ad417be8cfdd2e815575102f261b0ffcdaf6d5bc`  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -30,7 +30,7 @@
 - B02/B04 NEC2 characterization: PASS within current provisional tolerances
 - WINDOWS_BUILD_PASS: PASS
 - WINDOWS_PASS: PENDING real clean-run on a Windows machine
-- Independent finite-ground validation: PENDING
+- Independent finite-ground validation: MEASURED / NOT ACCEPTED — current approximation remains experimental
 - Independent conductor-loss / RLC-load validation: PENDING
 - Production-kernel convergence/policy closure: PENDING
 
@@ -48,11 +48,12 @@ GitHub Actions run: 35506144689 — PASS build/regression/package.
 
 ## Current release blockers
 
-1. Real Windows clean-run verification.
-2. Independent finite-ground reference validation.
-3. Independent finite-conductivity and R/L/C load validation.
-4. Production kernel convergence and acceptance policy.
-5. Final graphical geometry/editor workflow.
+1. Replace/augment the current finite-ground approximation with a validated Sommerfeld/Norton-grade treatment.
+2. Re-run the six-case finite-ground NEC2 matrix and adopt evidence-backed tolerances only after the model improves.
+3. Real Windows clean-run verification.
+4. Independent finite-conductivity and R/L/C load validation.
+5. Production kernel convergence and acceptance policy.
+6. Final graphical geometry/editor workflow.
 
 ## Next engineering step
 
@@ -61,3 +62,8 @@ Prefer external-reference depth before adding new solver features:
 2. add conductor-loss/load reference cases;
 3. freeze evidence-backed tolerances;
 4. only then move to multiport/N-port and graphical geometry editor.
+
+
+## Finite-ground characterization — 2026-09-20
+
+Real NEC2 run 35509245561 measured six finite-ground cases. The current complex-image approximation is not accepted as authoritative. Worst measured delta was G01 at h=0.10 m: dR=-30.163280 ohm, dX=+12.262247 ohm. See `benchmarks/FINITE_GROUND_NEC2_ALPHA20.json`.
