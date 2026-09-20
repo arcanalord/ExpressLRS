@@ -35,8 +35,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix='emnext-ui-cache-') as td:
         cache=Path(td);proc,base=start_server(root,emnext,cache)
         try:
-            html,ctype=get(base+'/');text=html.decode('utf-8');assert ctype=='text/html' and 'help-trigger' in text and 'ground-mode' in text and 'mobile-menu' in text
-            reg=get_json(base+'/api/help-registry');assert reg['fallbackTopic']=='emmana-next.overview' and reg['errorMap']['NEC2_NOT_RUN']=='emmana-next.error.nec2-not-run' and len(reg['topics'])>=10
+            html,ctype=get(base+'/');text=html.decode('utf-8');assert ctype=='text/html' and 'help-trigger' in text and 'ground-mode' in text and 'mobile-menu' in text and 'measurement-file' in text and 'measurement-compare' in text and 'measurement-chart' in text
+            reg=get_json(base+'/api/help-registry');assert reg['fallbackTopic']=='emmana-next.overview' and reg['errorMap']['NEC2_NOT_RUN']=='emmana-next.error.nec2-not-run' and any(t['id']=='emmana-next.measurement.compare' for t in reg['topics']) and len(reg['topics'])>=11
             product=get_json(base+'/api/product-registry');assert product['layer']=='product-domain' and any(x['id']=='analysis-plan' for x in product['workflow'])
             templates=get_json(base+'/api/templates');assert any(x['id']=='halfwave-dipole' and x['status']=='implemented' for x in templates['templates'])
             materials=get_json(base+'/api/materials');assert any(x['id']=='copper' for x in materials['conductors'])
@@ -53,8 +53,9 @@ def main():
             gr=post_json(base+'/api/solve',{'project':soil,'kernel':'reduced'},120)['result'];assert gr['environment_model']=='homogeneous-halfspace-image-v1' and gr['ground_dissipated_power_w']>=0 and 0<gr['efficiency']<=1
             lr=post_json(base+'/api/solve',{'project':b08,'kernel':'reduced'},120)['result'];assert lr['dissipated_power_w']>0 and 0<lr['efficiency']<1
             cached=post_json(base+'/api/solve',{'project':b01,'kernel':'reduced'},120);assert cached['cache_hit'] and cached['cache_source']=='memory'
-            swreq={'project':b01,'kernel':'reduced','start_hz':285e6,'stop_hz':315e6,'points':3,'parallel_workers':2};sw=post_json(base+'/api/sweep',swreq,180);assert sw['ok'] and len(sw['sweep']['samples'])==3 and sw['sweep']['execution_workers']==2 and sw['sweep']['max_linear_residual_relative']<1e-10
+            swreq={'project':b01,'kernel':'reduced','start_hz':285e6,'stop_hz':315e6,'points':3,'parallel_workers':2};sw=post_json(base+'/api/sweep',swreq,180);assert sw['ok'] and len(sw['sweep']['samples'])==3 and sw['sweep']['execution_workers']==2 and sw['sweep']['max_linear_residual_relative']<1e-10;cmp=post_json(base+'/api/measurement/compare',{'measurement':parsed['measurement'],'simulation_sweep':sw['sweep']},30);assert cmp['ok'] and cmp['comparison']['summary']['overlap_points']>=1 and 'max_abs_delta_r_ohm' in cmp['comparison']['summary']
             optreq={'project':optp,'kernel':'reduced','population':4,'generations':1,'local_iterations':0,'seed':42,'algorithm':'pso','weights':{'match':50,'gain':25,'front_to_back':15,'size':10},'gain_guardrail_db':0.5,'max_vswr':2.0,'band_start_hz':0,'band_stop_hz':0,'band_points':1,'quantization_step_m':.001,'manufacturing_tolerance_m':.001,'robust_objective_samples':1,'monte_carlo_samples':2,'parallel_workers':2};opt=post_json(base+'/api/optimize',optreq,300);oo=opt['optimizer'];assert opt['ok'] and oo['schema_version']=='0.8' and oo['best']['metrics']['feasible'] and oo['pareto_front'] and oo['monte_carlo_audit']['samples']==2
+            appjs,_=get(base+'/app.js');apptext=appjs.decode('utf-8');assert 'importMeasurement' in apptext and 'compareMeasurement' in apptext and 'drawMeasurementComparison' in apptext
             assert get_json(base+'/api/cache')['entries']>=3
         finally:stop(proc)
         proc2,base2=start_server(root,emnext,cache)

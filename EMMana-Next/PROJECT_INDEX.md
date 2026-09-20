@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev10  
+**Current version:** 0.1.0-alpha.20-rev11  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev10-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev11-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -111,3 +111,12 @@ Rev7 candidate was not promoted: Linux UI smoke exposed legacy seed schema 0.1 i
 ## Rev9 gate note
 
 Rev9 candidate was not promoted. The standalone measurement parser test passed, but Linux UI smoke encoded Touchstone newlines as literal backslash-n sequences. Rev10 corrects the test payload and adds HTTP error-body diagnostics; parser and solver behavior are unchanged.
+
+
+## Measurement UI — rev11
+
+- Real Linux web screen built from the approved Figma measurement comparison layout.
+- Minimal workflow: import S1P/VNA CSV → run Sweep → compare → KPI/graph/table/provenance.
+- Reuses existing rev10 measurement APIs; no solver or EMNX schema changes.
+- Help topic: `emmana-next.measurement.compare`.
+- Raw measurement remains a sidecar and never overwrites simulation.

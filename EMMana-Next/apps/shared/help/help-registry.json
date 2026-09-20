@@ -204,6 +204,37 @@
         "validation"
       ],
       "category": "error"
+    },
+    {
+      "id": "emmana-next.measurement.compare",
+      "title": "Simulation vs Measurement",
+      "summary": "Сравнивает частотный Sweep EMMana-Next с отдельным файлом измерений S1P или VNA CSV.",
+      "body": "Импорт measurement не изменяет EMNX и не заменяет simulation. Выполните Sweep на диапазоне, который пересекается с измерением, затем нажмите Сравнить. Дельты считаются как simulation − measurement; measurement линейно интерполируется на частотную сетку simulation.",
+      "keywords": [
+        "measurement",
+        "S1P",
+        "Touchstone",
+        "VNA",
+        "compare",
+        "ΔR",
+        "ΔX",
+        "S11"
+      ],
+      "aliases": [
+        "измерения",
+        "сравнение с VNA"
+      ],
+      "category": "measurement",
+      "quickSteps": [
+        "Выберите .s1p или .csv и нажмите Импорт",
+        "Проверьте калибровку и reference plane",
+        "Выполните Sweep на пересекающемся диапазоне",
+        "Нажмите Сравнить и проверьте ΔR, ΔX, ΔVSWR и ΔS11"
+      ],
+      "relatedTopics": [
+        "emmana-next.result.zin",
+        "emmana-next.result.vswr"
+      ]
     }
   ]
 }

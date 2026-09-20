@@ -108,6 +108,39 @@
       <canvas id="sweep-chart" width="1000" height="300"></canvas>
     </section>
 
+    <section class="panel measurement-panel" id="measurement-panel">
+      <div class="panel-head">
+        <div><small>MEASUREMENT CORRELATION</small><h2>Simulation vs Measurement</h2></div>
+        <div class="measurement-head-actions"><span id="measurement-summary">измерение не загружено</span><button class="inline-help" type="button" data-help-topic="emmana-next.measurement.compare">? Справка</button></div>
+      </div>
+      <div class="measurement-toolbar">
+        <label class="measurement-file">Файл S1P / CSV<input id="measurement-file" type="file" accept=".s1p,.csv,text/plain,text/csv"></label>
+        <label>Калибровка<select id="measurement-calibration"><option value="unknown">Не указана</option><option value="SOL">SOL</option><option value="SOLT">SOLT</option><option value="TRL">TRL</option><option value="other">Другая</option></select></label>
+        <label>Reference plane<input id="measurement-reference-plane" type="text" placeholder="Например: feed connector"></label>
+        <button id="measurement-import" class="secondary" type="button">Импорт</button>
+        <button id="measurement-compare" class="primary" type="button" disabled>Сравнить</button>
+      </div>
+      <div class="measurement-kpis">
+        <article><small>ΔR max</small><strong id="measurement-dr">—</strong><span>Ω</span></article>
+        <article><small>ΔX max</small><strong id="measurement-dx">—</strong><span>Ω</span></article>
+        <article><small>ΔVSWR max</small><strong id="measurement-dvswr">—</strong><span>absolute</span></article>
+        <article><small>ΔS11 max</small><strong id="measurement-ds11">—</strong><span>dB</span></article>
+      </div>
+      <canvas id="measurement-chart" width="1000" height="290"></canvas>
+      <div class="measurement-lower">
+        <div>
+          <div class="measurement-subhead">ALIGNED SAMPLES</div>
+          <div class="measurement-table-wrap">
+            <table class="measurement-table"><thead><tr><th>MHz</th><th>Sim R</th><th>Meas R</th><th>ΔR</th><th>Sim X</th><th>Meas X</th><th>ΔX</th></tr></thead><tbody id="measurement-table-body"><tr><td colspan="7" class="muted">Нет сравнения.</td></tr></tbody></table>
+          </div>
+        </div>
+        <aside class="measurement-provenance">
+          <div class="measurement-subhead">PROVENANCE</div>
+          <div id="measurement-provenance" class="muted">Загрузите измерение. Raw asset останется отдельным от simulation.</div>
+        </aside>
+      </div>
+    </section>
+
     <section class="panel optimizer-panel">
       <div class="panel-head"><div><small>PARAMETRIC OPTIMIZER</small><h2>Global → Local · robust band worst-case · Pareto</h2></div><span id="opt-summary">ещё не запускался</span></div>
       <div class="optimizer-grid">
