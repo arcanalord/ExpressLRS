@@ -156,6 +156,16 @@
             <div class="note geometry-note">Редактор меняет только физические поля EMNX. Служебные Variant/Measurement данные сюда не записываются.</div>
           </aside>
         </div>
+        <div class="geometry-3d-panel">
+          <div class="geometry-3d-head">
+            <div><small>3D PREVIEW</small><h3>Пространственный вид</h3><p>Потяните мышью, чтобы повернуть. Колесо — масштаб.</p></div>
+            <button id="geometry-3d-reset" class="secondary" type="button">Сбросить вид</button>
+          </div>
+          <div class="geometry-3d-wrap">
+            <canvas id="geometry-3d-canvas" width="1000" height="420" aria-label="3D просмотр геометрии антенны"></canvas>
+            <div id="geometry-3d-summary" class="geometry-3d-summary">—</div>
+          </div>
+        </div>
       </div>
     </section>
     <section class="cards metrics-cards" data-view="solve">
@@ -272,5 +282,6 @@
   </div>
 </section>
 <script src="/app.js" defer></script>
+<script src="/geometry3d.js" defer></script>
 </body>
 </html>

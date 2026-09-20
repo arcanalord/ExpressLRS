@@ -182,7 +182,7 @@ function applyGroundControls(){
     els.editor.value=JSON.stringify(p,null,2);updateMeta(p);status('ground обновлён','ok');
   }catch(e){status('ошибка ground','err');els.diag.textContent=String(e.message||e)}
 }
-const _updateMeta=updateMeta;updateMeta=function(p){_updateMeta(p);syncGroundFromProject(p);syncGeometryFromProject(p);};
+const _updateMeta=updateMeta;updateMeta=function(p){_updateMeta(p);syncGroundFromProject(p);syncGeometryFromProject(p);window.renderGeometry3D?.(p);};
 Object.values(groundEls).filter(Boolean).forEach(x=>x.addEventListener('change',applyGroundControls));
 
 const viewTabs=[...document.querySelectorAll('[data-view-tab]')];
