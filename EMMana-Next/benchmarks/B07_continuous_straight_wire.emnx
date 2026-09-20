@@ -1,0 +1,5 @@
+{
+  "schema_version":"0.1","name":"B07 continuous straight wire","frequency_hz":299792458.0,
+  "wires":[{"id":"whole","start_m":[-0.25,0,0],"end_m":[0.25,0,0],"radius_m":0.001,"segments":50}],
+  "feeds":[{"wire_id":"whole","segment":12,"voltage_re_v":1.0,"voltage_im_v":0.0}]
+}
