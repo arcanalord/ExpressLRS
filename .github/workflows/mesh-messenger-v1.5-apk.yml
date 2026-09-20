@@ -3,9 +3,9 @@ name: Mesh Messenger v1.5.1 APK
 on:
   push:
     branches:
-      - ci/mesh-messenger-v1.5.1-apk
+      - ci/mesh-messenger-v1.5-apk
     paths:
-      - ".github/workflows/mesh-messenger-v1.5.1-apk.yml"
+      - ".github/workflows/mesh-messenger-v1.5-apk.yml"
   workflow_dispatch:
 
 permissions:
