@@ -35,16 +35,43 @@ jobs:
       - name: C++ regression gates
         shell: pwsh
         run: ctest --test-dir build-win -C Release --output-on-failure
+      - name: Build portable Windows launcher
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller
+          python -m PyInstaller --noconfirm --clean --onefile --name EMMana-Next --add-binary "build-win/Release/emnext.exe;EMMana-Next" --add-data "apps;EMMana-Next/apps" --add-data "benchmarks;EMMana-Next/benchmarks" --add-data "schemas;EMMana-Next/schemas" --add-data "VERSION;EMMana-Next" apps/windows_launcher.py
+      - name: Portable launcher runtime gate
+        shell: pwsh
+        run: |
+          $port = 8799
+          $proc = Start-Process -FilePath "dist/EMMana-Next.exe" -ArgumentList "--no-browser","--port","$port" -PassThru -WindowStyle Hidden
+          try {
+            $ok = $false
+            for ($i=0; $i -lt 45; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2
+                if ($health.ok -and $health.version -eq (Get-Content VERSION).Trim()) { $ok = $true; break }
+              } catch {}
+            }
+            if (-not $ok) { throw "Portable launcher /api/health did not become ready" }
+            $page = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 5
+            if ($page.Content -notmatch "geometry-canvas") { throw "Portable UI missing geometry editor" }
+            if ($page.Content -notmatch "geometry-template-create") { throw "Portable UI missing template workflow" }
+            Write-Host "WINDOWS_PORTABLE_PASS version=$($health.version)"
+          } finally {
+            if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          }
       - name: Package Windows verification build
         shell: pwsh
         run: |
           $pkg = "dist/EMMana-Next-$((Get-Content VERSION).Trim())-windows-x64"
           New-Item -ItemType Directory -Force -Path $pkg | Out-Null
-          Copy-Item build-win/Release/emnext.exe $pkg/
-          Copy-Item benchmarks $pkg/benchmarks -Recurse
-          Copy-Item schemas $pkg/schemas -Recurse
-          Copy-Item docs $pkg/docs -Recurse
+          Copy-Item dist/EMMana-Next.exe $pkg/EMMana-Next.exe
+          Copy-Item build-win/Release/emnext.exe $pkg/emnext-cli.exe
           Copy-Item VERSION $pkg/
+          $readme = @("EMMana-Next Portable Windows","","Double-click EMMana-Next.exe.","It starts locally on 127.0.0.1 and opens your default browser.","No separate Python installation is required.","","emnext-cli.exe is included for diagnostics.")
+          $readme | Set-Content -Encoding UTF8 "$pkg/README-WINDOWS.txt"
           Compress-Archive -Path "$pkg/*" -DestinationPath "$pkg.zip" -Force
       - name: Upload Windows package
         uses: actions/upload-artifact@v4

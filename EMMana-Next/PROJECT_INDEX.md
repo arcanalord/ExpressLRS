@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev19  
+**Current version:** 0.1.0-alpha.20-rev20  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev19-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev20-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -207,3 +207,15 @@ Rev15 reconciles the valid rev10–rev14 history with the later canonical measur
 - Square Loop is marked experimental until independent reference validation is added.
 - Existing Dipole reference-validated and GP/Yagi characterized statuses are preserved.
 - No solver/API/schema architecture change.
+
+
+## Rev20 — portable Windows application
+
+- Windows package contains a self-contained `EMMana-Next.exe`.
+- No separate system Python installation is required.
+- Launcher bundles the same current web UI resources and exact solver binary.
+- Default bind address is 127.0.0.1 only.
+- Double-click opens the default browser; `--no-browser` supports automation.
+- Windows CI launches the packaged EXE and verifies `/api/health`, exact VERSION, Geometry UI and Template UI.
+- `emnext-cli.exe` stays in the ZIP for engineering diagnostics.
+- No Tauri/Electron/WebView layer was introduced.
