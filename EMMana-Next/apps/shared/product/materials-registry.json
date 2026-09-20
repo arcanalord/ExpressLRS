@@ -1,0 +1,79 @@
+{
+  "schema_version": "0.1",
+  "product": "EMMana-Next",
+  "note": "Engineering defaults are editable starting points, not metrology-grade material certificates.",
+  "conductors": [
+    {
+      "id": "pec",
+      "label": "PEC / ideal conductor",
+      "conductivity_s_per_m": 0,
+      "status": "solver-special-case",
+      "trust": "reference-validated"
+    },
+    {
+      "id": "copper",
+      "label": "Copper",
+      "conductivity_s_per_m": 58000000,
+      "status": "engineering-default",
+      "trust": "characterized",
+      "temperature_note": "nominal room-temperature value"
+    },
+    {
+      "id": "aluminum",
+      "label": "Aluminum",
+      "conductivity_s_per_m": 35000000,
+      "status": "engineering-default",
+      "trust": "experimental",
+      "temperature_note": "alloy-dependent; user should override when known"
+    },
+    {
+      "id": "stainless-steel",
+      "label": "Stainless steel",
+      "conductivity_s_per_m": 1400000,
+      "status": "engineering-default",
+      "trust": "experimental",
+      "temperature_note": "grade-dependent; user should override when known"
+    }
+  ],
+  "ground_profiles": [
+    {
+      "id": "pec-ground",
+      "label": "Perfect ground",
+      "model": "pec-image-v1",
+      "status": "implemented",
+      "trust": "reference-validated"
+    },
+    {
+      "id": "dry-ground",
+      "label": "Dry ground",
+      "model": "homogeneous-halfspace-image-v1",
+      "relative_permittivity": 5,
+      "conductivity_s_per_m": 0.001,
+      "status": "engineering-profile",
+      "trust": "characterized-not-accepted"
+    },
+    {
+      "id": "average-ground",
+      "label": "Average ground",
+      "model": "homogeneous-halfspace-image-v1",
+      "relative_permittivity": 13,
+      "conductivity_s_per_m": 0.005,
+      "status": "engineering-profile",
+      "trust": "characterized-not-accepted"
+    },
+    {
+      "id": "wet-ground",
+      "label": "Wet ground",
+      "model": "homogeneous-halfspace-image-v1",
+      "relative_permittivity": 25,
+      "conductivity_s_per_m": 0.02,
+      "status": "engineering-profile",
+      "trust": "characterized-not-accepted"
+    }
+  ],
+  "invariants": [
+    "Applying a library entry copies physical values into a new design model revision; it does not create a hidden runtime dependency.",
+    "Ground profiles using homogeneous-halfspace-image-v1 remain non-authoritative until a validated ground backend exists.",
+    "User-entered certified material data overrides engineering defaults."
+  ]
+}

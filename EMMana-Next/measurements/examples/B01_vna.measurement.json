@@ -1,0 +1,10 @@
+{
+  "schema_version":"0.1",
+  "measurement_id":"B01-vna-example",
+  "label":"Half-wave dipole VNA comparison",
+  "model_ref":{"model_path":"benchmarks/B01_halfwave_dipole_51seg.emnx"},
+  "assets":[{"id":"s11","format":"touchstone-s1p","path":"measurements/raw/B01_example.s1p","ports":1}],
+  "calibration":{"type":"SOL","reference_plane_note":"At feed connector","fixture_deembedded":false},
+  "provenance":{"instrument_or_source":"example-placeholder","notes":"Contract example only; no raw measurement is bundled."},
+  "comparison_policy":{"metrics":["delta_s11_db","delta_vswr","delta_r_ohm","delta_x_ohm","resonance_shift_hz"],"alignment":"common-grid"}
+}

@@ -103,7 +103,7 @@
       "description": "Tests, reference comparison, provenance and gate status."
     },
     "measurement_set": {
-      "status": "planned",
+      "status": "contract-implemented",
       "description": "Measured S/Z data stored beside, never over, simulated results."
     },
     "report_profile": {
@@ -114,7 +114,7 @@
   "capability_groups": [
     {
       "id": "templates-synthesis",
-      "status": "planned",
+      "status": "implemented-basic",
       "priority": "high",
       "features": [
         "antenna templates",
@@ -124,7 +124,7 @@
     },
     {
       "id": "materials-environments",
-      "status": "partial",
+      "status": "implemented-registry",
       "priority": "high",
       "features": [
         "conductor library",
@@ -170,7 +170,7 @@
     },
     {
       "id": "measurement-correlation",
-      "status": "planned",
+      "status": "contract-implemented",
       "priority": "high",
       "features": [
         "Touchstone import",
@@ -201,7 +201,7 @@
     },
     {
       "id": "project-library",
-      "status": "planned",
+      "status": "partial",
       "priority": "medium",
       "features": [
         "parts",
@@ -245,6 +245,7 @@
     "Measured data never overwrites simulated data.",
     "A build PASS is not a runtime PASS.",
     "A characterization measurement is not promoted to validation by widening tolerances after the fact.",
-    "Every reported result carries source model, solver/backend and evidence status."
+    "Every reported result carries source model, solver/backend and evidence status.",
+    "Template synthesis must return a pure EMNX project with no product-only fields."
   ]
 }

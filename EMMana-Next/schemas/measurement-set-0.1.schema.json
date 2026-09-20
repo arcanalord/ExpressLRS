@@ -1,0 +1,18 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://fpv-club.ru/schemas/emnext/measurement-set-0.1.schema.json",
+  "title":"EMMana-Next Measurement Set v0.1",
+  "type":"object",
+  "required":["schema_version","measurement_id","model_ref","assets","provenance"],
+  "properties":{
+    "schema_version":{"const":"0.1"},
+    "measurement_id":{"type":"string","minLength":1},
+    "label":{"type":"string"},
+    "model_ref":{"type":"object","required":["model_path"],"properties":{"model_path":{"type":"string","minLength":1},"expected_model_hash":{"type":"string"}},"additionalProperties":false},
+    "assets":{"type":"array","minItems":1,"items":{"type":"object","required":["id","format","path"],"properties":{"id":{"type":"string","minLength":1},"format":{"enum":["touchstone-s1p","touchstone-s2p","vna-csv"]},"path":{"type":"string","minLength":1},"sha256":{"type":"string","pattern":"^[0-9a-fA-F]{64}$"},"ports":{"type":"integer","minimum":1,"maximum":2}},"additionalProperties":false}},
+    "calibration":{"type":"object","properties":{"type":{"enum":["unknown","SOL","SOLT","TRL","other"]},"reference_plane_note":{"type":"string"},"fixture_deembedded":{"type":"boolean"}},"additionalProperties":false},
+    "provenance":{"type":"object","required":["instrument_or_source"],"properties":{"instrument_or_source":{"type":"string","minLength":1},"operator":{"type":"string"},"measured_at":{"type":"string"},"notes":{"type":"string"}},"additionalProperties":false},
+    "comparison_policy":{"type":"object","properties":{"metrics":{"type":"array","uniqueItems":true,"items":{"enum":["delta_s11_db","delta_vswr","delta_r_ohm","delta_x_ohm","resonance_shift_hz"]}},"alignment":{"enum":["interpolate-measured-to-simulation","interpolate-simulation-to-measured","common-grid"]}},"additionalProperties":false}
+  },
+  "additionalProperties":false
+}

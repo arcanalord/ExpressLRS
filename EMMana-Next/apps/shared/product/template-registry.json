@@ -1,0 +1,119 @@
+{
+  "schema_version": "0.1",
+  "product": "EMMana-Next",
+  "synthesis_method": "frequency-scale-seed-v1",
+  "note": "Implemented templates scale existing EMNX seed geometry by seed_frequency/target_frequency. Output project remains pure EMNX; template metadata stays outside the project.",
+  "templates": [
+    {
+      "id": "halfwave-dipole",
+      "label": "Half-wave dipole",
+      "status": "implemented",
+      "seed_model": "benchmarks/B01_halfwave_dipole_51seg.emnx",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "reference-validated",
+      "parameters": [
+        {
+          "id": "frequency_hz",
+          "type": "number",
+          "min": 1000000,
+          "max": 6000000000
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "baseline",
+        "single-band wire antenna"
+      ]
+    },
+    {
+      "id": "quarterwave-monopole-pec",
+      "label": "Quarter-wave monopole over PEC",
+      "status": "implemented",
+      "seed_model": "benchmarks/B02_quarterwave_monopole_over_pec.emnx",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "characterized",
+      "parameters": [
+        {
+          "id": "frequency_hz",
+          "type": "number",
+          "min": 1000000,
+          "max": 6000000000
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "ground-plane antenna",
+        "PEC reference"
+      ]
+    },
+    {
+      "id": "yagi-3el",
+      "label": "3-element Yagi",
+      "status": "implemented",
+      "seed_model": "benchmarks/B04_three_element_yagi_parametric.emnx",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "characterized",
+      "parameters": [
+        {
+          "id": "frequency_hz",
+          "type": "number",
+          "min": 1000000,
+          "max": 3000000000
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "directional antenna",
+        "optimizer seed"
+      ]
+    },
+    {
+      "id": "moxon",
+      "label": "Moxon rectangle",
+      "status": "planned",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental"
+    },
+    {
+      "id": "lpda",
+      "label": "Log-periodic dipole array",
+      "status": "planned",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental"
+    },
+    {
+      "id": "helix",
+      "label": "Helix",
+      "status": "planned",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental"
+    },
+    {
+      "id": "patch",
+      "label": "Microstrip patch",
+      "status": "unsupported-current-solver",
+      "solver_compatibility": [
+        "surface/full-wave backend required"
+      ],
+      "trust": "experimental"
+    }
+  ]
+}
