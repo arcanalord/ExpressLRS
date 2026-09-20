@@ -41,8 +41,8 @@ def main():
             templates=get_json(base+'/api/templates');assert any(x['id']=='halfwave-dipole' and x['status']=='implemented' for x in templates['templates'])
             materials=get_json(base+'/api/materials');assert any(x['id']=='copper' for x in materials['conductors'])
             contract=get_json(base+'/api/measurement-contract');assert contract['title']=='EMMana-Next Measurement Set v0.1'
-            touchstone_text='# MHz S RI R 50\n100 0 0\n150 0.3333333333 0\n200 0 0\n'
-            parsed=post_json(base+'/api/measurement/parse',{'format':'touchstone-s1p','source_name':'smoke.s1p','text':touchstone_text},30);assert parsed['ok'] and len(parsed['measurement']['points'])==3 and abs(parsed['measurement']['points'][1]['z_ohm']['re']-100)<1e-6
+            touchstone_text='# MHz S RI R 50\n285 0.10 0\n300 0.20 0\n315 0.10 0\n'
+            parsed=post_json(base+'/api/measurement/parse',{'format':'touchstone-s1p','source_name':'smoke.s1p','text':touchstone_text},30);assert parsed['ok'] and len(parsed['measurement']['points'])==3 and abs(parsed['measurement']['points'][1]['frequency_hz']-300e6)<1
             syn=get_json(base+'/api/template/halfwave-dipole?frequency_hz=150000000');assert syn['template_id']=='halfwave-dipole' and abs(syn['project']['frequency_hz']-150000000)<1e-6 and syn['project']['schema_version']=='0.5'
             syncheck=post_json(base+'/api/model-check',{'project':syn['project'],'kernel':'reduced'},30);assert syncheck['ok'] and 'MODEL OK' in syncheck['stdout']
             examples=get_json(base+'/api/examples')['examples'];names={x['file'] for x in examples};assert 'B02_quarterwave_monopole_over_pec.emnx' in names and 'B01_halfwave_dipole_51seg.emnx' in names

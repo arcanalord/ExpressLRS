@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev12  
+**Current version:** 0.1.0-alpha.20-rev13  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev12-source-artifact.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev13-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -125,3 +125,8 @@ Rev9 candidate was not promoted. The standalone measurement parser test passed, 
 ## Rev12 UI hardening
 
 Measurement provenance now HTML-escapes user-controlled file names and reference-plane text before rendering. No solver, EMNX, API contract or measurement math changes.
+
+
+## Rev13 integration-gate fix
+
+The measurement UI and rev12 provenance escaping are unchanged. The Linux integration smoke now uses an S1P fixture at 285/300/315 MHz so it overlaps the existing 285–315 MHz simulation sweep. Non-overlapping measurement/simulation ranges remain a hard API error.
