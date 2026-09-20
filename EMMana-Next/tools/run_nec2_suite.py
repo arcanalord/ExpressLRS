@@ -39,7 +39,7 @@ def main():
                 rows.append({'case':label,'project':filename,'strict':strict,'status':'export_failed','stderr':exp.stderr})
                 strict_ok = strict_ok and not strict
                 continue
-            nec=run([engine,str(deck),str(out)])
+            nec=run([engine,'-i',str(deck),'-o',str(out)])
             if nec.returncode != 0:
                 rows.append({
                     'case':label,'project':filename,'strict':strict,'status':'nec2_failed',
