@@ -24,11 +24,12 @@ async function runSweep(){try{const p=project();updateMeta(p);const startHz=Numb
 
 function measurementFormat(file){const n=String(file?.name||'').toLowerCase();if(n.endsWith('.csv'))return 'vna-csv';if(n.endsWith('.s1p'))return 'touchstone-s1p';throw new Error('Поддерживаются только .s1p и .csv')}
 function measurementValue(v,n=3){return Number.isFinite(Number(v))?Number(v).toFixed(n):'—'}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function setMeasurementKpis(summary){els.measurementDr.textContent=measurementValue(summary?.max_abs_delta_r_ohm);els.measurementDx.textContent=measurementValue(summary?.max_abs_delta_x_ohm);els.measurementDvswr.textContent=measurementValue(summary?.max_abs_delta_vswr);els.measurementDs11.textContent=measurementValue(summary?.max_abs_delta_s11_db)}
 function renderMeasurementProvenance(){
   if(!lastMeasurement){els.measurementProvenance.textContent='Загрузите измерение. Raw asset останется отдельным от simulation.';return}
   const m=lastMeasurement,cal=els.measurementCalibration.value||'unknown',plane=els.measurementReferencePlane.value.trim()||'не указан';
-  els.measurementProvenance.innerHTML=[['Source',m.source_name||'—'],['Format',m.source_format||'—'],['Reference',measurementValue(m.reference_ohm,1)+' Ω'],['Calibration',cal],['Reference plane',plane],['Points',String(m.points?.length||0)]].map(([k,v])=>`<div class="measurement-prov-row"><span>${k}</span><b>${v}</b></div>`).join('');
+  els.measurementProvenance.innerHTML=[['Source',m.source_name||'—'],['Format',m.source_format||'—'],['Reference',measurementValue(m.reference_ohm,1)+' Ω'],['Calibration',cal],['Reference plane',plane],['Points',String(m.points?.length||0)]].map(([k,v])=>`<div class="measurement-prov-row"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`).join('');
 }
 function drawMeasurementComparison(cmp){
   const c=els.measurementChart,ctx=c.getContext('2d'),W=c.width,H=c.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#0b0d11';ctx.fillRect(0,0,W,H);
