@@ -20,14 +20,14 @@ jobs:
       - name: Install C++ dependencies with vcpkg
         shell: pwsh
         run: |
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-json:x64-windows eigen3:x64-windows
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-json:x64-windows-static eigen3:x64-windows-static
       - name: Configure MSVC x64
         shell: pwsh
         run: >-
           cmake -S . -B build-win -A x64
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
-          -DVCPKG_TARGET_TRIPLET=x64-windows
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static
           -DEMNEXT_REQUIRE_EIGEN=ON
       - name: Build
         shell: pwsh
