@@ -10,7 +10,7 @@ spec=importlib.util.spec_from_file_location("emnext_windows_launcher",path)
 mod=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
-assert mod.runtime_root()==root
+assert mod.runtime_root()==root.resolve()
 assert mod.default_cache_dir().name=="cache"
 src=path.read_text(encoding="utf-8")
 for marker in ("--no-browser","webbrowser.open","runpy.run_path","127.0.0.1","EMMana-Next"):
