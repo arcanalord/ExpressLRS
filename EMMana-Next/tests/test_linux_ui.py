@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse,json,socket,subprocess,sys,tempfile,time,urllib.request
+import argparse,json,socket,subprocess,sys,tempfile,time,urllib.request,urllib.error
 from pathlib import Path
 
 def free_port():
@@ -11,7 +11,11 @@ def get(url,timeout=5):
 def get_json(url,timeout=5):return json.loads(get(url,timeout)[0])
 def post_json(url,obj,timeout=120):
     req=urllib.request.Request(url,data=json.dumps(obj).encode(),headers={'Content-Type':'application/json'})
-    with urllib.request.urlopen(req,timeout=timeout) as r:return json.load(r)
+    try:
+        with urllib.request.urlopen(req,timeout=timeout) as r:return json.load(r)
+    except urllib.error.HTTPError as e:
+        body=e.read().decode('utf-8',errors='replace')
+        raise RuntimeError(f'HTTP {e.code} from {url}: {body}') from e
 def start_server(root,emnext,cache):
     port=free_port(); proc=subprocess.Popen([sys.executable,str(root/'apps/linux_web/server.py'),'--host','127.0.0.1','--port',str(port),'--binary',str(emnext.resolve()),'--cache-dir',str(cache.resolve())],stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
     base=f'http://127.0.0.1:{port}'
@@ -37,7 +41,8 @@ def main():
             templates=get_json(base+'/api/templates');assert any(x['id']=='halfwave-dipole' and x['status']=='implemented' for x in templates['templates'])
             materials=get_json(base+'/api/materials');assert any(x['id']=='copper' for x in materials['conductors'])
             contract=get_json(base+'/api/measurement-contract');assert contract['title']=='EMMana-Next Measurement Set v0.1'
-            parsed=post_json(base+'/api/measurement/parse',{'format':'touchstone-s1p','source_name':'smoke.s1p','text':'# MHz S RI R 50\\n100 0 0\\n150 0.3333333333 0\\n200 0 0\\n'},30);assert parsed['ok'] and len(parsed['measurement']['points'])==3 and abs(parsed['measurement']['points'][1]['z_ohm']['re']-100)<1e-6
+            touchstone_text='# MHz S RI R 50\n100 0 0\n150 0.3333333333 0\n200 0 0\n'
+            parsed=post_json(base+'/api/measurement/parse',{'format':'touchstone-s1p','source_name':'smoke.s1p','text':touchstone_text},30);assert parsed['ok'] and len(parsed['measurement']['points'])==3 and abs(parsed['measurement']['points'][1]['z_ohm']['re']-100)<1e-6
             syn=get_json(base+'/api/template/halfwave-dipole?frequency_hz=150000000');assert syn['template_id']=='halfwave-dipole' and abs(syn['project']['frequency_hz']-150000000)<1e-6 and syn['project']['schema_version']=='0.5'
             syncheck=post_json(base+'/api/model-check',{'project':syn['project'],'kernel':'reduced'},30);assert syncheck['ok'] and 'MODEL OK' in syncheck['stdout']
             examples=get_json(base+'/api/examples')['examples'];names={x['file'] for x in examples};assert 'B02_quarterwave_monopole_over_pec.emnx' in names and 'B01_halfwave_dipole_51seg.emnx' in names
