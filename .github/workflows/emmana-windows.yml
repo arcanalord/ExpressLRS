@@ -1,0 +1,54 @@
+name: EMMana Windows x64 verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ emmana-next-alpha20 ]
+    paths:
+      - 'EMMana-Next/**'
+      - '.github/workflows/emmana-windows.yml'
+
+jobs:
+  windows-x64:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: EMMana-Next
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install C++ dependencies with vcpkg
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-json:x64-windows eigen3:x64-windows
+      - name: Configure MSVC x64
+        shell: pwsh
+        run: >-
+          cmake -S . -B build-win -A x64
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+          -DEMNEXT_REQUIRE_EIGEN=ON
+      - name: Build
+        shell: pwsh
+        run: cmake --build build-win --config Release --parallel 2
+      - name: C++ regression gates
+        shell: pwsh
+        run: ctest --test-dir build-win -C Release --output-on-failure
+      - name: Package Windows verification build
+        shell: pwsh
+        run: |
+          $pkg = "dist/EMMana-Next-$((Get-Content VERSION).Trim())-windows-x64"
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          Copy-Item build-win/Release/emnext.exe $pkg/
+          Copy-Item benchmarks $pkg/benchmarks -Recurse
+          Copy-Item schemas $pkg/schemas -Recurse
+          Copy-Item docs $pkg/docs -Recurse
+          Copy-Item VERSION $pkg/
+          Compress-Archive -Path "$pkg/*" -DestinationPath "$pkg.zip" -Force
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-windows-x64
+          path: EMMana-Next/dist/*.zip
+          if-no-files-found: error
