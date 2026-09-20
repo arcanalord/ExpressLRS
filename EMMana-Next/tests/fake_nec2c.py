@@ -8,11 +8,15 @@ from pathlib import Path
 
 def main() -> int:
     output: Path | None = None
-    for arg in sys.argv[1:]:
-        if arg.startswith("-o"):
-            output = Path(arg[2:])
+    args = sys.argv[1:]
+    if len(args) >= 2 and not args[0].startswith("-"):
+        output = Path(args[1])
+    else:
+        for arg in args:
+            if arg.startswith("-o"):
+                output = Path(arg[2:])
     if output is None:
-        print("fake-nec2c requires -o<path>", file=sys.stderr)
+        print("fake-nec2c requires positional input/output or -o<path>", file=sys.stderr)
         return 2
     output.write_text(
         """                              - - - - - - FREQUENCY - - - - - -
