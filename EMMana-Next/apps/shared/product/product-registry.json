@@ -1,0 +1,250 @@
+{
+  "schema_version": "0.1",
+  "product": "EMMana-Next",
+  "layer": "product-domain",
+  "principle": "Product workflow is separate from the physical .emnx solver model.",
+  "workflow": [
+    {
+      "id": "project",
+      "label": "Project",
+      "status": "implemented",
+      "owns": [
+        "identity",
+        "frequency plan",
+        "design variants"
+      ]
+    },
+    {
+      "id": "design-model",
+      "label": "Design Model",
+      "status": "implemented",
+      "owns": [
+        "geometry",
+        "feeds",
+        "loads",
+        "ground",
+        "solver inputs"
+      ]
+    },
+    {
+      "id": "analysis-plan",
+      "label": "Analysis Plan",
+      "status": "implemented",
+      "owns": [
+        "requests",
+        "sweeps",
+        "optimization goals",
+        "verification policy"
+      ]
+    },
+    {
+      "id": "solve",
+      "label": "Simulation",
+      "status": "implemented",
+      "owns": [
+        "solve",
+        "sweep",
+        "optimizer",
+        "cache"
+      ]
+    },
+    {
+      "id": "evidence",
+      "label": "Evidence",
+      "status": "implemented",
+      "owns": [
+        "internal tests",
+        "independent NEC2",
+        "provenance",
+        "release gates"
+      ]
+    },
+    {
+      "id": "measurement",
+      "label": "Measurement",
+      "status": "planned",
+      "owns": [
+        "VNA/Touchstone import",
+        "simulation-vs-measurement comparison"
+      ]
+    },
+    {
+      "id": "report",
+      "label": "Report",
+      "status": "planned",
+      "owns": [
+        "engineering report",
+        "variant comparison",
+        "release summary"
+      ]
+    }
+  ],
+  "domain_objects": {
+    "project": {
+      "status": "implemented",
+      "description": "Product-level project identity and workflow owner."
+    },
+    "design_model": {
+      "status": "implemented",
+      "format": "EMNX",
+      "description": "Pure physical solver input; product metadata must not be layered into it."
+    },
+    "analysis_plan": {
+      "status": "implemented",
+      "format": "analysis-plan-0.1",
+      "description": "Requested analyses, goals and evidence policy."
+    },
+    "design_variant": {
+      "status": "planned",
+      "description": "Named immutable candidate linked to one EMNX model hash."
+    },
+    "evidence_bundle": {
+      "status": "implemented",
+      "description": "Tests, reference comparison, provenance and gate status."
+    },
+    "measurement_set": {
+      "status": "planned",
+      "description": "Measured S/Z data stored beside, never over, simulated results."
+    },
+    "report_profile": {
+      "status": "planned",
+      "description": "Defines engineering report contents without changing solver behavior."
+    }
+  },
+  "capability_groups": [
+    {
+      "id": "templates-synthesis",
+      "status": "planned",
+      "priority": "high",
+      "features": [
+        "antenna templates",
+        "frequency-driven synthesis",
+        "parameter presets"
+      ]
+    },
+    {
+      "id": "materials-environments",
+      "status": "partial",
+      "priority": "high",
+      "features": [
+        "conductor library",
+        "ground profiles",
+        "units",
+        "validation status"
+      ]
+    },
+    {
+      "id": "analysis-requests",
+      "status": "implemented",
+      "priority": "high",
+      "features": [
+        "impedance",
+        "VSWR",
+        "far field",
+        "currents",
+        "power balance",
+        "sweep"
+      ]
+    },
+    {
+      "id": "goal-optimization",
+      "status": "implemented",
+      "priority": "high",
+      "features": [
+        "multi-objective weights",
+        "guardrails",
+        "robust tolerance",
+        "Monte Carlo",
+        "Pareto"
+      ]
+    },
+    {
+      "id": "reference-validation",
+      "status": "implemented",
+      "priority": "high",
+      "features": [
+        "NEC2 comparison",
+        "trust status",
+        "release gates"
+      ]
+    },
+    {
+      "id": "measurement-correlation",
+      "status": "planned",
+      "priority": "high",
+      "features": [
+        "Touchstone import",
+        "VNA CSV import",
+        "overlay",
+        "delta metrics"
+      ]
+    },
+    {
+      "id": "matching-network",
+      "status": "planned",
+      "priority": "medium",
+      "features": [
+        "RLC network",
+        "tuning",
+        "post-process matching"
+      ]
+    },
+    {
+      "id": "multiport-arrays",
+      "status": "planned",
+      "priority": "medium",
+      "features": [
+        "N-port",
+        "source phase/amplitude",
+        "array excitation"
+      ]
+    },
+    {
+      "id": "project-library",
+      "status": "planned",
+      "priority": "medium",
+      "features": [
+        "parts",
+        "materials",
+        "sources",
+        "project templates"
+      ]
+    },
+    {
+      "id": "job-queue",
+      "status": "planned",
+      "priority": "low",
+      "features": [
+        "queued studies",
+        "batch variants",
+        "artifact retention"
+      ]
+    }
+  ],
+  "trust_levels": [
+    {
+      "id": "experimental",
+      "meaning": "Implemented but not independently validated."
+    },
+    {
+      "id": "characterized",
+      "meaning": "Independent deltas measured; no authoritative acceptance yet."
+    },
+    {
+      "id": "reference-validated",
+      "meaning": "Evidence-backed tolerance gate passes against an independent reference."
+    },
+    {
+      "id": "release-authoritative",
+      "meaning": "Required solver, platform and evidence gates pass for the declared scope."
+    }
+  ],
+  "invariants": [
+    "One physical design model has one stable model hash.",
+    "Product workflow metadata never changes the meaning of an EMNX solver model.",
+    "Measured data never overwrites simulated data.",
+    "A build PASS is not a runtime PASS.",
+    "A characterization measurement is not promoted to validation by widening tolerances after the fact.",
+    "Every reported result carries source model, solver/backend and evidence status."
+  ]
+}

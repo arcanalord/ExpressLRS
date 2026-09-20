@@ -1,6 +1,6 @@
 # EMMana-Next — PROJECT INDEX
 
-**Current version:** 0.1.0-alpha.20-rev5  
+**Current version:** 0.1.0-alpha.20-rev6  
 **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
 **Current commit:** `ad417be8cfdd2e815575102f261b0ffcdaf6d5bc`  
 **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
@@ -10,7 +10,7 @@
 ## Current source
 
 - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev4-source.zip`
+- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev6-source-artifact.zip`
 - Older source bundles are history/evidence and are not current.
 
 ## Current architecture
@@ -67,3 +67,15 @@ Prefer external-reference depth before adding new solver features:
 ## Finite-ground characterization — 2026-09-20
 
 Real NEC2 run 35509245561 measured six finite-ground cases. The current complex-image approximation is not accepted as authoritative. Worst measured delta was G01 at h=0.10 m: dR=-30.163280 ohm, dX=+12.262247 ohm. See `benchmarks/FINITE_GROUND_NEC2_ALPHA20.json`.
+
+
+## Product Domain layer — rev6
+
+The product workflow is explicitly separated from the physical EMNX solver model.
+
+Product Project → Design Model → Analysis Plan → Execution → Evidence Bundle → Measurement Set → Report/Release.
+
+Current registry: `apps/shared/product/product-registry.json`  
+Analysis-plan contract: `schemas/analysis-plan-0.1.schema.json`  
+World-product review: `docs/research/WORLD_PRODUCT_PATTERNS_2026.md`  
+Decision: `docs/adr/ADR-0022-product-domain-layer.md`

@@ -1,0 +1,38 @@
+{
+  "schema_version": "0.1",
+  "project_id": "B04-yagi-engineering-study",
+  "model_ref": {
+    "path": "benchmarks/B04_three_element_yagi_parametric.emnx"
+  },
+  "frequency_plan": {
+    "start_hz": 297000000,
+    "stop_hz": 303000000,
+    "points": 7
+  },
+  "requests": [
+    "model-check",
+    "impedance",
+    "vswr",
+    "sweep",
+    "far-field",
+    "optimize",
+    "reference-compare"
+  ],
+  "optimization_goals": [
+    {"metric": "vswr", "objective": "less_or_equal", "target": 2.0, "weight": 0.4},
+    {"metric": "gain_dbi", "objective": "maximize", "weight": 0.3},
+    {"metric": "front_to_back_db", "objective": "maximize", "weight": 0.2},
+    {"metric": "boom_length_m", "objective": "minimize", "weight": 0.1}
+  ],
+  "verification_policy": {
+    "trust_target": "reference-validated",
+    "required_gates": ["CORE_PASS", "LINUX_RUNTIME_PASS", "INDEPENDENT_NEC2_PASS"],
+    "independent_reference": "nec2c"
+  },
+  "report_profile": {
+    "include_raw_json": false,
+    "include_patterns": true,
+    "include_provenance": true,
+    "include_reference_deltas": true
+  }
+}

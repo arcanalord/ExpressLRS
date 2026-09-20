@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fpv-club.ru/schemas/emnext/analysis-plan-0.1.schema.json",
+  "title": "EMMana-Next Analysis Plan v0.1",
+  "type": "object",
+  "required": ["schema_version", "project_id", "model_ref", "requests", "verification_policy"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "project_id": {"type": "string", "minLength": 1},
+    "model_ref": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "expected_model_hash": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "frequency_plan": {
+      "type": "object",
+      "properties": {
+        "start_hz": {"type": "number", "exclusiveMinimum": 0},
+        "stop_hz": {"type": "number", "exclusiveMinimum": 0},
+        "points": {"type": "integer", "minimum": 1, "maximum": 10001}
+      },
+      "additionalProperties": false
+    },
+    "requests": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["model-check", "impedance", "vswr", "sweep", "far-field", "currents", "power-balance", "optimize", "reference-compare"]
+      }
+    },
+    "optimization_goals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["metric", "objective"],
+        "properties": {
+          "metric": {"enum": ["vswr", "gain_dbi", "front_to_back_db", "boom_length_m", "efficiency"]},
+          "objective": {"enum": ["minimize", "maximize", "less_or_equal", "greater_or_equal"]},
+          "target": {"type": "number"},
+          "weight": {"type": "number", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "verification_policy": {
+      "type": "object",
+      "required": ["trust_target"],
+      "properties": {
+        "trust_target": {"enum": ["experimental", "characterized", "reference-validated", "release-authoritative"]},
+        "required_gates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "independent_reference": {"type": "string", "enum": ["none", "nec2c"]}
+      },
+      "additionalProperties": false
+    },
+    "report_profile": {
+      "type": "object",
+      "properties": {
+        "include_raw_json": {"type": "boolean", "default": false},
+        "include_patterns": {"type": "boolean", "default": true},
+        "include_provenance": {"type": "boolean", "default": true},
+        "include_reference_deltas": {"type": "boolean", "default": true}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

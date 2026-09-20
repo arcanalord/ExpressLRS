@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 STATIC = Path(__file__).resolve().parent / "static"
 BENCHMARKS = ROOT / "benchmarks"
+PRODUCT_REGISTRY = ROOT / "apps" / "shared" / "product" / "product-registry.json"
 DEFAULT_BINARY = ROOT / "build-linux" / "emnext"
 
 
@@ -106,6 +107,10 @@ class Handler(SimpleHTTPRequestHandler):
             candidates = sorted(BENCHMARKS.glob("REFERENCE_STATUS_ALPHA*.json")); status_path = candidates[-1] if candidates else BENCHMARKS / "REFERENCE_STATUS_ALPHA17.json"
             try: self.send_json(json.loads(status_path.read_text(encoding="utf-8")))
             except FileNotFoundError: self.send_json({"schema_version":"0.1","independent_reference":{"local_status":"unknown","ci_status":"unknown"}})
+            return
+        if parsed.path == "/api/product-registry":
+            try: self.send_json(json.loads(PRODUCT_REGISTRY.read_text(encoding="utf-8")))
+            except Exception as e: self.send_json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             return
         if parsed.path == "/api/help-registry":
             p = ROOT / "apps" / "shared" / "help" / "help-registry.json"

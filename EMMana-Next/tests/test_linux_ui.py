@@ -33,6 +33,7 @@ def main():
         try:
             html,ctype=get(base+'/');text=html.decode('utf-8');assert ctype=='text/html' and 'help-trigger' in text and 'ground-mode' in text and 'mobile-menu' in text
             reg=get_json(base+'/api/help-registry');assert reg['fallbackTopic']=='emmana-next.overview' and reg['errorMap']['NEC2_NOT_RUN']=='emmana-next.error.nec2-not-run' and len(reg['topics'])>=10
+            product=get_json(base+'/api/product-registry');assert product['layer']=='product-domain' and any(x['id']=='analysis-plan' for x in product['workflow'])
             examples=get_json(base+'/api/examples')['examples'];names={x['file'] for x in examples};assert 'B02_quarterwave_monopole_over_pec.emnx' in names and 'B01_halfwave_dipole_51seg.emnx' in names
             trust=get_json(base+'/api/reference-status');assert trust['independent_reference']['engine']=='nec2c'
             check=post_json(base+'/api/model-check',{'project':b01,'kernel':'reduced'},30);assert check['ok'] and 'MODEL OK' in check['stdout']
