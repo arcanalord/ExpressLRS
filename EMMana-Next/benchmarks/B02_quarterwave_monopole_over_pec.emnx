@@ -1,0 +1,35 @@
+{
+  "schema_version": "0.5",
+  "name": "B02 quarter-wave monopole over PEC ground",
+  "frequency_hz": 299792458.0,
+  "ground": {
+    "model": "pec-image-v1",
+    "plane_z_m": 0.0
+  },
+  "wires": [
+    {
+      "id": "MONO",
+      "start_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "end_m": [
+        0.0,
+        0.0,
+        0.25
+      ],
+      "radius_m": 0.001,
+      "segments": 25
+    }
+  ],
+  "feeds": [
+    {
+      "wire_id": "MONO",
+      "segment": 0,
+      "mode": "ground-terminal-start",
+      "voltage_re_v": 1.0,
+      "voltage_im_v": 0.0
+    }
+  ]
+}
