@@ -1,4 +1,4 @@
-name: Mesh Messenger v1.5.3 APK
+name: Mesh Messenger v1.5.4 APK
 
 on:
   push:
@@ -12,11 +12,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: mesh-messenger-v1.5.3-apk
+  group: mesh-messenger-v1.5.4-apk
   cancel-in-progress: true
 
 env:
-  SOURCE_SHA256: 4fce4e3de181ede39be0842a4c140caae4d7042064282c4c1a77ee02dac832c4
+  SOURCE_SHA256: fec9b88fdb8a5e44ae335139839b106c2c8bc6eb89c60bb55bedb4458f5eb479
   DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
   GRADLE_VERSION: "8.13"
   BUILD_TOOLS_VERSION: "35.0.0"
@@ -51,7 +51,7 @@ jobs:
           "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
 
-      - name: Download exact v1.5.3 source from Dropbox
+      - name: Download exact v1.5.4 source from Dropbox
         shell: bash
         run: |
           set -euo pipefail
@@ -76,17 +76,17 @@ jobs:
                           shutil.copyfileobj(src,dst)
           PY
 
-          SOURCE_ZIP="$(find _mesh_source/dropbox -type f -name 'SOURCE_CURRENT_v1.5.3.zip' -print -quit)"
+          SOURCE_ZIP="$(find _mesh_source/dropbox -type f -name 'SOURCE_CURRENT_v1.5.4.zip' -print -quit)"
           test -n "$SOURCE_ZIP"
           echo "$SOURCE_SHA256  $SOURCE_ZIP" | sha256sum -c -
-          cp "$SOURCE_ZIP" _mesh_source/SOURCE_CURRENT_v1.5.3.zip
-          unzip -q _mesh_source/SOURCE_CURRENT_v1.5.3.zip -d _mesh_source/unpacked
+          cp "$SOURCE_ZIP" _mesh_source/SOURCE_CURRENT_v1.5.4.zip
+          unzip -q _mesh_source/SOURCE_CURRENT_v1.5.4.zip -d _mesh_source/unpacked
 
           ANDROID_DIR="$(find _mesh_source/unpacked -type d -name android-app -print -quit)"
           test -n "$ANDROID_DIR"
           echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
 
-      - name: Verify exact v1.5.3 metadata and contracts
+      - name: Verify exact v1.5.4 metadata and contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -94,7 +94,7 @@ jobs:
           MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
           GATT_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/ble/AndroidGattBackend.kt"
           grep -q 'applicationId = "org.fpvclub.mesh"' "$BUILD_FILE"
-          grep -q 'versionCode = 19' "$BUILD_FILE"
+          grep -q 'versionCode = 20' "$BUILD_FILE"
           grep -q 'versionName = "1.5.3"' "$BUILD_FILE"
           grep -q 'jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")' "$BUILD_FILE"
           grep -q 'createMessageChannel();setupWebView();maybeStartMeshService()' "$MAIN_FILE"
@@ -120,17 +120,17 @@ jobs:
           apksigner verify --verbose "$APK"
           aapt dump badging "$APK" | tee _mesh_source/aapt-badging.txt
           grep -q "package: name='org.fpvclub.mesh'" _mesh_source/aapt-badging.txt
-          grep -q "versionCode='19'" _mesh_source/aapt-badging.txt
+          grep -q "versionCode='20'" _mesh_source/aapt-badging.txt
           grep -q "versionName='1.5.3'" _mesh_source/aapt-badging.txt
           sha256sum "$APK" | tee _mesh_source/APK_SHA256.txt
-          cp "$APK" _mesh_source/MeshMessenger-v1.5.3-debug.apk
+          cp "$APK" _mesh_source/MeshMessenger-v1.5.4-debug.apk
 
       - name: Write build provenance
         shell: bash
         run: |
           set -euo pipefail
           {
-            echo "Mesh Messenger v1.5.3 GitHub Actions build"
+            echo "Mesh Messenger v1.5.4 GitHub Actions build"
             echo "repository=$GITHUB_REPOSITORY"
             echo "ref=$GITHUB_REF"
             echo "commit=$GITHUB_SHA"
@@ -140,7 +140,7 @@ jobs:
             echo "build_tools=$BUILD_TOOLS_VERSION"
             echo "application_id=org.fpvclub.mesh"
             echo "version_name=1.5.3"
-            echo "version_code=19"
+            echo "version_code=20"
             echo
             java -version 2>&1
             echo
@@ -150,9 +150,9 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mesh-messenger-v1.5.3-debug-apk
+          name: mesh-messenger-v1.5.4-debug-apk
           path: |
-            _mesh_source/MeshMessenger-v1.5.3-debug.apk
+            _mesh_source/MeshMessenger-v1.5.4-debug.apk
             _mesh_source/APK_SHA256.txt
             _mesh_source/aapt-badging.txt
             _mesh_source/BUILD_PROVENANCE.txt
