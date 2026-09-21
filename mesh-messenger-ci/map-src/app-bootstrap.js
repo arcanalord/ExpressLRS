@@ -1,0 +1,25 @@
+export function runAppBootstrap({
+  initTheme=()=>{},
+  bindRadioState=()=>{},
+  renderInitial=()=>{},
+  restoreEngineeringUi=()=>{},
+  wireNavigation=()=>{},
+  wireEvents=()=>{},
+  openInitialHelp=()=>{},
+  consumePendingDeepLink=()=>{},
+  autoConnect=()=>{},
+  installDebug=()=>{},
+  registerServiceWorker=()=>{},
+}={}){
+  initTheme();
+  bindRadioState();
+  renderInitial();
+  restoreEngineeringUi();
+  wireNavigation();
+  wireEvents();
+  openInitialHelp();
+  consumePendingDeepLink();
+  autoConnect();
+  installDebug();
+  registerServiceWorker();
+}
