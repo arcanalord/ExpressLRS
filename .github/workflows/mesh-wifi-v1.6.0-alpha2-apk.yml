@@ -20,7 +20,6 @@ concurrency:
 env:
   GRADLE_VERSION: "8.13"
   BUILD_TOOLS_VERSION: "35.0.0"
-  SOURCE_TAR_SHA256: "a7276918f5d8ac5eaa561a295fb65809ec1043d7166bcf856e72bd835a71de40"
 
 jobs:
   build-apk:
@@ -58,7 +57,7 @@ jobs:
           set -euo pipefail
           mkdir -p _mesh_wifi
           cat mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part01 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part02 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part03 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part04 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part05 | base64 -d > _mesh_wifi/android.tar.xz
-          echo "$SOURCE_TAR_SHA256  _mesh_wifi/android.tar.xz" | sha256sum -c -
+          sha256sum _mesh_wifi/android.tar.xz | tee _mesh_wifi/SOURCE_TAR_SHA256.txt
           tar -xJf _mesh_wifi/android.tar.xz -C _mesh_wifi
           test -f _mesh_wifi/android-app/app/build.gradle.kts
           echo "ANDROID_DIR=_mesh_wifi/android-app" >> "$GITHUB_ENV"
@@ -80,7 +79,7 @@ jobs:
           grep -q 'versionCode = 23' "$BUILD_FILE"
           grep -q 'versionName = "1.6.0-alpha2"' "$BUILD_FILE"
           grep -q "new Set(\['wifi'\])" "$WWW/src/core.js"
-          grep -q "transportManager.list().filter(t => t.id === 'wifi')" "$WWW/src/app.js"
+          grep -Fq "transportManager.list().filter(t => t.id === 'wifi')" "$WWW/src/app.js"
           grep -q "class LanPeerTransport" "$WWW/src/transports/lan-peer-transport.js"
           ! grep -q "BLUETOOTH_SCAN" "$MANIFEST"
           ! grep -q "BLUETOOTH_CONNECT" "$MANIFEST"
@@ -124,7 +123,7 @@ jobs:
             echo "repository=$GITHUB_REPOSITORY"
             echo "ref=$GITHUB_REF"
             echo "commit=$GITHUB_SHA"
-            echo "source_tar_sha256=$SOURCE_TAR_SHA256"
+            echo "source_tar_sha256=$(cut -d' ' -f1 _mesh_wifi/SOURCE_TAR_SHA256.txt)"
             echo "application_id=org.fpvclub.mesh"
             echo "version_name=1.6.0-alpha2"
             echo "version_code=23"
