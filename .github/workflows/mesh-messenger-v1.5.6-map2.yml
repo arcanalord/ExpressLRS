@@ -1,0 +1,179 @@
+name: Mesh Messenger v1.5.6 Map Fix
+
+on:
+  push:
+    branches:
+      - ci/mesh-messenger-v1.5-apk
+    paths:
+      - ".github/workflows/mesh-messenger-v1.5.6-map2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-messenger-v1.5.6-map
+  cancel-in-progress: true
+
+env:
+  SOURCE_SHA256: f2193d3589dd39b14f9b5077096cebf2c5d0480604c7cb2494fb6bf2bc406c63
+  DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
+  GRADLE_VERSION: "8.13"
+  BUILD_TOOLS_VERSION: "35.0.0"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout CI branch
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Download exact v1.5.5 source from Dropbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _mesh_source/dropbox
+          curl -L --fail --retry 3 --retry-delay 2 "$DROPBOX_FOLDER_URL" -o _mesh_source/dropbox-folder.zip
+          python3 - <<'PY'
+          import pathlib, shutil, zipfile
+          archive=pathlib.Path("_mesh_source/dropbox-folder.zip")
+          out=pathlib.Path("_mesh_source/dropbox")
+          with zipfile.ZipFile(archive) as zf:
+              for info in zf.infolist():
+                  raw=info.filename.replace("\\","/").lstrip("/")
+                  parts=[p for p in raw.split("/") if p not in ("",".","..")]
+                  if not parts:
+                      continue
+                  target=out.joinpath(*parts)
+                  if info.is_dir():
+                      target.mkdir(parents=True,exist_ok=True)
+                  else:
+                      target.parent.mkdir(parents=True,exist_ok=True)
+                      with zf.open(info) as src,target.open("wb") as dst:
+                          shutil.copyfileobj(src,dst)
+          PY
+
+          SOURCE_ZIP="$(find _mesh_source/dropbox -type f -name 'SOURCE_CURRENT_v1.5.5.zip' -print -quit)"
+          test -n "$SOURCE_ZIP"
+          echo "$SOURCE_SHA256  $SOURCE_ZIP" | sha256sum -c -
+          cp "$SOURCE_ZIP" _mesh_source/SOURCE_CURRENT_v1.5.5.zip
+          unzip -q _mesh_source/SOURCE_CURRENT_v1.5.5.zip -d _mesh_source/unpacked
+
+          ANDROID_DIR="$(find _mesh_source/unpacked -type d -name android-app -print -quit)"
+          test -n "$ANDROID_DIR"
+          echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
+
+      - name: Apply v1.5.6 map patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$(dirname "$ANDROID_DIR")"
+          cp mesh-messenger-ci/map-src/index.html "$ROOT/index.html"
+          cp mesh-messenger-ci/map-src/app.js "$ROOT/src/app.js"
+          cp mesh-messenger-ci/map-src/styles.css "$ROOT/src/styles.css"
+          cp mesh-messenger-ci/map-src/AndroidManifest.xml "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
+          cp mesh-messenger-ci/map-src/android-index.html "$ANDROID_DIR/app/src/main/assets/www/index.html"
+          cp mesh-messenger-ci/map-src/android-app.js "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
+          cp mesh-messenger-ci/map-src/android-styles.css "$ANDROID_DIR/app/src/main/assets/www/src/styles.css"
+          sed -i 's/versionCode = 22/versionCode = 22/' "$ANDROID_DIR/app/build.gradle.kts"
+          sed -i 's/versionName = "1.5.5"/versionName = "1.5.6"/' "$ANDROID_DIR/app/build.gradle.kts"
+          node --check "$ROOT/src/app.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
+          grep -q 'tile.openstreetmap.org' "$ROOT/src/app.js"
+          grep -q 'android.permission.INTERNET' "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
+
+      - name: Verify v1.5.6 metadata and contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_FILE="$ANDROID_DIR/app/build.gradle.kts"
+          MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
+          GATT_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/ble/AndroidGattBackend.kt"
+          grep -q 'applicationId = "org.fpvclub.mesh"' "$BUILD_FILE"
+          grep -q 'versionCode = 22' "$BUILD_FILE"
+          grep -q 'versionName = "1.5.5"' "$BUILD_FILE"
+          grep -q 'jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")' "$BUILD_FILE"
+          grep -q 'createMessageChannel();setupWebView();maybeStartMeshService()' "$MAIN_FILE"
+          grep -q 'scannerAvailable' "$MAIN_FILE"
+          grep -q 'repeat(8)' "$GATT_FILE"
+          grep -q 'BLE_SCAN_FAILED_' "$GATT_FILE"
+          java -version
+          gradle --version
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p "$ANDROID_DIR" --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose "$APK"
+          aapt dump badging "$APK" | tee _mesh_source/aapt-badging.txt
+          grep -q "package: name='org.fpvclub.mesh'" _mesh_source/aapt-badging.txt
+          grep -q "versionCode='22'" _mesh_source/aapt-badging.txt
+          grep -q "versionName='1.5.6'" _mesh_source/aapt-badging.txt
+          sha256sum "$APK" | tee _mesh_source/APK_SHA256.txt
+          cp "$APK" _mesh_source/MeshMessenger-v1.5.6-map-fix-debug.apk
+
+      - name: Write build provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Mesh Messenger v1.5.6 GitHub Actions build"
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "ref=$GITHUB_REF"
+            echo "commit=$GITHUB_SHA"
+            echo "runner_os=$RUNNER_OS"
+            echo "source_sha256=$SOURCE_SHA256"
+            echo "gradle=$GRADLE_VERSION"
+            echo "build_tools=$BUILD_TOOLS_VERSION"
+            echo "application_id=org.fpvclub.mesh"
+            echo "version_name=1.5.6"
+            echo "version_code=22"
+            echo
+            java -version 2>&1
+            echo
+            gradle --version
+          } > _mesh_source/BUILD_PROVENANCE.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesh-messenger-v1.5.6-map-fix
+          path: |
+            _mesh_source/MeshMessenger-v1.5.6-map-fix-debug.apk
+            _mesh_source/APK_SHA256.txt
+            _mesh_source/aapt-badging.txt
+            _mesh_source/BUILD_PROVENANCE.txt
+          if-no-files-found: error
+          retention-days: 30
