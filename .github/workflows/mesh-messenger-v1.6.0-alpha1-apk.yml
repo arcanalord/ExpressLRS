@@ -1,0 +1,129 @@
+name: Mesh Messenger v1.6.0-alpha1 APK
+
+on:
+  push:
+    branches:
+      - ci/mesh-messenger-v1.6.0-alpha1-apk
+    paths:
+      - ".github/workflows/mesh-messenger-v1.6.0-alpha1-apk.yml"
+      - "mesh-messenger-ci/v1.6.0-alpha1/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-messenger-v1.6.0-alpha1-apk
+  cancel-in-progress: true
+
+env:
+  GRADLE_VERSION: "8.13"
+  BUILD_TOOLS_VERSION: "35.0.0"
+  SOURCE_TAR_SHA256: "a7276918f5d8ac5eaa561a295fb65809ec1043d7166bcf856e72bd835a71de40"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout CI branch
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Reconstruct exact Android source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _mesh_alpha1
+          cat mesh-messenger-ci/v1.6.0-alpha1/android.b64.part* | base64 -d > _mesh_alpha1/android.tar.xz
+          echo "$SOURCE_TAR_SHA256  _mesh_alpha1/android.tar.xz" | sha256sum -c -
+          tar -xJf _mesh_alpha1/android.tar.xz -C _mesh_alpha1
+          test -f _mesh_alpha1/android-app/app/build.gradle.kts
+          echo "ANDROID_DIR=_mesh_alpha1/android-app" >> "$GITHUB_ENV"
+
+      - name: Verify alpha metadata and transports
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_FILE="$ANDROID_DIR/app/build.gradle.kts"
+          grep -q 'applicationId = "org.fpvclub.mesh"' "$BUILD_FILE"
+          grep -q 'versionCode = 22' "$BUILD_FILE"
+          grep -q 'versionName = "1.6.0-alpha1"' "$BUILD_FILE"
+          grep -q 'compileSdk = 36' "$BUILD_FILE"
+          grep -q 'targetSdk = 36' "$BUILD_FILE"
+          test -f "$ANDROID_DIR/app/src/main/assets/www/src/transports/lan-peer-transport.js"
+          test -f "$ANDROID_DIR/app/src/main/assets/www/src/transports/internet-relay-transport.js"
+          test -f "$ANDROID_DIR/app/src/main/assets/www/src/transports/phoneapi-session.js"
+          java -version
+          gradle --version
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p "$ANDROID_DIR" --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose "$APK"
+          aapt dump badging "$APK" | tee _mesh_alpha1/aapt-badging.txt
+          grep -q "package: name='org.fpvclub.mesh'" _mesh_alpha1/aapt-badging.txt
+          grep -q "versionCode='22'" _mesh_alpha1/aapt-badging.txt
+          grep -q "versionName='1.6.0-alpha1'" _mesh_alpha1/aapt-badging.txt
+          sha256sum "$APK" | tee _mesh_alpha1/APK_SHA256.txt
+          cp "$APK" _mesh_alpha1/MeshMessenger-v1.6.0-alpha1-debug.apk
+
+      - name: Write build provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Mesh Messenger v1.6.0-alpha1 Wi-Fi First"
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "ref=$GITHUB_REF"
+            echo "commit=$GITHUB_SHA"
+            echo "source_tar_sha256=$SOURCE_TAR_SHA256"
+            echo "application_id=org.fpvclub.mesh"
+            echo "version_name=1.6.0-alpha1"
+            echo "version_code=22"
+            echo "gradle=$GRADLE_VERSION"
+            echo "build_tools=$BUILD_TOOLS_VERSION"
+          } > _mesh_alpha1/BUILD_PROVENANCE.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesh-messenger-v1.6.0-alpha1-debug-apk
+          path: |
+            _mesh_alpha1/MeshMessenger-v1.6.0-alpha1-debug.apk
+            _mesh_alpha1/APK_SHA256.txt
+            _mesh_alpha1/aapt-badging.txt
+            _mesh_alpha1/BUILD_PROVENANCE.txt
+          if-no-files-found: error
+          retention-days: 30
