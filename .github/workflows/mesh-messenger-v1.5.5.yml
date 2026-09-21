@@ -33,6 +33,16 @@ jobs:
           tar -xJf /tmp/mesh-source.tar.xz -C mesh-messenger
           test -f mesh-messenger/android-app/app/build.gradle.kts
 
+      - name: Upload reconstructed baseline UI assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshMessenger-v1.5.5-baseline-ui-assets
+          path: |
+            mesh-messenger/android-app/app/src/main/assets/www/src/app.js
+            mesh-messenger/android-app/app/src/main/assets/www/sw.js
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
