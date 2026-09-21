@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _mesh_wifi
-          cat mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part01 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part02 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part03 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part04 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part05 | base64 -d > _mesh_wifi/android.tar.xz
+          cat mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00.0 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00.1 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00.2 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00.3 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part01 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part02 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part03 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part04 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part05 | base64 -d > _mesh_wifi/android.tar.xz
           sha256sum _mesh_wifi/android.tar.xz | tee _mesh_wifi/SOURCE_TAR_SHA256.txt
           tar -xJf _mesh_wifi/android.tar.xz -C _mesh_wifi
           test -f _mesh_wifi/android-app/app/build.gradle.kts
