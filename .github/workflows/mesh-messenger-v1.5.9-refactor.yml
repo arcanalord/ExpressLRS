@@ -9,6 +9,7 @@ on:
       - "mesh-messenger-ci/map-src/**"
       - "mesh-messenger-ci/prepare_current_source.py"
       - "mesh-messenger-ci/release_source_audit.py"
+      - "mesh-messenger-ci/ui_startup_smoke.py"
   workflow_dispatch:
 
 permissions:
