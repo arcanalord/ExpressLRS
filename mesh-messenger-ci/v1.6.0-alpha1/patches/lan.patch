@@ -1,0 +1,263 @@
+diff -ruN /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/transports/lan-peer-transport.js /mnt/data/build_alpha1/android-app/app/src/main/assets/www/src/transports/lan-peer-transport.js
+--- /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/transports/lan-peer-transport.js	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/build_alpha1/android-app/app/src/main/assets/www/src/transports/lan-peer-transport.js	2026-09-21 21:36:15.000000000 +0000
+@@ -0,0 +1,270 @@
++const textEncoder = new TextEncoder();
++const textDecoder = new TextDecoder();
++
++function randomId(prefix = 'mm') {
++  if (globalThis.crypto?.randomUUID) return prefix + '-' + crypto.randomUUID();
++  return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
++}
++
++function toBase64Url(text) {
++  const bytes = textEncoder.encode(text);
++  let binary = '';
++  for (const byte of bytes) binary += String.fromCharCode(byte);
++  return btoa(binary).replace(/+/g, '-').replace(///g, '_').replace(/=+$/g, '');
++}
++
++function fromBase64Url(value) {
++  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
++  const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
++  const binary = atob(padded);
++  const bytes = new Uint8Array(binary.length);
++  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
++  return textDecoder.decode(bytes);
++}
++
++function encodeSignal(value) {
++  return 'MM-LAN1.' + toBase64Url(JSON.stringify(value));
++}
++
++function decodeSignal(code) {
++  const raw = String(code || '').trim();
++  if (!raw.startsWith('MM-LAN1.')) throw new Error('Неверный код Wi‑Fi LAN');
++  const parsed = JSON.parse(fromBase64Url(raw.slice(8)));
++  if (!parsed?.description || !parsed?.peerId) throw new Error('Код Wi‑Fi LAN повреждён');
++  return parsed;
++}
++
++export class LanPeerTransport {
++  constructor({ peerId = randomId('peer'), displayName = 'Устройство', onFrame = () => {}, onState = () => {}, onPeer = () => {}, RTCPeerConnectionImpl = globalThis.RTCPeerConnection } = {}) {
++    this.peerId = peerId;
++    this.displayName = displayName;
++    this.onFrame = onFrame;
++    this.onState = onState;
++    this.onPeer = onPeer;
++    this.RTCPeerConnectionImpl = RTCPeerConnectionImpl;
++    this.pc = null;
++    this.channel = null;
++    this.remotePeerId = '';
++    this.remoteName = '';
++    this.state = 'idle';
++    this._seenFrames = new Set();
++    this._outbox = [];
++    this._pendingSignalRole = '';
++    this._localSignalCode = '';
++  }
++
++  setIdentity({ peerId, displayName } = {}) {
++    if (peerId) this.peerId = peerId;
++    if (displayName) this.displayName = displayName;
++  }
++
++  _emitState(state, detail = '') {
++    this.state = state;
++    this.onState({ state, detail, peerId: this.peerId, remotePeerId: this.remotePeerId, remoteName: this.remoteName });
++  }
++
++  _buildPeerConnection() {
++    if (!this.RTCPeerConnectionImpl) throw new Error('WebRTC недоступен в этом runtime');
++    this.close({ preserveOutbox: true, silent: true });
++    const pc = new this.RTCPeerConnectionImpl({ iceServers: [] });
++    this.pc = pc;
++    pc.onconnectionstatechange = () => {
++      const state = pc.connectionState || '';
++      if (state === 'connected') this._emitState('ready', 'Локальный канал готов');
++      else if (state === 'failed' || state === 'disconnected') this._emitState('degraded', 'Локальный канал потерян — сообщения останутся в очереди');
++      else if (state === 'closed') this._emitState('idle', 'Локальный канал закрыт');
++    };
++    pc.ondatachannel = event => this._attachChannel(event.channel);
++    return pc;
++  }
++
++  _attachChannel(channel) {
++    this.channel = channel;
++    channel.binaryType = 'arraybuffer';
++    channel.onopen = () => {
++      this._emitState('ready', 'Локальный канал готов');
++      this._sendControl({ type: 'hello', peerId: this.peerId, displayName: this.displayName });
++      this._flushOutbox();
++    };
++    channel.onclose = () => this._emitState('degraded', 'Локальный канал закрыт — очередь сохранена');
++    channel.onerror = () => this._emitState('degraded', 'Ошибка локального канала');
++    channel.onmessage = event => this._handleMessage(event.data);
++  }
++
++  _sendControl(value) {
++    if (!this.channel || this.channel.readyState !== 'open') return false;
++    this.channel.send(JSON.stringify(value));
++    return true;
++  }
++
++  _handleMessage(raw) {
++    if (typeof raw !== 'string') {
++      const bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : new Uint8Array(raw.buffer || raw);
++      this.onFrame(bytes, { transportId: 'wifi' });
++      return;
++    }
++    let packet;
++    try { packet = JSON.parse(raw); } catch { return; }
++    if (packet.type === 'hello') {
++      this.remotePeerId = packet.peerId || this.remotePeerId;
++      this.remoteName = packet.displayName || this.remoteName || this.remotePeerId;
++      this.onPeer({ peerId: this.remotePeerId, displayName: this.remoteName });
++      if (!packet.reply) this._sendControl({ type: 'hello', peerId: this.peerId, displayName: this.displayName, reply: true });
++      return;
++    }
++    if (packet.type === 'frame') {
++      const frameId = String(packet.frameId || '');
++      if (frameId && this._seenFrames.has(frameId)) {
++        this._sendControl({ type: 'frameAck', frameId });
++        return;
++      }
++      if (frameId) {
++        this._seenFrames.add(frameId);
++        if (this._seenFrames.size > 1000) this._seenFrames.delete(this._seenFrames.values().next().value);
++      }
++      const bytes = Uint8Array.from(atob(packet.payload), c => c.charCodeAt(0));
++      this.onFrame(bytes, { transportId: 'wifi', frameId, from: packet.from || this.remotePeerId });
++      this._sendControl({ type: 'frameAck', frameId });
++      return;
++    }
++    if (packet.type === 'frameAck') {
++      this.onFrame(textEncoder.encode(JSON.stringify({ type: 'transport_ack', frameId: packet.frameId })), { transportId: 'wifi', system: true });
++    }
++  }
++
++  _encodeFrame(bytes, frameId) {
++    let binary = '';
++    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
++    for (let i = 0; i < view.length; i += 1) binary += String.fromCharCode(view[i]);
++    return { type: 'frame', frameId, from: this.peerId, payload: btoa(binary) };
++  }
++
++  _flushOutbox() {
++    if (!this.isReady()) return;
++    const pending = this._outbox.splice(0);
++    pending.forEach(item => {
++      if (!this._sendControl(item.packet)) this._outbox.push(item);
++    });
++  }
++
++  async _awaitIceComplete(timeoutMs = 5000) {
++    if (!this.pc) throw new Error('Wi‑Fi LAN session не создана');
++    if (this.pc.iceGatheringState === 'complete') return;
++    await new Promise((resolve, reject) => {
++      const timer = setTimeout(() => {
++        cleanup();
++        reject(new Error('Не удалось подготовить локальный Wi‑Fi маршрут'));
++      }, timeoutMs);
++      const onChange = () => {
++        if (this.pc?.iceGatheringState === 'complete') {
++          cleanup();
++          resolve();
++        }
++      };
++      const cleanup = () => {
++        clearTimeout(timer);
++        this.pc?.removeEventListener?.('icegatheringstatechange', onChange);
++      };
++      this.pc.addEventListener('icegatheringstatechange', onChange);
++    });
++  }
++
++  async createInvite() {
++    const pc = this._buildPeerConnection();
++    const channel = pc.createDataChannel('mesh-messenger', { ordered: true });
++    this._attachChannel(channel);
++    const offer = await pc.createOffer();
++    await pc.setLocalDescription(offer);
++    this._emitState('pairing', 'Создаём локальный маршрут…');
++    await this._awaitIceComplete();
++    const code = encodeSignal({ v: 1, role: 'offer', peerId: this.peerId, displayName: this.displayName, description: this.pc.localDescription });
++    this._pendingSignalRole = 'offer';
++    this._localSignalCode = code;
++    return code;
++  }
++
++  async applySignal(code) {
++    const signal = decodeSignal(code);
++    if (signal.role === 'offer') {
++      const pc = this._buildPeerConnection();
++      this.remotePeerId = signal.peerId;
++      this.remoteName = signal.displayName || signal.peerId;
++      this.onPeer({ peerId: this.remotePeerId, displayName: this.remoteName });
++      await pc.setRemoteDescription(signal.description);
++      const answer = await pc.createAnswer();
++      await pc.setLocalDescription(answer);
++      this._emitState('pairing', 'Готовим ответ второму устройству…');
++      await this._awaitIceComplete();
++      const response = encodeSignal({ v: 1, role: 'answer', peerId: this.peerId, displayName: this.displayName, description: this.pc.localDescription });
++      this._pendingSignalRole = 'answer';
++      this._localSignalCode = response;
++      return { role: 'answer', response, remotePeerId: this.remotePeerId, remoteName: this.remoteName };
++    }
++    if (signal.role === 'answer') {
++      if (!this.pc || this._pendingSignalRole !== 'offer') throw new Error('Сначала создайте приглашение на этом устройстве');
++      this.remotePeerId = signal.peerId;
++      this.remoteName = signal.displayName || signal.peerId;
++      this.onPeer({ peerId: this.remotePeerId, displayName: this.remoteName });
++      await this.pc.setRemoteDescription(signal.description);
++      this._emitState('connecting', 'Соединяем устройства…');
++      return { role: 'connected', remotePeerId: this.remotePeerId, remoteName: this.remoteName };
++    }
++    throw new Error('Неизвестный тип Wi‑Fi LAN кода');
++  }
++
++  getLocalSignalCode() {
++    return this._localSignalCode;
++  }
++
++  isReady() {
++    return this.channel?.readyState === 'open' && (this.state === 'ready' || this.pc?.connectionState === 'connected');
++  }
++
++  send(bytes, { frameId = randomId('frame') } = {}) {
++    const packet = this._encodeFrame(bytes, frameId);
++    if (!this.isReady() || !this._sendControl(packet)) {
++      this._outbox.push({ frameId, packet });
++      this._emitState('queued', 'Нет локального маршрута — данные сохранены в очереди');
++      return { queued: true, frameId };
++    }
++    return { queued: false, frameId };
++  }
++
++  close({ preserveOutbox = true, silent = false } = {}) {
++    try { this.channel?.close(); } catch {}
++    try { this.pc?.close(); } catch {}
++    this.channel = null;
++    this.pc = null;
++    this._pendingSignalRole = '';
++    this._localSignalCode = '';
++    this.remotePeerId = '';
++    this.remoteName = '';
++    if (!preserveOutbox) this._outbox = [];
++    if (!silent) this._emitState('idle', preserveOutbox && this._outbox.length ? 'Локальный канал закрыт — очередь сохранена' : 'Локальная связь отключена');
++  }
++
++  snapshot() {
++    return {
++      state: this.state,
++      peerId: this.peerId,
++      remotePeerId: this.remotePeerId,
++      remoteName: this.remoteName,
++      ready: this.isReady(),
++      queued: this._outbox.length,
++      connectionState: this.pc?.connectionState || 'closed',
++    };
++  }
++}
++
++export const LanPairing = { encode: encodeSignal, decode: decodeSignal };
