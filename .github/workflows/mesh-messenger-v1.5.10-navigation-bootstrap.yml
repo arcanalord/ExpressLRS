@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SOURCE_SHA256: f2193d3589dd39b14f9b5077096cebf2c5d0480604c7cb2494fb6bf2bc406c63
+  SOURCE_SHA256: 4047f60859dbc5ad37d4708ebf9e826d3ed5be6226c5c1d66ca2c03a25a5aa87
   DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
   VERSION_NAME: "1.5.10"
   VERSION_CODE: "26"
@@ -49,7 +49,7 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
-      - name: Restore exact v1.5.5 baseline
+      - name: Restore exact v1.5.9 baseline
         shell: bash
         run: |
           set -euo pipefail
@@ -71,7 +71,7 @@ jobs:
                       p.parent.mkdir(parents=True,exist_ok=True)
                       with z.open(info) as a,p.open("wb") as b: shutil.copyfileobj(a,b)
           PY
-          BASE="$(find _mesh1510/dropbox -type f -name 'SOURCE_CURRENT_v1.5.5.zip' -print -quit)"
+          BASE="$(find _mesh1510/dropbox -type f -path '*/10_Релизы/SOURCE_CURRENT_v1.5.9.zip' -print -quit)"
           test -n "$BASE"
           echo "$SOURCE_SHA256  $BASE" | sha256sum -c -
           unzip -q "$BASE" -d _mesh1510/unpacked
