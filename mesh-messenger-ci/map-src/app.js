@@ -23,6 +23,7 @@ const packetPositions = new Map();
 const trackHistory = new PositionTrackHistory({maxPointsPerNode:120});
 const sharedWaypoints = new Map();
 let pendingWaypointPosition = null;
+let browserMapPosition = null;
 let mapTileState = 'loading';
 let mapTileGeneration = 0;
 let qrMode = 'contact';
@@ -233,6 +234,10 @@ function buildConversations(snapshot=currentSnapshot()) {
   }
   const local=snapshot?.myInfo?.myNodeNum;
   const nodes=(snapshot?.nodes||[]).filter(n=>n.num!==local && !n.isIgnored && n.user?.isUnmessagable!==true);
+  if(fallback?.latitude!=null&&fallback?.longitude!=null){
+    const q=project(fallback),b=document.createElement('button');b.type='button';b.className='map-marker self map-device-position';
+    b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.title='Моя позиция';b.innerHTML=`Вы<span class="marker-label">Телефон</span>`;holder.append(b);
+  }
   for(const n of nodes){
     const id=`direct:${n.num>>>0}`; const last=getLastMessage(id);
     const ui=uiState(id);
@@ -705,7 +710,7 @@ function renderOnlineTiles({minX,maxX,minY,maxY,pad=10,span=80}){
   }
   setTimeout(()=>{if(generation===mapTileGeneration&&loaded===0){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;$('#mapOverlayTitle').textContent='Карта недоступна · локальная сетка';}},4500);
 }
-function renderMap({fallback=null}={}){
+function renderMap({fallback=browserMapPosition}={}){
   const holder=$('#mapMarkers'),trackLayer=$('#mapTrackLayer');if(!holder)return;
   const nodes=mapNodes();holder.innerHTML='';if(trackLayer)trackLayer.innerHTML='';
   const waypoints=activeWaypoints();
@@ -732,7 +737,7 @@ function renderMap({fallback=null}={}){
     b.addEventListener('click',()=>{selectedMapNodeNum=n.num>>>0;renderMap();});holder.append(b);
   }
   $('#mapOverlayTitle').textContent=mapTileState==='online'?'OSM · Позиции NodeDB':mapTileState==='loading'?'Карта загружается · Позиции NodeDB':'Карта недоступна · локальная сетка';$('#mapOverlayMeta').textContent=hasGeoData?`${nodes.length} узлов · ${waypoints.length} точек · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`:'координат пока нет · общий вид';
-  if(!selected){$('#mapSelectedName').textContent='Нет узла';$('#mapSelectedCoords').textContent=fallback?formatCoords(fallback):'—';$('#mapSelectedAltitude').textContent='—';$('#mapSelectedRoute').textContent='—';$('#mapTrackMeta').textContent='—';$('#mapOpenChatButton').disabled=true;$('#mapCreateWaypointButton').disabled=!fallback;$('#mapClearTrackButton').disabled=true;return;}
+  if(!selected){$('#mapSelectedName').textContent=fallback?'Моя позиция':'Нет узла';$('#mapSelectedCoords').textContent=fallback?formatCoords(fallback):'—';$('#mapSelectedAltitude').textContent=fallback?.altitude==null?'—':`${Math.round(fallback.altitude)} м`;$('#mapSelectedRoute').textContent=fallback?'GPS телефона':'—';$('#mapTrackMeta').textContent='—';$('#mapOpenChatButton').disabled=true;$('#mapCreateWaypointButton').disabled=!fallback;$('#mapClearTrackButton').disabled=true;return;}
   $('#mapSelectedName').textContent=selected.name;$('#mapSelectedCoords').textContent=formatCoords(selected.position);$('#mapSelectedAltitude').textContent=selected.position.altitude==null?'—':`${Math.round(selected.position.altitude)} м`;
   $('#mapSelectedRoute').textContent=selected.isLocal?'локальный узел':`${selected.hopsAway??'—'} hops · ${selected.snr==null?'SNR —':`SNR ${selected.snr.toFixed(1)} dB`}`;
   $('#mapTrackMeta').textContent=`${track.length} точек · ${formatDistanceMeters(trackHistory.distanceMeters(selected.num>>>0))}`;
@@ -749,11 +754,24 @@ function browserPosition(){
     navigator.geolocation.getCurrentPosition(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,altitude:p.coords.altitude==null?null:Math.round(p.coords.altitude),timestamp:Math.floor(Date.now()/1000)}),reject,{enableHighAccuracy:true,timeout:5000,maximumAge:15000});
   });
 }
+async function locateOnMap(){
+  const button=$('#locateMapButton');if(button)button.disabled=true;
+  try{
+    const position=await browserPosition();
+    browserMapPosition=position;
+    renderMap({fallback:position});
+    return position;
+  }catch(error){
+    renderSystemBanner('error','Не удалось определить местоположение. Разрешите доступ к геопозиции и включите геолокацию.');
+    return null;
+  }finally{if(button)button.disabled=false;}
+}
 async function shareCurrentPosition({preferBrowser=true}={}){
   let position=null;
   if(preferBrowser){try{position=await browserPosition();}catch{}}
   position=position||bestLocalPosition();
   if(!position){alert('У локального узла пока нет координат.');return null;}
+  browserMapPosition={...position};if(currentViewName==='map')renderMap({fallback:browserMapPosition});
   const c=currentConversation();if(!c)return null;
   const decision=transportManager.select('position');
   const label=`Позиция ${formatCoords(position)}`;
@@ -944,6 +962,7 @@ function wireEvents() {
   $('#pttShortcut').addEventListener('click',()=>{$('#messageTypeSelect').value='voice';renderRoute();openModal($('#pttLayer'));}); $('#mapPttButton').addEventListener('click',()=>{$('#messageTypeSelect').value='voice';renderRoute();openModal($('#pttLayer'));});
   $('#composerVoice')?.addEventListener('click',()=>$('#pttShortcut')?.click());
   $('#conversationBackMobile')?.addEventListener('click',()=>{const screen=document.querySelector('[data-screen="chats"]');screen?.classList.remove('mobile-conversation-open');requestAnimationFrame(()=>screen?.scrollIntoView({behavior:'smooth',block:'start'}));});
+  $('#locateMapButton')?.addEventListener('click',()=>locateOnMap());
   $('#sharePositionButton')?.addEventListener('click',()=>shareCurrentPosition());
   $('#centerMapButton')?.addEventListener('click',()=>{selectedMapNodeNum=0;renderMap();});
   $('#mapOpenChatButton')?.addEventListener('click',e=>{const num=Number(e.currentTarget.dataset.nodeNum)||0;if(num){selectConversation(`direct:${num}`);setView('chats');}});
@@ -960,5 +979,5 @@ const initialHelpTopic=parseHelpTopic(location.search);if(initialHelpTopic)openF
 if(globalThis.__meshPendingDeepLink){handleAndroidDeepLink(globalThis.__meshPendingDeepLink);globalThis.__meshPendingDeepLink='';}
 if(!globalThis.__meshDisableAutoConnect)activateRadio(AndroidBridgeMeshtasticTransport.isSupported()?androidBleRadio:mockRadio).catch(()=>{});
 
-window.__meshDebug={transportManager,queue,mockRadio,androidBleRadio,getPhoneApiSnapshot:()=>currentSnapshot(),getCurrentConversation:()=>currentConversation(),selectConversation,sendMessage,retryQueueItem,renderDeliveryQueue,exportPhoneApiCapture,simulateReboot:()=>mockRadio.simulateReboot(),setNextRoutingResult:(code)=>mockRadio.setNextRoutingResult(code),setFileDisconnectAfter:(n)=>mockRadio.setFileDisconnectAfter(n),getConversationUi:(id)=>({...uiState(id)}),sendSmallFile,getFileTransfers:()=>fileTransfers.list().map(t=>({id:t.id,name:t.name,status:t.status,confirmed:fileTransfers.confirmedCount(t.id),total:t.total,targetNode:t.targetNode,conversationId:t.conversationId,error:t.error})),simulateFileSubsystemRestart,resumeIncompleteFileTransfers,renderMap,shareCurrentPosition,currentShareUrls,renderShareQr,trackHistory,getWaypoints:()=>[...sharedWaypoints.values()],sendWaypointFromModal,helpRegistry,renderQuickHelp,openFullHelp,copySafeDiagnostics,currentHelpTopic:()=>currentHelpTopicId};
+window.__meshDebug={transportManager,queue,mockRadio,androidBleRadio,getPhoneApiSnapshot:()=>currentSnapshot(),getCurrentConversation:()=>currentConversation(),selectConversation,sendMessage,retryQueueItem,renderDeliveryQueue,exportPhoneApiCapture,simulateReboot:()=>mockRadio.simulateReboot(),setNextRoutingResult:(code)=>mockRadio.setNextRoutingResult(code),setFileDisconnectAfter:(n)=>mockRadio.setFileDisconnectAfter(n),getConversationUi:(id)=>({...uiState(id)}),sendSmallFile,getFileTransfers:()=>fileTransfers.list().map(t=>({id:t.id,name:t.name,status:t.status,confirmed:fileTransfers.confirmedCount(t.id),total:t.total,targetNode:t.targetNode,conversationId:t.conversationId,error:t.error})),simulateFileSubsystemRestart,resumeIncompleteFileTransfers,renderMap,locateOnMap,shareCurrentPosition,currentShareUrls,renderShareQr,trackHistory,getWaypoints:()=>[...sharedWaypoints.values()],sendWaypointFromModal,helpRegistry,renderQuickHelp,openFullHelp,copySafeDiagnostics,currentHelpTopic:()=>currentHelpTopicId};
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!AndroidBridgeMeshtasticTransport.isSupported())serviceWorker.register('./sw.js').catch(()=>{});
