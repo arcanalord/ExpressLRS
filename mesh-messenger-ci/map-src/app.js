@@ -1,3 +1,4 @@
+// startup-smoke-gate
 import { TransportManager, MessageQueue, SmallFileTransferManager, SmallFileReceiver, SmallFileTransferPersistence, PositionTrackHistory } from './core.js';
 import { MockMeshtasticTransport } from './transports/mock-meshtastic.js';
 import { WebSerialMeshtasticTransport } from './transports/web-serial-meshtastic.js';
