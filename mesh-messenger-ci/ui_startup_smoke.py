@@ -29,7 +29,17 @@ thread.start()
 errors = []
 try:
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        import shutil
+        executable = (
+            shutil.which("google-chrome")
+            or shutil.which("google-chrome-stable")
+            or shutil.which("chromium")
+            or shutil.which("chromium-browser")
+        )
+        launch_args = {"headless": True}
+        if executable:
+            launch_args["executable_path"] = executable
+        browser = p.chromium.launch(**launch_args)
         context = browser.new_context(
             viewport={"width": 412, "height": 915},
             service_workers="block",
