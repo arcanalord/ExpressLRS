@@ -1,0 +1,78 @@
+name: Mesh Messenger v1.5.5 APK
+
+on:
+  push:
+    branches:
+      - mesh-messenger-v1.5.5
+    paths:
+      - "mesh-messenger/**"
+      - ".github/workflows/mesh-messenger-v1.5.5.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "mesh-messenger/**"
+      - ".github/workflows/mesh-messenger-v1.5.5.yml"
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct exact v1.5.5 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat             mesh-messenger/source-v1.5.5.tar.xz.b64             mesh-messenger/source-v1.5.5.part02.b64             mesh-messenger/source-v1.5.5.part03.b64             mesh-messenger/source-v1.5.5.part04.b64             mesh-messenger/source-v1.5.5.part05.b64             mesh-messenger/source-v1.5.5.part06.b64             mesh-messenger/source-v1.5.5.part07.b64             mesh-messenger/source-v1.5.5.part08.b64             mesh-messenger/source-v1.5.5.part09.b64             mesh-messenger/source-v1.5.5.part10.b64             mesh-messenger/source-v1.5.5.part11.b64             mesh-messenger/source-v1.5.5.part12.b64             > /tmp/mesh-source.b64
+          base64 -d /tmp/mesh-source.b64 > /tmp/mesh-source.tar.xz
+          echo "b4f00cd61be3b8fe4f59d49c30c79c034e414cd3fb06315ace9991d00e3c2342  /tmp/mesh-source.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/mesh-source.tar.xz -C mesh-messenger
+          test -f mesh-messenger/android-app/app/build.gradle.kts
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android 36 SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Build debug APK
+        shell: bash
+        run: gradle -p mesh-messenger/android-app :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="mesh-messenger/android-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          sha256sum "$APK"
+          cp "$APK" "MeshMessenger-v1.5.5-debug.apk"
+          sha256sum "MeshMessenger-v1.5.5-debug.apk" > "MeshMessenger-v1.5.5-debug.apk.sha256"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshMessenger-v1.5.5-debug
+          path: |
+            MeshMessenger-v1.5.5-debug.apk
+            MeshMessenger-v1.5.5-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
