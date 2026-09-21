@@ -1,0 +1,512 @@
+### mesh-messenger-v1.5.5-work/UX_CORE_v1.4.md
+1: # UX Core v1.4 — Track + Waypoint
+3: ## Track
+4: - Track is local UI history derived from NodeDB/POSITION_APP updates.
+7: - Only the selected node track is emphasized as a line to keep the map readable.
+10: ## Waypoint
+11: - `WAYPOINT_APP` is a shared map point, not an automation/geofence.
+### mesh-messenger-v1.5.5-work/CURRENT_v1.4.md
+6: Status: Android-hardened Meshtastic messenger + position track history + interoperable WAYPOINT_APP.
+9: - bounded per-node position track history (120 points per node by default);
+10: - duplicate-position collapse and persisted track history;
+11: - track distance calculation;
+12: - selected-node track polyline on the map;
+13: - clear selected-node track action;
+14: - official Meshtastic `WAYPOINT_APP = 8` encode/decode;
+15: - waypoint create flow: name, description, lifetime, current selected map coordinate;
+16: - waypoint send through existing MessageQueue/RadioTransport/PhoneAPI path;
+17: - received waypoints are shown on the map and persisted locally;
+20: - Figma screen `26 · Карта · Трек + Waypoint` (node `18:143`).
+25: - PHONEAPI_POSITION_TRACK_PASS: PASS
+26: - WAYPOINT_APP_PASS: PASS
+### mesh-messenger-v1.5.5-work/CURRENT_v1.1.md
+6: Status: Meshtastic core + persistent small files + positions/map + interoperable QR sharing + Android BLE adapter source.
+9: - NodeDB/POSITION_APP map with live node markers and node details.
+10: - Send current position from the map or quick-add menu.
+11: - Position messages render in chat and open the corresponding point on the map.
+19: - POSITION_APP codec/regression: PASS
+29: Offline raster/vector map tiles are not bundled in v1.1; the map surface currently plots real NodeDB coordinates over a local engineering canvas. Tile storage remains a separate adapter.
+### mesh-messenger-v1.5.5-work/WORKLOG_v1.5.md
+9: 5. Added stable topics for overview, chats, delivery, files, map, position, waypoint, network, Bluetooth, QR, settings and mapped error topics.
+### mesh-messenger-v1.5.5-work/TEST_CASES.md
+17: - decode float SNR/voltage and signed fixed32 position subset.
+19: - render NodeDB in desktop/mobile layouts without horizontal overflow.
+### mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/transports/phoneapi-lite.js
+3: export const PORTNUM = Object.freeze({ TEXT_MESSAGE_APP: 1, POSITION_APP: 3, ROUTING_APP: 5, WAYPOINT_APP: 8, LORA_OTA_APP: 79, PRIVATE_APP: 256 });
+95:   if(out.portnum===PORTNUM.POSITION_APP){try{out.position=decodePosition(out.payload);}catch{}}
+96:   if(out.portnum===PORTNUM.WAYPOINT_APP){try{out.waypoint=decodeWaypoint(out.payload);}catch{}}
+130: export function decodePosition(bytes){
+143: export function encodeWaypointPayload({id=0,latitude,longitude,expire=0,lockedTo=0,name='',description='',icon=0}={}){
+144:   if(!Number.isFinite(Number(latitude))||!Number.isFinite(Number(longitude)))throw new Error('Waypoint coordinates are required');
+158: export function decodeWaypoint(bytes){
+173: export function encodeWaypointToRadio(waypoint,options={}){
+174:   return encodePortPayloadToRadio(PORTNUM.WAYPOINT_APP,encodeWaypointPayload(waypoint),options);
+190:   const out={num:0,user:null,position:null,snr:null,lastHeard:0,deviceMetrics:null,channel:0,viaMqtt:false,hopsAway:null,isFavorite:false,isIgnored:false,isKeyManuallyVerified:false};
+194:     else if(f.field===3&&f.wire===2)out.position=decodePosition(f.value);
+209:   const out={myNodeNum:0,rebootCount:0,minAppVersion:0,deviceId:'',pioEnv:'',firmwareEdition:0,nodeDbCount:0};
+217:     else if(f.field===15&&f.wire===0)out.nodeDbCount=f.value;
+247:   const out={firmwareVersion:'',deviceStateVersion:0,canShutdown:false,hasWifi:false,hasBluetooth:false,hasEthernet:false,role:0,positionFlags:0,hwModel:0,hasRemoteHardware:false,hasPkc:false,excludedModules:0,hasXeddsa:false};
+256:     else if(f.field===8&&f.wire===0)out.positionFlags=f.value;
+324:   const inner=concatBytes([encodeFieldVarint(1,info.myNodeNum>>>0),encodeFieldVarint(8,info.rebootCount||0),encodeFieldVarint(11,info.minAppVersion||0),info.deviceId?encodeFieldBytes(12,info.deviceId):new Uint8Array(),info.pioEnv?encodeFieldString(13,info.pioEnv):new Uint8Array(),encodeFieldVarint(14,info.firmwareEdition||0),encodeFieldVarint(15,info.nodeDbCount||0)]);
+328: export function encodePosition(position={}){return concatBytes([position.latitude!=null?encodeFieldSFixed32(1,Math.round(position.latitude*1e7)):new Uint8Array(),position.longitude!=null?encodeFieldSFixed32(2,Math.round(position.longitude*1e7)):new Uint8Array(),position.altitude!=null?encodeFieldVarint(3,Math.max(0,Math.round(position.altitude))):new Uint8Array(),position.time?encodeFieldFixed32(4,position.time>>>0):new Uint8Array(),position.timestamp?encodeFieldFixed32(7,position.timestamp>>>0):new Uint8Array(),position.satsInView!=null?encodeFieldVarint(19,position.satsInView):new Uint8Array()]);}
+331:   const inner=concatBytes([encodeFieldVarint(1,node.num>>>0),node.user?encodeFieldBytes(2,encodeUser(node.user)):new Uint8Array(),node.position?encodeFieldBytes(3,encodePosition(node.position)):new Uint8Array(),node.snr!=null?encodeFieldFloat32(4,node.snr):new Uint8Array(),node.lastHeard?encodeFieldFixed32(5,node.lastHeard):new Uint8Array(),node.deviceMetrics?encodeFieldBytes(6,encodeDeviceMetrics(node.deviceMetrics)):new Uint8Array(),node.channel?encodeFieldVarint(7,node.channel):new Uint8Array(),node.viaMqtt?encodeFieldVarint(8,1):new Uint8Array(),node.hopsAway!=null?encodeFieldVarint(9,node.hopsAway):new Uint8Array(),node.isFavorite?encodeFieldVarint(10,1):new Uint8Array(),node.isIgnored?encodeFieldVarint(11,1):new Uint8Array(),node.isKeyManuallyVerified?encodeFieldVarint(12,1):new Uint8Array()]);
+379: export function encodePositionToRadio(position, options={}) {
+380:   const payload=encodePosition(position);
+381:   if(!payload.length)throw new Error('Position payload is empty');
+382:   return encodePortPayloadToRadio(PORTNUM.POSITION_APP,payload,options);
+### mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/transports/mock-meshtastic.js
+18:       encodeMyInfoFromRadio({myNodeNum:own,rebootCount:12,minAppVersion:30200,deviceId:Uint8Array.from([0x7a,0x42,0xb0,0x01]),pioEnv:'heltec-v3',nodeDbCount:3},this._nextId()),
+19:       encodeNodeInfoFromRadio({num:own,user:{id:'!7a42b001',longName:'Mesh Messenger',shortName:'MM',hwModel:43,role:0,publicKey:Uint8Array.from(Array.from({length:32},(_,i)=>(0x31+i)&255))},position:{latitude:54.3158,longitude:48.3951,altitude:121,satsInView:12},snr:11.2,lastHeard:now,deviceMetrics:{batteryLevel:86,voltage:4.08,channelUtilization:6.4,airUtilTx:1.2,uptimeSeconds:9200},hopsAway:0,isKeyManuallyVerified:true},this._nextId()),
+20:       encodeNodeInfoFromRadio({num:peer,user:{id:'!b0010002',longName:'Узел B',shortName:'B',hwModel:4,role:0},position:{latitude:54.317,longitude:48.397,altitude:124,satsInView:14},snr:8.6,lastHeard:now-4,deviceMetrics:{batteryLevel:78,voltage:3.91},hopsAway:2,isFavorite:true,isKeyManuallyVerified:true},this._nextId()),
+21:       encodeNodeInfoFromRadio({num:relay,user:{id:'!c0030003',longName:'Relay R3',shortName:'R3',hwModel:43,role:2},position:{latitude:54.3192,longitude:48.4018,altitude:130,satsInView:10},snr:5.1,lastHeard:now-9,deviceMetrics:{batteryLevel:101,voltage:5.02},hopsAway:1},this._nextId()),
+### mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/help-registry.js
+18:     body: '\u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 offline-first: \u0435\u0441\u043b\u0438 \u043c\u0430\u0440\u0448\u0440\u0443\u0442 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d, \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u043e\u0441\u0442\u0430\u0435\u0442\u0441\u044f \u0432 \u043e\u0447\u0435\u0440\u0435\u0434\u0438. \u041a\u0430\u0440\u0442\u0430 \u0431\u0435\u0440\u0435\u0442 \u0442\u043e\u0447\u043a\u0438 \u0438\u0437 NodeDB/POSITION, \u0430 \u0432\u043a\u043b\u0430\u0434\u043a\u0430 \u00ab\u0421\u0432\u044f\u0437\u044c\u00bb \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0439 \u0442\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442 \u0438 PhoneAPI.',
+19:     quickSteps: ['\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442 \u0438\u043b\u0438 \u0443\u0437\u0435\u043b.', '\u041e\u0442\u043f\u0440\u0430\u0432\u044c\u0442\u0435 \u0442\u0435\u043a\u0441\u0442, \u043f\u043e\u0437\u0438\u0446\u0438\u044e, waypoint \u0438\u043b\u0438 \u043c\u0430\u043b\u044b\u0439 \u0444\u0430\u0439\u043b.', '\u0421\u0442\u0430\u0442\u0443\u0441 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u0432\u0438\u0434\u0435\u043d \u0432 \u0447\u0430\u0442\u0435 \u0438 \u0432 \u043e\u0447\u0435\u0440\u0435\u0434\u0438.'],
+25:   { id:'mesh-messenger.map.overview', title:'\u041a\u0430\u0440\u0442\u0430 \u0438 NodeDB', summary:'\u0423\u0437\u043b\u044b, \u043f\u043e\u0437\u0438\u0446\u0438\u0438, \u0442\u0440\u0435\u043a \u0438 waypoint.', body:'\u041a\u0430\u0440\u0442\u0430 \u0431\u0435\u0440\u0435\u0442 \u043a\u043e\u043e\u0440\u0434\u0438\u043d\u0430\u0442\u044b \u0438\u0437 NodeDB \u0438 POSITION_APP. \u0412\u044b\u0431\u043e\u0440 \u0443\u0437\u043b\u0430 \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0435\u0433\u043e \u0442\u0440\u0435\u043a \u0438 \u043c\u0430\u0440\u0448\u0440\u0443\u0442.', keywords:['map','nodedb','track','position','waypoint','\u043a\u0430\u0440\u0442\u0430','\u0442\u0440\u0435\u043a'], category:'map' },
+26:   { id:'mesh-messenger.map.position', title:'\u041f\u043e\u0437\u0438\u0446\u0438\u044f', summary:'\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 POSITION_APP \u0438 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0439 \u0442\u0440\u0435\u043a.', body:'\u041f\u0440\u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0435 \u043f\u043e\u0437\u0438\u0446\u0438\u0438 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u043f\u0440\u043e\u0431\u0443\u0435\u0442 \u0433\u0435\u043e\u043b\u043e\u043a\u0430\u0446\u0438\u044e, \u0430 \u043f\u0440\u0438 \u0435\u0451 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e\u0441\u0442\u0438 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442 \u0438\u0437\u0432\u0435\u0441\u0442\u043d\u0443\u044e \u043f\u043e\u0437\u0438\u0446\u0438\u044e \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u0443\u0437\u043b\u0430.', keywords:['position','gps','track','\u043f\u043e\u0437\u0438\u0446\u0438\u044f'], category:'map' },
+27:   { id:'mesh-messenger.map.waypoint', title:'Waypoint', summary:'\u041a\u0430\u043a \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0442\u043e\u0447\u043a\u0443.', body:'Waypoint \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u0447\u0435\u0440\u0435\u0437 WAYPOINT_APP (portnum 8), \u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e \u0438 \u0438\u0441\u0447\u0435\u0437\u0430\u0435\u0442 \u043f\u043e \u0437\u0430\u0434\u0430\u043d\u043d\u043e\u043c\u0443 TTL.', keywords:['waypoint','portnum 8','point','\u0442\u043e\u0447\u043a\u0430'], category:'map' },
+29:   { id:'mesh-messenger.network.bluetooth', title:'Bluetooth / Meshtastic', summary:'Как включить Bluetooth, найти узел и перейти от MOCK к реальному радио.', body:'На Android сначала разрешите Nearby devices, затем включите системный Bluetooth. Нажмите «Подключить BLE» → «Сканировать», выберите Meshtastic-узел и дождитесь PhoneAPI/NodeDB. Надпись MOCK означает симулятор: сообщения и кнопки в этом режиме не подтверждают работу физического радио.', quickSteps:['Разрешите Bluetooth для Mesh Messenger.','Включите Bluetooth на телефоне, если он выключен.','Нажмите «Подключить BLE» и выберите свой Meshtastic-узел.','Дождитесь статуса ANDROID BLE и синхронизации PhoneAPI.'], keywords:['ble','bluetooth','meshtastic','scan','mock','android','блютуз','узел'], category:'network' },
+### mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/core.js
+15:   { id: 'meshtastic', name: 'Meshtastic', available: true, bitrate: 1.1, latency: 820, reliability: 0.91, energy: 1, supports: ['text','position','waypoint','file'], detail: 'LoRa sub-GHz · 7 узлов' },
+16:   { id: 'wifi', name: 'Wi-Fi Direct', available: false, bitrate: 24000, latency: 55, reliability: 0.88, energy: 3, supports: ['text','position','waypoint','voice','file'], detail: 'локальный быстрый канал' },
+17:   { id: 'ip', name: 'Internet relay', available: false, bitrate: 12000, latency: 130, reliability: 0.94, energy: 2, supports: ['text','position','waypoint','voice','file'], detail: 'интернет не требуется' },
+61:     if (kind === 'position' || kind === 'waypoint') {
+63:       if (lora) return this._decision(lora, kind, 'compact position');
+78:       position: 'Экономичный канал подходит для коротких позиционных обновлений.',
+79:       waypoint: 'Waypoint — короткий protobuf-пакет для общей точки на карте.',
+133: export class PositionTrackHistory {
+134:   constructor({maxPointsPerNode=120}={}){this.maxPointsPerNode=Math.max(2,maxPointsPerNode|0);this.tracks=new Map();}
+135:   append(nodeNum,position,{receivedAt=Date.now()}={}){
+136:     const node=Number(nodeNum)>>>0,lat=Number(position?.latitude),lon=Number(position?.longitude);
+138:     const altitude=position?.altitude==null?null:Number(position.altitude);
+139:     const sourceTs=Number(position?.timestamp||position?.time||0);
+142:     const track=this.tracks.get(node)||[];const prev=track.at(-1);
+143:     if(prev&&prev.latitude===point.latitude&&prev.longitude===point.longitude&&prev.altitude===point.altitude){if(point.at>prev.at)prev.at=point.at;this.tracks.set(node,track);return {...prev};}
+144:     track.push(point);while(track.length>this.maxPointsPerNode)track.shift();this.tracks.set(node,track);return {...point};
+146:   list(nodeNum){return (this.tracks.get(Number(nodeNum)>>>0)||[]).map(p=>({...p}));}
+147:   clear(nodeNum){return this.tracks.delete(Number(nodeNum)>>>0);}
+148:   distanceMeters(nodeNum){const pts=this.tracks.get(Number(nodeNum)>>>0)||[];let total=0;for(let i=1;i<pts.length;i++)total+=haversineMeters(pts[i-1],pts[i]);return total;}
+149:   serialize(){return [...this.tracks.entries()].map(([nodeNum,points])=>({nodeNum,points:points.map(p=>({...p}))}));}
+150:   restore(items=[]){this.tracks.clear();for(const item of Array.isArray(items)?items:[]){const node=Number(item?.nodeNum)>>>0;if(!node)continue;for(const point of Array.isArray(item?.points)?item.points:[])this.append(node,point,{receivedAt:point?.at||Date.now()});}return this.serialize();}
+### mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/app.js
+1: import { TransportManager, MessageQueue, SmallFileTransferManager, SmallFileReceiver, SmallFileTransferPersistence, PositionTrackHistory } from './core.js';
+6: import { BROADCAST, PORTNUM, encodeTextToRadio, encodePositionToRadio, encodeWaypointToRadio, encodePortPayloadToRadio, encodeSmallFileManifest, encodeSmallFileChunk, encodeSmallFileStatus, encodeSmallFileStatusRequest, decodeSmallFileFrame, sharedContactUrl, channelSetUrl, parseMeshtasticShareUrl } from './transports/phoneapi-lite.js';
+22: const packetPositions = new Map();
+23: const trackHistory = new PositionTrackHistory({maxPointsPerNode:120});
+24: const sharedWaypoints = new Map();
+25: let pendingWaypointPosition = null;
+64: function persistTrackHistory(){try{storageSet('mesh-position-tracks-v1',JSON.stringify(trackHistory.serialize()));}catch{}}
+65: function restoreTrackHistory(){try{trackHistory.restore(JSON.parse(storageGet('mesh-position-tracks-v1')||'[]'));}catch{}}
+66: function persistWaypoints(){try{storageSet('mesh-waypoints-v1',JSON.stringify([...sharedWaypoints.values()]));}catch{}}
+67: function restoreWaypoints(){try{for(const w of JSON.parse(storageGet('mesh-waypoints-v1')||'[]'))if(w?.id)sharedWaypoints.set(w.id>>>0,w);}catch{}}
+68: restoreTrackHistory();restoreWaypoints();
+206:   try{await navigator.clipboard.writeText(text);}catch{const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
+304:         ${m.file ? `<div class="file-message"><strong>📎 ${m.file.name}</strong><small>${formatBytes(m.file.size)} · ${m.file.total} чанков · SHA-256</small><div class="file-progress"><span style="width:${Math.round((((Array.isArray(m.file.confirmed)?m.file.confirmed.filter(Boolean).length:(m.file.received||m.file.sent||0)))/Math.max(1,m.file.total))*100)}%"></span></div>${m.file.url?`<a class="file-download" href="${m.file.url}" download="${m.file.name}">Сохранить</a>`:''}</div>` : m.position ? `<div class="position-message"><strong>⌖ Позиция</strong><small>${formatCoords(m.position)}${m.position.altitude!=null?` · ${Math.round(m.position.altitude)} м`:''}</small><button class="text-button" type="button" data-show-position="${m.positionNodeNum||0}" data-lat="${m.position.latitude}" data-lon="${m.position.longitude}">Показать на карте →</button></div>` : `<p>${m.text}</p>`}
+310:   stream.querySelectorAll('[data-show-position]').forEach(button=>button.addEventListener('click',()=>{const num=Number(button.dataset.showPosition)||0;if(num)selectedMapNodeNum=num;setView('map');renderMap({fallback:{latitude:Number(button.dataset.lat),longitude:Number(button.dataset.lon)}});}));
+336:     : snapshot.state === 'connected' ? 'Поток PhoneAPI идёт через Web Serial; NodeDB/config decode включён.' : 'USB требует Chromium/Web Serial и разрешение пользователя.';
+357:     rebooted:['RESYNC · узел перезагрузился','Восстанавливаем каналы и NodeDB · очередь сохранена.'],
+358:     ready:['READY · Meshtastic работает','Каналы и NodeDB синхронизированы.'],
+366:     $('#localNodeValue').textContent='—'; $('#firmwareValue').textContent='—'; $('#loraConfigValue').textContent='—'; $('#nodeDbValue').textContent='0'; $('#channelCountValue').textContent='0';
+373:   $('#nodeDbValue').textContent=String(snapshot.nodes?.length||local?.nodeDbCount||0);
+378:   for(const n of snapshot.nodes||[])if(n.position?.latitude!=null&&n.position?.longitude!=null)trackHistory.append(n.num>>>0,n.position);
+379:   persistTrackHistory();
+393:   if(!nodes.length){list.innerHTML='<div class="node-empty">NodeDB ещё синхронизируется…</div>';return;}
+431:   if(packet?.decoded?.portnum===PORTNUM.WAYPOINT_APP && packet.decoded.waypoint?.latitude!=null && packet.decoded.waypoint?.longitude!=null){
+432:     const w={...packet.decoded.waypoint,sourceNode:packet.from>>>0,receivedAt:Date.now()};sharedWaypoints.set(w.id>>>0,w);persistWaypoints();renderMap();
+433:     if(AndroidBridgeMeshtasticTransport.isSupported()&&document.hidden)androidBleRadio.notify(node?.user?.longName||'Mesh Messenger',`Новая точка: ${w.name||formatCoords(w)}`,'waypoint','');
+438:   if(packet?.decoded?.portnum===PORTNUM.POSITION_APP && packet.decoded.position?.latitude!=null && packet.decoded.position?.longitude!=null){
+439:     const position=packet.decoded.position;packetPositions.set(packet.from>>>0,position);trackHistory.append(packet.from>>>0,position);persistTrackHistory();
+440:     bucket.push({side:'in',author:node?.user?.longName||node?.user?.shortName||formatNodeNum(packet.from),text:'Позиция',position,positionNodeNum:packet.from>>>0,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+447:   if(AndroidBridgeMeshtasticTransport.isSupported() && (document.hidden || id!==currentConversationId)){const latest=bucket.at(-1);androidBleRadio.notify(latest?.author||'Mesh Messenger',latest?.position?'Получена позиция':latest?.text||'Новое сообщение','message',id);}
+504:     const envelope=item.payload.type==='position'?encodePositionToRadio(item.payload.position,options):item.payload.type==='waypoint'?encodeWaypointToRadio(item.payload.waypoint,{...options,wantAck:false}):encodeTextToRadio(item.payload.text,options);
+627:   if(AndroidBridgeMeshtasticTransport.isSupported() && (document.hidden || id!==currentConversationId)){const latest=bucket.at(-1);androidBleRadio.notify(latest?.author||'Mesh Messenger',latest?.position?'Получена позиция':latest?.text||'Новое сообщение','message',id);}
+648: function formatCoords(position){
+649:   if(position?.latitude==null||position?.longitude==null)return '—';
+650:   return `${Number(position.latitude).toFixed(5)}, ${Number(position.longitude).toFixed(5)}`;
+655:     const override=packetPositions.get(n.num>>>0);const position=override||n.position;
+656:     if(position?.latitude==null||position?.longitude==null)return null;
+657:     return {...n,position,isLocal:(n.num>>>0)===local,name:n.user?.longName||n.user?.shortName||formatNodeNum(n.num)};
+661: function activeWaypoints(){const now=Math.floor(Date.now()/1000);return [...sharedWaypoints.values()].filter(w=>w?.latitude!=null&&w?.longitude!=null&&(!w.expire||w.expire>now));}
+663:   const holder=$('#mapMarkers'),trackLayer=$('#mapTrackLayer');if(!holder)return;
+664:   const nodes=mapNodes();holder.innerHTML='';if(trackLayer)trackLayer.innerHTML='';
+665:   if(!nodes.length&&!fallback&&!activeWaypoints().length){$('#mapOverlayMeta').textContent='координат пока нет';$('#mapTrackMeta').textContent='—';return;}
+668:   const track=selected?trackHistory.list(selected.num>>>0):[];
+669:   const waypoints=activeWaypoints();
+670:   const boundPoints=[...nodes.map(n=>n.position),...track,...waypoints.map(w=>({latitude:w.latitude,longitude:w.longitude}))];
+677:   if(trackLayer&&track.length>=2){const points=track.map(p=>{const q=project(p);return `${q.x.toFixed(2)},${q.y.toFixed(2)}`}).join(' ');const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');poly.setAttribute('points',points);poly.setAttribute('class','map-track-line');trackLayer.appendChild(poly);}
+678:   for(const w of waypoints){const q=project(w);const b=document.createElement('button');b.type='button';b.className='map-waypoint';b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.title=w.description||w.name||'Waypoint';b.innerHTML=`<span>⌖</span><span class="marker-label">${w.name||'Waypoint'}</span>`;holder.append(b);}
+680:     const q=project(n.position);
+685:   $('#mapOverlayTitle').textContent='Позиции NodeDB';$('#mapOverlayMeta').textContent=`${nodes.length} узлов · ${waypoints.length} точек · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
+686:   if(!selected){$('#mapSelectedName').textContent='Нет узла';$('#mapSelectedCoords').textContent=fallback?formatCoords(fallback):'—';$('#mapSelectedAltitude').textContent='—';$('#mapSelectedRoute').textContent='—';$('#mapTrackMeta').textContent='—';$('#mapOpenChatButton').disabled=true;$('#mapCreateWaypointButton').disabled=!fallback;$('#mapClearTrackButton').disabled=true;return;}
+687:   $('#mapSelectedName').textContent=selected.name;$('#mapSelectedCoords').textContent=formatCoords(selected.position);$('#mapSelectedAltitude').textContent=selected.position.altitude==null?'—':`${Math.round(selected.position.altitude)} м`;
+689:   $('#mapTrackMeta').textContent=`${track.length} точек · ${formatDistanceMeters(trackHistory.distanceMeters(selected.num>>>0))}`;
+690:   const open=$('#mapOpenChatButton');open.disabled=Boolean(selected.isLocal);open.dataset.nodeNum=String(selected.num>>>0);$('#mapCreateWaypointButton').disabled=false;$('#mapClearTrackButton').disabled=track.length===0;
+693: function bestLocalPosition(){
+695:   const node=snapshot?.nodes?.find(n=>(n.num>>>0)===local);return packetPositions.get(local)||node?.position||null;
+697: function browserPosition(){
+700:     navigator.geolocation.getCurrentPosition(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,altitude:p.coords.altitude==null?null:Math.round(p.coords.altitude),timestamp:Math.floor(Date.now()/1000)}),reject,{enableHighAccuracy:true,timeout:5000,maximumAge:15000});
+703: async function shareCurrentPosition({preferBrowser=true}={}){
+704:   let position=null;
+705:   if(preferBrowser){try{position=await browserPosition();}catch{}}
+706:   position=position||bestLocalPosition();
+707:   if(!position){alert('У локального узла пока нет координат.');return null;}
+709:   const decision=transportManager.select('position');
+710:   const label=`Позиция ${formatCoords(position)}`;
+711:   const localNum=currentSnapshot()?.myInfo?.myNodeNum>>>0;if(localNum){trackHistory.append(localNum,position);persistTrackHistory();}
+712:   const item=queue.enqueue({type:'position',text:label,position,conversationId:c.id},decision);
+713:   getBucket(c.id).push({side:'out',text:'Позиция',position,positionNodeNum:currentSnapshot()?.myInfo?.myNodeNum>>>0,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),status:item.status==='queued'?'В очереди':'Готово к отправке',queueId:item.id});
+718: function openWaypointModal(){
+719:   const selected=mapSelectedNode();if(!selected?.position){alert('Сначала выберите точку на карте.');return;}
+720:   pendingWaypointPosition={...selected.position};$('#waypointName').value=`Точка ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;$('#waypointDescription').value='';$('#waypointExpire').value='21600';openModal($('#waypointModal'));
+722: async function sendWaypointFromModal(){
+723:   if(!pendingWaypointPosition)return;const name=($('#waypointName').value||'Точка').trim().slice(0,30),description=($('#waypointDescription').value||'').trim().slice(0,100),ttl=Math.max(0,Number($('#waypointExpire').value)||0);
+724:   const id=nextPacketId(),expire=ttl?Math.floor(Date.now()/1000)+ttl:0,waypoint={id,latitude:pendingWaypointPosition.latitude,longitude:pendingWaypointPosition.longitude,expire,lockedTo:currentSnapshot()?.myInfo?.myNodeNum>>>0,name,description,icon:0x1f4cd};
+725:   sharedWaypoints.set(id,waypoint);persistWaypoints();renderMap();closeModal($('#waypointModal'));pendingWaypointPosition=null;
+726:   const decision=transportManager.select('waypoint');const item=queue.enqueue({type:'waypoint',text:`Waypoint: ${name}`,waypoint,conversationId:'channel:0'},decision);renderGlobalStatus();renderDeliveryQueue();if(item.status==='ready')await transmitQueueItem(item.id);
+868:   $('[data-add-position]')?.addEventListener('click',async()=>{closeModal($('#addMenuModal'));await shareCurrentPosition();});
+896:   $('#sharePositionButton')?.addEventListener('click',()=>shareCurrentPosition());
+899:   $('#mapCreateWaypointButton')?.addEventListener('click',openWaypointModal);$('#cancelWaypoint')?.addEventListener('click',()=>{pendingWaypointPosition=null;closeModal($('#waypointModal'));});$('#confirmWaypoint')?.addEventListener('click',()=>sendWaypointFromModal());$('#waypointModal')?.addEventListener('click',e=>{if(e.target===$('#waypointModal')){pendingWaypointPosition=null;closeModal($('#waypointModal'));}});$('#mapClearTrackButton')?.addEventListener('click',()=>{const n=mapSelectedNode();if(n){trackHistory.clear(n.num>>>0);persistTrackHistory();renderMap();}});
+912: window.__meshDebug={transportManager,queue,mockRadio,androidBleRadio,getPhoneApiSnapshot:()=>currentSnapshot(),getCurrentConversation:()=>currentConversation(),selectConversation,sendMessage,retryQueueItem,renderDeliveryQueue,exportPhoneApiCapture,simulateReboot:()=>mockRadio.simulateReboot(),setNextRoutingResult:(code)=>mockRadio.setNextRoutingResult(code),setFileDisconnectAfter:(n)=>mockRadio.setFileDisconnectAfter(n),getConversationUi:(id)=>({...uiState(id)}),sendSmallFile,getFileTransfers:()=>fileTransfers.list().map(t=>({id:t.id,name:t.name,status:t.status,confirmed:fileTransfers.confirmedCount(t.id),total:t.total,targetNode:t.targetNode,conversationId:t.conversationId,error:t.error})),simulateFileSubsystemRestart,resumeIncompleteFileTransfers,renderMap,shareCurrentPosition,currentShareUrls,renderShareQr,trackHistory,getWaypoints:()=>[...sharedWaypoints.values()],sendWaypointFromModal,helpRegistry,renderQuickHelp,openFullHelp,copySafeDiagnostics,currentHelpTopic:()=>currentHelpTopicId};
+### mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/styles.css
+43: .desktop-rail { position: sticky; top: 0; height: 100vh; padding: 24px 16px; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; gap: 24px; }
+109: .map-canvas { position: relative; min-height: 680px; border: 1px solid var(--border); border-radius: var(--r-feature); overflow: hidden; background: linear-gradient(135deg, color-mix(in srgb,var(--accent) 8%,var(--surface)), var(--surface-2)); }
+110: .map-grid { position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:52px 52px;opacity:.58;transform:rotate(-8deg) scale(1.12); }
+111: .map-marker { position:absolute; min-width:44px; min-height:44px; display:grid; place-items:center; border-radius:999px; background:var(--accent); color:white; font-weight:700; border:4px solid color-mix(in srgb,var(--surface) 80%,transparent); }
+113: .map-overlay { position:absolute; left:16px; top:16px; display:grid; gap:2px; background:color-mix(in srgb,var(--surface) 92%,transparent); backdrop-filter: blur(10px); padding:12px 14px; border-radius:14px; border:1px solid var(--border); }
+131: .switch input { position:absolute;opacity:0;pointer-events:none; }
+132: .switch span { width:46px;height:26px;border-radius:999px;background:var(--border);position:relative;transition:.18s ease-out; }
+133: .switch span::after { content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:white;top:3px;left:3px;transition:.18s ease-out;box-shadow:0 1px 4px rgba(0,0,0,.16); }
+136: .route-inspector { padding:18px; position:sticky;top:24px; }
+152: .modal-layer,.ptt-layer { position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.42);display:none;align-items:center;justify-content:center;padding:24px; }
+160: .ptt-card{text-align:center;position:relative}.ptt-close{position:absolute;right:16px;top:16px}.ptt-route{display:grid;justify-items:center;gap:5px;margin:18px 0}.ptt-route small{color:var(--text-2)}
+170:   .route-inspector { position:static; }
+179:   .mobile-topbar { min-height:64px;padding: max(10px, env(safe-area-inset-top)) 2px 8px;display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(12px); }
+181:   .mobile-bottom-nav { position:fixed;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:30;display:grid;grid-template-columns:repeat(4,1fr);padding:6px;background:color-mix(in srgb,var(--surface) 94%,transparent);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);backdrop-filter:blur(14px); }
+318: #mapMarkers{position:absolute;inset:0}
+324: .map-marker .marker-label{position:absolute;top:48px;left:50%;transform:translateX(-50%);white-space:nowrap;background:color-mix(in srgb,var(--surface) 94%,transparent);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:3px 7px;font-size:11px;font-weight:650}
+325: .position-message{display:grid;gap:4px;margin-top:6px;padding:9px 10px;border:1px solid var(--border);border-radius:12px;background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+326: .position-message button{justify-self:start}
+339: /* v1.4 track history + waypoints */
+340: .map-track-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+341: .map-track-line{fill:none;stroke:var(--accent);stroke-width:1.1;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round;opacity:.72}
+342: .map-waypoint{position:absolute;min-width:40px;min-height:40px;border-radius:12px;transform:translate(-50%,-50%) rotate(45deg);border:3px solid color-mix(in srgb,var(--surface) 85%,transparent);background:color-mix(in srgb,var(--warning) 86%,var(--accent));color:white;display:grid;place-items:center;box-shadow:0 8px 24px color-mix(in srgb,var(--text) 14%,transparent);z-index:2}
+343: .map-waypoint>span{transform:rotate(-45deg);font-size:16px}
+344: .map-waypoint .marker-label{position:absolute;top:43px;left:50%;transform:translateX(-50%) rotate(-45deg);white-space:nowrap;background:color-mix(in srgb,var(--surface) 94%,transparent);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:3px 7px;font-size:11px;font-weight:650}
+### mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/index.html
+99:           <div><p class="eyebrow">NodeDB positions</p><h1 id="mapTitle">Карта</h1><p>Точки строятся из POSITION/NodeDB. Offline tiles остаются отдельным адаптером.</p></div>
+100:           <div class="header-actions"><button class="secondary-button" id="sharePositionButton" type="button">Отправить позицию</button><button class="quiet-button" id="centerMapButton" type="button">Все точки</button></div>
+105:             <svg id="mapTrackLayer" class="map-track-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+107:             <div class="map-overlay"><strong id="mapOverlayTitle">Позиции NodeDB</strong><span id="mapOverlayMeta">ожидаем координаты…</span></div>
+115:             <div class="metric-row"><span>Трек</span><strong id="mapTrackMeta">—</strong></div>
+117:             <div class="map-action-row"><button class="secondary-button" id="mapCreateWaypointButton" type="button">Создать точку</button><button class="quiet-button" id="mapClearTrackButton" type="button">Очистить трек</button></div>
+168:                   <option value="position">Позиция</option>
+178:               <div class="snapshot-head"><div><span class="eyebrow">PhoneAPI snapshot</span><h2>Устройство и NodeDB</h2></div><span class="runtime-badge">DECODED</span></div>
+182:               <div class="metric-row"><span>NodeDB</span><strong id="nodeDbValue">0</strong></div>
+185:               <div class="node-snapshot-list" id="nodeSnapshotList"><div class="node-empty">NodeDB ещё синхронизируется…</div></div>
+222:             <button type="button" data-add-position><strong>Позиция</strong><small>Отправить POSITION_APP</small></button>
+245:       <section class="modal-layer" id="waypointModal" aria-hidden="true">
+246:         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="waypointTitle">
+247:           <div class="modal-header"><div><p class="eyebrow">Meshtastic waypoint</p><h2 id="waypointTitle">Новая точка</h2></div></div>
+248:           <label class="field-stack"><span>Название</span><input id="waypointName" maxlength="30" placeholder="Точка" /></label>
+249:           <label class="field-stack"><span>Описание</span><input id="waypointDescription" maxlength="100" placeholder="Необязательно" /></label>
+250:           <label class="field-stack"><span>Срок</span><select id="waypointExpire"><option value="3600">1 час</option><option value="21600" selected>6 часов</option><option value="86400">24 часа</option><option value="0">Без срока</option></select></label>
+251:           <p class="modal-copy">Точка будет отправлена в основной mesh-канал через WAYPOINT_APP.</p>
+252:           <div class="modal-actions"><button class="secondary-button" id="cancelWaypoint" type="button">Отмена</button><button class="primary-button" id="confirmWaypoint" type="button">Отправить точку</button></div>
+### mesh-messenger-v1.5.5-work/RECHECK_v1.5.md
+11: - Help search finds Bluetooth, Waypoint, ACK, NodeDB and NO_ROUTE
+### mesh-messenger-v1.5.5-work/ARCHITECTURE_PLAN.md
+40: Messageable NodeDB peers become direct chat entries.
+58: No duplicate chat, queue, ACK, NodeDB or channel logic per OS.
+### mesh-messenger-v1.5.5-work/RECHECK_REPORT.md
+26: - NodeDB peers render as `Лично`.
+### mesh-messenger-v1.5.5-work/PHONEAPI_SUBSET_v0.4.md
+45: - nodedb_count
+50: - Position latitude_i / longitude_i / altitude / sats_in_view
+71: - position_flags
+### mesh-messenger-v1.5.5-work/STATUS_v1.3.1.md
+9: - NodeDB map + POSITION_APP.
+35: 4. Hardware sequence: scan → select → NodeDB → direct message → ACK → position → small file → BLE drop → reconnect/resume.
+37: 6. Then: node track history, waypoint, voice/PTT.
+### mesh-messenger-v1.5.5-work/PHONEAPI_SUBSET_v1.1.md
+5: ## Position
+6: - PortNum: `POSITION_APP = 3`
+7: - Payload: Meshtastic `Position` protobuf subset:
+15: `encodePositionToRadio()` wraps Position into Data -> MeshPacket -> ToRadio using the existing RadioTransport.
+### mesh-messenger-v1.5.5-work/RECHECK_v1.5.4.md
+29: - position history
+### mesh-messenger-v1.5.5-work/src/transports/phoneapi-lite.js
+3: export const PORTNUM = Object.freeze({ TEXT_MESSAGE_APP: 1, POSITION_APP: 3, ROUTING_APP: 5, WAYPOINT_APP: 8, LORA_OTA_APP: 79, PRIVATE_APP: 256 });
+95:   if(out.portnum===PORTNUM.POSITION_APP){try{out.position=decodePosition(out.payload);}catch{}}
+96:   if(out.portnum===PORTNUM.WAYPOINT_APP){try{out.waypoint=decodeWaypoint(out.payload);}catch{}}
+130: export function decodePosition(bytes){
+143: export function encodeWaypointPayload({id=0,latitude,longitude,expire=0,lockedTo=0,name='',description='',icon=0}={}){
+144:   if(!Number.isFinite(Number(latitude))||!Number.isFinite(Number(longitude)))throw new Error('Waypoint coordinates are required');
+158: export function decodeWaypoint(bytes){
+173: export function encodeWaypointToRadio(waypoint,options={}){
+174:   return encodePortPayloadToRadio(PORTNUM.WAYPOINT_APP,encodeWaypointPayload(waypoint),options);
+190:   const out={num:0,user:null,position:null,snr:null,lastHeard:0,deviceMetrics:null,channel:0,viaMqtt:false,hopsAway:null,isFavorite:false,isIgnored:false,isKeyManuallyVerified:false};
+194:     else if(f.field===3&&f.wire===2)out.position=decodePosition(f.value);
+209:   const out={myNodeNum:0,rebootCount:0,minAppVersion:0,deviceId:'',pioEnv:'',firmwareEdition:0,nodeDbCount:0};
+217:     else if(f.field===15&&f.wire===0)out.nodeDbCount=f.value;
+247:   const out={firmwareVersion:'',deviceStateVersion:0,canShutdown:false,hasWifi:false,hasBluetooth:false,hasEthernet:false,role:0,positionFlags:0,hwModel:0,hasRemoteHardware:false,hasPkc:false,excludedModules:0,hasXeddsa:false};
+256:     else if(f.field===8&&f.wire===0)out.positionFlags=f.value;
+324:   const inner=concatBytes([encodeFieldVarint(1,info.myNodeNum>>>0),encodeFieldVarint(8,info.rebootCount||0),encodeFieldVarint(11,info.minAppVersion||0),info.deviceId?encodeFieldBytes(12,info.deviceId):new Uint8Array(),info.pioEnv?encodeFieldString(13,info.pioEnv):new Uint8Array(),encodeFieldVarint(14,info.firmwareEdition||0),encodeFieldVarint(15,info.nodeDbCount||0)]);
+328: export function encodePosition(position={}){return concatBytes([position.latitude!=null?encodeFieldSFixed32(1,Math.round(position.latitude*1e7)):new Uint8Array(),position.longitude!=null?encodeFieldSFixed32(2,Math.round(position.longitude*1e7)):new Uint8Array(),position.altitude!=null?encodeFieldVarint(3,Math.max(0,Math.round(position.altitude))):new Uint8Array(),position.time?encodeFieldFixed32(4,position.time>>>0):new Uint8Array(),position.timestamp?encodeFieldFixed32(7,position.timestamp>>>0):new Uint8Array(),position.satsInView!=null?encodeFieldVarint(19,position.satsInView):new Uint8Array()]);}
+331:   const inner=concatBytes([encodeFieldVarint(1,node.num>>>0),node.user?encodeFieldBytes(2,encodeUser(node.user)):new Uint8Array(),node.position?encodeFieldBytes(3,encodePosition(node.position)):new Uint8Array(),node.snr!=null?encodeFieldFloat32(4,node.snr):new Uint8Array(),node.lastHeard?encodeFieldFixed32(5,node.lastHeard):new Uint8Array(),node.deviceMetrics?encodeFieldBytes(6,encodeDeviceMetrics(node.deviceMetrics)):new Uint8Array(),node.channel?encodeFieldVarint(7,node.channel):new Uint8Array(),node.viaMqtt?encodeFieldVarint(8,1):new Uint8Array(),node.hopsAway!=null?encodeFieldVarint(9,node.hopsAway):new Uint8Array(),node.isFavorite?encodeFieldVarint(10,1):new Uint8Array(),node.isIgnored?encodeFieldVarint(11,1):new Uint8Array(),node.isKeyManuallyVerified?encodeFieldVarint(12,1):new Uint8Array()]);
+379: export function encodePositionToRadio(position, options={}) {
+380:   const payload=encodePosition(position);
+381:   if(!payload.length)throw new Error('Position payload is empty');
+382:   return encodePortPayloadToRadio(PORTNUM.POSITION_APP,payload,options);
+### mesh-messenger-v1.5.5-work/src/transports/mock-meshtastic.js
+18:       encodeMyInfoFromRadio({myNodeNum:own,rebootCount:12,minAppVersion:30200,deviceId:Uint8Array.from([0x7a,0x42,0xb0,0x01]),pioEnv:'heltec-v3',nodeDbCount:3},this._nextId()),
+19:       encodeNodeInfoFromRadio({num:own,user:{id:'!7a42b001',longName:'Mesh Messenger',shortName:'MM',hwModel:43,role:0,publicKey:Uint8Array.from(Array.from({length:32},(_,i)=>(0x31+i)&255))},position:{latitude:54.3158,longitude:48.3951,altitude:121,satsInView:12},snr:11.2,lastHeard:now,deviceMetrics:{batteryLevel:86,voltage:4.08,channelUtilization:6.4,airUtilTx:1.2,uptimeSeconds:9200},hopsAway:0,isKeyManuallyVerified:true},this._nextId()),
+20:       encodeNodeInfoFromRadio({num:peer,user:{id:'!b0010002',longName:'Узел B',shortName:'B',hwModel:4,role:0},position:{latitude:54.317,longitude:48.397,altitude:124,satsInView:14},snr:8.6,lastHeard:now-4,deviceMetrics:{batteryLevel:78,voltage:3.91},hopsAway:2,isFavorite:true,isKeyManuallyVerified:true},this._nextId()),
+21:       encodeNodeInfoFromRadio({num:relay,user:{id:'!c0030003',longName:'Relay R3',shortName:'R3',hwModel:43,role:2},position:{latitude:54.3192,longitude:48.4018,altitude:130,satsInView:10},snr:5.1,lastHeard:now-9,deviceMetrics:{batteryLevel:101,voltage:5.02},hopsAway:1},this._nextId()),
+### mesh-messenger-v1.5.5-work/src/help-registry.js
+18:     body: '\u041f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 offline-first: \u0435\u0441\u043b\u0438 \u043c\u0430\u0440\u0448\u0440\u0443\u0442 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d, \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 \u043e\u0441\u0442\u0430\u0435\u0442\u0441\u044f \u0432 \u043e\u0447\u0435\u0440\u0435\u0434\u0438. \u041a\u0430\u0440\u0442\u0430 \u0431\u0435\u0440\u0435\u0442 \u0442\u043e\u0447\u043a\u0438 \u0438\u0437 NodeDB/POSITION, \u0430 \u0432\u043a\u043b\u0430\u0434\u043a\u0430 \u00ab\u0421\u0432\u044f\u0437\u044c\u00bb \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0439 \u0442\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442 \u0438 PhoneAPI.',
+19:     quickSteps: ['\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0447\u0430\u0442 \u0438\u043b\u0438 \u0443\u0437\u0435\u043b.', '\u041e\u0442\u043f\u0440\u0430\u0432\u044c\u0442\u0435 \u0442\u0435\u043a\u0441\u0442, \u043f\u043e\u0437\u0438\u0446\u0438\u044e, waypoint \u0438\u043b\u0438 \u043c\u0430\u043b\u044b\u0439 \u0444\u0430\u0439\u043b.', '\u0421\u0442\u0430\u0442\u0443\u0441 \u0434\u043e\u0441\u0442\u0430\u0432\u043a\u0438 \u0432\u0438\u0434\u0435\u043d \u0432 \u0447\u0430\u0442\u0435 \u0438 \u0432 \u043e\u0447\u0435\u0440\u0435\u0434\u0438.'],
+25:   { id:'mesh-messenger.map.overview', title:'\u041a\u0430\u0440\u0442\u0430 \u0438 NodeDB', summary:'\u0423\u0437\u043b\u044b, \u043f\u043e\u0437\u0438\u0446\u0438\u0438, \u0442\u0440\u0435\u043a \u0438 waypoint.', body:'\u041a\u0430\u0440\u0442\u0430 \u0431\u0435\u0440\u0435\u0442 \u043a\u043e\u043e\u0440\u0434\u0438\u043d\u0430\u0442\u044b \u0438\u0437 NodeDB \u0438 POSITION_APP. \u0412\u044b\u0431\u043e\u0440 \u0443\u0437\u043b\u0430 \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0435\u0442 \u0435\u0433\u043e \u0442\u0440\u0435\u043a \u0438 \u043c\u0430\u0440\u0448\u0440\u0443\u0442.', keywords:['map','nodedb','track','position','waypoint','\u043a\u0430\u0440\u0442\u0430','\u0442\u0440\u0435\u043a'], category:'map' },
+26:   { id:'mesh-messenger.map.position', title:'\u041f\u043e\u0437\u0438\u0446\u0438\u044f', summary:'\u041e\u0442\u043f\u0440\u0430\u0432\u043a\u0430 POSITION_APP \u0438 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0439 \u0442\u0440\u0435\u043a.', body:'\u041f\u0440\u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0435 \u043f\u043e\u0437\u0438\u0446\u0438\u0438 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435 \u043f\u0440\u043e\u0431\u0443\u0435\u0442 \u0433\u0435\u043e\u043b\u043e\u043a\u0430\u0446\u0438\u044e, \u0430 \u043f\u0440\u0438 \u0435\u0451 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e\u0441\u0442\u0438 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u0442 \u0438\u0437\u0432\u0435\u0441\u0442\u043d\u0443\u044e \u043f\u043e\u0437\u0438\u0446\u0438\u044e \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u0443\u0437\u043b\u0430.', keywords:['position','gps','track','\u043f\u043e\u0437\u0438\u0446\u0438\u044f'], category:'map' },
+27:   { id:'mesh-messenger.map.waypoint', title:'Waypoint', summary:'\u041a\u0430\u043a \u0441\u043e\u0437\u0434\u0430\u0442\u044c \u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c \u0442\u043e\u0447\u043a\u0443.', body:'Waypoint \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0435\u0442\u0441\u044f \u0447\u0435\u0440\u0435\u0437 WAYPOINT_APP (portnum 8), \u0445\u0440\u0430\u043d\u0438\u0442\u0441\u044f \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e \u0438 \u0438\u0441\u0447\u0435\u0437\u0430\u0435\u0442 \u043f\u043e \u0437\u0430\u0434\u0430\u043d\u043d\u043e\u043c\u0443 TTL.', keywords:['waypoint','portnum 8','point','\u0442\u043e\u0447\u043a\u0430'], category:'map' },
+29:   { id:'mesh-messenger.network.bluetooth', title:'Bluetooth / Meshtastic', summary:'Как включить Bluetooth, найти узел и перейти от MOCK к реальному радио.', body:'На Android сначала разрешите Nearby devices, затем включите системный Bluetooth. Нажмите «Подключить BLE» → «Сканировать», выберите Meshtastic-узел и дождитесь PhoneAPI/NodeDB. Надпись MOCK означает симулятор: сообщения и кнопки в этом режиме не подтверждают работу физического радио.', quickSteps:['Разрешите Bluetooth для Mesh Messenger.','Включите Bluetooth на телефоне, если он выключен.','Нажмите «Подключить BLE» и выберите свой Meshtastic-узел.','Дождитесь статуса ANDROID BLE и синхронизации PhoneAPI.'], keywords:['ble','bluetooth','meshtastic','scan','mock','android','блютуз','узел'], category:'network' },
+### mesh-messenger-v1.5.5-work/src/core.js
+15:   { id: 'meshtastic', name: 'Meshtastic', available: true, bitrate: 1.1, latency: 820, reliability: 0.91, energy: 1, supports: ['text','position','waypoint','file'], detail: 'LoRa sub-GHz · 7 узлов' },
+16:   { id: 'wifi', name: 'Wi-Fi Direct', available: false, bitrate: 24000, latency: 55, reliability: 0.88, energy: 3, supports: ['text','position','waypoint','voice','file'], detail: 'локальный быстрый канал' },
+17:   { id: 'ip', name: 'Internet relay', available: false, bitrate: 12000, latency: 130, reliability: 0.94, energy: 2, supports: ['text','position','waypoint','voice','file'], detail: 'интернет не требуется' },
+61:     if (kind === 'position' || kind === 'waypoint') {
+63:       if (lora) return this._decision(lora, kind, 'compact position');
+78:       position: 'Экономичный канал подходит для коротких позиционных обновлений.',
+79:       waypoint: 'Waypoint — короткий protobuf-пакет для общей точки на карте.',
+133: export class PositionTrackHistory {
+134:   constructor({maxPointsPerNode=120}={}){this.maxPointsPerNode=Math.max(2,maxPointsPerNode|0);this.tracks=new Map();}
+135:   append(nodeNum,position,{receivedAt=Date.now()}={}){
+136:     const node=Number(nodeNum)>>>0,lat=Number(position?.latitude),lon=Number(position?.longitude);
+138:     const altitude=position?.altitude==null?null:Number(position.altitude);
+139:     const sourceTs=Number(position?.timestamp||position?.time||0);
+142:     const track=this.tracks.get(node)||[];const prev=track.at(-1);
+143:     if(prev&&prev.latitude===point.latitude&&prev.longitude===point.longitude&&prev.altitude===point.altitude){if(point.at>prev.at)prev.at=point.at;this.tracks.set(node,track);return {...prev};}
+144:     track.push(point);while(track.length>this.maxPointsPerNode)track.shift();this.tracks.set(node,track);return {...point};
+146:   list(nodeNum){return (this.tracks.get(Number(nodeNum)>>>0)||[]).map(p=>({...p}));}
+147:   clear(nodeNum){return this.tracks.delete(Number(nodeNum)>>>0);}
+148:   distanceMeters(nodeNum){const pts=this.tracks.get(Number(nodeNum)>>>0)||[];let total=0;for(let i=1;i<pts.length;i++)total+=haversineMeters(pts[i-1],pts[i]);return total;}
+149:   serialize(){return [...this.tracks.entries()].map(([nodeNum,points])=>({nodeNum,points:points.map(p=>({...p}))}));}
+150:   restore(items=[]){this.tracks.clear();for(const item of Array.isArray(items)?items:[]){const node=Number(item?.nodeNum)>>>0;if(!node)continue;for(const point of Array.isArray(item?.points)?item.points:[])this.append(node,point,{receivedAt:point?.at||Date.now()});}return this.serialize();}
+### mesh-messenger-v1.5.5-work/src/app.js
+1: import { TransportManager, MessageQueue, SmallFileTransferManager, SmallFileReceiver, SmallFileTransferPersistence, PositionTrackHistory } from './core.js';
+6: import { BROADCAST, PORTNUM, encodeTextToRadio, encodePositionToRadio, encodeWaypointToRadio, encodePortPayloadToRadio, encodeSmallFileManifest, encodeSmallFileChunk, encodeSmallFileStatus, encodeSmallFileStatusRequest, decodeSmallFileFrame, sharedContactUrl, channelSetUrl, parseMeshtasticShareUrl } from './transports/phoneapi-lite.js';
+22: const packetPositions = new Map();
+23: const trackHistory = new PositionTrackHistory({maxPointsPerNode:120});
+24: const sharedWaypoints = new Map();
+25: let pendingWaypointPosition = null;
+64: function persistTrackHistory(){try{storageSet('mesh-position-tracks-v1',JSON.stringify(trackHistory.serialize()));}catch{}}
+65: function restoreTrackHistory(){try{trackHistory.restore(JSON.parse(storageGet('mesh-position-tracks-v1')||'[]'));}catch{}}
+66: function persistWaypoints(){try{storageSet('mesh-waypoints-v1',JSON.stringify([...sharedWaypoints.values()]));}catch{}}
+67: function restoreWaypoints(){try{for(const w of JSON.parse(storageGet('mesh-waypoints-v1')||'[]'))if(w?.id)sharedWaypoints.set(w.id>>>0,w);}catch{}}
+68: restoreTrackHistory();restoreWaypoints();
+206:   try{await navigator.clipboard.writeText(text);}catch{const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
+304:         ${m.file ? `<div class="file-message"><strong>📎 ${m.file.name}</strong><small>${formatBytes(m.file.size)} · ${m.file.total} чанков · SHA-256</small><div class="file-progress"><span style="width:${Math.round((((Array.isArray(m.file.confirmed)?m.file.confirmed.filter(Boolean).length:(m.file.received||m.file.sent||0)))/Math.max(1,m.file.total))*100)}%"></span></div>${m.file.url?`<a class="file-download" href="${m.file.url}" download="${m.file.name}">Сохранить</a>`:''}</div>` : m.position ? `<div class="position-message"><strong>⌖ Позиция</strong><small>${formatCoords(m.position)}${m.position.altitude!=null?` · ${Math.round(m.position.altitude)} м`:''}</small><button class="text-button" type="button" data-show-position="${m.positionNodeNum||0}" data-lat="${m.position.latitude}" data-lon="${m.position.longitude}">Показать на карте →</button></div>` : `<p>${m.text}</p>`}
+310:   stream.querySelectorAll('[data-show-position]').forEach(button=>button.addEventListener('click',()=>{const num=Number(button.dataset.showPosition)||0;if(num)selectedMapNodeNum=num;setView('map');renderMap({fallback:{latitude:Number(button.dataset.lat),longitude:Number(button.dataset.lon)}});}));
+336:     : snapshot.state === 'connected' ? 'Поток PhoneAPI идёт через Web Serial; NodeDB/config decode включён.' : 'USB требует Chromium/Web Serial и разрешение пользователя.';
+357:     rebooted:['RESYNC · узел перезагрузился','Восстанавливаем каналы и NodeDB · очередь сохранена.'],
+358:     ready:['READY · Meshtastic работает','Каналы и NodeDB синхронизированы.'],
+366:     $('#localNodeValue').textContent='—'; $('#firmwareValue').textContent='—'; $('#loraConfigValue').textContent='—'; $('#nodeDbValue').textContent='0'; $('#channelCountValue').textContent='0';
+373:   $('#nodeDbValue').textContent=String(snapshot.nodes?.length||local?.nodeDbCount||0);
+378:   for(const n of snapshot.nodes||[])if(n.position?.latitude!=null&&n.position?.longitude!=null)trackHistory.append(n.num>>>0,n.position);
+379:   persistTrackHistory();
+393:   if(!nodes.length){list.innerHTML='<div class="node-empty">NodeDB ещё синхронизируется…</div>';return;}
+431:   if(packet?.decoded?.portnum===PORTNUM.WAYPOINT_APP && packet.decoded.waypoint?.latitude!=null && packet.decoded.waypoint?.longitude!=null){
+432:     const w={...packet.decoded.waypoint,sourceNode:packet.from>>>0,receivedAt:Date.now()};sharedWaypoints.set(w.id>>>0,w);persistWaypoints();renderMap();
+433:     if(AndroidBridgeMeshtasticTransport.isSupported()&&document.hidden)androidBleRadio.notify(node?.user?.longName||'Mesh Messenger',`Новая точка: ${w.name||formatCoords(w)}`,'waypoint','');
+438:   if(packet?.decoded?.portnum===PORTNUM.POSITION_APP && packet.decoded.position?.latitude!=null && packet.decoded.position?.longitude!=null){
+439:     const position=packet.decoded.position;packetPositions.set(packet.from>>>0,position);trackHistory.append(packet.from>>>0,position);persistTrackHistory();
+440:     bucket.push({side:'in',author:node?.user?.longName||node?.user?.shortName||formatNodeNum(packet.from),text:'Позиция',position,positionNodeNum:packet.from>>>0,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+447:   if(AndroidBridgeMeshtasticTransport.isSupported() && (document.hidden || id!==currentConversationId)){const latest=bucket.at(-1);androidBleRadio.notify(latest?.author||'Mesh Messenger',latest?.position?'Получена позиция':latest?.text||'Новое сообщение','message',id);}
+504:     const envelope=item.payload.type==='position'?encodePositionToRadio(item.payload.position,options):item.payload.type==='waypoint'?encodeWaypointToRadio(item.payload.waypoint,{...options,wantAck:false}):encodeTextToRadio(item.payload.text,options);
+627:   if(AndroidBridgeMeshtasticTransport.isSupported() && (document.hidden || id!==currentConversationId)){const latest=bucket.at(-1);androidBleRadio.notify(latest?.author||'Mesh Messenger',latest?.position?'Получена позиция':latest?.text||'Новое сообщение','message',id);}
+648: function formatCoords(position){
+649:   if(position?.latitude==null||position?.longitude==null)return '—';
+650:   return `${Number(position.latitude).toFixed(5)}, ${Number(position.longitude).toFixed(5)}`;
+655:     const override=packetPositions.get(n.num>>>0);const position=override||n.position;
+656:     if(position?.latitude==null||position?.longitude==null)return null;
+657:     return {...n,position,isLocal:(n.num>>>0)===local,name:n.user?.longName||n.user?.shortName||formatNodeNum(n.num)};
+661: function activeWaypoints(){const now=Math.floor(Date.now()/1000);return [...sharedWaypoints.values()].filter(w=>w?.latitude!=null&&w?.longitude!=null&&(!w.expire||w.expire>now));}
+663:   const holder=$('#mapMarkers'),trackLayer=$('#mapTrackLayer');if(!holder)return;
+664:   const nodes=mapNodes();holder.innerHTML='';if(trackLayer)trackLayer.innerHTML='';
+665:   if(!nodes.length&&!fallback&&!activeWaypoints().length){$('#mapOverlayMeta').textContent='координат пока нет';$('#mapTrackMeta').textContent='—';return;}
+668:   const track=selected?trackHistory.list(selected.num>>>0):[];
+669:   const waypoints=activeWaypoints();
+670:   const boundPoints=[...nodes.map(n=>n.position),...track,...waypoints.map(w=>({latitude:w.latitude,longitude:w.longitude}))];
+677:   if(trackLayer&&track.length>=2){const points=track.map(p=>{const q=project(p);return `${q.x.toFixed(2)},${q.y.toFixed(2)}`}).join(' ');const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');poly.setAttribute('points',points);poly.setAttribute('class','map-track-line');trackLayer.appendChild(poly);}
+678:   for(const w of waypoints){const q=project(w);const b=document.createElement('button');b.type='button';b.className='map-waypoint';b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.title=w.description||w.name||'Waypoint';b.innerHTML=`<span>⌖</span><span class="marker-label">${w.name||'Waypoint'}</span>`;holder.append(b);}
+680:     const q=project(n.position);
+685:   $('#mapOverlayTitle').textContent='Позиции NodeDB';$('#mapOverlayMeta').textContent=`${nodes.length} узлов · ${waypoints.length} точек · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
+686:   if(!selected){$('#mapSelectedName').textContent='Нет узла';$('#mapSelectedCoords').textContent=fallback?formatCoords(fallback):'—';$('#mapSelectedAltitude').textContent='—';$('#mapSelectedRoute').textContent='—';$('#mapTrackMeta').textContent='—';$('#mapOpenChatButton').disabled=true;$('#mapCreateWaypointButton').disabled=!fallback;$('#mapClearTrackButton').disabled=true;return;}
+687:   $('#mapSelectedName').textContent=selected.name;$('#mapSelectedCoords').textContent=formatCoords(selected.position);$('#mapSelectedAltitude').textContent=selected.position.altitude==null?'—':`${Math.round(selected.position.altitude)} м`;
+689:   $('#mapTrackMeta').textContent=`${track.length} точек · ${formatDistanceMeters(trackHistory.distanceMeters(selected.num>>>0))}`;
+690:   const open=$('#mapOpenChatButton');open.disabled=Boolean(selected.isLocal);open.dataset.nodeNum=String(selected.num>>>0);$('#mapCreateWaypointButton').disabled=false;$('#mapClearTrackButton').disabled=track.length===0;
+693: function bestLocalPosition(){
+695:   const node=snapshot?.nodes?.find(n=>(n.num>>>0)===local);return packetPositions.get(local)||node?.position||null;
+697: function browserPosition(){
+700:     navigator.geolocation.getCurrentPosition(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,altitude:p.coords.altitude==null?null:Math.round(p.coords.altitude),timestamp:Math.floor(Date.now()/1000)}),reject,{enableHighAccuracy:true,timeout:5000,maximumAge:15000});
+703: async function shareCurrentPosition({preferBrowser=true}={}){
+704:   let position=null;
+705:   if(preferBrowser){try{position=await browserPosition();}catch{}}
+706:   position=position||bestLocalPosition();
+707:   if(!position){alert('У локального узла пока нет координат.');return null;}
+709:   const decision=transportManager.select('position');
+710:   const label=`Позиция ${formatCoords(position)}`;
+711:   const localNum=currentSnapshot()?.myInfo?.myNodeNum>>>0;if(localNum){trackHistory.append(localNum,position);persistTrackHistory();}
+712:   const item=queue.enqueue({type:'position',text:label,position,conversationId:c.id},decision);
+713:   getBucket(c.id).push({side:'out',text:'Позиция',position,positionNodeNum:currentSnapshot()?.myInfo?.myNodeNum>>>0,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),status:item.status==='queued'?'В очереди':'Готово к отправке',queueId:item.id});
+718: function openWaypointModal(){
+719:   const selected=mapSelectedNode();if(!selected?.position){alert('Сначала выберите точку на карте.');return;}
+720:   pendingWaypointPosition={...selected.position};$('#waypointName').value=`Точка ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;$('#waypointDescription').value='';$('#waypointExpire').value='21600';openModal($('#waypointModal'));
+722: async function sendWaypointFromModal(){
+723:   if(!pendingWaypointPosition)return;const name=($('#waypointName').value||'Точка').trim().slice(0,30),description=($('#waypointDescription').value||'').trim().slice(0,100),ttl=Math.max(0,Number($('#waypointExpire').value)||0);
+724:   const id=nextPacketId(),expire=ttl?Math.floor(Date.now()/1000)+ttl:0,waypoint={id,latitude:pendingWaypointPosition.latitude,longitude:pendingWaypointPosition.longitude,expire,lockedTo:currentSnapshot()?.myInfo?.myNodeNum>>>0,name,description,icon:0x1f4cd};
+725:   sharedWaypoints.set(id,waypoint);persistWaypoints();renderMap();closeModal($('#waypointModal'));pendingWaypointPosition=null;
+726:   const decision=transportManager.select('waypoint');const item=queue.enqueue({type:'waypoint',text:`Waypoint: ${name}`,waypoint,conversationId:'channel:0'},decision);renderGlobalStatus();renderDeliveryQueue();if(item.status==='ready')await transmitQueueItem(item.id);
+868:   $('[data-add-position]')?.addEventListener('click',async()=>{closeModal($('#addMenuModal'));await shareCurrentPosition();});
+896:   $('#sharePositionButton')?.addEventListener('click',()=>shareCurrentPosition());
+899:   $('#mapCreateWaypointButton')?.addEventListener('click',openWaypointModal);$('#cancelWaypoint')?.addEventListener('click',()=>{pendingWaypointPosition=null;closeModal($('#waypointModal'));});$('#confirmWaypoint')?.addEventListener('click',()=>sendWaypointFromModal());$('#waypointModal')?.addEventListener('click',e=>{if(e.target===$('#waypointModal')){pendingWaypointPosition=null;closeModal($('#waypointModal'));}});$('#mapClearTrackButton')?.addEventListener('click',()=>{const n=mapSelectedNode();if(n){trackHistory.clear(n.num>>>0);persistTrackHistory();renderMap();}});
+912: window.__meshDebug={transportManager,queue,mockRadio,androidBleRadio,getPhoneApiSnapshot:()=>currentSnapshot(),getCurrentConversation:()=>currentConversation(),selectConversation,sendMessage,retryQueueItem,renderDeliveryQueue,exportPhoneApiCapture,simulateReboot:()=>mockRadio.simulateReboot(),setNextRoutingResult:(code)=>mockRadio.setNextRoutingResult(code),setFileDisconnectAfter:(n)=>mockRadio.setFileDisconnectAfter(n),getConversationUi:(id)=>({...uiState(id)}),sendSmallFile,getFileTransfers:()=>fileTransfers.list().map(t=>({id:t.id,name:t.name,status:t.status,confirmed:fileTransfers.confirmedCount(t.id),total:t.total,targetNode:t.targetNode,conversationId:t.conversationId,error:t.error})),simulateFileSubsystemRestart,resumeIncompleteFileTransfers,renderMap,shareCurrentPosition,currentShareUrls,renderShareQr,trackHistory,getWaypoints:()=>[...sharedWaypoints.values()],sendWaypointFromModal,helpRegistry,renderQuickHelp,openFullHelp,copySafeDiagnostics,currentHelpTopic:()=>currentHelpTopicId};
+### mesh-messenger-v1.5.5-work/src/styles.css
+43: .desktop-rail { position: sticky; top: 0; height: 100vh; padding: 24px 16px; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; gap: 24px; }
+109: .map-canvas { position: relative; min-height: 680px; border: 1px solid var(--border); border-radius: var(--r-feature); overflow: hidden; background: linear-gradient(135deg, color-mix(in srgb,var(--accent) 8%,var(--surface)), var(--surface-2)); }
+110: .map-grid { position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:52px 52px;opacity:.58;transform:rotate(-8deg) scale(1.12); }
+111: .map-marker { position:absolute; min-width:44px; min-height:44px; display:grid; place-items:center; border-radius:999px; background:var(--accent); color:white; font-weight:700; border:4px solid color-mix(in srgb,var(--surface) 80%,transparent); }
+113: .map-overlay { position:absolute; left:16px; top:16px; display:grid; gap:2px; background:color-mix(in srgb,var(--surface) 92%,transparent); backdrop-filter: blur(10px); padding:12px 14px; border-radius:14px; border:1px solid var(--border); }
+131: .switch input { position:absolute;opacity:0;pointer-events:none; }
+132: .switch span { width:46px;height:26px;border-radius:999px;background:var(--border);position:relative;transition:.18s ease-out; }
+133: .switch span::after { content:"";position:absolute;width:20px;height:20px;border-radius:50%;background:white;top:3px;left:3px;transition:.18s ease-out;box-shadow:0 1px 4px rgba(0,0,0,.16); }
+136: .route-inspector { padding:18px; position:sticky;top:24px; }
+152: .modal-layer,.ptt-layer { position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.42);display:none;align-items:center;justify-content:center;padding:24px; }
+160: .ptt-card{text-align:center;position:relative}.ptt-close{position:absolute;right:16px;top:16px}.ptt-route{display:grid;justify-items:center;gap:5px;margin:18px 0}.ptt-route small{color:var(--text-2)}
+170:   .route-inspector { position:static; }
+179:   .mobile-topbar { min-height:64px;padding: max(10px, env(safe-area-inset-top)) 2px 8px;display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(12px); }
+181:   .mobile-bottom-nav { position:fixed;left:10px;right:10px;bottom:max(10px,env(safe-area-inset-bottom));z-index:30;display:grid;grid-template-columns:repeat(4,1fr);padding:6px;background:color-mix(in srgb,var(--surface) 94%,transparent);border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);backdrop-filter:blur(14px); }
+318: #mapMarkers{position:absolute;inset:0}
+324: .map-marker .marker-label{position:absolute;top:48px;left:50%;transform:translateX(-50%);white-space:nowrap;background:color-mix(in srgb,var(--surface) 94%,transparent);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:3px 7px;font-size:11px;font-weight:650}
+325: .position-message{display:grid;gap:4px;margin-top:6px;padding:9px 10px;border:1px solid var(--border);border-radius:12px;background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+326: .position-message button{justify-self:start}
+339: /* v1.4 track history + waypoints */
+340: .map-track-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+341: .map-track-line{fill:none;stroke:var(--accent);stroke-width:1.1;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round;opacity:.72}
+342: .map-waypoint{position:absolute;min-width:40px;min-height:40px;border-radius:12px;transform:translate(-50%,-50%) rotate(45deg);border:3px solid color-mix(in srgb,var(--surface) 85%,transparent);background:color-mix(in srgb,var(--warning) 86%,var(--accent));color:white;display:grid;place-items:center;box-shadow:0 8px 24px color-mix(in srgb,var(--text) 14%,transparent);z-index:2}
+343: .map-waypoint>span{transform:rotate(-45deg);font-size:16px}
+344: .map-waypoint .marker-label{position:absolute;top:43px;left:50%;transform:translateX(-50%) rotate(-45deg);white-space:nowrap;background:color-mix(in srgb,var(--surface) 94%,transparent);color:var(--text);border:1px solid var(--border);border-radius:9px;padding:3px 7px;font-size:11px;font-weight:650}
+### mesh-messenger-v1.5.5-work/RECHECK_v1.1.md
+9: - `POSITION_APP = 3` encode/decode
+10: - position send through existing RadioTransport / MessageQueue
+11: - NodeDB positions rendered as map markers
+12: - position message rendered in direct chat
+13: - position -> map navigation
+28: - `screenshots/mobile-position-message-v1.1.png`
+39: - map tiles are not yet an offline tile package; v1.1 renders NodeDB coordinates on a local map surface.
+### mesh-messenger-v1.5.5-work/STATUS_v1.3.md
+9: - NodeDB map + POSITION_APP send/receive.
+34: 4. Hardware sequence: scan → select node → NodeDB → direct message → ACK → position → small file → BLE drop → reconnect/resume.
+36: 6. Then: node track history, waypoint, voice/PTT.
+### mesh-messenger-v1.5.5-work/ARCHITECTURE_v1.1.md
+40: Messageable NodeDB peers become direct chat entries.
+58: No duplicate chat, queue, ACK, NodeDB or channel logic per OS.
+103: ### Position path
+104: `POSITION_APP packet <-> phoneapi-lite <-> PhoneApiSession <-> app map/chat`
+106: Sending uses the same MessageQueue and RadioTransport as text. Direct position sends request ACK; channel position sends use broadcast semantics.
+### mesh-messenger-v1.5.5-work/WORKLOG.md
+74: ## v0.4 — NodeDB/config decode + replay evidence
+78: - `MyNodeInfo` decoder: local node number, reboot count, min app version, device ID, PlatformIO env, NodeDB count.
+79: - `NodeInfo` decoder: `User`, position subset, SNR, last-heard, DeviceMetrics, channel, MQTT flag, hops, favorite/ignored/verified flags.
+83: - PhoneAPI session now owns a full config snapshot (`myInfo`, NodeDB, metadata, configs) instead of only READY state.
+85: - Network UI now renders decoded local node, firmware, LoRa profile and NodeDB entries.
+102: - NodeDB/config replay regression: PASS
+120: - chat list is now derived from synced channels + NodeDB peers.
+130: - network snapshot now shows synced channels and the transport card uses actual NodeDB/channel counts.
+239: - deterministic UI harness import composition updated for new persistence import.
+254: ## 2026-09-19 — v1.1 positions, QR, Android BLE
+256: ### Position/map
+257: - Added POSITION_APP encode/decode and queue transport path.
+258: - Map now renders NodeDB positions plus received position packets.
+260: - Added position messages with map action.
+261: - Added send-position action with browser geolocation + local-node fallback.
+278: - POSITION_APP codec/runtime: PASS.
+279: - NodeDB map/runtime: PASS.
+357: ## 2026-09-20 — v1.4 track history + waypoint
+358: - Added bounded per-node PositionTrackHistory with duplicate collapse, persistence and distance calculation.
+359: - Added selected-node track polyline + track stats + local clear action.
+360: - Added official Meshtastic WAYPOINT_APP=8 encode/decode path.
+361: - Added waypoint create modal with name/description/lifetime and send via shared MessageQueue/RadioTransport.
+362: - Added received/shared waypoint map rendering and persistence.
+364: - Added mobile runtime evidence for track and waypoint.
+365: - Figma synced with `26 · Карта · Трек + Waypoint` (node `18:143`).
+### mesh-messenger-v1.5.5-work/WORKLOG_v1.5.3.md
+20: No changes were made to Meshtastic PhoneAPI framing, message queue semantics, file transfer protocol, POSITION_APP or WAYPOINT_APP.
+### mesh-messenger-v1.5.5-work/STATUS_v1.4.md
+9: - NodeDB map + POSITION_APP send/receive.
+12: - Per-node local track history with persistence and distance calculation.
+13: - Track polyline and track stats on map.
+14: - WAYPOINT_APP=8 protobuf encode/decode and map waypoint rendering.
+15: - Waypoint creation and send via the same queue/PhoneAPI path.
+18: - core + track manager: PASS.
+19: - POSITION_APP + WAYPOINT_APP round-trip: PASS.
+23: - v1.4 map track UI: PASS.
+24: - v1.4 waypoint create/send/render UI: PASS.
+31: 4. Hardware test: scan → select → NodeDB → text ACK → position → waypoint → small file → BLE drop → reconnect/resume.
+33: 6. After hardware path: offline map tile adapter, waypoint management/edit/delete semantics, then voice/PTT.
+### mesh-messenger-v1.5.5-work/RECHECK_v1.4.md
+7: - PositionTrackHistory append/dedup/bounds/serialize/restore
+8: - track distance calculation
+9: - map track polyline for selected node
+10: - map track statistics and clear action
+11: - `WAYPOINT_APP = 8`
+12: - waypoint protobuf encode/decode round-trip
+13: - waypoint send via MessageQueue/RadioTransport
+14: - waypoint map rendering and local persistence
+17: - v1.4 mobile map track capture
+18: - v1.4 mobile waypoint capture
+22: - `screenshots/mobile-map-track-v1.4.png`
+23: - `screenshots/mobile-map-waypoint-v1.4.png`
+24: - Figma: `26 · Карта · Трек + Waypoint` (node `18:143`)
+### mesh-messenger-v1.5.5-work/RECHECK_v1.2.md
+9: - v1.1 POSITION_APP/map/QR regression
+14: - Android-mode browser harness: BLE connected -> PhoneAPI READY -> NodeDB 3 -> QR scan -> contact confirmation/import -> native notification callback
+### mesh-messenger-v1.5.5-work/UX_CORE_v1.1.md
+4: - The map is no longer static demo content: markers come from synced NodeDB positions and received POSITION_APP packets.
+7: - `Отправить позицию` uses device geolocation when permitted; otherwise it can fall back to the local Meshtastic node position.
+8: - Position messages in chat contain a `Показать на карте` action.
+### mesh-messenger-v1.5.5-work/PHONE_FEEDBACK_v1.5.2.md
+18: Disposition: addressed in v1.5.3 source; exact phone retest required.
+### mesh-messenger-v1.5.5-work/PHONEAPI_SUBSET_v1.4.md
+4: - `WAYPOINT_APP = 8`
+5: - Waypoint protobuf fields used by Mesh Messenger: id, latitude_i, longitude_i, expire, locked_to, name, description, icon.
+6: - `encodeWaypointToRadio()` routes Waypoint payload through existing MeshPacket/Data envelope path.
+7: - inbound Data with portnum 8 decodes to `decoded.waypoint`.
+9: No new transport is introduced. WAYPOINT_APP uses the existing Meshtastic RadioTransport and PhoneAPI session.
+### mesh-messenger-v1.5.5-work/PHONEAPI_SUBSET_v0.5.md
+30: - packet ID is tracked until `ROUTING_APP` result arrives
+### mesh-messenger-v1.5.5-work/STATUS_v1.5.md
+10: - Existing messaging, queue, retry, small-file resume, QR, map, track, waypoint, PhoneAPI and Android bridge regression suite: PASS.
+### mesh-messenger-v1.5.5-work/CURRENT_v1.2.md
+6: Status: Meshtastic core + persistent small files + positions/map + interoperable QR + Android runtime source.
+### mesh-messenger-v1.5.5-work/index.html
+99:           <div><p class="eyebrow">NodeDB positions</p><h1 id="mapTitle">Карта</h1><p>Точки строятся из POSITION/NodeDB. Offline tiles остаются отдельным адаптером.</p></div>
+100:           <div class="header-actions"><button class="secondary-button" id="sharePositionButton" type="button">Отправить позицию</button><button class="quiet-button" id="centerMapButton" type="button">Все точки</button></div>
+105:             <svg id="mapTrackLayer" class="map-track-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+107:             <div class="map-overlay"><strong id="mapOverlayTitle">Позиции NodeDB</strong><span id="mapOverlayMeta">ожидаем координаты…</span></div>
+115:             <div class="metric-row"><span>Трек</span><strong id="mapTrackMeta">—</strong></div>
+117:             <div class="map-action-row"><button class="secondary-button" id="mapCreateWaypointButton" type="button">Создать точку</button><button class="quiet-button" id="mapClearTrackButton" type="button">Очистить трек</button></div>
+168:                   <option value="position">Позиция</option>
+178:               <div class="snapshot-head"><div><span class="eyebrow">PhoneAPI snapshot</span><h2>Устройство и NodeDB</h2></div><span class="runtime-badge">DECODED</span></div>
+182:               <div class="metric-row"><span>NodeDB</span><strong id="nodeDbValue">0</strong></div>
+185:               <div class="node-snapshot-list" id="nodeSnapshotList"><div class="node-empty">NodeDB ещё синхронизируется…</div></div>
+222:             <button type="button" data-add-position><strong>Позиция</strong><small>Отправить POSITION_APP</small></button>
+245:       <section class="modal-layer" id="waypointModal" aria-hidden="true">
+246:         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="waypointTitle">
+247:           <div class="modal-header"><div><p class="eyebrow">Meshtastic waypoint</p><h2 id="waypointTitle">Новая точка</h2></div></div>
+248:           <label class="field-stack"><span>Название</span><input id="waypointName" maxlength="30" placeholder="Точка" /></label>
+249:           <label class="field-stack"><span>Описание</span><input id="waypointDescription" maxlength="100" placeholder="Необязательно" /></label>
+250:           <label class="field-stack"><span>Срок</span><select id="waypointExpire"><option value="3600">1 час</option><option value="21600" selected>6 часов</option><option value="86400">24 часа</option><option value="0">Без срока</option></select></label>
+251:           <p class="modal-copy">Точка будет отправлена в основной mesh-канал через WAYPOINT_APP.</p>
+252:           <div class="modal-actions"><button class="secondary-button" id="cancelWaypoint" type="button">Отмена</button><button class="primary-button" id="confirmWaypoint" type="button">Отправить точку</button></div>
+### mesh-messenger-v1.5.5-work/RECHECK_v1.5.3.md
+48: - message/ACK, position, waypoint, file, reconnect/resume.
