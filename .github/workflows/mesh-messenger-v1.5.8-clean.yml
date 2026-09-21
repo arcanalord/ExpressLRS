@@ -147,7 +147,7 @@ jobs:
           bash tests/android_app_source_check.sh
           python3 tests/ui_compact_batch_a.test.py
           python3 tests/ui_compact_batch_b.test.py
-          python3 "$GITHUB_WORKSPACE/mesh-messenger-ci/ui_startup_smoke.py" "$ROOT"
+          python3 "$GITHUB_WORKSPACE/mesh-messenger-ci/ui_startup_smoke.py" "."
       - name: Build Android
         shell: bash
         run: |
