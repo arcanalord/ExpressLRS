@@ -105,6 +105,7 @@ jobs:
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
           grep -q 'tile.openstreetmap.org' "$ROOT/src/app.js"
           grep -q 'android.permission.INTERNET' "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
+          python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
 
       - name: Verify v1.5.6 metadata and contracts
         shell: bash
