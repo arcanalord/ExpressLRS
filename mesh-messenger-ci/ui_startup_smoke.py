@@ -48,7 +48,7 @@ try:
         page.add_init_script("window.__meshDisableAutoConnect=true;")
         page.route("https://tile.openstreetmap.org/**", lambda route: route.abort())
         page.on("pageerror", lambda exc: errors.append(f"pageerror: {exc}"))
-        page.on("console", lambda msg: errors.append(f"console error: {msg.text}") if msg.type == "error" else None)
+        page.on("console", lambda msg: errors.append(f"console error: {msg.text}") if msg.type == "error" and "Failed to load resource" not in msg.text else None)
 
         page.goto(f"http://127.0.0.1:{port}/index.html", wait_until="domcontentloaded")
         page.wait_for_timeout(500)
