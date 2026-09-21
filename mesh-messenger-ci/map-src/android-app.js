@@ -5,6 +5,7 @@ import { AndroidBridgeMeshtasticTransport } from './transports/android-bridge-me
 import { PhoneApiSession } from './transports/phoneapi-session.js';
 import { BROADCAST, PORTNUM, encodeTextToRadio, encodePositionToRadio, encodeWaypointToRadio, encodePortPayloadToRadio, encodeSmallFileManifest, encodeSmallFileChunk, encodeSmallFileStatus, encodeSmallFileStatusRequest, decodeSmallFileFrame, sharedContactUrl, channelSetUrl, parseMeshtasticShareUrl } from './transports/phoneapi-lite.js';
 import { HELP_FALLBACK_ID, ERROR_TOPIC_MAP, helpRegistry, parseHelpTopic, buildSafeDiagnostics } from './help-registry.js';
+import { OsmTileProvider, mercatorPoint } from './map-tile-provider.js';
 
 const transportManager = new TransportManager();
 const queue = new MessageQueue();
@@ -24,8 +25,6 @@ const trackHistory = new PositionTrackHistory({maxPointsPerNode:120});
 const sharedWaypoints = new Map();
 let pendingWaypointPosition = null;
 let browserMapPosition = null;
-let mapTileState = 'loading';
-let mapTileGeneration = 0;
 let qrMode = 'contact';
 const importedContacts = new Map();
 let pendingQrImport = null;
@@ -33,6 +32,7 @@ let currentViewName = 'chats';
 let currentHelpTopicId = HELP_FALLBACK_ID;
 let helpHistoryPushed = false;
 let activeHelpErrorCode = '';
+const mapTiles = new OsmTileProvider({onState:()=>renderMapTileStatus()});
 const SCREEN_HELP_TOPICS = Object.freeze({
   chats:'mesh-messenger.chats.messaging',
   map:'mesh-messenger.map.overview',
@@ -662,49 +662,9 @@ function mapNodes(snapshot=currentSnapshot()){
 }
 function formatDistanceMeters(meters){if(!Number.isFinite(meters)||meters<=0)return '0 м';return meters>=1000?`${(meters/1000).toFixed(meters>=10000?0:1)} км`:`${Math.round(meters)} м`;}
 function activeWaypoints(){const now=Math.floor(Date.now()/1000);return [...sharedWaypoints.values()].filter(w=>w?.latitude!=null&&w?.longitude!=null&&(!w.expire||w.expire>now));}
-function mercatorPoint(position){
-  const lat=Math.max(-85.05112878,Math.min(85.05112878,Number(position.latitude))),lon=Number(position.longitude);
-  const x=(lon+180)/360;
-  const sin=Math.sin(lat*Math.PI/180);
-  const y=0.5-Math.log((1+sin)/(1-sin))/(4*Math.PI);
-  return {x,y};
-}
-function chooseMapZoom(minX,maxX,minY,maxY){
-  const canvas=$('#mapCanvas'),w=Math.max(320,canvas?.clientWidth||800),h=Math.max(320,canvas?.clientHeight||680);
-  const spanX=Math.max(1e-7,maxX-minX),spanY=Math.max(1e-7,maxY-minY);
-  const target=Math.min((w*.8)/(spanX*256),(h*.8)/(spanY*256));
-  return Math.max(2,Math.min(18,Math.floor(Math.log2(Math.max(1,target)))));
-}
-function renderOnlineTiles({minX,maxX,minY,maxY,pad=10,span=80}){
-  const layer=$('#mapTileLayer'),grid=$('#mapGrid'),attribution=$('#mapAttribution');
-  if(!layer)return;
-  const generation=++mapTileGeneration;
-  layer.innerHTML='';
-  if(navigator.onLine===false){
-    mapTileState='offline'; layer.hidden=true; if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;return;
-  }
-  const z=chooseMapZoom(minX,maxX,minY,maxY),n=2**z;
-  const tx0=Math.max(0,Math.floor(minX*n)-1),tx1=Math.min(n-1,Math.floor(maxX*n)+1);
-  const ty0=Math.max(0,Math.floor(minY*n)-1),ty1=Math.min(n-1,Math.floor(maxY*n)+1);
-  let pending=0,loaded=0,failed=0;
-  mapTileState='loading';layer.hidden=false;if(grid)grid.hidden=false;if(attribution)attribution.hidden=false;
-  const settle=()=>{
-    if(generation!==mapTileGeneration)return;
-    if(loaded>0){mapTileState='online';if(grid)grid.hidden=true;$('#mapOverlayTitle').textContent='OSM · Позиции NodeDB';}
-    else if(pending===failed){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;$('#mapOverlayTitle').textContent='Карта недоступна · локальная сетка';}
-  };
-  for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){
-    pending++;
-    const img=document.createElement('img');img.className='map-tile';img.alt='';img.decoding='async';img.loading='eager';img.referrerPolicy='origin';
-    const left=pad+(((tx/n)-minX)/(maxX-minX))*span,top=pad+(((ty/n)-minY)/(maxY-minY))*span;
-    const right=pad+((((tx+1)/n)-minX)/(maxX-minX))*span,bottom=pad+((((ty+1)/n)-minY)/(maxY-minY))*span;
-    img.style.left=`${left}%`;img.style.top=`${top}%`;img.style.width=`${right-left}%`;img.style.height=`${bottom-top}%`;
-    img.addEventListener('load',()=>{loaded++;settle();},{once:true});
-    img.addEventListener('error',()=>{failed++;img.remove();settle();},{once:true});
-    img.src=`https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`;
-    layer.appendChild(img);
-  }
-  setTimeout(()=>{if(generation===mapTileGeneration&&loaded===0){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;$('#mapOverlayTitle').textContent='Карта недоступна · локальная сетка';}},4500);
+function renderMapTileStatus(){
+  const title=$('#mapOverlayTitle');if(!title)return;
+  title.textContent=mapTiles.state==='online'?'OSM · Позиции NodeDB':mapTiles.state==='loading'?'Карта загружается · Позиции NodeDB':'Карта недоступна · локальная сетка';
 }
 function renderMap({fallback=browserMapPosition}={}){
   const holder=$('#mapMarkers'),trackLayer=$('#mapTrackLayer');if(!holder)return;
@@ -723,7 +683,7 @@ function renderMap({fallback=browserMapPosition}={}){
   if(maxX-minX<0.00001){minX-=0.000005;maxX+=0.000005;} if(maxY-minY<0.00001){minY-=0.000005;maxY+=0.000005;}
   const extraX=(maxX-minX)*0.16,extraY=(maxY-minY)*0.16;minX-=extraX;maxX+=extraX;minY-=extraY;maxY+=extraY;
   const pad=10,span=80,project=p=>{const m=mercatorPoint(p);return{x:pad+((m.x-minX)/(maxX-minX))*span,y:pad+((m.y-minY)/(maxY-minY))*span};};
-  renderOnlineTiles({minX,maxX,minY,maxY,pad,span});
+  mapTiles.render({minX,maxX,minY,maxY,pad,span});
   if(trackLayer&&track.length>=2){const points=track.map(p=>{const q=project(p);return `${q.x.toFixed(2)},${q.y.toFixed(2)}`}).join(' ');const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');poly.setAttribute('points',points);poly.setAttribute('class','map-track-line');trackLayer.appendChild(poly);}
   for(const w of waypoints){const q=project(w);const b=document.createElement('button');b.type='button';b.className='map-waypoint';b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.title=w.description||w.name||'Waypoint';b.innerHTML=`<span>⌖</span><span class="marker-label">${w.name||'Waypoint'}</span>`;holder.append(b);}
   if(fallback?.latitude!=null&&fallback?.longitude!=null){
@@ -736,7 +696,7 @@ function renderMap({fallback=browserMapPosition}={}){
     b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.dataset.nodeNum=String(n.num>>>0);b.innerHTML=`${n.isLocal?'Вы':(n.user?.shortName||n.name.slice(0,2))}<span class="marker-label">${n.name}</span>`;
     b.addEventListener('click',()=>{selectedMapNodeNum=n.num>>>0;renderMap();});holder.append(b);
   }
-  $('#mapOverlayTitle').textContent=mapTileState==='online'?'OSM · Позиции NodeDB':mapTileState==='loading'?'Карта загружается · Позиции NodeDB':'Карта недоступна · локальная сетка';$('#mapOverlayMeta').textContent=hasGeoData?`${nodes.length} узлов · ${waypoints.length} точек · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`:'координат пока нет · общий вид';
+  renderMapTileStatus();$('#mapOverlayMeta').textContent=hasGeoData?`${nodes.length} узлов · ${waypoints.length} точек · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`:'координат пока нет · общий вид';
   if(!selected){$('#mapSelectedName').textContent=fallback?'Моя позиция':'Нет узла';$('#mapSelectedCoords').textContent=fallback?formatCoords(fallback):'—';$('#mapSelectedAltitude').textContent=fallback?.altitude==null?'—':`${Math.round(fallback.altitude)} м`;$('#mapSelectedRoute').textContent=fallback?'GPS телефона':'—';$('#mapTrackMeta').textContent='—';$('#mapOpenChatButton').disabled=true;$('#mapCreateWaypointButton').disabled=!fallback;$('#mapClearTrackButton').disabled=true;return;}
   $('#mapSelectedName').textContent=selected.name;$('#mapSelectedCoords').textContent=formatCoords(selected.position);$('#mapSelectedAltitude').textContent=selected.position.altitude==null?'—':`${Math.round(selected.position.altitude)} м`;
   $('#mapSelectedRoute').textContent=selected.isLocal?'локальный узел':`${selected.hopsAway??'—'} hops · ${selected.snr==null?'SNR —':`SNR ${selected.snr.toFixed(1)} dB`}`;
@@ -931,7 +891,7 @@ function wireEvents() {
   globalThis.addEventListener('mesh-android-bluetooth',e=>{const detail=e.detail||{};renderBluetoothPower(detail);if(detail.enabled&&$('#bleDeviceModal')?.getAttribute('aria-hidden')==='false')setTimeout(()=>scanBleDevicePicker(),700);else if(detail.enabled===false)setBleDevicePickerStatus('Bluetooth выключен. Нажмите «Включить Bluetooth».');});
   globalThis.addEventListener('mesh-android-deeplink',e=>handleAndroidDeepLink(e.detail));
   globalThis.addEventListener('online',()=>{if(currentViewName==='map')renderMap();});
-  globalThis.addEventListener('offline',()=>{mapTileState='offline';if(currentViewName==='map')renderMap();});
+  globalThis.addEventListener('offline',()=>{mapTiles.markOffline();if(currentViewName==='map')renderMap();});
   $('#closeBleDeviceModal')?.addEventListener('click',()=>closeModal($('#bleDeviceModal')));$('#cancelBleDevices')?.addEventListener('click',()=>closeModal($('#bleDeviceModal')));$('#enableBluetoothButton')?.addEventListener('click',()=>androidBleRadio.requestBluetoothEnable());$('#rescanBleDevices')?.addEventListener('click',()=>{const permission=androidBleRadio.permissionStatus();const bluetooth=androidBleRadio.bluetoothStatus();renderBlePermission(permission);renderBluetoothPower(bluetooth);if(!permission?.granted)androidBleRadio.requestPermissions();else if(bluetooth?.enabled===false)androidBleRadio.requestBluetoothEnable();else scanBleDevicePicker();});$('#bleDeviceModal')?.addEventListener('click',e=>{if(e.target===$('#bleDeviceModal'))closeModal($('#bleDeviceModal'));});
   $('#confirmQrImport')?.addEventListener('click',confirmQrImport);$('#cancelQrImport')?.addEventListener('click',()=>{pendingQrImport=null;closeModal($('#importQrModal'));});
   $('[data-add-position]')?.addEventListener('click',async()=>{closeModal($('#addMenuModal'));await shareCurrentPosition();});
