@@ -1,0 +1,108 @@
++function disconnectInternetRelay() {
++  internetRelayTransport?.disconnect?.();
++  internetPeer = null;
++  internetInviteCode = '';
++  transportManager.setAvailability('ip', false);
++  renderConnection();
++}
++
+ function makeShareUrl(payload) {
+   const url = new URL(location.href);
+   url.hash = 'share=' + encodeURIComponent(encodeSharePayload(payload));
+@@ -1574,10 +1890,26 @@
+   refreshTimeline();
+ }
+ 
++function sendFastText(chat, text) {
++  const peerId = chat?.id || fastPeerId();
++  const route = pickFastRoute(peerId);
++  const messageId = nextTransportFrameId('msg');
++  if (route) sendFastPacket(route, { v: 1, type: 'text', messageId, from: appPeerId, to: peerId, text, ts: Date.now() }, messageId);
++  const message = { id: `fast-${messageId}`, messageId, direction: 'sent', text, time: nowTime(), status: route ? 'sent' : 'queued', transport: route === 'wifi' ? 'Wi‑Fi LAN' : route === 'ip' ? 'Internet relay' : 'Авто', hops: 0, rssi: '—', queued: !route };
++  const messages = data.messages[peerId] ||= [];
++  messages.push(message);
++  chat.preview = text;
++  chat.time = message.time;
++  renderChats();
++  renderConversation();
++  return message;
++}
++
+ function sendMessage(text) {
+   const chat = data.chats.find(c => c.id === data.selectedChat);
+   if (!chat || !text.trim()) return;
+   const cleanText = text.trim();
++  if ((lanPeer?.peerId === chat.id) || (internetPeer?.peerId === chat.id) || chat.transport === 'Wi‑Fi LAN' || chat.transport === 'Internet') {
++    return sendFastText(chat, cleanText);
++  }
+   const messageId = nextMessageId('text');
+   const message = { id: messageId, messageId, direction: 'sent', text: cleanText, time: nowTime(), status: 'queued', transport: 'Queued', hops: '—', rssi: '—', queued: true };
+   data.messages[chat.id].push(message);
+@@ -1748,7 +2080,10 @@
+   document.documentElement.dataset.theme = data.settings.theme;
+   localStorage.setItem('mesh-settings', JSON.stringify(data.settings));
+   byId('settingsBluetoothNote')?.classList.toggle('hidden', !(window.MeshAndroid?.platform === 'android'));
+-  byId('runtimeVersion').textContent = 'Web/PWA v1.5.5';
++  byId('runtimeVersion').textContent = 'Web/PWA v1.6.0-alpha1';
++  document.querySelector('.view[data-screen="network"]')?.classList.remove('show-network-details');
++  document.querySelector('.radio-link-card')?.classList.remove('is-mobile-open');
+   openScreen('settings');
+ }
+ 
+@@ -2005,6 +2340,7 @@
+ document.querySelectorAll('.nav-item, .bottom-nav button').forEach(button => button.addEventListener('click', () => openScreen(button.dataset.route)));
+ themeSwitch.addEventListener('change', () => setTheme(themeSwitch.checked ? 'light' : 'dark'));
+ engineerMode.addEventListener('change', () => {
++  document.querySelector('.view[data-screen="network"]')?.classList.toggle('show-network-details', engineerMode.checked);
+   renderConnection();
+   updateDiagnostics();
+ });
+@@ -2014,6 +2350,21 @@
+ pttButton.addEventListener('pointerup', stopPtt);
+ pttButton.addEventListener('pointercancel', stopPtt);
+ byId('networkDetails')?.addEventListener('click', () => {
++  document.querySelector('.view[data-screen="network"]')?.classList.toggle('show-network-details');
++  document.querySelector('.radio-link-card')?.classList.toggle('is-mobile-open');
+   document.querySelector('.diagnostic-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+ });
+ byId('openLinkMap')?.addEventListener('click', () => {
+@@ -2043,6 +2394,23 @@
+ byId('disconnectRadio')?.addEventListener('click', disconnectCurrentRadio);
+ byId('openAndroidBluetoothSettings')?.addEventListener('click', openAndroidBluetoothSettings);
+ byId('radioConnectMode')?.addEventListener('change', event => setRadioConnectMode(event.target.value));
++byId('closeLanPairModal')?.addEventListener('click', closeLanPairing);
++byId('cancelLanPair')?.addEventListener('click', closeLanPairing);
++byId('createLanInvite')?.addEventListener('click', createLanInvite);
++byId('applyLanCode')?.addEventListener('click', applyLanCode);
++byId('copyLanOutgoing')?.addEventListener('click', copyLanCode);
++byId('disconnectLan')?.addEventListener('click', disconnectLan);
++byId('lanPairHelp')?.addEventListener('click', () => openContextHelp('mesh-messenger.network.lan'));
++byId('lanLocalName')?.addEventListener('change', persistLanName);
++byId('closeInternetRelayModal')?.addEventListener('click', closeInternetRelay);
++byId('cancelInternetRelay')?.addEventListener('click', closeInternetRelay);
++byId('createInternetInvite')?.addEventListener('click', createInternetInvite);
++byId('applyInternetInvite')?.addEventListener('click', applyInternetInvite);
++byId('copyInternetOutgoing')?.addEventListener('click', copyInternetCode);
++byId('disconnectInternetRelay')?.addEventListener('click', disconnectInternetRelay);
++byId('internetRelayHelp')?.addEventListener('click', () => openContextHelp('mesh-messenger.network.internet'));
+ byId('openBluetoothHelp')?.addEventListener('click', () => openContextHelp('mesh-messenger.network.bluetooth'));
+ byId('openContactModal')?.addEventListener('click', openContactModal);
+ byId('closeContactModal')?.addEventListener('click', closeContactModal);
+@@ -2058,6 +2426,8 @@
+ byId('errorHelp')?.addEventListener('click', () => {
+   if (lastRuntimeHelpTopic) openContextHelp(lastRuntimeHelpTopic);
+ });
++lanPairModal?.addEventListener('click', event => { if (event.target === lanPairModal) closeLanPairing(); });
++internetRelayModal?.addEventListener('click', event => { if (event.target === internetRelayModal) closeInternetRelay(); });
+ byId('contactModal')?.addEventListener('click', event => { if (event.target === byId('contactModal')) closeContactModal(); });
+ filePicker.addEventListener('change', async () => {
+   const file = filePicker.files?.[0];
+@@ -2081,6 +2451,8 @@
+ configureAndroidBridge();
+ bindPhoneApiSession();
+ refreshVoiceSupport();
++if (lanLocalName) lanLocalName.value = appDisplayName;
++if (internetRelayUrl) internetRelayUrl.value = internetRelayUrlValue;
+ 
+ if ('serviceWorker' in navigator && (location.protocol === 'http:' || location.protocol === 'https:')) {
+   navigator.serviceWorker.register('./sw.js').catch(() => {});
