@@ -1,0 +1,81 @@
+name: Mesh map diagnose v3
+
+on:
+  push:
+    branches: [ci/mesh-messenger-v1.5-apk]
+    paths:
+      - ".github/workflows/mesh-map-diagnose-v3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose-map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/mesh-messenger-v1.5-apk
+      - name: Download and inspect exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _mapdiag
+          mkdir -p _mapdiag/dropbox _mapdiag/unpacked mesh-messenger-ci
+          BUILD_WF=".github/workflows/mesh-messenger-v1.5-apk.yml"
+          SOURCE_SHA256="$(sed -n 's/^  SOURCE_SHA256: //p' "$BUILD_WF" | head -n1)"
+          DROPBOX_FOLDER_URL="$(sed -n 's/^  DROPBOX_FOLDER_URL: //p' "$BUILD_WF" | head -n1)"
+          test -n "$SOURCE_SHA256"
+          test -n "$DROPBOX_FOLDER_URL"
+          curl -L --fail --retry 3 --retry-delay 2 "$DROPBOX_FOLDER_URL" -o _mapdiag/dropbox-folder.zip
+          python3 - <<'PY'
+          import pathlib, shutil, zipfile
+          src=pathlib.Path("_mapdiag/dropbox-folder.zip")
+          out=pathlib.Path("_mapdiag/dropbox")
+          with zipfile.ZipFile(src) as z:
+              for info in z.infolist():
+                  raw=info.filename.replace("\\","/").lstrip("/")
+                  parts=[p for p in raw.split("/") if p not in ("",".","..")]
+                  if not parts: continue
+                  dst=out.joinpath(*parts)
+                  if info.is_dir():
+                      dst.mkdir(parents=True,exist_ok=True)
+                  else:
+                      dst.parent.mkdir(parents=True,exist_ok=True)
+                      with z.open(info) as a, dst.open("wb") as b:
+                          shutil.copyfileobj(a,b)
+          PY
+          SOURCE_ZIP="$(find _mapdiag/dropbox -type f -name 'SOURCE_CURRENT_v1.5.5.zip' -print -quit)"
+          test -n "$SOURCE_ZIP"
+          echo "$SOURCE_SHA256  $SOURCE_ZIP" | sha256sum -c -
+          unzip -q "$SOURCE_ZIP" -d _mapdiag/unpacked
+          REPORT=mesh-messenger-ci/MAP_DIAGNOSIS_v1.5.5.txt
+          {
+            echo "Mesh Messenger v1.5.5 map diagnosis"
+            date -u +%FT%TZ
+            echo "=== FILES ==="
+            find _mapdiag/unpacked -type f \( -iname '*map*' -o -iname '*tile*' -o -iname '*leaflet*' -o -iname 'index.html' -o -iname 'app.js' -o -iname 'styles.css' -o -name 'AndroidManifest.xml' \) | sort
+            echo "=== MATCHES ==="
+            grep -RniE --exclude='*.map' --exclude='*.min.js' --exclude-dir=node_modules 'leaflet|openstreetmap|tileLayer|tile.openstreetmap|maplibre|mapbox|L\.map|L\.tileLayer|initMap|map-container|mapContainer|WebGL|offline|waypoint|track|position' _mapdiag/unpacked 2>/dev/null | head -n 1600 || true
+            echo "=== MAP JS CONTEXT ==="
+            grep -RniE --exclude='*.map' --exclude='*.min.js' --exclude-dir=node_modules 'leaflet|openstreetmap|tileLayer|maplibre|mapbox|L\.map|L\.tileLayer|initMap|map-container|mapContainer' _mapdiag/unpacked 2>/dev/null | head -n 100 | cut -d: -f1,2 | while IFS=: read -r f n; do
+              [ -f "$f" ] || continue
+              s=$((n>35?n-35:1)); e=$((n+120))
+              echo "--- $f:$n"
+              sed -n "${s},${e}p" "$f"
+            done
+            echo "=== MANIFEST ==="
+            find _mapdiag/unpacked -type f -name AndroidManifest.xml -print -exec sed -n '1,260p' {} \;
+          } > "$REPORT"
+      - name: Commit report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mesh-messenger-ci/MAP_DIAGNOSIS_v1.5.5.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore(mesh): capture map diagnosis v1.5.5"
+          git push origin HEAD:ci/mesh-messenger-v1.5-apk
