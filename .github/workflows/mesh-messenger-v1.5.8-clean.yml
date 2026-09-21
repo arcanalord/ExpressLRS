@@ -121,8 +121,8 @@ jobs:
           python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
           python3 mesh-messenger-ci/release_source_audit.py "$ROOT"
           grep -q "onGeolocationPermissionsShowPrompt" "$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
-          grep -q "versionName = \\"$VERSION_NAME\\"" "$ANDROID_DIR/app/build.gradle.kts"
-          grep -q "versionCode = $VERSION_CODE" "$ANDROID_DIR/app/build.gradle.kts"
+          grep -Fq "versionName = \"$VERSION_NAME\"" "$ANDROID_DIR/app/build.gradle.kts"
+          grep -Fq "versionCode = $VERSION_CODE" "$ANDROID_DIR/app/build.gradle.kts"
       - name: Run deterministic regression tests
         shell: bash
         run: |
@@ -156,8 +156,8 @@ jobs:
           aapt dump badging "$APK" | tee _mesh158/out/aapt-badging.txt
           grep -q "versionCode='$VERSION_CODE'" _mesh158/out/aapt-badging.txt
           grep -q "versionName='$VERSION_NAME'" _mesh158/out/aapt-badging.txt
-          cp "$APK" "_mesh158/out/MeshMessenger-v\${VERSION_NAME}-clean-debug.apk"
-          sha256sum "_mesh158/out/MeshMessenger-v\${VERSION_NAME}-clean-debug.apk" > _mesh158/out/APK_SHA256.txt
+          cp "$APK" "_mesh158/out/MeshMessenger-v${VERSION_NAME}-clean-debug.apk"
+          sha256sum "_mesh158/out/MeshMessenger-v${VERSION_NAME}-clean-debug.apk" > _mesh158/out/APK_SHA256.txt
           python3 - <<'PY'
           import os,pathlib,zipfile
           root=pathlib.Path(os.environ["ROOT"])
@@ -171,7 +171,7 @@ jobs:
                       if any(x in "/"+rel for x in skip): continue
                       z.write(p,pathlib.Path(f"mesh-messenger-v{ver}-work")/rel)
           PY
-          sha256sum "_mesh158/out/SOURCE_CURRENT_v\${VERSION_NAME}.zip" > _mesh158/out/SOURCE_SHA256.txt
+          sha256sum "_mesh158/out/SOURCE_CURRENT_v${VERSION_NAME}.zip" > _mesh158/out/SOURCE_SHA256.txt
           {
             echo "version=$VERSION_NAME"
             echo "version_code=$VERSION_CODE"
