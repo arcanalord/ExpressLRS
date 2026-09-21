@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d10" />
+  <meta name="description" content="Mesh Messenger — offline-first multi-transport messenger prototype" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./src/styles.css" />
+  <title>Mesh Messenger Prototype</title>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside class="desktop-rail" aria-label="Основная навигация">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true">M</div>
+        <div class="brand-copy">
+          <strong>Mesh Messenger</strong>
+          <span>local QA runtime</span>
+        </div>
+        <button id="helpTriggerDesktop" class="icon-button help-trigger" type="button" aria-label="Help">?</button>
+      </div>
+      <nav class="rail-nav" data-nav>
+        <button class="nav-item is-active" data-view="chats" type="button"><span>Чаты</span><small>3</small></button>
+        <button class="nav-item" data-view="map" type="button"><span>Карта</span><small>7</small></button>
+        <button class="nav-item" data-view="network" type="button"><span>Связь</span><small>●</small></button>
+        <button class="nav-item" data-view="settings" type="button"><span>Настройки</span><small>›</small></button>
+      </nav>
+      <div class="rail-footer">
+        <div class="compact-status"><span class="status-dot ok"></span><span>Mesh активен</span></div>
+        <button id="themeToggleDesktop" class="quiet-button" type="button">Сменить тему</button>
+      </div>
+    </aside>
+
+    <main class="main-stage">
+      <header class="mobile-topbar">
+        <div>
+          <strong>Mesh Messenger</strong>
+          <span id="mobileSubstatus">Сеть активна</span>
+        </div>
+        <div class="mobile-topbar-actions"><button id="helpTriggerMobile" class="icon-button help-trigger" type="button" aria-label="Help">?</button><button id="themeToggleMobile" class="icon-button" type="button" aria-label="Сменить тему">◐</button></div>
+      </header>
+
+      <section class="view is-active" data-screen="chats" aria-labelledby="chatsTitle">
+        <div class="screen-header chats-screen-header">
+          <div>
+            <p class="eyebrow">Offline-first</p>
+            <h1 id="chatsTitle">Чаты</h1>
+            <p>Сообщения не пропадают без интернета: они ждут доступный маршрут.</p>
+          </div>
+          <button class="primary-button" id="newContactButton" type="button" aria-label="Добавить">＋</button>
+        </div>
+
+        <div class="status-card is-collapsed" id="globalStatusCard">
+          <div class="status-card-main"><span class="status-dot ok"></span><strong id="networkStateLabel">Сеть активна</strong><span id="nodeCount">7 узлов</span></div>
+          <p id="routeSummary">Meshtastic · хороший сигнал · очередь 0</p>
+          <div class="status-actions"><button class="text-button" data-open-network type="button">Почему маршрут →</button><button class="text-button" id="openDeliveryQueue" type="button">Доставка →</button><button class="text-button" id="toggleStatusDetails" aria-expanded="false" type="button">Подробнее ▾</button></div>
+        </div>
+        <div class="system-banner is-ready" id="systemBanner" role="status" aria-live="polite"><strong id="systemBannerTitle">READY · Meshtastic работает</strong><span id="systemBannerDetail">Синхронизация завершена</span></div>
+
+        <label class="search-field">
+          <span aria-hidden="true">⌕</span>
+          <input id="chatSearch" type="search" placeholder="Поиск по чатам и узлам" aria-label="Поиск по чатам и узлам" />
+        </label>
+
+        <div class="chat-layout">
+          <div class="conversation-list" id="conversationList" aria-label="Список чатов"></div>
+          <article class="conversation-panel" id="conversationPanel" aria-label="Переписка">
+            <div class="conversation-header">
+              <button class="icon-button conversation-back-mobile" id="conversationBackMobile" type="button" aria-label="К списку чатов">‹</button>
+              <div class="conversation-heading">
+                <strong id="conversationTitle">Группа Альфа</strong>
+                <span><span class="status-dot ok"></span> Mesh · 5 участников · 2 hops</span>
+              </div>
+              <div class="conversation-header-actions"><button class="icon-button" id="openChatSearch" type="button" aria-label="Поиск в чате">⌕</button><button class="secondary-button" id="pttShortcut" type="button">PTT</button></div>
+            </div>
+            <div class="message-search-bar" id="messageSearchBar" hidden><input id="messageSearchInput" type="search" placeholder="Поиск в переписке"/><span id="messageSearchCount">Введите текст</span><button class="icon-button" id="closeChatSearch" type="button">×</button></div><div class="transport-strip"><span id="conversationRoute">Связь через Meshtastic</span><span id="queueBadge">очередь 0</span></div>
+            <div class="message-stream" id="messageStream" aria-live="polite"></div>
+            <div class="quick-phrases" aria-label="Быстрые фразы">
+              <button type="button" data-phrase="Я в порядке">Я в порядке</button>
+              <button type="button" data-phrase="Нужна помощь">Нужна помощь</button>
+              <button type="button" data-phrase="Повторите сообщение">Повторите</button>
+              <button type="button" data-phrase="Принял">Принял</button>
+              <button type="button" data-phrase="Иду к точке">Иду к точке</button>
+            </div>
+            <form class="composer" id="composerForm">
+              <button id="attachFile" class="icon-button" type="button" aria-label="Прикрепить небольшой файл">📎</button>
+              <input id="fileInput" type="file" hidden />
+              <input id="messageInput" aria-label="Сообщение" autocomplete="off" placeholder="Сообщение…" />
+              <button id="composerVoice" class="quiet-button composer-voice" type="button" aria-label="Голосовое сообщение">Голос</button>
+              <button type="submit" class="primary-button composer-send">Отправить</button>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" data-screen="map" aria-labelledby="mapTitle">
+        <div class="screen-header">
+          <div><p class="eyebrow">NodeDB positions</p><h1 id="mapTitle">Карта</h1><p>Точки строятся из POSITION/NodeDB. Offline tiles остаются отдельным адаптером.</p></div>
+          <div class="header-actions"><button class="secondary-button" id="sharePositionButton" type="button">Отправить позицию</button><button class="quiet-button" id="centerMapButton" type="button">Все точки</button></div>
+        </div>
+        <div class="map-layout">
+          <div class="map-canvas" id="mapCanvas" role="img" aria-label="Локальная карта узлов Meshtastic">
+            <div class="map-grid"></div>
+            <svg id="mapTrackLayer" class="map-track-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <div id="mapMarkers"></div>
+            <div class="map-overlay"><strong id="mapOverlayTitle">Позиции NodeDB</strong><span id="mapOverlayMeta">ожидаем координаты…</span></div>
+          </div>
+          <aside class="context-card" id="mapContextCard">
+            <p class="eyebrow">Выбранная точка</p>
+            <h2 id="mapSelectedName">Нет точки</h2>
+            <div class="metric-row"><span>Координаты</span><strong id="mapSelectedCoords">—</strong></div>
+            <div class="metric-row"><span>Высота</span><strong id="mapSelectedAltitude">—</strong></div>
+            <div class="metric-row"><span>Маршрут</span><strong id="mapSelectedRoute">—</strong></div>
+            <div class="metric-row"><span>Трек</span><strong id="mapTrackMeta">—</strong></div>
+            <button class="primary-button" id="mapOpenChatButton" type="button" disabled>Открыть чат</button>
+            <div class="map-action-row"><button class="secondary-button" id="mapCreateWaypointButton" type="button">Создать точку</button><button class="quiet-button" id="mapClearTrackButton" type="button">Очистить трек</button></div>
+            <button class="secondary-button" id="mapPttButton" type="button">Говорить</button>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" data-screen="network" aria-labelledby="networkTitle">
+        <div class="screen-header network-screen-header">
+          <div><p class="eyebrow">Transport Manager</p><h1 id="networkTitle">Связь</h1><p>Приложение выбирает маршрут автоматически; инженерный режим показывает причину.</p></div>
+          <div class="network-header-actions">
+            <label class="toggle-row compact"><span>Инженерный режим</span><input id="engineeringToggle" type="checkbox" /></label>
+            <button class="text-button network-details-toggle" id="networkDetailsToggle" type="button" aria-expanded="false">Детали</button>
+          </div>
+        </div>
+
+        <div class="network-mobile-health" id="networkMobileHealth">
+          <div class="network-mobile-health-copy"><span class="status-dot" id="networkHealthDot"></span><div><strong id="networkHealthLabel">Сеть: проверяем</strong><small id="networkHealthMeta">Маршрут и очередь обновляются автоматически</small></div></div>
+          <button class="text-button" id="networkHealthDetails" type="button">Детали ›</button>
+        </div>
+
+        <div class="network-grid">
+          <div class="transport-stack">
+            <div class="radio-link-card" id="radioLinkCard">
+              <div class="radio-link-head">
+                <div><span class="eyebrow">Meshtastic Radio</span><strong id="radioConnectionState">Симулятор подключён</strong><small id="radioRuntimeHint">Linux QA использует тот же transport contract без физического радио.</small></div>
+                <span class="runtime-badge" id="radioAdapterName">MOCK</span>
+              </div>
+              <div class="radio-actions">
+                <button class="secondary-button" id="connectBleRadio" type="button">Подключить BLE</button>
+                <button class="secondary-button" id="connectUsbRadio" type="button">Подключить USB</button>
+                <button class="secondary-button" id="connectDemoRadio" type="button">Demo</button>
+                <button class="quiet-button" id="exportPhoneApiCapture" type="button">Экспорт replay</button>
+                <button class="quiet-button" id="disconnectRadio" type="button">Отключить</button>
+              </div>
+              <div class="radio-evidence">
+                <span id="serialCapability">Web Serial: проверяем…</span><span id="phoneApiCapability">PhoneAPI: не синхронизирован</span>
+                <span>PROTO framing: 0x94 0xC3 · max 512 B</span>
+              </div>
+            </div>
+            <div class="mobile-section-label">Каналы</div><div id="transportCards"></div>
+          </div>
+          <aside class="route-inspector">
+            <div class="route-hero">
+              <span class="eyebrow">Активный маршрут</span>
+              <strong id="activeRouteName">Meshtastic</strong>
+              <p id="activeRouteReason">Надёжный доступный канал для короткого текста.</p>
+            </div>
+            <div class="route-options">
+              <label><span>Тип сообщения</span>
+                <select id="messageTypeSelect">
+                  <option value="text">Текст</option>
+                  <option value="position">Позиция</option>
+                  <option value="voice">Голос</option>
+                  <option value="file">Файл</option>
+                </select>
+              </label>
+              <div class="metric-row"><span>Кодек / режим</span><strong id="routeCodec">packet</strong></div>
+              <div class="metric-row"><span>Оценка задержки</span><strong id="routeLatency">~800 ms</strong></div>
+              <div class="metric-row"><span>Очередь</span><strong id="routeQueue">0</strong></div>
+            </div>
+            <div class="phoneapi-snapshot" id="phoneApiSnapshot">
+              <div class="snapshot-head"><div><span class="eyebrow">PhoneAPI snapshot</span><h2>Устройство и NodeDB</h2></div><span class="runtime-badge">DECODED</span></div>
+              <div class="metric-row"><span>Локальный узел</span><strong id="localNodeValue">—</strong></div>
+              <div class="metric-row"><span>Firmware</span><strong id="firmwareValue">—</strong></div>
+              <div class="metric-row"><span>LoRa</span><strong id="loraConfigValue">—</strong></div>
+              <div class="metric-row"><span>NodeDB</span><strong id="nodeDbValue">0</strong></div>
+              <div class="metric-row"><span>Каналы</span><strong id="channelCountValue">0</strong></div>
+              <div class="channel-snapshot-list" id="channelSnapshotList"><div class="node-empty">Каналы ещё синхронизируются…</div></div>
+              <div class="node-snapshot-list" id="nodeSnapshotList"><div class="node-empty">NodeDB ещё синхронизируется…</div></div>
+            </div>
+            <div class="engineering-block" id="engineeringBlock" hidden>
+              <h2>Инженерные данные</h2>
+              <div class="metric-row"><span>RSSI</span><strong>−91 dBm</strong></div>
+              <div class="metric-row"><span>SNR</span><strong>8.6 dB</strong></div>
+              <div class="metric-row"><span>Hops</span><strong>2</strong></div>
+              <div class="metric-row"><span>MTU</span><strong>auto</strong></div>
+              <div class="metric-row"><span>Retries</span><strong>0</strong></div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="relay-card">
+          <div><strong>Умная ретрансляция</strong><span>Ретранслировать только при зарядке или батарее выше 60%</span></div>
+          <label class="switch"><input id="relaySwitch" type="checkbox" checked /><span></span></label>
+        </div>
+      </section>
+
+      <section class="view" data-screen="settings" aria-labelledby="settingsTitle">
+        <div class="screen-header"><div><p class="eyebrow">Локальные параметры</p><h1 id="settingsTitle">Настройки</h1><p>То, что не должно мешать основному сценарию, вынесено сюда.</p></div></div>
+        <div class="settings-list">
+          <button type="button" data-help-topic="mesh-messenger.settings.security"><span><strong>Безопасность</strong><small>Identity & Trust · план развития</small></span><b>›</b></button>
+          <button type="button" data-help-topic="mesh-messenger.settings.offline-maps"><span><strong>Офлайн-карты</strong><small>Менеджер пакетов · планируется</small></span><b>›</b></button>
+          <button type="button" data-help-topic="mesh-messenger.settings.voice"><span><strong>Голос</strong><small>Сообщения → PTT на быстром канале</small></span><b>›</b></button>
+          <button type="button" data-open-network><span><strong>Транспорт</strong><small>Meshtastic BLE / USB · состояние связи</small></span><b>›</b></button>
+          <button type="button" data-help-topic="mesh-messenger.settings.storage"><span><strong>Хранение</strong><small>Локальная очередь и история</small></span><b>›</b></button>
+        </div>
+      </section>
+
+      <section class="modal-layer" id="addMenuModal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="addMenuTitle">
+          <div class="modal-header"><div><p class="eyebrow">Добавить</p><h2 id="addMenuTitle">Быстрое действие</h2></div><button class="icon-button" id="closeAddMenu" aria-label="Закрыть" type="button">×</button></div>
+          <div class="add-menu-grid">
+            <button type="button" data-add-contact><strong>QR-контакт</strong><small>SharedContact · /v/#</small></button>
+            <button type="button" data-add-channel-qr><strong>QR-канал</strong><small>ChannelSet · /e/#</small></button>
+            <button type="button" data-scan-qr><strong>Сканировать QR</strong><small>Контакт или ChannelSet</small></button>
+            <button type="button" data-add-position><strong>Позиция</strong><small>Отправить POSITION_APP</small></button>
+            <button type="button" data-add-file><strong>Файл</strong><small>До 32 KB через личный чат</small></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="modal-layer" id="importQrModal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="importQrTitle">
+          <div class="modal-header"><div><p class="eyebrow">Meshtastic QR</p><h2 id="importQrTitle">Импорт</h2></div></div>
+          <div class="pending-card"><strong>Проверка перед импортом</strong><span id="importQrDetail">—</span></div>
+          <div class="modal-actions"><button class="secondary-button" id="cancelQrImport" type="button">Отмена</button><button class="primary-button" id="confirmQrImport" type="button">Добавить</button></div>
+        </div>
+      </section>
+
+      <section class="modal-layer" id="bleDeviceModal" aria-hidden="true">
+        <div class="modal-card ble-picker-card" role="dialog" aria-modal="true" aria-labelledby="bleDeviceTitle">
+          <div class="modal-header"><div><p class="eyebrow">Bluetooth</p><h2 id="bleDeviceTitle">Подключить устройство</h2></div><button class="icon-button" id="closeBleDeviceModal" aria-label="Закрыть" type="button">×</button></div>
+          <div class="pending-card ble-status-card" id="blePermissionCard"><strong id="blePermissionTitle">Bluetooth</strong><span id="blePermissionText">Проверяем состояние…</span><div class="error-help-inline" id="bleErrorHelp" hidden><span id="bleErrorHelpText"></span><button class="text-button" id="bleErrorHelpButton" type="button"></button></div></div>
+          <div class="ble-device-list" id="bleDeviceList"><div class="node-empty">Нажмите «Сканировать»</div></div>
+          <div class="modal-actions ble-picker-actions"><button class="secondary-button" id="enableBluetoothButton" type="button" hidden>Включить Bluetooth</button><button class="primary-button" id="rescanBleDevices" type="button">Сканировать рядом</button><button class="quiet-button" id="cancelBleDevices" type="button">Отмена</button></div>
+        </div>
+      </section>
+
+      <section class="modal-layer" id="waypointModal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="waypointTitle">
+          <div class="modal-header"><div><p class="eyebrow">Meshtastic waypoint</p><h2 id="waypointTitle">Новая точка</h2></div></div>
+          <label class="field-stack"><span>Название</span><input id="waypointName" maxlength="30" placeholder="Точка" /></label>
+          <label class="field-stack"><span>Описание</span><input id="waypointDescription" maxlength="100" placeholder="Необязательно" /></label>
+          <label class="field-stack"><span>Срок</span><select id="waypointExpire"><option value="3600">1 час</option><option value="21600" selected>6 часов</option><option value="86400">24 часа</option><option value="0">Без срока</option></select></label>
+          <p class="modal-copy">Точка будет отправлена в основной mesh-канал через WAYPOINT_APP.</p>
+          <div class="modal-actions"><button class="secondary-button" id="cancelWaypoint" type="button">Отмена</button><button class="primary-button" id="confirmWaypoint" type="button">Отправить точку</button></div>
+        </div>
+      </section>
+
+      <section class="modal-layer" id="deliveryModal" aria-hidden="true">
+        <div class="modal-card delivery-modal-card" role="dialog" aria-modal="true" aria-labelledby="deliveryModalTitle">
+          <div class="modal-header"><div><p class="eyebrow">Meshtastic queue</p><h2 id="deliveryModalTitle">Доставка</h2></div><button class="icon-button" id="closeDeliveryModal" aria-label="Закрыть" type="button">×</button></div>
+          <div class="delivery-summary" id="deliverySummary">Очередь пуста</div>
+          <div class="delivery-list" id="deliveryList"></div>
+        </div>
+      </section>
+
+      <section class="modal-layer" id="contactModal" aria-hidden="true">
+        <div class="modal-card qr-share-card" role="dialog" aria-modal="true" aria-labelledby="contactModalTitle">
+          <div class="modal-header"><div><p class="eyebrow">Meshtastic share</p><h2 id="contactModalTitle">QR</h2></div><button class="icon-button" id="closeContactModal" aria-label="Закрыть" type="button">×</button></div>
+          <div class="segmented" id="qrModeTabs"><button class="is-active" data-qr-mode="contact" type="button">Мой контакт</button><button data-qr-mode="channel" type="button">Канал</button></div>
+          <div class="qr-box qr-live"><img id="shareQrImage" alt="QR Meshtastic"/><small id="shareQrCaption">SharedContact · совместимо с Meshtastic</small></div>
+          <code class="share-url" id="shareQrUrl">—</code>
+          <div class="pending-card"><strong id="shareQrTitle">Мой контакт</strong><span id="shareQrDetail">После сканирования контакт подтверждается на принимающем устройстве.</span></div>
+          <button class="primary-button" id="copyShareUrl" type="button">Копировать ссылку</button>
+        </div>
+      </section>
+
+      <section class="modal-layer help-layer" id="quickHelpModal" aria-hidden="true">
+        <div class="modal-card help-quick-card" role="dialog" aria-modal="true" aria-labelledby="quickHelpTitle">
+          <div class="modal-header"><div><p class="eyebrow" id="quickHelpEyebrow">QUICK HELP</p><h2 id="quickHelpTitle">Справка Mesh Messenger</h2></div><button class="icon-button" id="closeQuickHelp" aria-label="Закрыть" type="button">×</button></div>
+          <p class="help-summary" id="quickHelpSummary">Подключите Meshtastic через «Связь → Подключить BLE», затем выберите узел. В режиме MOCK физическое радио не используется.</p>
+          <ol class="help-steps" id="quickHelpSteps"><li>Откройте вкладку «Связь».</li><li>Нажмите «Подключить BLE» и разрешите Bluetooth.</li><li>Включите Bluetooth и выберите Meshtastic-узел.</li></ol>
+          <div class="modal-actions"><button class="secondary-button" id="openFullHelp" type="button"></button></div>
+        </div>
+      </section>
+
+      <section class="modal-layer help-layer" id="fullHelpModal" aria-hidden="true">
+        <div class="modal-card help-full-card" role="dialog" aria-modal="true" aria-labelledby="fullHelpTitle">
+          <div class="modal-header help-full-header"><div><p class="eyebrow" id="fullHelpEyebrow"></p><h2 id="fullHelpTitle"></h2><small id="fullHelpContext"></small></div><button class="icon-button" id="closeFullHelp" aria-label="Close" type="button">x</button></div>
+          <label class="search-field help-search"><span aria-hidden="true">&#8981;</span><input id="helpSearchInput" type="search" aria-label="Help search" /></label>
+          <div class="help-full-layout">
+            <nav class="help-topic-list" id="helpTopicList" aria-label="Help topics"></nav>
+            <article class="help-article" id="helpArticle">
+              <p class="eyebrow" id="helpArticleCategory">Быстрый старт</p>
+              <h3 id="helpArticleTitle">Справка Mesh Messenger</h3>
+              <p class="help-summary" id="helpArticleSummary">Чаты, карта, связь и офлайн-доставка в одном приложении.</p>
+              <div class="help-body" id="helpArticleBody">На Android начните со вкладки «Связь»: разрешите Bluetooth, включите его и выберите Meshtastic-узел. MOCK — это симулятор и не подтверждает физическую радиосвязь.</div>
+              <ol class="help-steps" id="helpArticleSteps"></ol>
+              <div class="help-article-actions"><button class="secondary-button" id="copySafeDiagnostics" type="button"></button></div>
+              <code class="help-topic-id" id="helpArticleId"></code>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="ptt-layer" id="pttLayer" aria-hidden="true">
+        <div class="ptt-card">
+          <button class="icon-button ptt-close" id="closePtt" type="button" aria-label="Закрыть голосовой режим">×</button>
+          <p class="eyebrow">Голосовой канал</p>
+          <h2>Группа Альфа</h2>
+          <div class="ptt-route"><span class="status-dot ok"></span><strong id="pttRouteLabel">Wi‑Fi Direct · Opus</strong><small id="pttFallbackLabel">Резерв: Meshtastic → голосовое сообщение</small></div>
+          <button class="ptt-main" id="pttMain" type="button"><span>Удерживайте</span><strong>ГОВОРИТЬ</strong></button>
+          <div class="ptt-state" id="pttState">Готов к передаче</div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="mobile-bottom-nav" aria-label="Мобильная навигация" data-nav>
+      <button class="is-active" data-view="chats" type="button"><span>◉</span><small>Чаты</small></button>
+      <button data-view="map" type="button"><span>⌖</span><small>Карта</small></button>
+      <button data-view="network" type="button"><span>⌁</span><small>Связь</small></button>
+      <button data-view="settings" type="button"><span>⚙</span><small>Настройки</small></button>
+    </nav>
+  </div>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
