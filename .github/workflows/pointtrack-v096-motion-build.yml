@@ -1,0 +1,169 @@
+name: PointTrack Android v0.9.6 motion fix
+
+on:
+  push:
+    branches: [pointtrack-android-v0.9.6-motion]
+    paths:
+      - 'pointtrack_ci/v095_parts/**'
+      - '.github/workflows/pointtrack-v096-motion-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: PointTrack v0.9.6 visual motion Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'platform-tools'
+
+      - name: Restore exact clean v0.9.5 snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat pointtrack_ci/v095_parts/part.* > "$RUNNER_TEMP/PointTrack_v0.9.5-dev_android_source.zip"
+          echo "19d22cda0c0dbdd49a0dcf6233cc9f1dafdca72ea89370e6d29e59b775df7259  $RUNNER_TEMP/PointTrack_v0.9.5-dev_android_source.zip" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/pointtrack"
+          unzip -q "$RUNNER_TEMP/PointTrack_v0.9.5-dev_android_source.zip" -d "$RUNNER_TEMP/pointtrack"
+          test -f "$RUNNER_TEMP/pointtrack/settings.gradle.kts"
+          test "$(cat "$RUNNER_TEMP/pointtrack/VERSION")" = "0.9.5-dev"
+          echo "PT=$RUNNER_TEMP/pointtrack" >> "$GITHUB_ENV"
+
+      - name: Apply v0.9.6 visual camera-motion fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path(__import__("os").environ["PT"])
+          runtime = root / "androidApp/src/main/java/com/fpvclub/pointtrack/TrackerRuntime.kt"
+          s = runtime.read_text(encoding="utf-8")
+
+          fields = """    private var frameCounter = 0L
+              private var lastTrackingMode = TrackingMode.NONE
+              private var lastTrackState = TrackState.AIM
+          """.replace("              ", "    ")
+          if fields not in s:
+              raise SystemExit("expected v0.9.5 runtime cadence fields not found")
+          s = s.replace(fields, "", 1)
+
+          reset = """        frameCounter = 0L
+              lastTrackingMode = TrackingMode.NONE
+              lastTrackState = TrackState.AIM
+          """.replace("              ", "        ")
+          if reset not in s:
+              raise SystemExit("expected v0.9.5 runtime reset cadence block not found")
+          s = s.replace(reset, "", 1)
+
+          cadence = """        frameCounter++
+              val stablePatchTrack = trackValid &&
+                  lastTrackingMode == TrackingMode.PATCH &&
+                  (lastTrackState == TrackState.LOCKED || lastTrackState == TrackState.INIT)
+              val skipThisPatchMotionFrame = stablePatchTrack && frameCounter % 2L != 0L
+              val estimateMotion = (trackValid || command is TrackerCommand.Lock) && !skipThisPatchMotionFrame
+          """.replace("              ", "        ")
+          replacement = "        val estimateMotion = trackValid || command is TrackerCommand.Lock\n"
+          if cadence not in s:
+              raise SystemExit("expected v0.9.5 every-other-frame motion block not found")
+          s = s.replace(cadence, replacement, 1)
+
+          updates = """        lastTrackingMode = result.track.trackingMode
+              lastTrackState = result.track.state
+          """.replace("              ", "        ")
+          if updates not in s:
+              raise SystemExit("expected v0.9.5 last-mode update block not found")
+          s = s.replace(updates, "", 1)
+          runtime.write_text(s, encoding="utf-8")
+
+          version = root / "VERSION"
+          version.write_text("0.9.6-dev\n", encoding="utf-8")
+
+          reg = root / "core/src/test/kotlin/com/pointtrack/core/CoreRegression.kt"
+          r = reg.read_text(encoding="utf-8")
+          needle = '    checkThat(mh.confidence > 0.25, "visual motion confidence regression")\n'
+          addition = r'''
+              // Consecutive camera motion must be measured on every accepted frame.
+              // This protects Android LOCK from the old every-other-frame cadence,
+              // where a small phone pan could produce one uncompensated frame.
+              val continuousStabilizer = GlobalTranslationStabilizer(
+                  MotionConfig(searchRadiusPx = 12, coarseStepPx = 3, minAcceptedPatches = 4)
+              )
+              continuousStabilizer.update(textureFrame(192, 144, ts = 0L))
+              val cm1 = continuousStabilizer.update(textureFrame(192, 144, dx = 5, dy = -2, ts = 33_333_333L))
+              val cm2 = continuousStabilizer.update(textureFrame(192, 144, dx = 10, dy = -4, ts = 66_666_666L))
+              checkThat(abs(cm1.previousToCurrent.tx - 5.0) <= 1.0 && abs(cm1.previousToCurrent.ty + 2.0) <= 1.0,
+                  "continuous camera motion frame 1 regression: ${cm1.previousToCurrent}")
+              checkThat(abs(cm2.previousToCurrent.tx - 5.0) <= 1.0 && abs(cm2.previousToCurrent.ty + 2.0) <= 1.0,
+                  "continuous camera motion frame 2 regression: ${cm2.previousToCurrent}")
+              checkThat(abs(cm2.currentToStabilized.tx + 10.0) <= 2.0 && abs(cm2.currentToStabilized.ty - 4.0) <= 2.0,
+                  "continuous camera cumulative transform regression: ${cm2.currentToStabilized}")
+          '''
+          if needle not in r:
+              raise SystemExit("visual-motion regression insertion point not found")
+          r = r.replace(needle, needle + addition, 1)
+          reg.write_text(r, encoding="utf-8")
+          PY
+
+          grep -R "skipThisPatchMotionFrame" "$PT" && { echo "old motion skip remains"; exit 1; } || true
+          grep -F "val estimateMotion = trackValid || command is TrackerCommand.Lock"             "$PT/androidApp/src/main/java/com/fpvclub/pointtrack/TrackerRuntime.kt"
+          grep -F "continuous camera motion frame 2 regression"             "$PT/core/src/test/kotlin/com/pointtrack/core/CoreRegression.kt"
+          test "$(cat "$PT/VERSION")" = "0.9.6-dev"
+
+      - name: Core regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PT"
+          gradle --no-daemon :core:coreRegression --stacktrace
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PT"
+          gradle --no-daemon :androidApp:assembleDebug --stacktrace
+
+      - name: Package source and APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/out/android" "$GITHUB_WORKSPACE/out/source"
+          SRC="$PT/androidApp/build/outputs/apk/debug/androidApp-debug.apk"
+          test -s "$SRC"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$SRC" | grep "package: name='com.fpvclub.pointtrack'"
+          cp "$SRC" "$GITHUB_WORKSPACE/out/android/PointTrack_v0.9.6-dev-motion-debug.apk"
+          (
+            cd "$PT"
+            zip -qr "$GITHUB_WORKSPACE/out/source/PointTrack_v0.9.6-dev_android_source.zip" .               -x '*/build/*' '.gradle/*' '*/.gradle/*'
+          )
+          sha256sum "$GITHUB_WORKSPACE"/out/android/* "$GITHUB_WORKSPACE"/out/source/* | tee "$GITHUB_WORKSPACE/out/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: PointTrack-v0.9.6-dev-motion
+          path: |
+            out/android/*
+            out/source/*
+            out/SHA256SUMS.txt
+          retention-days: 14
