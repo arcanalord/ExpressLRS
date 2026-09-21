@@ -107,10 +107,13 @@ button { color: inherit; }
 .composer input:focus { border-color: var(--accent); }
 .map-layout { display: grid; grid-template-columns: minmax(0,1.7fr) minmax(280px,.6fr); gap: 16px; }
 .map-canvas { position: relative; min-height: 680px; border: 1px solid var(--border); border-radius: var(--r-feature); overflow: hidden; background: linear-gradient(135deg, color-mix(in srgb,var(--accent) 8%,var(--surface)), var(--surface-2)); }
-.map-grid { position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:52px 52px;opacity:.58;transform:rotate(-8deg) scale(1.12); }
+.map-grid { position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:52px 52px;opacity:.58;transform:rotate(-8deg) scale(1.12);z-index:0; }
+.map-tile-layer{position:absolute;inset:0;overflow:hidden;z-index:1;background:var(--surface-2)}
+.map-tile{position:absolute;display:block;object-fit:fill;max-width:none;user-select:none;pointer-events:none}
+.map-attribution{position:absolute;right:8px;bottom:8px;z-index:5;padding:3px 6px;border-radius:6px;background:color-mix(in srgb,var(--surface) 88%,transparent);color:var(--text-2);font-size:10px;pointer-events:none}
 .map-marker { position:absolute; min-width:44px; min-height:44px; display:grid; place-items:center; border-radius:999px; background:var(--accent); color:white; font-weight:700; border:4px solid color-mix(in srgb,var(--surface) 80%,transparent); }
 .map-marker.peer{background:var(--success)} .map-marker.relay{background:var(--warning)}
-.map-overlay { position:absolute; left:16px; top:16px; display:grid; gap:2px; background:color-mix(in srgb,var(--surface) 92%,transparent); backdrop-filter: blur(10px); padding:12px 14px; border-radius:14px; border:1px solid var(--border); }
+.map-overlay { z-index:6; position:absolute; left:16px; top:16px; display:grid; gap:2px; background:color-mix(in srgb,var(--surface) 92%,transparent); backdrop-filter: blur(10px); padding:12px 14px; border-radius:14px; border:1px solid var(--border); }
 .map-overlay span { color:var(--text-2);font-size:13px; }
 .context-card { padding:18px; align-self:start; }
 .context-card h2, .engineering-block h2 { margin:0 0 14px; font-size:18px; }
@@ -315,7 +318,7 @@ button { color: inherit; }
 
 /* v1.1 map / QR */
 .header-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-#mapMarkers{position:absolute;inset:0}
+#mapMarkers{position:absolute;inset:0;z-index:4}
 .map-marker{appearance:none;border:4px solid color-mix(in srgb,var(--surface) 80%,transparent);cursor:pointer;padding:0;box-shadow:0 8px 24px color-mix(in srgb,var(--text) 14%,transparent);transform:translate(-50%,-50%);transition:transform .16s ease,box-shadow .16s ease}
 .map-marker:hover,.map-marker.is-selected{transform:translate(-50%,-50%) scale(1.08);box-shadow:0 10px 30px color-mix(in srgb,var(--accent) 28%,transparent)}
 .map-marker.self{background:var(--accent)}
@@ -337,7 +340,7 @@ button { color: inherit; }
 .ble-device-list{display:grid;gap:8px;max-height:42vh;overflow:auto;margin:12px 0}.ble-device-list button{display:grid;gap:4px;width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:16px;background:var(--surface-2);color:var(--text);text-align:left;cursor:pointer}.ble-device-list button strong{font-size:15px}.ble-device-list button small{color:var(--text-2);font-size:13px}.ble-device-list button[data-saved="true"]{border-color:var(--accent)}
 
 /* v1.4 track history + waypoints */
-.map-track-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.map-track-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:3}
 .map-track-line{fill:none;stroke:var(--accent);stroke-width:1.1;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round;opacity:.72}
 .map-waypoint{position:absolute;min-width:40px;min-height:40px;border-radius:12px;transform:translate(-50%,-50%) rotate(45deg);border:3px solid color-mix(in srgb,var(--surface) 85%,transparent);background:color-mix(in srgb,var(--warning) 86%,var(--accent));color:white;display:grid;place-items:center;box-shadow:0 8px 24px color-mix(in srgb,var(--text) 14%,transparent);z-index:2}
 .map-waypoint>span{transform:rotate(-45deg);font-size:16px}
