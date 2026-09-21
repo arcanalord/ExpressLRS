@@ -29,6 +29,8 @@ pairs = [
     ("src/core.js", "android-app/app/src/main/assets/www/src/core.js"),
     ("src/help-registry.js", "android-app/app/src/main/assets/www/src/help-registry.js"),
     ("src/styles.css", "android-app/app/src/main/assets/www/src/styles.css"),
+    ("src/navigation-controller.js", "android-app/app/src/main/assets/www/src/navigation-controller.js"),
+    ("src/app-bootstrap.js", "android-app/app/src/main/assets/www/src/app-bootstrap.js"),
 ]
 for a,b in pairs:
     pa,pb=root/a,root/b
