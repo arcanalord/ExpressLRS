@@ -5,7 +5,7 @@ on:
     branches: [pointtrack-android-v0.9.7-acquisition]
     paths:
       - 'pointtrack_ci/v095_parts/**'
-      - 'pointtrack_ci/v097_acquisition.patch'
+      - 'pointtrack_ci/v097_apply.py'
       - '.github/workflows/pointtrack-v097-acquisition-build.yml'
   workflow_dispatch:
 
@@ -62,7 +62,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          patch -p1 -d "$PT" < "$GITHUB_WORKSPACE/pointtrack_ci/v097_acquisition.patch"
+          python3 "$GITHUB_WORKSPACE/pointtrack_ci/v097_apply.py" "$PT"
           test "$(cat "$PT/VERSION")" = "0.9.7-dev"
           grep -F "val evidenceSigmaThreshold: Double = 2.0" "$PT/core/src/main/kotlin/com/pointtrack/core/Config.kt"
           grep -F "val minCenterContrastAbs: Double = 6.0" "$PT/core/src/main/kotlin/com/pointtrack/core/Config.kt"
