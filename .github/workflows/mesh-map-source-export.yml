@@ -1,0 +1,59 @@
+name: Mesh map source export
+
+on:
+  push:
+    branches: [ci/mesh-messenger-v1.5-apk]
+    paths:
+      - ".github/workflows/mesh-map-source-export.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/mesh-messenger-v1.5-apk
+      - name: Export map source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _export mesh-messenger-ci/map-src
+          mkdir -p _export/dropbox mesh-messenger-ci/map-src
+          BUILD_WF=".github/workflows/mesh-messenger-v1.5-apk.yml"
+          DROPBOX_FOLDER_URL="$(sed -n 's/^  DROPBOX_FOLDER_URL: //p' "$BUILD_WF" | head -n1)"
+          curl -L --fail --retry 3 "$DROPBOX_FOLDER_URL" -o _export/folder.zip
+          python3 - <<'PY'
+          import pathlib, zipfile
+          outer=pathlib.Path("_export/folder.zip")
+          with zipfile.ZipFile(outer) as z:
+              source_name=next(n for n in z.namelist() if n.endswith("SOURCE_CURRENT_v1.5.5.zip"))
+              source_bytes=z.read(source_name)
+          source_path=pathlib.Path("_export/source.zip")
+          source_path.write_bytes(source_bytes)
+          wanted={
+            "mesh-messenger-v1.5.5-work/index.html":"index.html",
+            "mesh-messenger-v1.5.5-work/src/app.js":"app.js",
+            "mesh-messenger-v1.5.5-work/src/styles.css":"styles.css",
+            "mesh-messenger-v1.5.5-work/android-app/app/src/main/AndroidManifest.xml":"AndroidManifest.xml",
+            "mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/index.html":"android-index.html",
+            "mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/app.js":"android-app.js",
+            "mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/styles.css":"android-styles.css"
+          }
+          out=pathlib.Path("mesh-messenger-ci/map-src")
+          with zipfile.ZipFile(source_path) as z:
+              for src,dst in wanted.items():
+                  out.joinpath(dst).write_bytes(z.read(src))
+          PY
+      - name: Commit exported sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mesh-messenger-ci/map-src
+          git commit -m "chore(mesh): export v1.5.5 map source files" || exit 0
+          git push origin HEAD:ci/mesh-messenger-v1.5-apk
