@@ -1,0 +1,216 @@
+diff -ruN /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/transports/internet-relay-transport.js /mnt/data/build_alpha1/android-app/app/src/main/assets/www/src/transports/internet-relay-transport.js
+--- /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/transports/internet-relay-transport.js	1970-01-01 00:00:00.000000000 +0000
++++ /mnt/data/build_alpha1/android-app/app/src/main/assets/www/src/transports/internet-relay-transport.js	2026-09-21 21:36:15.000000000 +0000
+@@ -0,0 +1,234 @@
++const textEncoder = new TextEncoder();
++const textDecoder = new TextDecoder();
++
++function randomId(prefix = 'mm') {
++  if (globalThis.crypto?.randomUUID) return prefix + '-' + crypto.randomUUID();
++  return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
++}
++
++function encodePayload(payload) {
++  const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
++  let binary = '';
++  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
++  return btoa(binary);
++}
++
++function decodePayload(value) {
++  const binary = atob(String(value || ''));
++  const out = new Uint8Array(binary.length);
++  for (let i = 0; i < binary.length; i += 1) out[i] = binary.charCodeAt(i);
++  return out;
++}
++
++function encodeInvite(value) {
++  const raw = textEncoder.encode(JSON.stringify(value));
++  return 'MM-NET1.' + encodePayload(raw);
++}
++
++function decodeInvite(code) {
++  const raw = String(code || '').trim();
++  if (!raw.startsWith('MM-NET1.')) throw new Error('Неверный код Internet relay');
++  const bytes = decodePayload(raw.slice(8));
++  const parsed = JSON.parse(textDecoder.decode(bytes));
++  if (!parsed?.relayUrl || !parsed?.roomId || !parsed?.roomKey || !parsed?.peerId) throw new Error('Код Internet relay повреждён');
++  return parsed;
++}
++
++export class InternetRelayTransport {
++  constructor({ peerId = randomId('peer'), displayName = 'Устройство', onFrame = () => {}, onState = () => {}, onPeer = () => {}, WebSocketImpl = globalThis.WebSocket } = {}) {
++    this.peerId = peerId;
++    this.displayName = displayName;
++    this.onFrame = onFrame;
++    this.onState = onState;
++    this.onPeer = onPeer;
++    this.WebSocketImpl = WebSocketImpl;
++    this.ws = null;
++    this.relayUrl = '';
++    this.roomId = '';
++    this.roomKey = '';
++    this.remotePeerId = '';
++    this.remoteName = '';
++    this.state = 'idle';
++    this._sendQueue = [];
++    this._seen = new Set();
++    this._reconnectTimer = null;
++    this._retryMs = 1000;
++    this._manualClose = false;
++  }
++
++  setIdentity({ peerId, displayName } = {}) {
++    if (peerId) this.peerId = peerId;
++    if (displayName) this.displayName = displayName;
++  }
++
++  _emitState(state, detail = '') {
++    this.state = state;
++    this.onState({ state, detail, relayUrl: this.relayUrl, roomId: this.roomId, remotePeerId: this.remotePeerId, remoteName: this.remoteName });
++  }
++
++  _sendJson(value) {
++    if (!this.ws || this.ws.readyState !== 1) return false;
++    this.ws.send(JSON.stringify(value));
++    return true;
++  }
++
++  _hello() {
++    this._sendJson({ type: 'hello', protocol: 1, roomId: this.roomId, roomKey: this.roomKey, peerId: this.peerId, displayName: this.displayName });
++  }
++
++  _flushQueue() {
++    if (!this.isReady()) return;
++    const pending = this._sendQueue.splice(0);
++    pending.forEach(item => this._sendJson(item));
++  }
++
++  _handleMessage(raw) {
++    let message;
++    try {
++      message = JSON.parse(typeof raw === 'string' ? raw : textDecoder.decode(raw instanceof ArrayBuffer ? new Uint8Array(raw) : raw));
++    } catch {
++      return;
++    }
++    if (message.type === 'peer') {
++      if (message.peerId && message.peerId !== this.peerId) {
++        this.remotePeerId = message.peerId;
++        this.remoteName = message.displayName || message.peerId;
++        this.onPeer({ peerId: this.remotePeerId, displayName: this.remoteName });
++        this._emitState('ready', 'Internet relay готов');
++        this._flushQueue();
++      }
++      return;
++    }
++    if (message.type === 'frame') {
++      if (message.from === this.peerId) return;
++      const frameId = String(message.frameId || '');
++      if (frameId && this._seen.has(frameId)) {
++        this._sendJson({ type: 'frameAck', roomId: this.roomId, roomKey: this.roomKey, frameId, from: this.peerId, to: message.from });
++        return;
++      }
++      if (frameId) {
++        this._seen.add(frameId);
++        if (this._seen.size > 1000) this._seen.delete(this._seen.values().next().value);
++      }
++      const payload = decodePayload(message.payload);
++      this.onFrame(payload, { transportId: 'ip', from: message.from, frameId });
++      this._sendJson({ type: 'frameAck', roomId: this.roomId, roomKey: this.roomKey, frameId, from: this.peerId, to: message.from });
++      return;
++    }
++    if (message.type === 'frameAck') {
++      this.onFrame(textEncoder.encode(JSON.stringify({ type: 'transport_ack', frameId: message.frameId })), { transportId: 'ip', system: true, from: message.from });
++      return;
++    }
++    if (message.type === 'error') {
++      this._emitState('error', message.message || 'Ошибка Internet relay');
++    }
++  }
++
++  connect({ relayUrl, roomId, roomKey, remotePeerId = '', remoteName = '' }) {
++    if (!this.WebSocketImpl) throw new Error('WebSocket недоступен');
++    if (!/^wss?:///i.test(relayUrl || '')) throw new Error('Нужен адрес ws:// или wss://');
++    this.disconnect({ keepConfig: true, manual: false });
++    this.relayUrl = String(relayUrl).trim();
++    this.roomId = roomId;
++    this.roomKey = roomKey;
++    this.remotePeerId = remotePeerId;
++    this.remoteName = remoteName;
++    this._manualClose = false;
++    this._emitState('connecting', 'Подключение к Internet relay…');
++    const ws = new this.WebSocketImpl(this.relayUrl);
++    this.ws = ws;
++    try { ws.binaryType = 'arraybuffer'; } catch {}
++    ws.onopen = () => {
++      this._retryMs = 1000;
++      this._emitState(this.remotePeerId ? 'ready' : 'waiting', this.remotePeerId ? 'Internet relay готов' : 'Ожидание второго устройства…');
++      this._hello();
++      this._flushQueue();
++    };
++    ws.onmessage = event => this._handleMessage(event.data);
++    ws.onerror = () => this._emitState('degraded', 'Ошибка соединения с relay');
++    ws.onclose = () => {
++      this.ws = null;
++      if (this._manualClose) {
++        this._emitState('idle', 'Internet relay отключён');
++        return;
++      }
++      this._emitState('reconnecting', 'Internet relay недоступен, повторное подключение…');
++      clearTimeout(this._reconnectTimer);
++      this._reconnectTimer = setTimeout(() => {
++        this._retryMs = Math.min(this._retryMs * 1.8, 15000);
++        try { this.connect({ relayUrl: this.relayUrl, roomId: this.roomId, roomKey: this.roomKey, remotePeerId: this.remotePeerId, remoteName: this.remoteName }); } catch {}
++      }, this._retryMs);
++    };
++  }
++
++  createInvite(relayUrl) {
++    const roomId = randomId('room');
++    const roomKey = randomId('key') + randomId('key');
++    this.connect({ relayUrl, roomId, roomKey });
++    return encodeInvite({ v: 1, relayUrl, roomId, roomKey, peerId: this.peerId, displayName: this.displayName });
++  }
++
++  acceptInvite(code) {
++    const invite = decodeInvite(code);
++    this.connect({ relayUrl: invite.relayUrl, roomId: invite.roomId, roomKey: invite.roomKey, remotePeerId: invite.peerId, remoteName: invite.displayName || invite.peerId });
++    return invite;
++  }
++
++  isReady() {
++    return this.ws?.readyState === 1 && Boolean(this.remotePeerId) && (this.state === 'ready' || this.state === 'waiting');
++  }
++
++  send(bytes, { frameId = randomId('frame'), to = this.remotePeerId } = {}) {
++    const payload = encodePayload(bytes);
++    const frame = { type: 'frame', roomId: this.roomId, roomKey: this.roomKey, frameId, from: this.peerId, to, payload };
++    if (!this.isReady() || !this._sendJson(frame)) {
++      this._sendQueue.push(frame);
++      this._emitState('queued', 'Нет internet-маршрута — данные сохранены в очереди');
++      return { queued: true, frameId };
++    }
++    return { queued: false, frameId };
++  }
++
++  disconnect({ keepConfig = false, manual = true } = {}) {
++    this._manualClose = manual;
++    clearTimeout(this._reconnectTimer);
++    this._reconnectTimer = null;
++    try { this.ws?.close(); } catch {}
++    this.ws = null;
++    if (!keepConfig) {
++      this.roomId = '';
++      this.roomKey = '';
++      this.remotePeerId = '';
++      this.remoteName = '';
++    }
++    if (manual) this._emitState('idle', 'Internet relay отключён');
++  }
++
++  snapshot() {
++    return { state: this.state, relayUrl: this.relayUrl, roomId: this.roomId, peerId: this.peerId, remotePeerId: this.remotePeerId, remoteName: this.remoteName, queued: this._sendQueue.length, ready: this.isReady() };
++  }
++}
++
++export const InternetRelayInvite = { encode: encodeInvite, decode: decodeInvite };
