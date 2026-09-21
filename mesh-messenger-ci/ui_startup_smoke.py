@@ -80,6 +80,8 @@ try:
         if not box or box["width"] < 300 or box["height"] < 400:
             raise AssertionError(f"map viewport collapsed: {box}")
 
+        page.locator(".mobile-bottom-nav [data-view='chats']").click()
+        page.wait_for_timeout(80)
         page.locator("#helpTriggerMobile").click()
         page.wait_for_timeout(50)
         if page.locator("#quickHelpModal").get_attribute("aria-hidden") != "false":
