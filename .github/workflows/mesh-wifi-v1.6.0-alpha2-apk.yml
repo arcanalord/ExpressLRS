@@ -1,0 +1,145 @@
+name: Mesh Wi-Fi v1.6.0-alpha2 APK
+
+on:
+  push:
+    branches:
+      - ci/mesh-wifi-v1.6.0-alpha2-apk
+    paths:
+      - ".github/workflows/mesh-wifi-v1.6.0-alpha2-apk.yml"
+      - "mesh-messenger-ci/v1.6.0-alpha1/**"
+      - "mesh-messenger-ci/v1.6.0-alpha2/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-wifi-v1.6.0-alpha2-apk
+  cancel-in-progress: true
+
+env:
+  GRADLE_VERSION: "8.13"
+  BUILD_TOOLS_VERSION: "35.0.0"
+  SOURCE_TAR_SHA256: "a7276918f5d8ac5eaa561a295fb65809ec1043d7166bcf856e72bd835a71de40"
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Wi-Fi branch
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Reconstruct alpha1 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _mesh_wifi
+          cat mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part01 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part02 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part03 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part04 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part05 | base64 -d > _mesh_wifi/android.tar.xz
+          echo "$SOURCE_TAR_SHA256  _mesh_wifi/android.tar.xz" | sha256sum -c -
+          tar -xJf _mesh_wifi/android.tar.xz -C _mesh_wifi
+          test -f _mesh_wifi/android-app/app/build.gradle.kts
+          echo "ANDROID_DIR=_mesh_wifi/android-app" >> "$GITHUB_ENV"
+
+      - name: Apply Wi-Fi-only product overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 mesh-messenger-ci/v1.6.0-alpha2/wifi_only_overlay.py "$ANDROID_DIR"
+
+      - name: Verify Wi-Fi-only contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_FILE="$ANDROID_DIR/app/build.gradle.kts"
+          MANIFEST="$ANDROID_DIR/app/src/main/AndroidManifest.xml"
+          WWW="$ANDROID_DIR/app/src/main/assets/www"
+          grep -q 'applicationId = "org.fpvclub.mesh"' "$BUILD_FILE"
+          grep -q 'versionCode = 23' "$BUILD_FILE"
+          grep -q 'versionName = "1.6.0-alpha2"' "$BUILD_FILE"
+          grep -q "new Set(\['wifi'\])" "$WWW/src/core.js"
+          grep -q "transportManager.list().filter(t => t.id === 'wifi')" "$WWW/src/app.js"
+          grep -q "class LanPeerTransport" "$WWW/src/transports/lan-peer-transport.js"
+          ! grep -q "BLUETOOTH_SCAN" "$MANIFEST"
+          ! grep -q "BLUETOOTH_CONNECT" "$MANIFEST"
+          ! grep -q 'id="internetRelayModal"' "$WWW/index.html"
+          ! grep -q "mesh-messenger.network.internet" "$WWW/src/help-registry.js"
+          node --check "$WWW/src/app.js"
+          node --check "$WWW/src/core.js"
+          node --check "$WWW/src/transports/lan-peer-transport.js"
+          java -version
+          node --version
+          gradle --version
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p "$ANDROID_DIR" --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose "$APK"
+          aapt dump badging "$APK" | tee _mesh_wifi/aapt-badging.txt
+          grep -q "package: name='org.fpvclub.mesh'" _mesh_wifi/aapt-badging.txt
+          grep -q "versionCode='23'" _mesh_wifi/aapt-badging.txt
+          grep -q "versionName='1.6.0-alpha2'" _mesh_wifi/aapt-badging.txt
+          sha256sum "$APK" | tee _mesh_wifi/APK_SHA256.txt
+          cp "$APK" _mesh_wifi/MeshWiFi-v1.6.0-alpha2-debug.apk
+
+      - name: Write build provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Mesh Wi-Fi v1.6.0-alpha2"
+            echo "scope=Wi-Fi LAN only"
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "ref=$GITHUB_REF"
+            echo "commit=$GITHUB_SHA"
+            echo "source_tar_sha256=$SOURCE_TAR_SHA256"
+            echo "application_id=org.fpvclub.mesh"
+            echo "version_name=1.6.0-alpha2"
+            echo "version_code=23"
+            echo "transport=WebRTC DataChannel over phone/laptop Wi-Fi LAN"
+            echo "future_transport_extension=kept behind adapter boundary"
+          } > _mesh_wifi/BUILD_PROVENANCE.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesh-wifi-v1.6.0-alpha2-debug-apk
+          path: |
+            _mesh_wifi/MeshWiFi-v1.6.0-alpha2-debug.apk
+            _mesh_wifi/APK_SHA256.txt
+            _mesh_wifi/aapt-badging.txt
+            _mesh_wifi/BUILD_PROVENANCE.txt
+          if-no-files-found: error
+          retention-days: 30
