@@ -1,0 +1,73 @@
+name: Mesh map source scan
+
+on:
+  push:
+    branches: [ci/mesh-messenger-v1.5-apk]
+    paths:
+      - ".github/workflows/mesh-map-source-scan.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/mesh-messenger-v1.5-apk
+      - name: Scan exact source zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _scan/dropbox mesh-messenger-ci
+          BUILD_WF=".github/workflows/mesh-messenger-v1.5-apk.yml"
+          SOURCE_SHA256="$(sed -n 's/^  SOURCE_SHA256: //p' "$BUILD_WF" | head -n1)"
+          DROPBOX_FOLDER_URL="$(sed -n 's/^  DROPBOX_FOLDER_URL: //p' "$BUILD_WF" | head -n1)"
+          curl -L --fail --retry 3 "$DROPBOX_FOLDER_URL" -o _scan/folder.zip
+          python3 - <<'PY'
+          import pathlib, zipfile, hashlib, re
+          outer=pathlib.Path("_scan/folder.zip")
+          out=pathlib.Path("_scan/dropbox")
+          out.mkdir(parents=True,exist_ok=True)
+          with zipfile.ZipFile(outer) as z:
+              for n in z.namelist():
+                  if n.endswith("SOURCE_CURRENT_v1.5.5.zip"):
+                      data=z.read(n)
+                      p=out/"SOURCE_CURRENT_v1.5.5.zip"
+                      p.write_bytes(data)
+                      break
+          else:
+              raise SystemExit("source zip not found")
+          src=out/"SOURCE_CURRENT_v1.5.5.zip"
+          print("source_sha256", hashlib.sha256(src.read_bytes()).hexdigest())
+          pats=re.compile(r"leaflet|openstreetmap|tilelayer|maplibre|mapbox|mapcontainer|map-container|waypoint|nodedb|track|position", re.I)
+          report=[]
+          with zipfile.ZipFile(src) as z:
+              for info in z.infolist():
+                  name=info.filename
+                  if info.file_size > 2_000_000:
+                      continue
+                  if not re.search(r"\.(js|ts|tsx|jsx|html|css|kt|xml|json|md)$", name, re.I):
+                      continue
+                  try:
+                      text=z.read(info).decode("utf-8", "replace")
+                  except Exception:
+                      continue
+                  hits=[(i+1,line) for i,line in enumerate(text.splitlines()) if pats.search(line)]
+                  if hits:
+                      report.append("### "+name)
+                      for i,line in hits[:120]:
+                          report.append(f"{i}: {line}")
+          pathlib.Path("mesh-messenger-ci/MAP_SOURCE_SCAN_v1.5.5.txt").write_text("\n".join(report),encoding="utf-8")
+          PY
+      - name: Commit report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mesh-messenger-ci/MAP_SOURCE_SCAN_v1.5.5.txt
+          git commit -m "chore(mesh): scan map source v1.5.5" || exit 0
+          git push origin HEAD:ci/mesh-messenger-v1.5-apk
