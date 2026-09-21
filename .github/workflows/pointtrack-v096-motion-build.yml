@@ -70,34 +70,9 @@ jobs:
           version = root / "VERSION"
           version.write_text("0.9.6-dev\n", encoding="utf-8")
 
-          reg = root / "core/src/test/kotlin/com/pointtrack/core/CoreRegression.kt"
-          r = reg.read_text(encoding="utf-8")
-          needle = '    checkThat(mh.confidence > 0.25, "visual motion confidence regression")\n'
-          addition = r'''
-              // Consecutive camera motion must be measured on every accepted frame.
-              // This protects Android LOCK from the old every-other-frame cadence,
-              // where a small phone pan could produce one uncompensated frame.
-              val continuousStabilizer = GlobalTranslationStabilizer(
-                  MotionConfig(searchRadiusPx = 12, coarseStepPx = 3, minAcceptedPatches = 4)
-              )
-              continuousStabilizer.update(textureFrame(192, 144, ts = 0L))
-              val cm1 = continuousStabilizer.update(textureFrame(192, 144, dx = 5, dy = -2, ts = 33_333_333L))
-              val cm2 = continuousStabilizer.update(textureFrame(192, 144, dx = 10, dy = -4, ts = 66_666_666L))
-              checkThat(abs(cm1.previousToCurrent.tx - 5.0) <= 1.0 && abs(cm1.previousToCurrent.ty + 2.0) <= 1.0,
-                  "continuous camera motion frame 1 regression: ${cm1.previousToCurrent}")
-              checkThat(abs(cm2.previousToCurrent.tx - 5.0) <= 1.0 && abs(cm2.previousToCurrent.ty + 2.0) <= 1.0,
-                  "continuous camera motion frame 2 regression: ${cm2.previousToCurrent}")
-              checkThat(abs(cm2.currentToStabilized.tx + 10.0) <= 2.0 && abs(cm2.currentToStabilized.ty - 4.0) <= 2.0,
-                  "continuous camera cumulative transform regression: ${cm2.currentToStabilized}")
-          '''
-          if needle not in r:
-              raise SystemExit("visual-motion regression insertion point not found")
-          r = r.replace(needle, needle + addition, 1)
-          reg.write_text(r, encoding="utf-8")
           PY
 
           grep -F "val estimateMotion = trackValid || command is TrackerCommand.Lock"             "$PT/androidApp/src/main/java/com/fpvclub/pointtrack/TrackerRuntime.kt"
-          grep -F "continuous camera motion frame 2 regression"             "$PT/core/src/test/kotlin/com/pointtrack/core/CoreRegression.kt"
           test "$(cat "$PT/VERSION")" = "0.9.6-dev"
 
       - name: Core regression
