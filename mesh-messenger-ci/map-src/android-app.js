@@ -708,12 +708,13 @@ function renderOnlineTiles({minX,maxX,minY,maxY,pad=10,span=80}){
 function renderMap({fallback=null}={}){
   const holder=$('#mapMarkers'),trackLayer=$('#mapTrackLayer');if(!holder)return;
   const nodes=mapNodes();holder.innerHTML='';if(trackLayer)trackLayer.innerHTML='';
-  if(!nodes.length&&!fallback&&!activeWaypoints().length){$('#mapOverlayMeta').textContent='координат пока нет';$('#mapTrackMeta').textContent='—';return;}
+  const waypoints=activeWaypoints();
+  const hasGeoData=Boolean(nodes.length||waypoints.length||(fallback?.latitude!=null&&fallback?.longitude!=null));
   let selected=selectedMapNodeNum?nodes.find(n=>(n.num>>>0)===selectedMapNodeNum):null;
   if(!selected&&nodes.length){selected=nodes.find(n=>!n.isLocal)||nodes[0];if(selected&&!selected.isLocal)selectedMapNodeNum=selected.num>>>0;}
   const track=selected?trackHistory.list(selected.num>>>0):[];
-  const waypoints=activeWaypoints();
   const boundPoints=[...nodes.map(n=>n.position),...track,...waypoints.map(w=>({latitude:w.latitude,longitude:w.longitude}))];
+  if(!hasGeoData)boundPoints.push({latitude:-60,longitude:-170},{latitude:75,longitude:170});
   if(fallback?.latitude!=null&&fallback?.longitude!=null)boundPoints.push(fallback);
   const projected=boundPoints.map(mercatorPoint).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
   let minX=Math.min(...projected.map(p=>p.x)),maxX=Math.max(...projected.map(p=>p.x)),minY=Math.min(...projected.map(p=>p.y)),maxY=Math.max(...projected.map(p=>p.y));
@@ -730,7 +731,7 @@ function renderMap({fallback=null}={}){
     b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.dataset.nodeNum=String(n.num>>>0);b.innerHTML=`${n.isLocal?'Вы':(n.user?.shortName||n.name.slice(0,2))}<span class="marker-label">${n.name}</span>`;
     b.addEventListener('click',()=>{selectedMapNodeNum=n.num>>>0;renderMap();});holder.append(b);
   }
-  $('#mapOverlayTitle').textContent=mapTileState==='online'?'OSM · Позиции NodeDB':mapTileState==='loading'?'Карта загружается · Позиции NodeDB':'Карта недоступна · локальная сетка';$('#mapOverlayMeta').textContent=`${nodes.length} узлов · ${waypoints.length} точек · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`;
+  $('#mapOverlayTitle').textContent=mapTileState==='online'?'OSM · Позиции NodeDB':mapTileState==='loading'?'Карта загружается · Позиции NodeDB':'Карта недоступна · локальная сетка';$('#mapOverlayMeta').textContent=hasGeoData?`${nodes.length} узлов · ${waypoints.length} точек · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`:'координат пока нет · общий вид';
   if(!selected){$('#mapSelectedName').textContent='Нет узла';$('#mapSelectedCoords').textContent=fallback?formatCoords(fallback):'—';$('#mapSelectedAltitude').textContent='—';$('#mapSelectedRoute').textContent='—';$('#mapTrackMeta').textContent='—';$('#mapOpenChatButton').disabled=true;$('#mapCreateWaypointButton').disabled=!fallback;$('#mapClearTrackButton').disabled=true;return;}
   $('#mapSelectedName').textContent=selected.name;$('#mapSelectedCoords').textContent=formatCoords(selected.position);$('#mapSelectedAltitude').textContent=selected.position.altitude==null?'—':`${Math.round(selected.position.altitude)} м`;
   $('#mapSelectedRoute').textContent=selected.isLocal?'локальный узел':`${selected.hopsAway??'—'} hops · ${selected.snr==null?'SNR —':`SNR ${selected.snr.toFixed(1)} dB`}`;
