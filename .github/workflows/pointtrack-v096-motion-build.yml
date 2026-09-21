@@ -60,40 +60,11 @@ jobs:
           runtime = root / "androidApp/src/main/java/com/fpvclub/pointtrack/TrackerRuntime.kt"
           s = runtime.read_text(encoding="utf-8")
 
-          fields = """    private var frameCounter = 0L
-              private var lastTrackingMode = TrackingMode.NONE
-              private var lastTrackState = TrackState.AIM
-          """.replace("              ", "    ")
-          if fields not in s:
-              raise SystemExit("expected v0.9.5 runtime cadence fields not found")
-          s = s.replace(fields, "", 1)
-
-          reset = """        frameCounter = 0L
-              lastTrackingMode = TrackingMode.NONE
-              lastTrackState = TrackState.AIM
-          """.replace("              ", "        ")
-          if reset not in s:
-              raise SystemExit("expected v0.9.5 runtime reset cadence block not found")
-          s = s.replace(reset, "", 1)
-
-          cadence = """        frameCounter++
-              val stablePatchTrack = trackValid &&
-                  lastTrackingMode == TrackingMode.PATCH &&
-                  (lastTrackState == TrackState.LOCKED || lastTrackState == TrackState.INIT)
-              val skipThisPatchMotionFrame = stablePatchTrack && frameCounter % 2L != 0L
-              val estimateMotion = (trackValid || command is TrackerCommand.Lock) && !skipThisPatchMotionFrame
-          """.replace("              ", "        ")
-          replacement = "        val estimateMotion = trackValid || command is TrackerCommand.Lock\n"
-          if cadence not in s:
-              raise SystemExit("expected v0.9.5 every-other-frame motion block not found")
-          s = s.replace(cadence, replacement, 1)
-
-          updates = """        lastTrackingMode = result.track.trackingMode
-              lastTrackState = result.track.state
-          """.replace("              ", "        ")
-          if updates not in s:
-              raise SystemExit("expected v0.9.5 last-mode update block not found")
-          s = s.replace(updates, "", 1)
+          old = "val estimateMotion = (trackValid || command is TrackerCommand.Lock) && !skipThisPatchMotionFrame"
+          new = "val estimateMotion = trackValid || command is TrackerCommand.Lock"
+          if old not in s:
+              raise SystemExit("expected v0.9.5 every-other-frame estimateMotion line not found")
+          s = s.replace(old, new, 1)
           runtime.write_text(s, encoding="utf-8")
 
           version = root / "VERSION"
