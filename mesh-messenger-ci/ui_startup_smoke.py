@@ -68,6 +68,18 @@ try:
             if active != view:
                 raise AssertionError(f"navigation failed: {view!r} -> {active!r}")
 
+        page.locator(".mobile-bottom-nav [data-view='map']").click()
+        page.wait_for_timeout(80)
+        before = page.evaluate("window.__meshDebug.getMapViewport().zoom")
+        page.locator("#mapZoomInButton").click()
+        page.wait_for_timeout(80)
+        after = page.evaluate("window.__meshDebug.getMapViewport().zoom")
+        if not after > before:
+            raise AssertionError(f"map zoom button failed: {before} -> {after}")
+        box = page.locator("#mapCanvas").bounding_box()
+        if not box or box["width"] < 300 or box["height"] < 400:
+            raise AssertionError(f"map viewport collapsed: {box}")
+
         page.locator("#helpTriggerMobile").click()
         page.wait_for_timeout(50)
         if page.locator("#quickHelpModal").get_attribute("aria-hidden") != "false":
