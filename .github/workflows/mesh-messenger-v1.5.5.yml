@@ -1,0 +1,91 @@
+name: Mesh Messenger v1.5.5 APK
+
+on:
+  push:
+    branches:
+      - mesh-messenger-v1.5.5
+    paths:
+      - "mesh-messenger/**"
+      - ".github/workflows/mesh-messenger-v1.5.5.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "mesh-messenger/**"
+      - ".github/workflows/mesh-messenger-v1.5.5.yml"
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch exact QA-hardened v1.5.5 source
+        shell: bash
+        env:
+          SOURCE_URL: "https://uce2db68074e18e3aa0242c15025.dl.dropboxusercontent.com/cd/0/get/DIk51Ge0ZK1p9YYn7yl-Pn9lpAHhmK1RFFi3D2vEipju8O0mpqMGnXQShkLEUfws81P02foLv6J4mO8E-VlyN4GDm4a5fEpbZJCTeMhQGOCgJ7V9dEaxV7hiSpAOjNzjtxos1PFDNbmOGWSdQsyaewAg0u6toAdlQSIqB0bqm-N0Ww/file?c_luid=cfbe8875"
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 2 "$SOURCE_URL" -o /tmp/SOURCE_CURRENT_v1.5.5.zip
+          echo "4406ca53b86a2a70a55ee499126366dafc52725f65f2403520ff4ef061ed6f9b  /tmp/SOURCE_CURRENT_v1.5.5.zip" | sha256sum -c -
+          rm -rf /tmp/mesh-current "$GITHUB_WORKSPACE/mesh-messenger-current"
+          mkdir -p /tmp/mesh-current "$GITHUB_WORKSPACE/mesh-messenger-current"
+          unzip -q /tmp/SOURCE_CURRENT_v1.5.5.zip -d /tmp/mesh-current
+          SRC_DIR="$(find /tmp/mesh-current -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$SRC_DIR"
+          cp -a "$SRC_DIR/android-app" "$GITHUB_WORKSPACE/mesh-messenger-current/android-app"
+          test -f "$GITHUB_WORKSPACE/mesh-messenger-current/android-app/app/build.gradle.kts"
+          sha256sum "$GITHUB_WORKSPACE/mesh-messenger-current/android-app/app/src/main/assets/www/src/app.js"
+          sha256sum "$GITHUB_WORKSPACE/mesh-messenger-current/android-app/app/src/main/assets/www/sw.js"
+          echo "bfd70b3290689578880ece9cb975743fcc5813dac37b36a161008fe8232bc2c5  $GITHUB_WORKSPACE/mesh-messenger-current/android-app/app/src/main/assets/www/src/app.js" | sha256sum -c -
+          echo "c29ace10c2559d23876a19476ad9022614753f7d903087189501869dabb3f692  $GITHUB_WORKSPACE/mesh-messenger-current/android-app/app/src/main/assets/www/sw.js" | sha256sum -c -
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android 36 SDK
+        shell: bash
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        run: |
+          SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Build QA-hardened debug APK
+        shell: bash
+        run: gradle -p mesh-messenger-current/android-app :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="mesh-messenger-current/android-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          cp "$APK" "MeshMessenger-v1.5.5-QA-hardened-debug.apk"
+          sha256sum "MeshMessenger-v1.5.5-QA-hardened-debug.apk" | tee "MeshMessenger-v1.5.5-QA-hardened-debug.apk.sha256"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshMessenger-v1.5.5-QA-hardened-debug
+          path: |
+            MeshMessenger-v1.5.5-QA-hardened-debug.apk
+            MeshMessenger-v1.5.5-QA-hardened-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
