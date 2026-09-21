@@ -1,0 +1,226 @@
++function pickFastRoute(peerId) {
++  const lanReady = Boolean(lanTransport?.isReady?.()) && (!lanPeer?.peerId || lanPeer.peerId === peerId);
++  const internetReady = Boolean(internetRelayTransport?.isReady?.()) && (!internetPeer?.peerId || internetPeer.peerId === peerId);
++  if (lanReady) return 'wifi';
++  if (internetReady) return 'ip';
++  return null;
++}
++
++function flushFastQueuedMessages() {
++  const peers = new Set([lanPeer?.peerId, internetPeer?.peerId].filter(Boolean));
++  peers.forEach(peerId => {
++    const route = pickFastRoute(peerId);
++    if (!route) return;
++    const messages = data.messages[peerId] || [];
++    messages.filter(message => message.direction === 'sent' && message.queued && message.messageId).forEach(message => {
++      sendFastPacket(route, { v: 1, type: 'text', messageId: message.messageId, from: appPeerId, to: peerId, text: message.text, ts: Date.now() }, message.messageId);
++      message.transport = route === 'wifi' ? 'Wi‑Fi LAN' : 'Internet relay';
++      message.status = 'sent';
++    });
++  });
++  renderConversation();
++}
++
+ function normalizeSerialDeviceSummary(value = '') {
+   return String(value || '').trim();
+ }
+@@ -403,7 +566,7 @@
+   const extra = queueStats.failed ? ` · failed ${queueStats.failed}` : '';
+   if (networkSummaryCompact) {
+     networkSummaryCompact.textContent = `${primary.id === 'meshtastic' ? (phoneApiState === 'MOCK' ? 'Meshtastic · демо' : 'Meshtastic') : primary.name} · ${qualityLabel} · очередь ${totalQueue}${extra}`;
+-    const direct = primary.id === 'wifi' ? 'Wi-Fi Direct' : primary.id === 'ip' ? 'Internet relay' : 'Meshtastic';
++    const direct = primary.id === 'wifi' ? 'Wi‑Fi LAN' : primary.id === 'ip' ? 'Internet relay' : 'Meshtastic';
+     const directLabel = primaryModeEl?.textContent?.trim() || '';
+     if (directLabel && directLabel !== direct) networkSummaryCompact.textContent = `${directLabel} · ${qualityLabel} · очередь ${totalQueue}${extra}`;
+   }
+@@ -487,15 +650,33 @@
+ function renderConnection() {
+   const items = transportManager.list();
+   const connections = byId('transportList');
++  if (connections && !connections.dataset.fastHandlers) {
++    connections.addEventListener('click', event => {
++      const row = event.target.closest('[data-transport-row]');
++      if (!row) return;
++      const id = row.dataset.transportRow;
++      if (id === 'wifi') openLanPairing();
++      if (id === 'ip') openInternetRelay();
++      if (id === 'meshtastic') openMeshtasticControls(row);
++    });
++    connections.dataset.fastHandlers = '1';
++  }
+   connections.innerHTML = items.map(t => {
+     const signal = t.id === 'meshtastic' ? (t.available ? '−91 dBm · SNR 8.6' : 'не подключён') : t.id === 'wifi' ? (t.available ? 'прямой LAN' : 'не подключён') : (t.available ? 'через интернет' : 'не подключён');
+-    const state = t.available ? 'Активен' : 'Нет сети';
+-    return `<div class="transport-row" data-transport="${t.id}">
+-      <div class="transport-title"><strong>${t.name}</strong><small>${signal}</small></div>
++    const state = t.available ? (t.id === 'wifi' ? 'Связано' : t.id === 'ip' ? 'Связано' : 'Активен') : (t.id === 'wifi' || t.id === 'ip' ? 'Подключить' : 'Нет сети');
++    const title = t.id === 'wifi' ? 'Wi‑Fi LAN' : t.name;
++    const actionLabel = t.id === 'meshtastic' ? state : `${state} ›`;
++    return `<div class="transport-row" data-transport="${t.id}" data-transport-row="${t.id}">
++      <div class="transport-title"><strong>${title}</strong><small>${signal}</small></div>
+       <div class="transport-metrics"><span>${t.detail || ''}</span></div>
+-      <span class="runtime-badge ${t.available ? 'ready' : 'muted'}">${state}</span>
++      <button class="transport-state ${t.available ? 'is-ready' : ''}" type="button">${actionLabel}</button>
+     </div>`;
+   }).join('');
++  flushFastQueuedMessages();
+ }
+ 
++function openMeshtasticControls(row) {
++  document.querySelector('.view[data-screen="network"]')?.classList.add('show-network-details');
++  const card = row?.closest?.('.radio-link-card') || document.querySelector('.radio-link-card');
++  card?.classList.add('is-mobile-open');
++  card?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
++}
++
+ function transportNameById(id) {
+-  return id === 'meshtastic' ? 'Meshtastic' : id === 'wifi' ? 'Wi-Fi Direct' : id === 'ip' ? 'Internet relay' : id;
++  return id === 'meshtastic' ? 'Meshtastic' : id === 'wifi' ? 'Wi‑Fi LAN' : id === 'ip' ? 'Internet relay' : id;
+ }
+ 
+ function renderQueueStatus() {
+@@ -1201,6 +1382,141 @@
+   }
+ }
+ 
++function openLanPairing() {
++  const transport = ensureLanTransport();
++  lanLocalName.value = appDisplayName;
++  lanIncomingCode.value = '';
++  lanOutgoingCode.value = transport.getLocalSignalCode?.() || '';
++  lanOutgoingLabel.textContent = 'Код для второго устройства';
++  handleLanState(transport.snapshot());
++  lanPairModal.setAttribute('aria-hidden', 'false');
++}
++
++function closeLanPairing() {
++  lanPairModal?.setAttribute('aria-hidden', 'true');
++}
++
++function persistLanName() {
++  appDisplayName = (lanLocalName?.value || appDisplayName).trim().slice(0, 40) || appDisplayName;
++  localStorage.setItem(APP_NAME_KEY, appDisplayName);
++  lanTransport?.setIdentity?.({ peerId: appPeerId, displayName: appDisplayName });
++  internetRelayTransport?.setIdentity?.({ peerId: appPeerId, displayName: appDisplayName });
++  return appDisplayName;
++}
++
++async function createLanInvite() {
++  try {
++    persistLanName();
++    lanPairState.textContent = 'Создаём приглашение…';
++    const code = await ensureLanTransport().createInvite();
++    lanOutgoingLabel.textContent = 'Код приглашения · передайте второму устройству';
++    lanOutgoingCode.value = code;
++  } catch (error) {
++    lanPairState.textContent = 'Не удалось создать приглашение';
++    lanPairDetail.textContent = error?.message || String(error);
++  }
++}
++
++async function applyLanCode() {
++  const code = (lanIncomingCode?.value || '').trim();
++  if (!code) return;
++  try {
++    persistLanName();
++    const result = await ensureLanTransport().applySignal(code);
++    lanIncomingCode.value = '';
++    if (result.role === 'answer') {
++      lanOutgoingLabel.textContent = 'Код ответа · верните первому устройству';
++      lanOutgoingCode.value = result.response;
++      lanPairState.textContent = 'Ответ готов';
++      lanPairDetail.textContent = 'Скопируйте код ответа и вставьте его на первом устройстве.';
++    } else {
++      lanOutgoingCode.value = '';
++      lanOutgoingLabel.textContent = 'Код больше не нужен';
++      lanPairState.textContent = 'Соединяем устройства…';
++      lanPairDetail.textContent = 'Оставьте окно открытым до статуса «Связано».';
++    }
++  } catch (error) {
++    lanPairState.textContent = 'Код не принят';
++    lanPairDetail.textContent = error?.message || String(error);
++  }
++}
++
++async function copyLanCode() {
++  const code = (lanOutgoingCode?.value || '').trim();
++  if (!code) return;
++  try {
++    await navigator.clipboard?.writeText?.(code);
++    byId('copyLanOutgoing').textContent = 'Скопировано';
++    setTimeout(() => { if (byId('copyLanOutgoing')) byId('copyLanOutgoing').textContent = 'Копировать код'; }, 1200);
++  } catch {
++    lanOutgoingCode.select();
++    document.execCommand?.('copy');
++  }
++}
++
++function disconnectLan() {
++  lanTransport?.close?.({ preserveOutbox: true });
++  lanPeer = null;
++  transportManager.setAvailability('wifi', false);
++  renderConnection();
++}
++
++function openInternetRelay() {
++  const transport = ensureInternetRelayTransport();
++  internetRelayUrl.value = internetRelayUrlValue;
++  internetIncomingCode.value = '';
++  internetOutgoingCode.value = internetInviteCode || '';
++  internetOutgoingLabel.textContent = internetInviteCode ? 'Код приглашения' : 'Код приглашения';
++  handleInternetState(transport.snapshot());
++  internetRelayModal.setAttribute('aria-hidden', 'false');
++}
++
++function closeInternetRelay() {
++  internetRelayModal?.setAttribute('aria-hidden', 'true');
++}
++
++function relayUrlFromForm() {
++  const value = (internetRelayUrl?.value || '').trim();
++  if (!value) throw new Error('Введите ws:// или wss:// адрес relay');
++  if (!/^wss?:///i.test(value)) throw new Error('Адрес relay должен начинаться с ws:// или wss://');
++  internetRelayUrlValue = value;
++  localStorage.setItem('mesh-messenger-relay-url', value);
++  return value;
++}
++
++function createInternetInvite() {
++  try {
++    const code = ensureInternetRelayTransport().createInvite(relayUrlFromForm());
++    internetInviteCode = code;
++    internetOutgoingCode.value = code;
++    internetOutgoingLabel.textContent = 'Код приглашения · передайте второму устройству';
++  } catch (error) {
++    internetRelayState.textContent = 'Не удалось создать интернет-сессию';
++    internetRelayDetail.textContent = error?.message || String(error);
++  }
++}
++
++function applyInternetInvite() {
++  try {
++    const code = (internetIncomingCode?.value || '').trim();
++    if (!code) return;
++    const invite = ensureInternetRelayTransport().acceptInvite(code);
++    internetRelayUrlValue = invite.relayUrl;
++    localStorage.setItem('mesh-messenger-relay-url', invite.relayUrl);
++    internetRelayUrl.value = invite.relayUrl;
++    internetIncomingCode.value = '';
++    internetOutgoingCode.value = '';
++  } catch (error) {
++    internetRelayState.textContent = 'Код не принят';
++    internetRelayDetail.textContent = error?.message || String(error);
++  }
++}
++
++async function copyInternetCode() {
++  const code = (internetOutgoingCode?.value || '').trim();
++  if (!code) return;
++  try { await navigator.clipboard?.writeText?.(code); } catch { internetOutgoingCode.select(); document.execCommand?.('copy'); }
++  const button = byId('copyInternetOutgoing');
++  if (button) {
++    button.textContent = 'Скопировано';
++    setTimeout(() => { button.textContent = 'Копировать код'; }, 1200);
++  }
++}
++
