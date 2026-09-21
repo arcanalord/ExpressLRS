@@ -1,0 +1,144 @@
+name: Mesh Messenger v1.5.6 Map Fix
+
+on:
+  push:
+    branches: [ci/mesh-messenger-v1.5-apk]
+    paths:
+      - ".github/workflows/mesh-messenger-v1.5.6-map.yml"
+      - "mesh-messenger-ci/map-src/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-map-fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/mesh-messenger-v1.5-apk
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n 1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+      - name: Prepare patched source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _mapfix
+          mkdir -p _mapfix/dropbox _mapfix/unpacked
+          BASE_WF=".github/workflows/mesh-messenger-v1.5-apk.yml"
+          SOURCE_SHA256="$(sed -n 's/^  SOURCE_SHA256: //p' "$BASE_WF" | head -n1)"
+          DROPBOX_FOLDER_URL="$(sed -n 's/^  DROPBOX_FOLDER_URL: //p' "$BASE_WF" | head -n1)"
+          curl -L --fail --retry 3 "$DROPBOX_FOLDER_URL" -o _mapfix/folder.zip
+          python3 - <<'PY'
+          import pathlib, zipfile, shutil, re
+          outer=pathlib.Path("_mapfix/folder.zip")
+          db=pathlib.Path("_mapfix/dropbox"); db.mkdir(parents=True,exist_ok=True)
+          with zipfile.ZipFile(outer) as z:
+              source_name=next(n for n in z.namelist() if n.endswith("SOURCE_CURRENT_v1.5.5.zip"))
+              source=db/"SOURCE_CURRENT_v1.5.5.zip"
+              source.write_bytes(z.read(source_name))
+          work=pathlib.Path("_mapfix/unpacked")
+          with zipfile.ZipFile(source) as z:
+              for info in z.infolist():
+                  raw=info.filename.replace("\\","/").lstrip("/")
+                  parts=[p for p in raw.split("/") if p not in ("",".","..")]
+                  if not parts: continue
+                  dst=work.joinpath(*parts)
+                  if info.is_dir():
+                      dst.mkdir(parents=True,exist_ok=True)
+                  else:
+                      dst.parent.mkdir(parents=True,exist_ok=True)
+                      with z.open(info) as a, dst.open("wb") as b:
+                          shutil.copyfileobj(a,b)
+          root=next(p for p in work.iterdir() if p.is_dir() and p.name.startswith("mesh-messenger-v1.5.5-work"))
+          patch=pathlib.Path("mesh-messenger-ci/map-src")
+          shutil.copy2(patch/"index.html", root/"index.html")
+          shutil.copy2(patch/"app.js", root/"src/app.js")
+          shutil.copy2(patch/"styles.css", root/"src/styles.css")
+          android=root/"android-app/app/src/main"
+          shutil.copy2(patch/"AndroidManifest.xml", android/"AndroidManifest.xml")
+          shutil.copy2(patch/"android-index.html", android/"assets/www/index.html")
+          shutil.copy2(patch/"android-app.js", android/"assets/www/src/app.js")
+          shutil.copy2(patch/"android-styles.css", android/"assets/www/src/styles.css")
+          build=root/"android-app/app/build.gradle.kts"
+          txt=build.read_text(encoding="utf-8")
+          txt=txt.replace('versionCode = 21','versionCode = 22').replace('versionName = "1.5.5"','versionName = "1.5.6"')
+          build.write_text(txt,encoding="utf-8")
+          (root/"MAP_FIX_v1.5.6.md").write_text("""Mesh Messenger v1.5.6 map fix
+- OSM raster tiles online
+- local coordinate grid fallback offline/provider failure
+- NodeDB markers preserved
+- track and waypoint overlays preserved
+- position send path preserved
+- Android INTERNET permission added
+""",encoding="utf-8")
+          pathlib.Path("_mapfix/ROOT.txt").write_text(str(root),encoding="utf-8")
+          PY
+          SOURCE_ZIP="$(find _mapfix/dropbox -type f -name 'SOURCE_CURRENT_v1.5.5.zip' -print -quit)"
+          echo "$SOURCE_SHA256  $SOURCE_ZIP" | sha256sum -c -
+          ROOT="$(cat _mapfix/ROOT.txt)"
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+          node --check "$ROOT/src/app.js"
+          node --check "$ROOT/android-app/app/src/main/assets/www/src/app.js"
+          grep -q 'android.permission.INTERNET' "$ROOT/android-app/app/src/main/AndroidManifest.xml"
+          grep -q 'tile.openstreetmap.org' "$ROOT/src/app.js"
+          grep -q 'tile.openstreetmap.org' "$ROOT/android-app/app/src/main/assets/www/src/app.js"
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p "$ROOT/android-app" --no-daemon --stacktrace :app:assembleDebug
+      - name: Package and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _mapfix/out
+          APK="$ROOT/android-app/app/build/outputs/apk/debug/app-debug.apk"
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose "$APK"
+          aapt dump badging "$APK" | tee _mapfix/out/aapt-badging.txt
+          grep -q "package: name='org.fpvclub.mesh'" _mapfix/out/aapt-badging.txt
+          grep -q "versionCode='22'" _mapfix/out/aapt-badging.txt
+          grep -q "versionName='1.5.6'" _mapfix/out/aapt-badging.txt
+          cp "$APK" _mapfix/out/MeshMessenger-v1.5.6-map-fix-debug.apk
+          sha256sum _mapfix/out/MeshMessenger-v1.5.6-map-fix-debug.apk > _mapfix/out/APK_SHA256.txt
+          python3 - <<'PY'
+          import pathlib, zipfile
+          root=pathlib.Path(__import__('os').environ['ROOT'])
+          out=pathlib.Path("_mapfix/out/SOURCE_CURRENT_v1.5.6.zip")
+          with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as z:
+              for p in root.rglob("*"):
+                  if p.is_file() and "/build/" not in str(p).replace("\\","/"):
+                      z.write(p, pathlib.Path("mesh-messenger-v1.5.6-work")/p.relative_to(root))
+          PY
+          sha256sum _mapfix/out/SOURCE_CURRENT_v1.5.6.zip > _mapfix/out/SOURCE_SHA256.txt
+          cat > _mapfix/out/BUILD_RESULT_v1.5.6.md <<EOF
+          # Mesh Messenger v1.5.6 Map Fix
+          MAP_SOURCE_PATCH_PASS: PASS
+          ANDROID_BUILD_PASS: PASS
+          MAP_ONLINE_PASS: PENDING phone/network runtime
+          MAP_OFFLINE_FALLBACK_PASS: PENDING phone offline runtime
+          MAP_OVERLAYS_PASS: PENDING phone runtime
+          POSITION_SEND_PASS: preserved by source-path regression; phone confirmation pending
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mesh-messenger-v1.5.6-map-fix
+          path: _mapfix/out/*
+          if-no-files-found: error
+          retention-days: 30
