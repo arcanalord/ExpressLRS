@@ -1,0 +1,38 @@
+diff -ruN /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/index.html /mnt/data/build_alpha1/android-app/app/src/main/assets/www/index.html
+--- /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/index.html	2026-09-21 03:49:51.000000000 +0000
++++ /mnt/data/build_alpha1/android-app/app/src/main/assets/www/index.html	2026-09-21 21:36:15.000000000 +0000
+@@ -261,6 +261,34 @@
+         </div>
+       </section>
+ 
++      <section class="modal-layer" id="lanPairModal" aria-hidden="true">
++        <div class="modal-card lan-pair-card" role="dialog" aria-modal="true" aria-labelledby="lanPairTitle">
++          <div class="modal-header"><div><p class="eyebrow">Wi‑Fi LAN</p><h2 id="lanPairTitle">Локальная связь</h2></div><button class="icon-button" id="closeLanPairModal" aria-label="Закрыть" type="button">×</button></div>
++          <div class="lan-pair-status"><span class="status-dot ok"></span><div><strong id="lanPairState">Локальная связь не подключена</strong><small id="lanPairDetail">Оба устройства должны быть в одной локальной сети. Интернет не нужен.</small></div></div>
++          <label class="field-stack"><span>Имя этого устройства</span><input id="lanLocalName" maxlength="40" autocomplete="off" /></label>
++          <div class="lan-pair-step"><div><strong>1. Создайте приглашение</strong><small>На одном из устройств нажмите кнопку и передайте код второму.</small></div><button class="secondary-button" id="createLanInvite" type="button">Создать приглашение</button></div>
++          <label class="field-stack"><span id="lanOutgoingLabel">Код для второго устройства</span><textarea id="lanOutgoingCode" class="pairing-code" rows="3" readonly placeholder="Здесь появится код"></textarea></label>
++          <button class="quiet-button lan-copy-button" id="copyLanOutgoing" type="button">Копировать код</button>
++          <div class="lan-pair-step"><div><strong>2. Вставьте код второго устройства</strong><small>Приложение само поймёт, приглашение это или ответ.</small></div></div>
++          <label class="field-stack"><textarea id="lanIncomingCode" class="pairing-code" rows="3" placeholder="Вставьте код сюда"></textarea></label>
++          <div class="modal-actions lan-pair-actions"><button class="quiet-button" id="lanPairHelp" type="button">Справка</button><button class="quiet-button" id="disconnectLan" type="button" hidden>Отключить</button><button class="secondary-button" id="cancelLanPair" type="button">Закрыть</button><button class="primary-button" id="applyLanCode" type="button">Применить код</button></div>
++        </div>
++      </section>
++
++      <section class="modal-layer" id="internetRelayModal" aria-hidden="true">
++        <div class="modal-card lan-pair-card" role="dialog" aria-modal="true" aria-labelledby="internetRelayTitle">
++          <div class="modal-header"><div><p class="eyebrow">INTERNET RELAY</p><h2 id="internetRelayTitle">Связь через интернет</h2></div><button class="icon-button" id="closeInternetRelayModal" aria-label="Закрыть" type="button">×</button></div>
++          <div class="lan-pair-status"><span class="status-dot" id="internetRelayDot"></span><div><strong id="internetRelayState">Relay не подключён</strong><small id="internetRelayDetail">Используется только когда прямого Wi‑Fi маршрута нет.</small></div></div>
++          <label class="field-stack"><span>Адрес relay</span><input id="internetRelayUrl" inputmode="url" autocomplete="off" placeholder="wss://relay.example.org/ws" /></label>
++          <div class="lan-pair-step"><div><strong>Создать интернет-сессию</strong><small>Получится код приглашения. Второе устройство вставит его один раз.</small></div><button class="secondary-button" id="createInternetInvite" type="button">Создать</button></div>
++          <label class="field-stack"><span id="internetOutgoingLabel">Код приглашения</span><textarea id="internetOutgoingCode" class="pairing-code" rows="3" readonly placeholder="Здесь появится код"></textarea></label>
++          <button class="quiet-button lan-copy-button" id="copyInternetOutgoing" type="button">Копировать код</button>
++          <div class="lan-pair-step"><div><strong>Подключиться по приглашению</strong><small>Вставьте код с другого устройства. Адрес relay и ключ комнаты подставятся автоматически.</small></div></div>
++          <label class="field-stack"><textarea id="internetIncomingCode" class="pairing-code" rows="3" placeholder="Вставьте MM-NET1…"></textarea></label>
++          <div class="modal-actions lan-pair-actions"><button class="quiet-button" id="internetRelayHelp" type="button">Справка</button><button class="quiet-button" id="disconnectInternetRelay" type="button" hidden>Отключить</button><button class="secondary-button" id="cancelInternetRelay" type="button">Закрыть</button><button class="primary-button" id="applyInternetInvite" type="button">Подключиться</button></div>
++        </div>
++      </section>
++
+       <section class="modal-layer" id="contactModal" aria-hidden="true">
+         <div class="modal-card qr-share-card" role="dialog" aria-modal="true" aria-labelledby="contactModalTitle">
+           <div class="modal-header"><div><p class="eyebrow">Meshtastic share</p><h2 id="contactModalTitle">QR</h2></div><button class="icon-button" id="closeContactModal" aria-label="Закрыть" type="button">×</button></div>
