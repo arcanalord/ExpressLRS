@@ -95,7 +95,7 @@ jobs:
           GATT_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/ble/AndroidGattBackend.kt"
           grep -q 'applicationId = "org.fpvclub.mesh"' "$BUILD_FILE"
           grep -q 'versionCode = 20' "$BUILD_FILE"
-          grep -q 'versionName = "1.5.3"' "$BUILD_FILE"
+          grep -q 'versionName = "1.5.4"' "$BUILD_FILE"
           grep -q 'jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")' "$BUILD_FILE"
           grep -q 'createMessageChannel();setupWebView();maybeStartMeshService()' "$MAIN_FILE"
           grep -q 'scannerAvailable' "$MAIN_FILE"
@@ -121,7 +121,7 @@ jobs:
           aapt dump badging "$APK" | tee _mesh_source/aapt-badging.txt
           grep -q "package: name='org.fpvclub.mesh'" _mesh_source/aapt-badging.txt
           grep -q "versionCode='20'" _mesh_source/aapt-badging.txt
-          grep -q "versionName='1.5.3'" _mesh_source/aapt-badging.txt
+          grep -q "versionName='1.5.4'" _mesh_source/aapt-badging.txt
           sha256sum "$APK" | tee _mesh_source/APK_SHA256.txt
           cp "$APK" _mesh_source/MeshMessenger-v1.5.4-debug.apk
 
@@ -139,7 +139,7 @@ jobs:
             echo "gradle=$GRADLE_VERSION"
             echo "build_tools=$BUILD_TOOLS_VERSION"
             echo "application_id=org.fpvclub.mesh"
-            echo "version_name=1.5.3"
+            echo "version_name=1.5.4"
             echo "version_code=20"
             echo
             java -version 2>&1
