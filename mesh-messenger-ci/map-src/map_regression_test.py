@@ -52,3 +52,12 @@ for token in [
     check(token in app or token in html, f"overlay/position contract missing: {token}")
 
 print("MAP_REGRESSION_PASS")
+
+
+# Explicit phone location request contract.
+check('android.permission.ACCESS_COARSE_LOCATION' in manifest, "Android coarse location permission missing")
+check('android.permission.ACCESS_FINE_LOCATION' in manifest, "Android fine location permission missing")
+check('android:maxSdkVersion="30"' not in manifest.split('ACCESS_FINE_LOCATION')[1].split('/>')[0], "fine location incorrectly capped at SDK 30")
+check("locateMapButton" in html, "explicit map location button missing")
+check("async function locateOnMap()" in app, "explicit map location flow missing")
+check("browserMapPosition" in app, "browser map position state missing")
