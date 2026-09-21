@@ -1,0 +1,206 @@
+name: Mesh Messenger v1.5.10 Navigation Bootstrap
+# rerun: clean-source-audit-v2
+
+on:
+  push:
+    branches: [refactor/mesh-navigation-bootstrap-v1.5.10]
+    paths:
+      - ".github/workflows/mesh-messenger-v1.5.10-navigation-bootstrap.yml"
+      - "mesh-messenger-ci/map-src/**"
+      - "mesh-messenger-ci/prepare_current_source.py"
+      - "mesh-messenger-ci/release_source_audit.py"
+      - "mesh-messenger-ci/ui_startup_smoke.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-messenger-v1.5.10-navigation-bootstrap
+  cancel-in-progress: true
+
+env:
+  SOURCE_SHA256: f2193d3589dd39b14f9b5077096cebf2c5d0480604c7cb2494fb6bf2bc406c63
+  DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
+  VERSION_NAME: "1.5.10"
+  VERSION_CODE: "26"
+  GRADLE_VERSION: "8.13"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refactor/mesh-navigation-bootstrap-v1.5.10
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+      - name: Restore exact v1.5.5 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _mesh1510
+          mkdir -p _mesh1510/dropbox _mesh1510/unpacked _mesh1510/out
+          curl -L --fail --retry 3 "$DROPBOX_FOLDER_URL" -o _mesh1510/dropbox.zip
+          python3 - <<'PY'
+          import pathlib, shutil, zipfile
+          outer=pathlib.Path("_mesh1510/dropbox.zip")
+          out=pathlib.Path("_mesh1510/dropbox")
+          with zipfile.ZipFile(outer) as z:
+              for info in z.infolist():
+                  raw=info.filename.replace("\\","/").lstrip("/")
+                  parts=[p for p in raw.split("/") if p not in ("",".","..")]
+                  if not parts: continue
+                  p=out.joinpath(*parts)
+                  if info.is_dir(): p.mkdir(parents=True,exist_ok=True)
+                  else:
+                      p.parent.mkdir(parents=True,exist_ok=True)
+                      with z.open(info) as a,p.open("wb") as b: shutil.copyfileobj(a,b)
+          PY
+          BASE="$(find _mesh1510/dropbox -type f -name 'SOURCE_CURRENT_v1.5.5.zip' -print -quit)"
+          test -n "$BASE"
+          echo "$SOURCE_SHA256  $BASE" | sha256sum -c -
+          unzip -q "$BASE" -d _mesh1510/unpacked
+          ANDROID_DIR="$(find _mesh1510/unpacked -type d -name android-app -print -quit)"
+          test -n "$ANDROID_DIR"
+          ROOT="$(dirname "$ANDROID_DIR")"
+          echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+      - name: Apply current map + location work
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp mesh-messenger-ci/map-src/index.html "$ROOT/index.html"
+          cp mesh-messenger-ci/map-src/app.js "$ROOT/src/app.js"
+          cp mesh-messenger-ci/map-src/styles.css "$ROOT/src/styles.css"
+          cp mesh-messenger-ci/map-src/navigation-controller.js "$ROOT/src/navigation-controller.js"
+          cp mesh-messenger-ci/map-src/app-bootstrap.js "$ROOT/src/app-bootstrap.js"
+          cp mesh-messenger-ci/map-src/AndroidManifest.xml "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
+          cp mesh-messenger-ci/map-src/android-index.html "$ANDROID_DIR/app/src/main/assets/www/index.html"
+          cp mesh-messenger-ci/map-src/android-app.js "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
+          cp mesh-messenger-ci/map-src/android-styles.css "$ANDROID_DIR/app/src/main/assets/www/src/styles.css"
+          cp mesh-messenger-ci/map-src/navigation-controller.js "$ANDROID_DIR/app/src/main/assets/www/src/navigation-controller.js"
+          cp mesh-messenger-ci/map-src/app-bootstrap.js "$ANDROID_DIR/app/src/main/assets/www/src/app-bootstrap.js"
+          MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
+          python3 - "$MAIN_FILE" <<'PY'
+          import pathlib, sys
+          p=pathlib.Path(sys.argv[1]); s=p.read_text(encoding="utf-8")
+          if "geolocationPermissionRequest=1404" not in s:
+              s=s.replace("    private val bluetoothEnableRequest=1403\n",
+              "    private val bluetoothEnableRequest=1403\n    private val geolocationPermissionRequest=1404\n    private var pendingGeolocationOrigin:String?=null\n    private var pendingGeolocationCallback:GeolocationPermissions.Callback?=null\n")
+          s=s.replace(
+              "        webView.settings.javaScriptEnabled=true;webView.settings.domStorageEnabled=true;webView.settings.mediaPlaybackRequiresUserGesture=false\n",
+              "        webView.settings.javaScriptEnabled=true;webView.settings.domStorageEnabled=true;webView.settings.mediaPlaybackRequiresUserGesture=false;webView.settings.setGeolocationEnabled(true)\n"
+          )
+          if "onGeolocationPermissionsShowPrompt" not in s:
+              marker="        webView.webViewClient=object:WebViewClientCompat(){"
+              chrome='''        webView.webChromeClient=object:WebChromeClient(){\n            override fun onGeolocationPermissionsShowPrompt(origin:String,callback:GeolocationPermissions.Callback){\n                val granted=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED\n                if(granted){callback.invoke(origin,true,false);return}\n                pendingGeolocationOrigin=origin;pendingGeolocationCallback=callback\n                requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION),geolocationPermissionRequest)\n            }\n        }\n'''
+              s=s.replace(marker,chrome+marker)
+          if "if(requestCode==geolocationPermissionRequest)" not in s:
+              anchor='''        if(requestCode==permissionRequest){\n            val denied=permissions.indices.filter{grantResults.getOrNull(it)!=PackageManager.PERMISSION_GRANTED}.map{permissions[it]}\n            if(hasBleRuntimePermissions())maybeStartMeshService()\n            val cont=permissionContinuation;permissionContinuation=null;cont?.invoke(denied.isEmpty(),denied)\n        }\n'''
+              geo='''        if(requestCode==geolocationPermissionRequest){\n            val granted=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED\n            val origin=pendingGeolocationOrigin;val callback=pendingGeolocationCallback\n            pendingGeolocationOrigin=null;pendingGeolocationCallback=null\n            if(origin!=null&&callback!=null)callback.invoke(origin,granted,false)\n        }\n'''
+              s=s.replace(anchor,anchor+geo)
+          p.write_text(s,encoding="utf-8")
+          PY
+      - name: Clean source owners and release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 mesh-messenger-ci/prepare_current_source.py "$ROOT" "$VERSION_NAME" "$VERSION_CODE"
+          node --check "$ROOT/src/app.js"
+          node --check "$ROOT/src/core.js"
+          node --check "$ROOT/src/navigation-controller.js"
+          node --check "$ROOT/src/app-bootstrap.js"
+          python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
+          python3 mesh-messenger-ci/release_source_audit.py "$ROOT"
+          grep -q "onGeolocationPermissionsShowPrompt" "$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
+          grep -Fq "versionName = \"$VERSION_NAME\"" "$ANDROID_DIR/app/build.gradle.kts"
+          grep -Fq "versionCode = $VERSION_CODE" "$ANDROID_DIR/app/build.gradle.kts"
+      - name: Install regression test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-cache-dir opencv-python-headless playwright
+
+      - name: Run deterministic regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ROOT"
+          node tests/core.test.mjs
+          node tests/help-registry.test.mjs
+          node tests/meshtastic-stream.test.mjs
+          node tests/phoneapi-lite.test.mjs
+          node tests/phoneapi-snapshot.test.mjs
+          node tests/share_import.test.mjs
+          node tests/android_bridge_transport.test.mjs
+          python3 tests/qr_assets.test.py
+          bash tests/android_ble_contract.sh
+          bash tests/android_ble_power_contract.sh
+          bash tests/android_app_source_check.sh
+          python3 tests/ui_compact_batch_a.test.py
+          python3 tests/ui_compact_batch_b.test.py
+          node "$GITHUB_WORKSPACE/mesh-messenger-ci/navigation-bootstrap.test.mjs"
+          python3 "$GITHUB_WORKSPACE/mesh-messenger-ci/ui_startup_smoke.py" "."
+      - name: Build Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p "$ANDROID_DIR" --no-daemon :app:assembleDebug
+      - name: Verify and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose "$APK"
+          aapt dump badging "$APK" | tee _mesh1510/out/aapt-badging.txt
+          grep -q "versionCode='$VERSION_CODE'" _mesh1510/out/aapt-badging.txt
+          grep -q "versionName='$VERSION_NAME'" _mesh1510/out/aapt-badging.txt
+          cp "$APK" "_mesh1510/out/MeshMessenger-v${VERSION_NAME}-refactor-debug.apk"
+          sha256sum "_mesh1510/out/MeshMessenger-v${VERSION_NAME}-refactor-debug.apk" > _mesh1510/out/APK_SHA256.txt
+          python3 - <<'PY'
+          import os,pathlib,zipfile
+          root=pathlib.Path(os.environ["ROOT"])
+          ver=os.environ["VERSION_NAME"]
+          out=pathlib.Path(f"_mesh1510/out/SOURCE_CURRENT_v{ver}.zip")
+          skip=("/build/","/.gradle/","/.idea/")
+          with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as z:
+              for p in root.rglob("*"):
+                  if p.is_file():
+                      rel=p.relative_to(root).as_posix()
+                      if any(x in "/"+rel for x in skip): continue
+                      z.write(p,pathlib.Path(f"mesh-messenger-v{ver}-work")/rel)
+          PY
+          sha256sum "_mesh1510/out/SOURCE_CURRENT_v${VERSION_NAME}.zip" > _mesh1510/out/SOURCE_SHA256.txt
+          {
+            echo "version=$VERSION_NAME"
+            echo "version_code=$VERSION_CODE"
+            echo "base_source_sha256=$SOURCE_SHA256"
+            echo "source_audit=PASS"
+            echo "map_regression=PASS"
+            echo "deterministic_regression=PASS"
+            echo "android_build=PASS"
+            echo "apk_verify=PASS"
+            echo "phone_runtime=PENDING"
+            echo "hardware_e2e=PENDING"
+          } > _mesh1510/out/BUILD_RESULT.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mesh-messenger-v1.5.10-navigation-bootstrap
+          path: _mesh1510/out/*
+          retention-days: 30
