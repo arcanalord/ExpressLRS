@@ -10,6 +10,8 @@ android_html = (root / "android-app/app/src/main/assets/www/index.html").read_te
 css = (root / "src/styles.css").read_text(encoding="utf-8")
 android_css = (root / "android-app/app/src/main/assets/www/src/styles.css").read_text(encoding="utf-8")
 manifest = (root / "android-app/app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
+tile_provider = (root / "src/map-tile-provider.js").read_text(encoding="utf-8")
+android_tile_provider = (root / "android-app/app/src/main/assets/www/src/map-tile-provider.js").read_text(encoding="utf-8")
 
 def check(cond, msg):
     if not cond:
@@ -19,9 +21,10 @@ def check(cond, msg):
 check(app == android_app, "root and Android app.js diverged")
 check(html == android_html, "root and Android index.html diverged")
 check(css == android_css, "root and Android styles.css diverged")
+check(tile_provider == android_tile_provider, "root and Android map-tile-provider.js diverged")
 
 # Online map contract.
-check("https://tile.openstreetmap.org/" in app, "OSM HTTPS tile endpoint missing")
+check("https://tile.openstreetmap.org/" in tile_provider, "OSM HTTPS tile endpoint missing")
 check("© OpenStreetMap contributors" in html, "OSM attribution missing")
 check('android.permission.INTERNET' in manifest, "Android INTERNET permission missing")
 check('android:usesCleartextTraffic="false"' in manifest, "HTTPS-only Android policy changed")
@@ -34,7 +37,7 @@ check("if(!hasGeoData)boundPoints.push(" in app, "default map bounds for zero-co
 check("'координат пока нет · общий вид'" in app, "zero-coordinate UI state missing")
 
 # Offline/recovery contract.
-check("navigator.onLine===false" in app, "offline tile fallback missing")
+check("navigator.onLine===false" in tile_provider, "offline tile fallback missing")
 check("globalThis.addEventListener('online'" in app, "online recovery listener missing")
 check("globalThis.addEventListener('offline'" in app, "offline listener missing")
 check("Карта недоступна · локальная сетка" in app, "local-grid fallback status missing")
