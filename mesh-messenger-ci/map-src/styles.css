@@ -111,6 +111,7 @@ button { color: inherit; }
 .map-tile-layer{position:absolute;inset:0;overflow:hidden;z-index:1;background:var(--surface-2)}
 .map-tile{position:absolute;display:block;object-fit:fill;max-width:none;user-select:none;pointer-events:none}
 .map-attribution{position:absolute;right:8px;bottom:8px;z-index:5;padding:3px 6px;border-radius:6px;background:color-mix(in srgb,var(--surface) 88%,transparent);color:var(--text-2);font-size:10px;pointer-events:none}
+.map-locate-button{position:absolute;right:14px;top:14px;z-index:7;min-height:40px;padding:0 12px;border:1px solid var(--border);border-radius:999px;background:color-mix(in srgb,var(--surface) 94%,transparent);color:var(--accent);font-weight:650;box-shadow:var(--shadow);backdrop-filter:blur(10px);cursor:pointer}.map-locate-button:disabled{opacity:.55;cursor:wait}.map-device-position{z-index:5;background:var(--accent)}
 .map-marker { position:absolute; min-width:44px; min-height:44px; display:grid; place-items:center; border-radius:999px; background:var(--accent); color:white; font-weight:700; border:4px solid color-mix(in srgb,var(--surface) 80%,transparent); }
 .map-marker.peer{background:var(--success)} .map-marker.relay{background:var(--warning)}
 .map-overlay { z-index:6; position:absolute; left:16px; top:16px; display:grid; gap:2px; background:color-mix(in srgb,var(--surface) 92%,transparent); backdrop-filter: blur(10px); padding:12px 14px; border-radius:14px; border:1px solid var(--border); }
