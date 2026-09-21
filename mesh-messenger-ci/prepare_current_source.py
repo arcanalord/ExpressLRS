@@ -57,7 +57,7 @@ write(rel, s)
 rel = "tests/help_ui_v15.py"
 s = read(rel)
 s = re.sub(r"assert diag\['appVersion'\]=='[^']+'",
-           r"assert re.fullmatch(r'\d+\.\d+\.\d+',diag['appVersion'])", s, count=1)
+           lambda _m: "assert re.fullmatch(r'\\d+\\.\\d+\\.\\d+',diag['appVersion'])", s, count=1)
 write(rel, s)
 
 # Remove duplicate Android source owner. The contract test now targets production android-app sources.
