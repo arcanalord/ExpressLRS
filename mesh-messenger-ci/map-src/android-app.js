@@ -27,6 +27,7 @@ let pendingWaypointPosition = null;
 let browserMapPosition = null;
 let mapTileState = 'loading';
 let mapTileGeneration = 0;
+const mapViewport={centerX:.5,centerY:.5,zoom:1,initialized:false,userMoved:false,pointers:new Map(),pinch:null};
 let qrMode = 'contact';
 const importedContacts = new Map();
 let pendingQrImport = null;
@@ -670,79 +671,158 @@ function mercatorPoint(position){
   const y=0.5-Math.log((1+sin)/(1-sin))/(4*Math.PI);
   return {x,y};
 }
-function chooseMapZoom(minX,maxX,minY,maxY){
-  const canvas=$('#mapCanvas'),w=Math.max(320,canvas?.clientWidth||800),h=Math.max(320,canvas?.clientHeight||680);
-  const spanX=Math.max(1e-7,maxX-minX),spanY=Math.max(1e-7,maxY-minY);
-  const target=Math.min((w*.8)/(spanX*256),(h*.8)/(spanY*256));
-  return Math.max(2,Math.min(18,Math.floor(Math.log2(Math.max(1,target)))));
+function clampMapZoom(z){return Math.max(1,Math.min(19,Number(z)||1));}
+function normalizeMapCenter(){
+  mapViewport.centerX=((mapViewport.centerX%1)+1)%1;
+  mapViewport.centerY=Math.max(0,Math.min(1,mapViewport.centerY));
 }
-function renderOnlineTiles({minX,maxX,minY,maxY,pad=10,span=80}){
+function mapCanvasSize(){
+  const canvas=$('#mapCanvas');
+  return {canvas,w:Math.max(1,canvas?.clientWidth||1),h:Math.max(1,canvas?.clientHeight||1)};
+}
+function mapWorldSize(zoom=mapViewport.zoom){return 256*Math.pow(2,zoom);}
+function projectMapScreen(position){
+  const m=mercatorPoint(position),{w,h}=mapCanvasSize(),world=mapWorldSize();
+  let dx=m.x-mapViewport.centerX;
+  if(dx>.5)dx-=1;if(dx<-.5)dx+=1;
+  return {x:w/2+dx*world,y:h/2+(m.y-mapViewport.centerY)*world};
+}
+function setMapView(position,zoom=mapViewport.zoom,{userMoved=false}={}){
+  const m=position?.x!=null&&position?.y!=null?position:mercatorPoint(position);
+  mapViewport.centerX=m.x;mapViewport.centerY=m.y;mapViewport.zoom=clampMapZoom(zoom);
+  mapViewport.initialized=true;mapViewport.userMoved=Boolean(userMoved);normalizeMapCenter();
+}
+function fitMapToPositions(points,{maxZoom=16}={}){
+  const valid=(points||[]).map(mercatorPoint).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
+  const {w,h}=mapCanvasSize();
+  if(!valid.length){setMapView({x:.5,y:.5},1);return;}
+  if(valid.length===1){setMapView(valid[0],Math.min(maxZoom,16));return;}
+  let minX=Math.min(...valid.map(p=>p.x)),maxX=Math.max(...valid.map(p=>p.x));
+  let minY=Math.min(...valid.map(p=>p.y)),maxY=Math.max(...valid.map(p=>p.y));
+  const spanX=Math.max(1e-9,maxX-minX),spanY=Math.max(1e-9,maxY-minY);
+  const zx=Math.log2(Math.max(1,(w*.72)/(256*spanX)));
+  const zy=Math.log2(Math.max(1,(h*.72)/(256*spanY)));
+  setMapView({x:(minX+maxX)/2,y:(minY+maxY)/2},Math.min(maxZoom,zx,zy));
+}
+function mapAllPositions({fallback=browserMapPosition}={}){
+  const nodes=mapNodes(),waypoints=activeWaypoints(),points=[...nodes.map(n=>n.position),...waypoints.map(w=>({latitude:w.latitude,longitude:w.longitude}))];
+  if(fallback?.latitude!=null&&fallback?.longitude!=null)points.push(fallback);
+  return points;
+}
+function centerMapOnAll(){fitMapToPositions(mapAllPositions(),{maxZoom:16});mapViewport.userMoved=false;renderMap({preserveViewport:true});}
+function zoomMapAt(clientX,clientY,nextZoom){
+  const {canvas,w,h}=mapCanvasSize();if(!canvas)return;
+  const rect=canvas.getBoundingClientRect(),sx=clientX-rect.left,sy=clientY-rect.top;
+  const oldWorld=mapWorldSize(),anchorX=mapViewport.centerX+(sx-w/2)/oldWorld,anchorY=mapViewport.centerY+(sy-h/2)/oldWorld;
+  mapViewport.zoom=clampMapZoom(nextZoom);
+  const newWorld=mapWorldSize();
+  mapViewport.centerX=anchorX-(sx-w/2)/newWorld;mapViewport.centerY=anchorY-(sy-h/2)/newWorld;
+  mapViewport.initialized=true;mapViewport.userMoved=true;normalizeMapCenter();renderMap({preserveViewport:true});
+}
+function panMapPixels(dx,dy){
+  const world=mapWorldSize();
+  mapViewport.centerX-=dx/world;mapViewport.centerY-=dy/world;mapViewport.initialized=true;mapViewport.userMoved=true;normalizeMapCenter();
+}
+function renderOnlineTiles(){
   const layer=$('#mapTileLayer'),grid=$('#mapGrid'),attribution=$('#mapAttribution');
   if(!layer)return;
-  const generation=++mapTileGeneration;
+  const generation=++mapTileGeneration,{w,h}=mapCanvasSize();
   layer.innerHTML='';
-  if(navigator.onLine===false){
-    mapTileState='offline'; layer.hidden=true; if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;return;
-  }
-  const z=chooseMapZoom(minX,maxX,minY,maxY),n=2**z;
-  const tx0=Math.max(0,Math.floor(minX*n)-1),tx1=Math.min(n-1,Math.floor(maxX*n)+1);
-  const ty0=Math.max(0,Math.floor(minY*n)-1),ty1=Math.min(n-1,Math.floor(maxY*n)+1);
+  if(navigator.onLine===false){mapTileState='offline';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;return;}
+  const tileZ=Math.max(1,Math.min(19,Math.floor(mapViewport.zoom))),fractionScale=Math.pow(2,mapViewport.zoom-tileZ);
+  const n=2**tileZ,baseWorld=256*n,cx=mapViewport.centerX*baseWorld,cy=mapViewport.centerY*baseWorld,tileSize=256*fractionScale;
+  const leftBase=cx-(w/2)/fractionScale,topBase=cy-(h/2)/fractionScale;
+  const tx0=Math.floor(leftBase/256)-1,tx1=Math.floor((cx+(w/2)/fractionScale)/256)+1;
+  const ty0=Math.max(0,Math.floor(topBase/256)-1),ty1=Math.min(n-1,Math.floor((cy+(h/2)/fractionScale)/256)+1);
   let pending=0,loaded=0,failed=0;
   mapTileState='loading';layer.hidden=false;if(grid)grid.hidden=false;if(attribution)attribution.hidden=false;
   const settle=()=>{
     if(generation!==mapTileGeneration)return;
-    if(loaded>0){mapTileState='online';if(grid)grid.hidden=true;$('#mapOverlayTitle').textContent='OSM · Позиции NodeDB';}
-    else if(pending===failed){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;$('#mapOverlayTitle').textContent='Карта недоступна · локальная сетка';}
+    if(loaded>0){mapTileState='online';if(grid)grid.hidden=true;}
+    else if(pending===failed){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;}
+    renderMapTileStatus();
   };
   for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){
     pending++;
-    const img=document.createElement('img');img.className='map-tile';img.alt='';img.decoding='async';img.loading='eager';img.referrerPolicy='origin';
-    const left=pad+(((tx/n)-minX)/(maxX-minX))*span,top=pad+(((ty/n)-minY)/(maxY-minY))*span;
-    const right=pad+((((tx+1)/n)-minX)/(maxX-minX))*span,bottom=pad+((((ty+1)/n)-minY)/(maxY-minY))*span;
-    img.style.left=`${left}%`;img.style.top=`${top}%`;img.style.width=`${right-left}%`;img.style.height=`${bottom-top}%`;
+    const wrapped=((tx%n)+n)%n,img=document.createElement('img');img.className='map-tile';img.alt='';img.decoding='async';img.loading='eager';img.referrerPolicy='origin';
+    img.style.left=`${(tx*256-cx)*fractionScale+w/2}px`;img.style.top=`${(ty*256-cy)*fractionScale+h/2}px`;img.style.width=`${tileSize+.5}px`;img.style.height=`${tileSize+.5}px`;
     img.addEventListener('load',()=>{loaded++;settle();},{once:true});
     img.addEventListener('error',()=>{failed++;img.remove();settle();},{once:true});
-    img.src=`https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`;
-    layer.appendChild(img);
+    img.src=`https://tile.openstreetmap.org/${tileZ}/${wrapped}/${ty}.png`;layer.appendChild(img);
   }
-  setTimeout(()=>{if(generation===mapTileGeneration&&loaded===0){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;$('#mapOverlayTitle').textContent='Карта недоступна · локальная сетка';}},4500);
+  setTimeout(()=>{if(generation===mapTileGeneration&&loaded===0){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;renderMapTileStatus();}},4500);
 }
-function renderMap({fallback=browserMapPosition}={}){
+function renderMapTileStatus(){
+  const title=$('#mapOverlayTitle');if(!title)return;
+  title.textContent=mapTileState==='online'?'OSM · Позиции NodeDB':mapTileState==='loading'?'Карта загружается · Позиции NodeDB':'Карта недоступна · локальная сетка';
+}
+function renderMap({fallback=browserMapPosition,preserveViewport=false}={}){
   const holder=$('#mapMarkers'),trackLayer=$('#mapTrackLayer');if(!holder)return;
-  const nodes=mapNodes();holder.innerHTML='';if(trackLayer)trackLayer.innerHTML='';
-  const waypoints=activeWaypoints();
+  const nodes=mapNodes(),waypoints=activeWaypoints();holder.innerHTML='';if(trackLayer)trackLayer.innerHTML='';
   const hasGeoData=Boolean(nodes.length||waypoints.length||(fallback?.latitude!=null&&fallback?.longitude!=null));
   let selected=selectedMapNodeNum?nodes.find(n=>(n.num>>>0)===selectedMapNodeNum):null;
   if(!selected&&nodes.length){selected=nodes.find(n=>!n.isLocal)||nodes[0];if(selected&&!selected.isLocal)selectedMapNodeNum=selected.num>>>0;}
   const track=selected?trackHistory.list(selected.num>>>0):[];
-  const boundPoints=[...nodes.map(n=>n.position),...track,...waypoints.map(w=>({latitude:w.latitude,longitude:w.longitude}))];
-  if(!hasGeoData)boundPoints.push({latitude:-60,longitude:-170},{latitude:75,longitude:170});
-  if(fallback?.latitude!=null&&fallback?.longitude!=null)boundPoints.push(fallback);
-  const projected=boundPoints.map(mercatorPoint).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y));
-  let minX=Math.min(...projected.map(p=>p.x)),maxX=Math.max(...projected.map(p=>p.x)),minY=Math.min(...projected.map(p=>p.y)),maxY=Math.max(...projected.map(p=>p.y));
-  if(!Number.isFinite(minX)||!Number.isFinite(minY)){return;}
-  if(maxX-minX<0.00001){minX-=0.000005;maxX+=0.000005;} if(maxY-minY<0.00001){minY-=0.000005;maxY+=0.000005;}
-  const extraX=(maxX-minX)*0.16,extraY=(maxY-minY)*0.16;minX-=extraX;maxX+=extraX;minY-=extraY;maxY+=extraY;
-  const pad=10,span=80,project=p=>{const m=mercatorPoint(p);return{x:pad+((m.x-minX)/(maxX-minX))*span,y:pad+((m.y-minY)/(maxY-minY))*span};};
-  renderOnlineTiles({minX,maxX,minY,maxY,pad,span});
-  if(trackLayer&&track.length>=2){const points=track.map(p=>{const q=project(p);return `${q.x.toFixed(2)},${q.y.toFixed(2)}`}).join(' ');const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');poly.setAttribute('points',points);poly.setAttribute('class','map-track-line');trackLayer.appendChild(poly);}
-  for(const w of waypoints){const q=project(w);const b=document.createElement('button');b.type='button';b.className='map-waypoint';b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.title=w.description||w.name||'Waypoint';b.innerHTML=`<span>⌖</span><span class="marker-label">${w.name||'Waypoint'}</span>`;holder.append(b);}
+  const allPoints=[...nodes.map(n=>n.position),...track,...waypoints.map(w=>({latitude:w.latitude,longitude:w.longitude}))];
+  if(fallback?.latitude!=null&&fallback?.longitude!=null)allPoints.push(fallback);
+  if(!mapViewport.initialized&&!preserveViewport)fitMapToPositions(allPoints,{maxZoom:16});
+  renderOnlineTiles();
+  const {w,h}=mapCanvasSize();
+  if(trackLayer){
+    trackLayer.setAttribute('viewBox',`0 0 ${w} ${h}`);
+    trackLayer.setAttribute('preserveAspectRatio','none');
+  }
+  if(trackLayer&&track.length>=2){
+    const points=track.map(p=>{const q=projectMapScreen(p);return `${q.x.toFixed(1)},${q.y.toFixed(1)}`}).join(' ');
+    const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');poly.setAttribute('points',points);poly.setAttribute('class','map-track-line');trackLayer.appendChild(poly);
+  }
+  for(const wpt of waypoints){const q=projectMapScreen(wpt);const b=document.createElement('button');b.type='button';b.className='map-waypoint';b.style.left=`${q.x}px`;b.style.top=`${q.y}px`;b.title=wpt.description||wpt.name||'Waypoint';b.innerHTML=`<span>⌖</span><span class="marker-label">${wpt.name||'Waypoint'}</span>`;holder.append(b);}
   if(fallback?.latitude!=null&&fallback?.longitude!=null){
-    const q=project(fallback),b=document.createElement('button');b.type='button';b.className='map-marker self map-device-position';
-    b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.title='Моя позиция';b.innerHTML=`Вы<span class="marker-label">Телефон</span>`;holder.append(b);
+    const q=projectMapScreen(fallback),b=document.createElement('button');b.type='button';b.className='map-marker self map-device-position';
+    b.style.left=`${q.x}px`;b.style.top=`${q.y}px`;b.title='Моя позиция';b.innerHTML=`Вы<span class="marker-label">Телефон</span>`;holder.append(b);
   }
   for(const n of nodes){
-    const q=project(n.position);
-    const b=document.createElement('button');b.type='button';b.className=`map-marker ${n.isLocal?'self':n.user?.role===2?'relay':'peer'} ${(n.num>>>0)===selectedMapNodeNum?'is-selected':''}`;
-    b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.dataset.nodeNum=String(n.num>>>0);b.innerHTML=`${n.isLocal?'Вы':(n.user?.shortName||n.name.slice(0,2))}<span class="marker-label">${n.name}</span>`;
-    b.addEventListener('click',()=>{selectedMapNodeNum=n.num>>>0;renderMap();});holder.append(b);
+    const q=projectMapScreen(n.position),b=document.createElement('button');b.type='button';b.className=`map-marker ${n.isLocal?'self':n.user?.role===2?'relay':'peer'} ${(n.num>>>0)===selectedMapNodeNum?'is-selected':''}`;
+    b.style.left=`${q.x}px`;b.style.top=`${q.y}px`;b.dataset.nodeNum=String(n.num>>>0);b.innerHTML=`${n.isLocal?'Вы':(n.user?.shortName||n.name.slice(0,2))}<span class="marker-label">${n.name}</span>`;
+    b.addEventListener('click',()=>{selectedMapNodeNum=n.num>>>0;renderMap({preserveViewport:true});});holder.append(b);
   }
-  $('#mapOverlayTitle').textContent=mapTileState==='online'?'OSM · Позиции NodeDB':mapTileState==='loading'?'Карта загружается · Позиции NodeDB':'Карта недоступна · локальная сетка';$('#mapOverlayMeta').textContent=hasGeoData?`${nodes.length} узлов · ${waypoints.length} точек · ${new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}`:'координат пока нет · общий вид';
+  renderMapTileStatus();$('#mapOverlayMeta').textContent=hasGeoData?`${nodes.length} узлов · ${waypoints.length} точек · z${mapViewport.zoom.toFixed(1)}`:'координат пока нет · общий вид';
   if(!selected){$('#mapSelectedName').textContent=fallback?'Моя позиция':'Нет узла';$('#mapSelectedCoords').textContent=fallback?formatCoords(fallback):'—';$('#mapSelectedAltitude').textContent=fallback?.altitude==null?'—':`${Math.round(fallback.altitude)} м`;$('#mapSelectedRoute').textContent=fallback?'GPS телефона':'—';$('#mapTrackMeta').textContent='—';$('#mapOpenChatButton').disabled=true;$('#mapCreateWaypointButton').disabled=!fallback;$('#mapClearTrackButton').disabled=true;return;}
   $('#mapSelectedName').textContent=selected.name;$('#mapSelectedCoords').textContent=formatCoords(selected.position);$('#mapSelectedAltitude').textContent=selected.position.altitude==null?'—':`${Math.round(selected.position.altitude)} м`;
   $('#mapSelectedRoute').textContent=selected.isLocal?'локальный узел':`${selected.hopsAway??'—'} hops · ${selected.snr==null?'SNR —':`SNR ${selected.snr.toFixed(1)} dB`}`;
   $('#mapTrackMeta').textContent=`${track.length} точек · ${formatDistanceMeters(trackHistory.distanceMeters(selected.num>>>0))}`;
   const open=$('#mapOpenChatButton');open.disabled=Boolean(selected.isLocal);open.dataset.nodeNum=String(selected.num>>>0);$('#mapCreateWaypointButton').disabled=false;$('#mapClearTrackButton').disabled=track.length===0;
+}
+function wireMapGestures(){
+  const canvas=$('#mapCanvas');if(!canvas||canvas.dataset.gesturesWired==='1')return;canvas.dataset.gesturesWired='1';
+  const pointerPoint=e=>({x:e.clientX,y:e.clientY});
+  canvas.addEventListener('wheel',e=>{e.preventDefault();zoomMapAt(e.clientX,e.clientY,mapViewport.zoom+(e.deltaY<0?.5:-.5));},{passive:false});
+  canvas.addEventListener('dblclick',e=>{if(e.target.closest('button'))return;e.preventDefault();zoomMapAt(e.clientX,e.clientY,mapViewport.zoom+1);});
+  canvas.addEventListener('pointerdown',e=>{
+    if(e.target.closest('button'))return;
+    canvas.setPointerCapture?.(e.pointerId);mapViewport.pointers.set(e.pointerId,pointerPoint(e));
+    if(mapViewport.pointers.size===2){
+      const [a,b]=[...mapViewport.pointers.values()],dx=a.x-b.x,dy=a.y-b.y;
+      mapViewport.pinch={distance:Math.hypot(dx,dy),midX:(a.x+b.x)/2,midY:(a.y+b.y)/2};
+    }
+  });
+  canvas.addEventListener('pointermove',e=>{
+    const previous=mapViewport.pointers.get(e.pointerId);if(!previous)return;
+    const current=pointerPoint(e);mapViewport.pointers.set(e.pointerId,current);
+    if(mapViewport.pointers.size===1){
+      panMapPixels(current.x-previous.x,current.y-previous.y);renderMap({preserveViewport:true});return;
+    }
+    if(mapViewport.pointers.size>=2){
+      const [a,b]=[...mapViewport.pointers.values()].slice(0,2),distance=Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),midX=(a.x+b.x)/2,midY=(a.y+b.y)/2;
+      const prev=mapViewport.pinch||{distance,midX,midY};
+      panMapPixels(midX-prev.midX,midY-prev.midY);
+      const delta=Math.log2(distance/Math.max(1,prev.distance));
+      if(Math.abs(delta)>.002)zoomMapAt(midX,midY,mapViewport.zoom+delta);else renderMap({preserveViewport:true});
+      mapViewport.pinch={distance,midX,midY};
+    }
+  });
+  const end=e=>{mapViewport.pointers.delete(e.pointerId);if(mapViewport.pointers.size<2)mapViewport.pinch=null;};
+  canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
 }
 
 function bestLocalPosition(){
@@ -760,7 +840,7 @@ async function locateOnMap(){
   try{
     const position=await browserPosition();
     browserMapPosition=position;
-    renderMap({fallback:position});
+    setMapView(position,Math.max(16,mapViewport.zoom));renderMap({fallback:position,preserveViewport:true});
     return position;
   }catch(error){
     renderSystemBanner('error','Не удалось определить местоположение. Разрешите доступ к геопозиции и включите геолокацию.');
@@ -931,8 +1011,8 @@ function wireEvents() {
   globalThis.addEventListener('mesh-android-permissions',e=>{const detail=e.detail||{};renderBlePermission(detail);if(detail.granted&&$('#bleDeviceModal')?.getAttribute('aria-hidden')==='false')scanBleDevicePicker();else if(!detail.granted)setBleDevicePickerStatus('Bluetooth не разрешён. Нажмите «Сканировать», чтобы запросить разрешение ещё раз.');});
   globalThis.addEventListener('mesh-android-bluetooth',e=>{const detail=e.detail||{};renderBluetoothPower(detail);if(detail.enabled&&$('#bleDeviceModal')?.getAttribute('aria-hidden')==='false')setTimeout(()=>scanBleDevicePicker(),700);else if(detail.enabled===false)setBleDevicePickerStatus('Bluetooth выключен. Нажмите «Включить Bluetooth».');});
   globalThis.addEventListener('mesh-android-deeplink',e=>handleAndroidDeepLink(e.detail));
-  globalThis.addEventListener('online',()=>{if(currentViewName==='map')renderMap();});
-  globalThis.addEventListener('offline',()=>{mapTileState='offline';if(currentViewName==='map')renderMap();});
+  globalThis.addEventListener('online',()=>{if(currentViewName==='map')renderMap({preserveViewport:true});});
+  globalThis.addEventListener('offline',()=>{mapTileState='offline';if(currentViewName==='map')renderMap({preserveViewport:true});});
   $('#closeBleDeviceModal')?.addEventListener('click',()=>closeModal($('#bleDeviceModal')));$('#cancelBleDevices')?.addEventListener('click',()=>closeModal($('#bleDeviceModal')));$('#enableBluetoothButton')?.addEventListener('click',()=>androidBleRadio.requestBluetoothEnable());$('#rescanBleDevices')?.addEventListener('click',()=>{const permission=androidBleRadio.permissionStatus();const bluetooth=androidBleRadio.bluetoothStatus();renderBlePermission(permission);renderBluetoothPower(bluetooth);if(!permission?.granted)androidBleRadio.requestPermissions();else if(bluetooth?.enabled===false)androidBleRadio.requestBluetoothEnable();else scanBleDevicePicker();});$('#bleDeviceModal')?.addEventListener('click',e=>{if(e.target===$('#bleDeviceModal'))closeModal($('#bleDeviceModal'));});
   $('#confirmQrImport')?.addEventListener('click',confirmQrImport);$('#cancelQrImport')?.addEventListener('click',()=>{pendingQrImport=null;closeModal($('#importQrModal'));});
   $('[data-add-position]')?.addEventListener('click',async()=>{closeModal($('#addMenuModal'));await shareCurrentPosition();});
@@ -963,9 +1043,12 @@ function wireEvents() {
   $('#pttShortcut').addEventListener('click',()=>{$('#messageTypeSelect').value='voice';renderRoute();openModal($('#pttLayer'));}); $('#mapPttButton').addEventListener('click',()=>{$('#messageTypeSelect').value='voice';renderRoute();openModal($('#pttLayer'));});
   $('#composerVoice')?.addEventListener('click',()=>$('#pttShortcut')?.click());
   $('#conversationBackMobile')?.addEventListener('click',()=>{const screen=document.querySelector('[data-screen="chats"]');screen?.classList.remove('mobile-conversation-open');requestAnimationFrame(()=>screen?.scrollIntoView({behavior:'smooth',block:'start'}));});
+  wireMapGestures();
   $('#locateMapButton')?.addEventListener('click',()=>locateOnMap());
+  $('#mapZoomInButton')?.addEventListener('click',()=>{const c=$('#mapCanvas')?.getBoundingClientRect();if(c)zoomMapAt(c.left+c.width/2,c.top+c.height/2,mapViewport.zoom+1);});
+  $('#mapZoomOutButton')?.addEventListener('click',()=>{const c=$('#mapCanvas')?.getBoundingClientRect();if(c)zoomMapAt(c.left+c.width/2,c.top+c.height/2,mapViewport.zoom-1);});
   $('#sharePositionButton')?.addEventListener('click',()=>shareCurrentPosition());
-  $('#centerMapButton')?.addEventListener('click',()=>{selectedMapNodeNum=0;renderMap();});
+  $('#centerMapButton')?.addEventListener('click',()=>{selectedMapNodeNum=0;centerMapOnAll();});
   $('#mapOpenChatButton')?.addEventListener('click',e=>{const num=Number(e.currentTarget.dataset.nodeNum)||0;if(num){selectConversation(`direct:${num}`);setView('chats');}});
   $('#mapCreateWaypointButton')?.addEventListener('click',openWaypointModal);$('#cancelWaypoint')?.addEventListener('click',()=>{pendingWaypointPosition=null;closeModal($('#waypointModal'));});$('#confirmWaypoint')?.addEventListener('click',()=>sendWaypointFromModal());$('#waypointModal')?.addEventListener('click',e=>{if(e.target===$('#waypointModal')){pendingWaypointPosition=null;closeModal($('#waypointModal'));}});$('#mapClearTrackButton')?.addEventListener('click',()=>{const n=mapSelectedNode();if(n){trackHistory.clear(n.num>>>0);persistTrackHistory();renderMap();}});
   $('#closePtt').addEventListener('click',()=>closeModal($('#pttLayer')));
