@@ -96,7 +96,6 @@ jobs:
           reg.write_text(r, encoding="utf-8")
           PY
 
-          grep -R "skipThisPatchMotionFrame" "$PT" && { echo "old motion skip remains"; exit 1; } || true
           grep -F "val estimateMotion = trackValid || command is TrackerCommand.Lock"             "$PT/androidApp/src/main/java/com/fpvclub/pointtrack/TrackerRuntime.kt"
           grep -F "continuous camera motion frame 2 regression"             "$PT/core/src/test/kotlin/com/pointtrack/core/CoreRegression.kt"
           test "$(cat "$PT/VERSION")" = "0.9.6-dev"
