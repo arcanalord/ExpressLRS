@@ -127,7 +127,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --disable-pip-version-check --no-cache-dir opencv-python-headless
+          python3 -m pip install --disable-pip-version-check --no-cache-dir opencv-python-headless playwright
 
       - name: Run deterministic regression tests
         shell: bash
@@ -147,6 +147,7 @@ jobs:
           bash tests/android_app_source_check.sh
           python3 tests/ui_compact_batch_a.test.py
           python3 tests/ui_compact_batch_b.test.py
+          python3 "$GITHUB_WORKSPACE/mesh-messenger-ci/ui_startup_smoke.py" "$ROOT"
       - name: Build Android
         shell: bash
         run: |
