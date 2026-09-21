@@ -1,0 +1,94 @@
+name: Mesh Messenger map diagnose v1.5.5
+
+on:
+  push:
+    branches:
+      - ci/mesh-messenger-v1.5-apk
+    paths:
+      - ".github/workflows/mesh-map-diagnose.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ci/mesh-messenger-v1.5-apk
+
+      - name: Download exact source
+        shell: bash
+        env:
+          SOURCE_SHA256: f2193d3589dd39b14f9b5077096cebf2c5d0480604c7cb2494fb6bf2bc406c63
+          DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
+        run: |
+          set -euo pipefail
+          rm -rf _mapdiag
+          mkdir -p _mapdiag/dropbox _mapdiag/unpacked
+          curl -L --fail --retry 3 --retry-delay 2 "$DROPBOX_FOLDER_URL" -o _mapdiag/dropbox-folder.zip
+          unzip -q _mapdiag/dropbox-folder.zip -d _mapdiag/dropbox
+          SOURCE_ZIP="$(find _mapdiag/dropbox -type f -name 'SOURCE_CURRENT_v1.5.5.zip' -print -quit)"
+          test -n "$SOURCE_ZIP"
+          echo "$SOURCE_SHA256  $SOURCE_ZIP" | sha256sum -c -
+          unzip -q "$SOURCE_ZIP" -d _mapdiag/unpacked
+
+      - name: Generate diagnosis report
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT="mesh-messenger-ci/MAP_DIAGNOSIS_v1.5.5.txt"
+          mkdir -p mesh-messenger-ci
+          ROOT="$(find _mapdiag/unpacked -maxdepth 2 -type f -name package.json -printf '%h\n' | head -n1 || true)"
+          if [ -z "$ROOT" ]; then
+            ROOT="$(find _mapdiag/unpacked -maxdepth 3 -type f -name 'app.js' -printf '%h\n' | head -n1 || true)"
+          fi
+          {
+            echo "Mesh Messenger v1.5.5 map diagnosis"
+            echo "Generated: $(date -u +%FT%TZ)"
+            echo "ROOT=$ROOT"
+            echo
+            echo "=== MAP-RELATED FILES ==="
+            find _mapdiag/unpacked -type f \( -iname '*map*' -o -iname '*leaflet*' -o -iname '*tile*' -o -iname '*manifest*' -o -iname 'index.html' -o -iname 'app.js' -o -iname 'styles.css' \) | sort
+            echo
+            echo "=== MAP KEYWORD MATCHES ==="
+            grep -RniE --exclude='*.map' --exclude='*.min.js' --exclude-dir=node_modules               'leaflet|tileLayer|openstreetmap|maplibre|mapbox|L\.map|L\.tileLayer|createMap|initMap|map-container|mapContainer|offline|tiles|tile.openstreetmap|WebGL|canvas'               _mapdiag/unpacked 2>/dev/null | head -n 800 || true
+            echo
+            echo "=== INDEX/HTML HEADS ==="
+            while IFS= read -r f; do
+              echo "--- $f"
+              sed -n '1,240p' "$f"
+            done < <(find _mapdiag/unpacked -type f -iname 'index.html' | sort | head -n 10)
+            echo
+            echo "=== MANIFESTS ==="
+            while IFS= read -r f; do
+              echo "--- $f"
+              sed -n '1,260p' "$f"
+            done < <(find _mapdiag/unpacked -type f \( -name 'AndroidManifest.xml' -o -name 'manifest.json' -o -name 'package.json' \) | sort | head -n 20)
+            echo
+            echo "=== MAP CONTEXT FROM JS ==="
+            while IFS=: read -r f line rest; do
+              [ -f "$f" ] || continue
+              start=$(( line > 35 ? line-35 : 1 ))
+              end=$(( line+90 ))
+              echo "--- $f lines $start-$end"
+              sed -n "${start},${end}p" "$f"
+            done < <(grep -RniE --exclude='*.map' --exclude='*.min.js' --exclude-dir=node_modules               'leaflet|tileLayer|openstreetmap|maplibre|mapbox|L\.map|L\.tileLayer|initMap|mapContainer|map-container'               _mapdiag/unpacked 2>/dev/null | head -n 30 || true)
+          } > "$REPORT"
+
+      - name: Commit diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mesh-messenger-ci/MAP_DIAGNOSIS_v1.5.5.txt
+          if git diff --cached --quiet; then
+            echo "No diagnosis changes"
+            exit 0
+          fi
+          git commit -m "chore(mesh): capture v1.5.5 map diagnosis"
+          git push origin HEAD:ci/mesh-messenger-v1.5-apk
