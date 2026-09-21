@@ -6,6 +6,7 @@ import { AndroidBridgeMeshtasticTransport } from './transports/android-bridge-me
 import { PhoneApiSession } from './transports/phoneapi-session.js';
 import { BROADCAST, PORTNUM, encodeTextToRadio, encodePositionToRadio, encodeWaypointToRadio, encodePortPayloadToRadio, encodeSmallFileManifest, encodeSmallFileChunk, encodeSmallFileStatus, encodeSmallFileStatusRequest, decodeSmallFileFrame, sharedContactUrl, channelSetUrl, parseMeshtasticShareUrl } from './transports/phoneapi-lite.js';
 import { HELP_FALLBACK_ID, ERROR_TOPIC_MAP, helpRegistry, parseHelpTopic, buildSafeDiagnostics } from './help-registry.js';
+import { createNavigationBootstrap } from './navigation-bootstrap.js';
 
 const transportManager = new TransportManager();
 const queue = new MessageQueue();
@@ -31,7 +32,6 @@ const mapViewport={centerX:.5,centerY:.5,zoom:1,initialized:false,userMoved:fals
 let qrMode = 'contact';
 const importedContacts = new Map();
 let pendingQrImport = null;
-let currentViewName = 'chats';
 let currentHelpTopicId = HELP_FALLBACK_ID;
 let helpHistoryPushed = false;
 let activeHelpErrorCode = '';
@@ -108,19 +108,19 @@ function toggleTheme() {
   storageSet('mesh-theme', next);
 }
 
-function setView(name) {
-  currentViewName = name;
-  $$('.view').forEach(v => v.classList.toggle('is-active', v.dataset.screen === name));
-  $$('[data-nav] [data-view]').forEach(b => b.classList.toggle('is-active', b.dataset.view === name));
-  window.scrollTo({top:0, behavior:'instant'});
-  if (name === 'network') renderRoute();
-  if (name === 'map') renderMap();
-}
+const navigationBootstrap = createNavigationBootstrap({
+  initialView: 'chats',
+  onActivate: name => {
+    if (name === 'network') renderRoute();
+    if (name === 'map') renderMap();
+  },
+});
+const setView = name => navigationBootstrap.setView(name);
 
 function helpCategoryLabel(category){
   return ({start:'\u0411\u044b\u0441\u0442\u0440\u044b\u0439 \u0441\u0442\u0430\u0440\u0442',chats:'\u0427\u0430\u0442\u044b',map:'\u041a\u0430\u0440\u0442\u0430',network:'\u0421\u0432\u044f\u0437\u044c',share:'QR',settings:'\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438',errors:'\u041e\u0448\u0438\u0431\u043a\u0438'})[category] || category || '';
 }
-function currentScreenHelpTopic(){ return SCREEN_HELP_TOPICS[currentViewName] || HELP_FALLBACK_ID; }
+function currentScreenHelpTopic(){ return SCREEN_HELP_TOPICS[navigationBootstrap.current()] || HELP_FALLBACK_ID; }
 function setNetworkDetails(open){
   const screen=document.querySelector('[data-screen="network"]'); if(!screen)return;
   screen.classList.toggle('show-network-details',Boolean(open));
@@ -852,7 +852,7 @@ async function shareCurrentPosition({preferBrowser=true}={}){
   if(preferBrowser){try{position=await browserPosition();}catch{}}
   position=position||bestLocalPosition();
   if(!position){alert('У локального узла пока нет координат.');return null;}
-  browserMapPosition={...position};if(currentViewName==='map')renderMap({fallback:browserMapPosition});
+  browserMapPosition={...position};if(navigationBootstrap.current()==='map')renderMap({fallback:browserMapPosition});
   const c=currentConversation();if(!c)return null;
   const decision=transportManager.select('position');
   const label=`Позиция ${formatCoords(position)}`;
@@ -990,8 +990,7 @@ function openBleDevicePicker(){
 function handleAndroidDeepLink(id){if(!id)return;selectConversation(String(id));setView('chats');}
 
 function wireEvents() {
-  $$('[data-nav] [data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
-  $$('[data-open-network]').forEach(b=>b.addEventListener('click',()=>setView('network')));
+  navigationBootstrap.wire();
   $('#chatSearch').addEventListener('input',e=>renderConversations(e.target.value));
   $('#composerForm').addEventListener('submit',e=>{e.preventDefault();const i=$('#messageInput');sendMessage(i.value);i.value='';});
   $$('.quick-phrases [data-phrase]').forEach(b=>b.addEventListener('click',()=>sendMessage(b.dataset.phrase)));
@@ -1011,8 +1010,8 @@ function wireEvents() {
   globalThis.addEventListener('mesh-android-permissions',e=>{const detail=e.detail||{};renderBlePermission(detail);if(detail.granted&&$('#bleDeviceModal')?.getAttribute('aria-hidden')==='false')scanBleDevicePicker();else if(!detail.granted)setBleDevicePickerStatus('Bluetooth не разрешён. Нажмите «Сканировать», чтобы запросить разрешение ещё раз.');});
   globalThis.addEventListener('mesh-android-bluetooth',e=>{const detail=e.detail||{};renderBluetoothPower(detail);if(detail.enabled&&$('#bleDeviceModal')?.getAttribute('aria-hidden')==='false')setTimeout(()=>scanBleDevicePicker(),700);else if(detail.enabled===false)setBleDevicePickerStatus('Bluetooth выключен. Нажмите «Включить Bluetooth».');});
   globalThis.addEventListener('mesh-android-deeplink',e=>handleAndroidDeepLink(e.detail));
-  globalThis.addEventListener('online',()=>{if(currentViewName==='map')renderMap({preserveViewport:true});});
-  globalThis.addEventListener('offline',()=>{mapTileState='offline';if(currentViewName==='map')renderMap({preserveViewport:true});});
+  globalThis.addEventListener('online',()=>{if(navigationBootstrap.current()==='map')renderMap({preserveViewport:true});});
+  globalThis.addEventListener('offline',()=>{mapTileState='offline';if(navigationBootstrap.current()==='map')renderMap({preserveViewport:true});});
   $('#closeBleDeviceModal')?.addEventListener('click',()=>closeModal($('#bleDeviceModal')));$('#cancelBleDevices')?.addEventListener('click',()=>closeModal($('#bleDeviceModal')));$('#enableBluetoothButton')?.addEventListener('click',()=>androidBleRadio.requestBluetoothEnable());$('#rescanBleDevices')?.addEventListener('click',()=>{const permission=androidBleRadio.permissionStatus();const bluetooth=androidBleRadio.bluetoothStatus();renderBlePermission(permission);renderBluetoothPower(bluetooth);if(!permission?.granted)androidBleRadio.requestPermissions();else if(bluetooth?.enabled===false)androidBleRadio.requestBluetoothEnable();else scanBleDevicePicker();});$('#bleDeviceModal')?.addEventListener('click',e=>{if(e.target===$('#bleDeviceModal'))closeModal($('#bleDeviceModal'));});
   $('#confirmQrImport')?.addEventListener('click',confirmQrImport);$('#cancelQrImport')?.addEventListener('click',()=>{pendingQrImport=null;closeModal($('#importQrModal'));});
   $('[data-add-position]')?.addEventListener('click',async()=>{closeModal($('#addMenuModal'));await shareCurrentPosition();});
