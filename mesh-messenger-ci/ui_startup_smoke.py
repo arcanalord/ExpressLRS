@@ -54,7 +54,8 @@ try:
         page.wait_for_timeout(500)
 
         if page.evaluate("typeof window.__meshDebug") != "object":
-            raise AssertionError("window.__meshDebug missing: startup did not finish")
+            detail="; ".join(errors) or "no page/console error captured"
+            raise AssertionError("window.__meshDebug missing: startup did not finish; " + detail)
 
         active = page.locator(".view.is-active").get_attribute("data-screen")
         if active != "chats":
