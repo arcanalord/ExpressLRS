@@ -1,4 +1,5 @@
 name: Mesh Messenger map diagnose v1.5.5
+# trigger: 2026-09-21-map-p0
 
 on:
   push:
