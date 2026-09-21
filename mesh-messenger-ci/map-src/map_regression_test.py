@@ -61,3 +61,13 @@ check('android:maxSdkVersion="30"' not in manifest.split('ACCESS_FINE_LOCATION')
 check("locateMapButton" in html, "explicit map location button missing")
 check("async function locateOnMap()" in app, "explicit map location flow missing")
 check("browserMapPosition" in app, "browser map position state missing")
+
+
+# Interactive viewport regression.
+check("const mapViewport=" in app, "interactive map viewport missing")
+check("function wireMapGestures()" in app, "map gesture wiring missing")
+check("pointerdown" in app and "pointermove" in app, "map pointer pan/pinch missing")
+check("zoomMapAt" in app, "map zoom-at-anchor missing")
+check("mapZoomInButton" in html and "mapZoomOutButton" in html, "map zoom controls missing")
+check("touch-action:none" in css, "touch gesture CSS missing")
+check("tileSize" in app and "px" in app, "pixel-sized OSM tiles missing")
