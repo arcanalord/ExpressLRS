@@ -1,4 +1,4 @@
-name: Mesh Messenger v1.5.6 Map Fix
+name: Mesh Messenger v1.5.7 Map + Location Fix
 # rerun: zero-coordinate-map-fix
 
 on:
@@ -6,14 +6,14 @@ on:
     branches:
       - ci/mesh-messenger-v1.5-apk
     paths:
-      - ".github/workflows/mesh-messenger-v1.5.6-map2.yml"
+      - ".github/workflows/mesh-messenger-v1.5.7-map2.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: mesh-messenger-v1.5.6-map
+  group: mesh-messenger-v1.5.7-map
   cancel-in-progress: true
 
 env:
@@ -87,7 +87,7 @@ jobs:
           test -n "$ANDROID_DIR"
           echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
 
-      - name: Apply v1.5.6 map patch
+      - name: Apply v1.5.7 map patch
         shell: bash
         run: |
           set -euo pipefail
@@ -99,7 +99,28 @@ jobs:
           cp mesh-messenger-ci/map-src/android-index.html "$ANDROID_DIR/app/src/main/assets/www/index.html"
           cp mesh-messenger-ci/map-src/android-app.js "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
           cp mesh-messenger-ci/map-src/android-styles.css "$ANDROID_DIR/app/src/main/assets/www/src/styles.css"
-          sed -i 's/versionCode = 21/versionCode = 22/' "$ANDROID_DIR/app/build.gradle.kts"
+          MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
+          python3 - "$MAIN_FILE" <<'PY'
+          import pathlib, sys
+          p=pathlib.Path(sys.argv[1])
+          s=p.read_text(encoding="utf-8")
+          s=s.replace(
+              "    private val bluetoothEnableRequest=1403\n",
+              "    private val bluetoothEnableRequest=1403\n    private val geolocationPermissionRequest=1404\n    private var pendingGeolocationOrigin:String?=null\n    private var pendingGeolocationCallback:GeolocationPermissions.Callback?=null\n"
+          )
+          s=s.replace(
+              "        webView.settings.javaScriptEnabled=true;webView.settings.domStorageEnabled=true;webView.settings.mediaPlaybackRequiresUserGesture=false\n",
+              "        webView.settings.javaScriptEnabled=true;webView.settings.domStorageEnabled=true;webView.settings.mediaPlaybackRequiresUserGesture=false;webView.settings.setGeolocationEnabled(true)\n"
+          )
+          marker="        webView.webViewClient=object:WebViewClientCompat(){"
+          chrome='''        webView.webChromeClient=object:WebChromeClient(){\n            override fun onGeolocationPermissionsShowPrompt(origin:String,callback:GeolocationPermissions.Callback){\n                val granted=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED\n                if(granted){callback.invoke(origin,true,false);return}\n                pendingGeolocationOrigin=origin;pendingGeolocationCallback=callback\n                requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION),geolocationPermissionRequest)\n            }\n        }\n'''
+          s=s.replace(marker,chrome+marker)
+          old='''        if(requestCode==permissionRequest){\n            val denied=permissions.indices.filter{grantResults.getOrNull(it)!=PackageManager.PERMISSION_GRANTED}.map{permissions[it]}\n            if(hasBleRuntimePermissions())maybeStartMeshService()\n            val cont=permissionContinuation;permissionContinuation=null;cont?.invoke(denied.isEmpty(),denied)\n        }\n'''
+          new=old+'''        if(requestCode==geolocationPermissionRequest){\n            val granted=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED\n            val origin=pendingGeolocationOrigin;val callback=pendingGeolocationCallback\n            pendingGeolocationOrigin=null;pendingGeolocationCallback=null\n            if(origin!=null&&callback!=null)callback.invoke(origin,granted,false)\n        }\n'''
+          s=s.replace(old,new)
+          p.write_text(s,encoding="utf-8")
+          PY
+          sed -i 's/versionCode = 21/versionCode = 23/' "$ANDROID_DIR/app/build.gradle.kts"
           sed -i 's/versionName = "1.5.5"/versionName = "1.5.6"/' "$ANDROID_DIR/app/build.gradle.kts"
           node --check "$ROOT/src/app.js"
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
@@ -107,7 +128,7 @@ jobs:
           grep -q 'android.permission.INTERNET' "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
           python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
 
-      - name: Verify v1.5.6 metadata and contracts
+      - name: Verify v1.5.7 metadata and contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -115,11 +136,16 @@ jobs:
           MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
           GATT_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/ble/AndroidGattBackend.kt"
           grep -q 'applicationId = "org.fpvclub.mesh"' "$BUILD_FILE"
-          grep -q 'versionCode = 22' "$BUILD_FILE"
+          grep -q 'versionCode = 23' "$BUILD_FILE"
           grep -q 'versionName = "1.5.6"' "$BUILD_FILE"
           grep -q 'jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")' "$BUILD_FILE"
           grep -q 'createMessageChannel();setupWebView();maybeStartMeshService()' "$MAIN_FILE"
           grep -q 'scannerAvailable' "$MAIN_FILE"
+          grep -q 'onGeolocationPermissionsShowPrompt' "$MAIN_FILE"
+          grep -q 'geolocationPermissionRequest=1404' "$MAIN_FILE"
+          grep -q 'setGeolocationEnabled(true)' "$MAIN_FILE"
+          grep -q 'ACCESS_FINE_LOCATION' "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
+          grep -q 'ACCESS_COARSE_LOCATION' "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
           grep -q 'repeat(8)' "$GATT_FILE"
           grep -q 'BLE_SCAN_FAILED_' "$GATT_FILE"
           java -version
@@ -141,17 +167,17 @@ jobs:
           apksigner verify --verbose "$APK"
           aapt dump badging "$APK" | tee _mesh_source/aapt-badging.txt
           grep -q "package: name='org.fpvclub.mesh'" _mesh_source/aapt-badging.txt
-          grep -q "versionCode='22'" _mesh_source/aapt-badging.txt
+          grep -q "versionCode='23'" _mesh_source/aapt-badging.txt
           grep -q "versionName='1.5.6'" _mesh_source/aapt-badging.txt
           sha256sum "$APK" | tee _mesh_source/APK_SHA256.txt
-          cp "$APK" _mesh_source/MeshMessenger-v1.5.6-map-fix-debug.apk
+          cp "$APK" _mesh_source/MeshMessenger-v1.5.7-map-fix-debug.apk
 
       - name: Write build provenance
         shell: bash
         run: |
           set -euo pipefail
           {
-            echo "Mesh Messenger v1.5.6 GitHub Actions build"
+            echo "Mesh Messenger v1.5.7 GitHub Actions build"
             echo "repository=$GITHUB_REPOSITORY"
             echo "ref=$GITHUB_REF"
             echo "commit=$GITHUB_SHA"
@@ -161,7 +187,7 @@ jobs:
             echo "build_tools=$BUILD_TOOLS_VERSION"
             echo "application_id=org.fpvclub.mesh"
             echo "version_name=1.5.6"
-            echo "version_code=22"
+            echo "version_code=23"
             echo
             java -version 2>&1
             echo
@@ -176,7 +202,7 @@ jobs:
           python3 - <<'PY'
           import pathlib, zipfile, os
           root=pathlib.Path(os.environ["ANDROID_DIR"]).parent
-          out=pathlib.Path("_mesh_source/SOURCE_CURRENT_v1.5.6.zip")
+          out=pathlib.Path("_mesh_source/SOURCE_CURRENT_v1.5.5.zip")
           skip={"/build/","/.gradle/","/.idea/"}
           with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as z:
               for p in root.rglob("*"):
@@ -185,20 +211,20 @@ jobs:
                   s="/"+p.relative_to(root).as_posix()
                   if any(part in s for part in skip):
                       continue
-                  z.write(p, pathlib.Path("mesh-messenger-v1.5.6-work")/p.relative_to(root))
+                  z.write(p, pathlib.Path("mesh-messenger-v1.5.7-work")/p.relative_to(root))
           PY
-          sha256sum _mesh_source/SOURCE_CURRENT_v1.5.6.zip | tee _mesh_source/SOURCE_SHA256_v1.5.6.txt
+          sha256sum _mesh_source/SOURCE_CURRENT_v1.5.5.zip | tee _mesh_source/SOURCE_SHA256_v1.5.7.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mesh-messenger-v1.5.6-map-fix
+          name: mesh-messenger-v1.5.7-map-fix
           path: |
-            _mesh_source/MeshMessenger-v1.5.6-map-fix-debug.apk
+            _mesh_source/MeshMessenger-v1.5.7-map-fix-debug.apk
             _mesh_source/APK_SHA256.txt
             _mesh_source/aapt-badging.txt
             _mesh_source/BUILD_PROVENANCE.txt
-            _mesh_source/SOURCE_CURRENT_v1.5.6.zip
-            _mesh_source/SOURCE_SHA256_v1.5.6.txt
+            _mesh_source/SOURCE_CURRENT_v1.5.5.zip
+            _mesh_source/SOURCE_SHA256_v1.5.7.txt
           if-no-files-found: error
           retention-days: 30
