@@ -96,12 +96,14 @@
 
       <section class="view" data-screen="map" aria-labelledby="mapTitle">
         <div class="screen-header">
-          <div><p class="eyebrow">NodeDB positions</p><h1 id="mapTitle">Карта</h1><p>Точки строятся из POSITION/NodeDB. Offline tiles остаются отдельным адаптером.</p></div>
+          <div><p class="eyebrow">NodeDB positions</p><h1 id="mapTitle">Карта</h1><p>OpenStreetMap при наличии сети; без сети — локальная координатная сетка.</p></div>
           <div class="header-actions"><button class="secondary-button" id="sharePositionButton" type="button">Отправить позицию</button><button class="quiet-button" id="centerMapButton" type="button">Все точки</button></div>
         </div>
         <div class="map-layout">
-          <div class="map-canvas" id="mapCanvas" role="img" aria-label="Локальная карта узлов Meshtastic">
-            <div class="map-grid"></div>
+          <div class="map-canvas" id="mapCanvas" role="img" aria-label="Карта узлов Meshtastic">
+            <div class="map-grid" id="mapGrid"></div>
+            <div class="map-tile-layer" id="mapTileLayer" aria-hidden="true"></div>
+            <div class="map-attribution" id="mapAttribution">© OpenStreetMap contributors</div>
             <svg id="mapTrackLayer" class="map-track-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
             <div id="mapMarkers"></div>
             <div class="map-overlay"><strong id="mapOverlayTitle">Позиции NodeDB</strong><span id="mapOverlayMeta">ожидаем координаты…</span></div>
