@@ -1,0 +1,30 @@
+diff -ruN /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/styles.css /mnt/data/build_alpha1/android-app/app/src/main/assets/www/src/styles.css
+--- /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/styles.css	2026-09-21 03:49:51.000000000 +0000
++++ /mnt/data/build_alpha1/android-app/app/src/main/assets/www/src/styles.css	2026-09-21 21:36:15.000000000 +0000
+@@ -615,3 +615,26 @@
+ 
+ /* v1.5.5 desktop composer alignment for voice shortcut */
+ .composer{grid-template-columns:44px minmax(0,1fr) auto auto}
++
++/* Wi-Fi LAN slice: Figma compact transport/pairing treatment */
++.transport-state{border:0;border-radius:10px;padding:6px 10px;min-height:32px;background:var(--surface-2);color:var(--text-2);font:inherit;font-size:12px;font-weight:650;cursor:pointer}
++.transport-state.is-ready{background:color-mix(in srgb,var(--success) 12%,var(--surface));color:var(--success)}
++.runtime-badge.muted{opacity:.62}
++.lan-pair-card{display:grid;gap:14px}
++.lan-pair-status{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:16px;background:var(--surface-2)}
++.lan-pair-status>div{display:grid;gap:2px;min-width:0}.lan-pair-status strong{font-size:15px}.lan-pair-status small{color:var(--text-2);font-size:12px;line-height:1.35}
++.lan-pair-step{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:4px}.lan-pair-step>div{display:grid;gap:3px}.lan-pair-step strong{font-size:14px}.lan-pair-step small{color:var(--text-2);font-size:12px;line-height:1.35}
++.pairing-code{width:100%;resize:vertical;min-height:72px;border:1px solid var(--border);border-radius:14px;background:var(--bg);color:var(--text);padding:10px 12px;font:500 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
++.lan-copy-button{justify-self:start}.lan-pair-actions{align-items:center}.lan-pair-actions #lanPairHelp{margin-right:auto}
++@media (max-width:720px){
++  .view[data-screen="network"] .transport-state{min-height:32px;padding:5px 9px;font-size:11px}
++  .lan-pair-card{gap:12px}.lan-pair-step{align-items:flex-start;flex-direction:column}.lan-pair-step .secondary-button{width:100%}
++  .lan-pair-actions{display:grid;grid-template-columns:1fr 1fr}.lan-pair-actions #lanPairHelp{margin-right:0}.lan-pair-actions .primary-button{grid-column:1/-1}
++}
++
++@media (max-width:760px){
++  .radio-link-card:not(.is-mobile-open){display:none}
++  .view[data-screen="network"].show-network-details .radio-link-card{display:grid}
++  .transport-state{min-height:44px;padding:0 13px;font-size:13px}
++  .transport-title small,.transport-metrics span{font-size:13px}
++}
