@@ -51,16 +51,38 @@ jobs:
           "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
 
-      - name: Reconstruct alpha1 source
+      - name: Reconstruct clean v1.5.5 source
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p _mesh_wifi
-          cat mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00.0 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00.1 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00.2 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00.3 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part01 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part02 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part03 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part04 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part05 | base64 -d > _mesh_wifi/android.tar.xz
-          sha256sum _mesh_wifi/android.tar.xz | tee _mesh_wifi/SOURCE_TAR_SHA256.txt
-          tar -xJf _mesh_wifi/android.tar.xz -C _mesh_wifi
-          test -f _mesh_wifi/android-app/app/build.gradle.kts
-          echo "ANDROID_DIR=_mesh_wifi/android-app" >> "$GITHUB_ENV"
+          mkdir -p _mesh_wifi/base
+          git fetch --depth=1 origin mesh-messenger-v1.5.5
+          {
+            git show FETCH_HEAD:mesh-messenger/source-v1.5.5.tar.xz.b64
+            for n in $(seq -w 2 12); do
+              git show FETCH_HEAD:mesh-messenger/source-v1.5.5.part${n}.b64
+            done
+          } | tr -d '\r\n' | base64 -d > _mesh_wifi/source-v1.5.5.tar.xz
+          xz -t _mesh_wifi/source-v1.5.5.tar.xz
+          sha256sum _mesh_wifi/source-v1.5.5.tar.xz | tee _mesh_wifi/SOURCE_TAR_SHA256.txt
+          tar -xJf _mesh_wifi/source-v1.5.5.tar.xz -C _mesh_wifi/base
+          BUILD_FILE="$(find _mesh_wifi/base -type f -path '*/app/build.gradle.kts' -print -quit)"
+          test -n "$BUILD_FILE"
+          ANDROID_DIR="$(dirname "$(dirname "$BUILD_FILE")")"
+          echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
+          echo "BASE155_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
+
+      - name: Apply alpha1 source patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          for patch_file in \
+            build.patch core.patch help.patch index.patch lan.patch internet-relay.patch styles.patch sw.patch app.patch.1 app.patch.2
+          do
+            patch -d "$ANDROID_DIR" -p5 --forward --batch < "mesh-messenger-ci/v1.6.0-alpha1/patches/$patch_file"
+          done
+          grep -q 'versionName = "1.6.0-alpha1"' "$ANDROID_DIR/app/build.gradle.kts"
+          test -f "$ANDROID_DIR/app/src/main/assets/www/src/transports/lan-peer-transport.js"
 
       - name: Apply Wi-Fi-only product overlay
         shell: bash
