@@ -30,7 +30,7 @@ check('android:usesCleartextTraffic="false"' in manifest, "HTTPS-only Android po
 old_early_return = "if(!nodes.length&&!fallback&&!activeWaypoints().length)"
 check(old_early_return not in app, "zero-coordinate early return reintroduced")
 check("const hasGeoData=Boolean(" in app, "zero-coordinate state guard missing")
-check("if(!hasGeoData)boundPoints.push(" in app, "default map bounds for zero-coordinate state missing")
+check("if(!valid.length){setMapView({x:.5,y:.5},1);return;}" in app, "default world view for zero-coordinate state missing")
 check("'координат пока нет · общий вид'" in app, "zero-coordinate UI state missing")
 
 # Offline/recovery contract.
