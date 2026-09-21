@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { createNavigationController } from '../src/navigation-controller.js';
-import { runAppBootstrap } from '../src/app-bootstrap.js';
+import { createNavigationController } from './map-src/navigation-controller.js';
+import { runAppBootstrap } from './map-src/app-bootstrap.js';
 
 class FakeClassList {
   constructor(initial=[]){this.values=new Set(initial);}
