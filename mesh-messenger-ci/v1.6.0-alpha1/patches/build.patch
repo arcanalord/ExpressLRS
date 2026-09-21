@@ -1,0 +1,14 @@
+diff -ruN /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/build.gradle.kts /mnt/data/build_alpha1/android-app/app/build.gradle.kts
+--- /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/build.gradle.kts	2026-09-21 03:38:06.000000000 +0000
++++ /mnt/data/build_alpha1/android-app/app/build.gradle.kts	2026-09-21 21:36:15.000000000 +0000
+@@ -7,8 +7,8 @@
+         applicationId = "org.fpvclub.mesh"
+         minSdk = 26
+         targetSdk = 36
+-        versionCode = 21
+-        versionName = "1.5.5"
++        versionCode = 22
++        versionName = "1.6.0-alpha1"
+     }
+     buildTypes { release { isMinifyEnabled = false } }
+     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
