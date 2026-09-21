@@ -234,10 +234,6 @@ function buildConversations(snapshot=currentSnapshot()) {
   }
   const local=snapshot?.myInfo?.myNodeNum;
   const nodes=(snapshot?.nodes||[]).filter(n=>n.num!==local && !n.isIgnored && n.user?.isUnmessagable!==true);
-  if(fallback?.latitude!=null&&fallback?.longitude!=null){
-    const q=project(fallback),b=document.createElement('button');b.type='button';b.className='map-marker self map-device-position';
-    b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.title='Моя позиция';b.innerHTML=`Вы<span class="marker-label">Телефон</span>`;holder.append(b);
-  }
   for(const n of nodes){
     const id=`direct:${n.num>>>0}`; const last=getLastMessage(id);
     const ui=uiState(id);
@@ -730,6 +726,10 @@ function renderMap({fallback=browserMapPosition}={}){
   renderOnlineTiles({minX,maxX,minY,maxY,pad,span});
   if(trackLayer&&track.length>=2){const points=track.map(p=>{const q=project(p);return `${q.x.toFixed(2)},${q.y.toFixed(2)}`}).join(' ');const poly=document.createElementNS('http://www.w3.org/2000/svg','polyline');poly.setAttribute('points',points);poly.setAttribute('class','map-track-line');trackLayer.appendChild(poly);}
   for(const w of waypoints){const q=project(w);const b=document.createElement('button');b.type='button';b.className='map-waypoint';b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.title=w.description||w.name||'Waypoint';b.innerHTML=`<span>⌖</span><span class="marker-label">${w.name||'Waypoint'}</span>`;holder.append(b);}
+  if(fallback?.latitude!=null&&fallback?.longitude!=null){
+    const q=project(fallback),b=document.createElement('button');b.type='button';b.className='map-marker self map-device-position';
+    b.style.left=`${q.x}%`;b.style.top=`${q.y}%`;b.title='Моя позиция';b.innerHTML=`Вы<span class="marker-label">Телефон</span>`;holder.append(b);
+  }
   for(const n of nodes){
     const q=project(n.position);
     const b=document.createElement('button');b.type='button';b.className=`map-marker ${n.isLocal?'self':n.user?.role===2?'relay':'peer'} ${(n.num>>>0)===selectedMapNodeNum?'is-selected':''}`;
