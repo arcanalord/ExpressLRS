@@ -57,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _mesh_alpha1
-          cat mesh-messenger-ci/v1.6.0-alpha1/android.b64.part* | base64 -d > _mesh_alpha1/android.tar.xz
+          cat mesh-messenger-ci/v1.6.0-alpha1/android.b64.part00 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part01 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part02 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part03 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part04 mesh-messenger-ci/v1.6.0-alpha1/android.b64.part05 | base64 -d > _mesh_alpha1/android.tar.xz
           echo "$SOURCE_TAR_SHA256  _mesh_alpha1/android.tar.xz" | sha256sum -c -
           tar -xJf _mesh_alpha1/android.tar.xz -C _mesh_alpha1
           test -f _mesh_alpha1/android-app/app/build.gradle.kts
@@ -76,7 +76,11 @@ jobs:
           test -f "$ANDROID_DIR/app/src/main/assets/www/src/transports/lan-peer-transport.js"
           test -f "$ANDROID_DIR/app/src/main/assets/www/src/transports/internet-relay-transport.js"
           test -f "$ANDROID_DIR/app/src/main/assets/www/src/transports/phoneapi-session.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/transports/lan-peer-transport.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/transports/internet-relay-transport.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/transports/phoneapi-session.js"
           java -version
+          node --version
           gradle --version
 
       - name: Build debug APK
