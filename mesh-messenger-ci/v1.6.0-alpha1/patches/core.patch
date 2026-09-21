@@ -1,0 +1,44 @@
+diff -ruN /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/core.js /mnt/data/build_alpha1/android-app/app/src/main/assets/www/src/core.js
+--- /mnt/data/base155src/mesh-messenger-v1.5.5-work/android-app/app/src/main/assets/www/src/core.js	2026-09-21 03:49:51.000000000 +0000
++++ /mnt/data/build_alpha1/android-app/app/src/main/assets/www/src/core.js	2026-09-21 21:36:15.000000000 +0000
+@@ -13,8 +13,8 @@
+ 
+ export const DEFAULT_TRANSPORTS = [
+   { id: 'meshtastic', name: 'Meshtastic', available: true, bitrate: 1.1, latency: 820, reliability: 0.91, energy: 1, supports: ['text','position','waypoint','file'], detail: 'LoRa sub-GHz · 7 узлов' },
+-  { id: 'wifi', name: 'Wi-Fi Direct', available: false, bitrate: 24000, latency: 55, reliability: 0.88, energy: 3, supports: ['text','position','waypoint','voice','file'], detail: 'локальный быстрый канал' },
+-  { id: 'ip', name: 'Internet relay', available: false, bitrate: 12000, latency: 130, reliability: 0.94, energy: 2, supports: ['text','position','waypoint','voice','file'], detail: 'интернет не требуется' },
++  { id: 'wifi', name: 'Wi-Fi LAN', available: false, bitrate: 24000, latency: 35, reliability: 0.96, energy: 2, supports: ['text'], detail: 'прямой канал в локальной сети · без интернета' },
++  { id: 'ip', name: 'Internet relay', available: false, bitrate: 12000, latency: 130, reliability: 0.94, energy: 2, supports: ['text','position','waypoint','voice','file'], detail: 'через интернет · следующий этап' },
+ ];
+ 
+ export class TransportManager {
+@@ -33,7 +33,8 @@
+   list() { return this.transports.map(t => ({...t})); }
+ 
+   select(kind = 'text', meta = {}) {
+-    const available = this.transports.filter(t => t.available);
++    const allowedIds = Array.isArray(meta.allowedTransportIds) ? new Set(meta.allowedTransportIds) : null;
++    const available = this.transports.filter(t => t.available && (!allowedIds || allowedIds.has(t.id)));
+     const direct = available.filter(t => t.supports.includes(kind));
+ 
+     if (kind === 'voice') {
+@@ -64,6 +65,10 @@
+     }
+ 
+     if (kind === 'text') {
++      const wifi = direct.find(t => t.id === 'wifi');
++      if (wifi) return this._decision(wifi, kind, 'datachannel');
++      const ip = direct.find(t => t.id === 'ip');
++      if (ip) return this._decision(ip, kind, 'relay');
+       const lora = direct.find(t => t.id === 'meshtastic');
+       if (lora) return this._decision(lora, kind, 'packet');
+     }
+@@ -74,7 +79,7 @@
+ 
+   _decision(transport, kind, codec) {
+     const reasons = {
+-      text: 'Надёжный доступный канал для короткого текста.',
++      text: transport.id === 'wifi' ? 'Прямой локальный канал без интернета.' : transport.id === 'ip' ? 'Доставка через интернет relay.' : 'Надёжный доступный канал для короткого текста.',
+       position: 'Экономичный канал подходит для коротких позиционных обновлений.',
+       waypoint: 'Waypoint — короткий protobuf-пакет для общей точки на карте.',
+       voice: 'Выбран доступный транспорт с минимальной задержкой для голоса.',
