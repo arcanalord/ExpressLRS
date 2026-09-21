@@ -31,14 +31,16 @@ jobs:
           outer=pathlib.Path("_scan/folder.zip")
           out=pathlib.Path("_scan/dropbox")
           out.mkdir(parents=True,exist_ok=True)
+          found=False
           with zipfile.ZipFile(outer) as z:
               for n in z.namelist():
                   if n.endswith("SOURCE_CURRENT_v1.5.5.zip"):
                       data=z.read(n)
                       p=out/"SOURCE_CURRENT_v1.5.5.zip"
                       p.write_bytes(data)
+                      found=True
                       break
-          else:
+          if not found:
               raise SystemExit("source zip not found")
           src=out/"SOURCE_CURRENT_v1.5.5.zip"
           print("source_sha256", hashlib.sha256(src.read_bytes()).hexdigest())
