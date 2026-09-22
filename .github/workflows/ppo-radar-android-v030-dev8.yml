@@ -192,80 +192,71 @@ jobs:
           css.write_text(s, encoding="utf-8")
 
           p = root / "app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
-          s = p.read_text(encoding="utf-8")
-          old = '''    private void applySystemBarInsets() {
-              if (Build.VERSION.SDK_INT < 35) return;
-              getWindow().setStatusBarColor(Color.TRANSPARENT);
-              getWindow().setNavigationBarColor(Color.TRANSPARENT);
-              if (Build.VERSION.SDK_INT >= 29) getWindow().setNavigationBarContrastEnforced(false);
-              webView.setOnApplyWindowInsetsListener((view, insets) -> {
-                  android.graphics.Insets bars = insets.getInsets(
-                      WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
-                  );
-                  view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-                  return insets;
-              });
-              webView.requestApplyInsets();
-          }'''
-          compact = "\n".join(line.rstrip() for line in old.splitlines())
-          if compact not in s:
-              # Normalize NBSP/spacing from archived Java before matching.
-              normalized = s.replace("\u00a0"," ")
-              if compact not in normalized:
-                  raise SystemExit("applySystemBarInsets anchor not found")
-              s = normalized
-          new = '''    private int insetTop = 0;
-          private int insetRight = 0;
-          private int insetBottom = 0;
-          private int insetLeft = 0;
+          s = p.read_text(encoding="utf-8").replace("\u00a0", " ")
 
-          private void applySystemBarInsets() {
-              if (Build.VERSION.SDK_INT < 30) return;
-              getWindow().setDecorFitsSystemWindows(false);
-              getWindow().setStatusBarColor(Color.TRANSPARENT);
-              getWindow().setNavigationBarColor(Color.TRANSPARENT);
-              if (Build.VERSION.SDK_INT >= 29) getWindow().setNavigationBarContrastEnforced(false);
+          method_start = s.find("    private void applySystemBarInsets() {")
+          method_end = s.find("    private void jsCall(", method_start)
+          if method_start < 0 or method_end < 0:
+              raise SystemExit("applySystemBarInsets method boundary not found")
 
-              webView.setOnApplyWindowInsetsListener((view, insets) -> {
-                  android.graphics.Insets bars = insets.getInsets(
-                      WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
-                  );
-                  insetLeft = bars.left;
-                  insetTop = bars.top;
-                  insetRight = bars.right;
-                  insetBottom = bars.bottom;
-                  view.setPadding(0, 0, 0, 0);
-                  pushSystemInsetsToWeb();
-                  return insets;
-              });
-              webView.requestApplyInsets();
-          }
+          new_method = '''    private int insetTop = 0;
+              private int insetRight = 0;
+              private int insetBottom = 0;
+              private int insetLeft = 0;
 
-          private void pushSystemInsetsToWeb() {
-              if (webView == null) return;
-              String js = "(function(){var r=document.documentElement.style;"
-                  + "r.setProperty('--android-inset-top','" + insetTop + "px');"
-                  + "r.setProperty('--android-inset-right','" + insetRight + "px');"
-                  + "r.setProperty('--android-inset-bottom','" + insetBottom + "px');"
-                  + "r.setProperty('--android-inset-left','" + insetLeft + "px');"
-                  + "})();";
-              runOnUiThread(() -> webView.evaluateJavascript(js, null));
-          }'''
-          s = s.replace(compact, new)
-          client_anchor = '''            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                  WebResourceResponse local = loader.shouldInterceptRequest(request.getUrl());
-                  return local != null ? local : super.shouldInterceptRequest(view, request);
-              }'''
-          client_new = client_anchor + '''
+              private void applySystemBarInsets() {
+                  if (Build.VERSION.SDK_INT < 30) return;
+                  getWindow().setDecorFitsSystemWindows(false);
+                  getWindow().setStatusBarColor(Color.TRANSPARENT);
+                  getWindow().setNavigationBarColor(Color.TRANSPARENT);
+                  if (Build.VERSION.SDK_INT >= 29) getWindow().setNavigationBarContrastEnforced(false);
 
+                  webView.setOnApplyWindowInsetsListener((view, insets) -> {
+                      android.graphics.Insets bars = insets.getInsets(
+                          WindowInsets.Type.statusBars()
+                              | WindowInsets.Type.navigationBars()
+                              | WindowInsets.Type.displayCutout()
+                      );
+                      insetLeft = bars.left;
+                      insetTop = bars.top;
+                      insetRight = bars.right;
+                      insetBottom = bars.bottom;
+                      view.setPadding(0, 0, 0, 0);
+                      pushSystemInsetsToWeb();
+                      return insets;
+                  });
+                  webView.requestApplyInsets();
+              }
+
+              private void pushSystemInsetsToWeb() {
+                  if (webView == null) return;
+                  String js = "(function(){var r=document.documentElement.style;"
+                      + "r.setProperty('--android-inset-top','" + insetTop + "px');"
+                      + "r.setProperty('--android-inset-right','" + insetRight + "px');"
+                      + "r.setProperty('--android-inset-bottom','" + insetBottom + "px');"
+                      + "r.setProperty('--android-inset-left','" + insetLeft + "px');"
+                      + "})();";
+                  runOnUiThread(() -> webView.evaluateJavascript(js, null));
+              }
+
+          '''
+          s = s[:method_start] + new_method + s[method_end:]
+
+          client_start = s.find("        webView.setWebViewClient(new WebViewClient() {")
+          client_end = s.find("        });", client_start)
+          if client_start < 0 or client_end < 0:
+              raise SystemExit("WebViewClient block boundary not found")
+          client_block = s[client_start:client_end]
+          if "onPageFinished(WebView view, String url)" not in client_block:
+              addition = '''
               @Override public void onPageFinished(WebView view, String url) {
                   super.onPageFinished(view, url);
                   pushSystemInsetsToWeb();
-              }'''
-          if "onPageFinished(WebView view, String url)" not in s:
-              if client_anchor not in s:
-                  raise SystemExit("WebViewClient anchor not found")
-              s = s.replace(client_anchor, client_new)
+              }
+
+          '''
+              s = s[:client_end] + addition + s[client_end:]
+
           p.write_text(s, encoding="utf-8")
 
       - name: Verify packaged runtime
