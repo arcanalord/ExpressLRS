@@ -646,3 +646,9 @@ button:disabled{opacity:.46;cursor:not-allowed}
   .offline-map-estimate{grid-template-columns:1fr 1fr}
   .offline-maps-card .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 }
+
+.map-vector-layer{position:absolute;inset:0;z-index:1;background:var(--surface-2)}
+.map-vector-layer[hidden]{display:none}
+.map-vector-layer .maplibregl-map{position:absolute;inset:0}
+.map-vector-layer .maplibregl-canvas{outline:none}
+.offline-package-actions{display:flex;gap:10px;align-items:center}
