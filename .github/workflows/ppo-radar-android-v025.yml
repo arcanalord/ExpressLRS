@@ -103,6 +103,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          printf 'android.useAndroidX=true\n' > "$ANDROID_DIR/gradle.properties"
           gradle -p "$ANDROID_DIR" --no-daemon :app:assembleDebug
 
       - name: Verify APK
