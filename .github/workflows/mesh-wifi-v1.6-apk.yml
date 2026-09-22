@@ -1,4 +1,4 @@
-name: Mesh Wi-Fi v1.6.2 LAN APK
+name: Mesh Wi-Fi v1.6.3 LAN APK
 
 on:
   push:
@@ -22,8 +22,8 @@ concurrency:
 
 env:
   DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
-  VERSION_NAME: "1.6.2"
-  VERSION_CODE: "28"
+  VERSION_NAME: "1.6.3"
+  VERSION_CODE: "29"
   GRADLE_VERSION: "8.13"
 
 jobs:
@@ -209,6 +209,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mesh-wifi-v1.6.2-lan-debug
+          name: mesh-wifi-v1.6.3-lan-debug
           path: _mesh160/out/*
           retention-days: 30
