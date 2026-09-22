@@ -10,6 +10,7 @@ on:
       - "mesh-messenger-ci/prepare_current_source.py"
       - "mesh-messenger-ci/release_source_audit.py"
       - "mesh-messenger-ci/ui_startup_smoke.py"
+      - "mesh-messenger-ci/offline_map_regression_test.py"
   workflow_dispatch:
 
 permissions:
