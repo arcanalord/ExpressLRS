@@ -1,0 +1,207 @@
+name: EMMana rev25 Dropbox Windows gate
+
+on:
+  push:
+    branches: [ emmana-next-alpha20 ]
+    paths:
+      - '.github/workflows/emmana-rev25-dropbox-build.yml'
+  workflow_dispatch:
+
+jobs:
+  windows-rev25:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch exact rev25 source from Dropbox
+        shell: pwsh
+        run: |
+          $url = 'https://uc8e775ea7cd3923b46941e0d256.dl.dropboxusercontent.com/cd/0/get/DInGJEJZ4owANX2MiLS7rjfv0YHxX778mWmUTgLXn58wUTzitiLpFoyu8P4qW_Wz0_-TTBwqUQ0cVdFuzRlN-VAsh0shUSTgnbmacY1GqVAoRA2Ae25gFDff2YCvx-x6LEBclRqN8MsrvtB9xsEk_nmMq9u8XeFWjnEesZCXDA-Uyw/file?c_luid=cfbe8875'
+          Invoke-WebRequest -Uri $url -OutFile rev25.zip -TimeoutSec 120
+          $sha = (Get-FileHash rev25.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne '31c19421cc8088bbc0ed52a8ca7455a485f795ddad7a8eb0a6002d102b38c6d5') { throw "rev25 source SHA mismatch: $sha" }
+          Expand-Archive rev25.zip -DestinationPath src -Force
+          $version = (Get-Content src/emmana_rev25/VERSION).Trim()
+          if ($version -ne '0.1.0-alpha.20-rev25') { throw "Unexpected VERSION: $version" }
+          Write-Host "DROPBOX_SOURCE_PASS sha=$sha version=$version"
+
+      - name: Install C++ dependencies
+        shell: pwsh
+        working-directory: src/emmana_rev25
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-json:x64-windows-static eigen3:x64-windows-static
+
+      - name: Configure MSVC x64 with Eigen required
+        shell: pwsh
+        working-directory: src/emmana_rev25
+        run: cmake -S . -B build-win -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static -DEMNEXT_REQUIRE_EIGEN=ON
+
+      - name: Build
+        shell: pwsh
+        working-directory: src/emmana_rev25
+        run: cmake --build build-win --config Release --parallel 2
+
+      - name: Full regression gate
+        shell: pwsh
+        working-directory: src/emmana_rev25
+        run: ctest --test-dir build-win -C Release --output-on-failure
+
+      - name: Explicit UI and workflow regression gate
+        shell: pwsh
+        working-directory: src/emmana_rev25
+        run: |
+          python tests/test_primary_actions.py .
+          python tests/test_geometry_editor.py .
+          python tests/test_ui_surface_state.py .
+          python tests/test_help_registry.py .
+          python tests/test_measurement_pipeline.py .
+          python tests/test_product_workflow.py .
+          python tests/test_windows_launcher.py .
+
+      - name: Build portable launcher
+        shell: pwsh
+        working-directory: src/emmana_rev25
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller
+          python -m PyInstaller --noconfirm --clean --onefile --name EMMana-Next --hidden-import json --hidden-import hashlib --hidden-import importlib.util --hidden-import math --hidden-import subprocess --hidden-import tempfile --hidden-import urllib.parse --hidden-import http --hidden-import http.server --hidden-import cmath --hidden-import csv --hidden-import io --hidden-import re --hidden-import typing --add-binary "build-win/Release/emnext.exe;EMMana-Next" --add-data "apps;EMMana-Next/apps" --add-data "benchmarks;EMMana-Next/benchmarks" --add-data "schemas;EMMana-Next/schemas" --add-data "VERSION;EMMana-Next" apps/windows_launcher.py
+
+      - name: Portable runtime, Optimization and Measurements gate
+        shell: pwsh
+        working-directory: src/emmana_rev25
+        run: |
+          $port = 8799
+          $stdout = Join-Path $PWD "portable-stdout.log"
+          $stderr = Join-Path $PWD "portable-stderr.log"
+          $proc = Start-Process -FilePath "dist/EMMana-Next.exe" -ArgumentList "--no-browser","--port","$port" -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          function PostJson($path, $obj, $timeout=120) {
+            $body = $obj | ConvertTo-Json -Depth 100
+            return Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port$path" -ContentType "application/json" -Body $body -TimeoutSec $timeout
+          }
+          try {
+            $health = $null
+            for ($i=0; $i -lt 60; $i++) {
+              Start-Sleep -Seconds 1
+              if ($proc.HasExited) { throw "Portable launcher exited early code=$($proc.ExitCode)" }
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2
+                if ($health.ok) { break }
+              } catch {}
+            }
+            if (-not $health -or -not $health.ok) { throw "Portable /api/health did not become ready" }
+            if ($health.version -ne '0.1.0-alpha.20-rev25') { throw "Wrong portable version: $($health.version)" }
+
+            $page = (Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 10).Content
+            foreach ($marker in @(
+              'geometry-canvas','geometry-3d-canvas','geometry-template-create',
+              'run-opt','apply-opt',
+              'measurement-file','measurement-import','measurement-compare',
+              'variant-save','measurement-bind','report-generate','report-download',
+              'Частотный расчёт','Назначить питание'
+            )) {
+              if ($page -notmatch [regex]::Escape($marker)) { throw "Packaged UI missing: $marker" }
+            }
+
+            $app = (Invoke-WebRequest -Uri "http://127.0.0.1:$port/app.js" -TimeoutSec 10).Content
+            foreach ($marker in @(
+              'els.run.onclick=run',
+              'els.runSweep.onclick=runSweep',
+              'els.runOpt.onclick=runOptimize',
+              'els.applyOpt.onclick=applyBest',
+              'els.measurementImport.onclick=importMeasurement',
+              'els.measurementCompare.onclick=compareMeasurement',
+              'els.variantSave.onclick=saveVariant',
+              'els.measurementBind.onclick=bindMeasurement',
+              'els.reportGenerate.onclick=generateReport',
+              'els.reportDownload.onclick=downloadReport'
+            )) {
+              if ($app -notmatch [regex]::Escape($marker)) { throw "Packaged app.js missing binding: $marker" }
+            }
+            Invoke-WebRequest -Uri "http://127.0.0.1:$port/geometry3d.js" -TimeoutSec 10 | Out-Null
+
+            $examples = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/examples" -TimeoutSec 10
+            $b01pick = $examples.examples | Where-Object { $_.file -eq 'B01_halfwave_dipole_51seg.emnx' } | Select-Object -First 1
+            $b04pick = $examples.examples | Where-Object { $_.file -eq 'B04_three_element_yagi_parametric.emnx' } | Select-Object -First 1
+            if (-not $b01pick -or -not $b04pick) { throw "Required B01/B04 examples missing" }
+            $b01 = Invoke-RestMethod -Uri ("http://127.0.0.1:$port/api/example/" + [uri]::EscapeDataString($b01pick.file)) -TimeoutSec 10
+            $b04 = Invoke-RestMethod -Uri ("http://127.0.0.1:$port/api/example/" + [uri]::EscapeDataString($b04pick.file)) -TimeoutSec 10
+
+            $check = PostJson '/api/model-check' @{ project=$b01; kernel='reduced' } 30
+            if (-not $check.ok) { throw "Model check API failed" }
+            $solve = PostJson '/api/solve' @{ project=$b01; kernel='reduced' } 90
+            if (-not $solve.result -or -not $solve.result.feeds -or $solve.result.feeds.Count -lt 1) { throw "Solve API returned no feed result" }
+
+            $sweep = PostJson '/api/sweep' @{
+              project=$b01; kernel='reduced'; start_hz=285000000.0; stop_hz=315000000.0; points=3; parallel_workers=2
+            } 120
+            if (-not $sweep.sweep -or $sweep.sweep.samples.Count -ne 3) { throw "Sweep API did not return 3 samples" }
+
+            $opt = PostJson '/api/optimize' @{
+              project=$b04; kernel='reduced'; population=4; generations=1; local_iterations=0; seed=42; algorithm='pso'
+              weights=@{match=50; gain=25; front_to_back=15; size=10}
+              gain_guardrail_db=0.5; max_vswr=2.0
+              band_start_hz=0; band_stop_hz=0; band_points=1
+              quantization_step_m=0.001; manufacturing_tolerance_m=0.0
+              robust_objective_samples=0; monte_carlo_samples=0; parallel_workers=2
+            } 300
+            if (-not $opt.ok -or -not $opt.optimizer.best -or -not $opt.optimizer.best.metrics.feasible) { throw "Optimizer API did not return feasible best candidate" }
+
+            $nl = [Environment]::NewLine
+            $measurementText = "# MHz S RI R 50" + $nl + "285 0.10 0" + $nl + "300 0.20 0" + $nl + "315 0.10 0" + $nl
+            $parsed = PostJson '/api/measurement/parse' @{ format='touchstone-s1p'; source_name='windows-gate.s1p'; text=$measurementText } 30
+            if (-not $parsed.ok -or $parsed.measurement.samples.Count -ne 3) { throw "Measurement import failed" }
+
+            $cmp = PostJson '/api/measurement/compare' @{ measurement=$parsed.measurement; sweep=$sweep.sweep } 30
+            if (-not $cmp.ok -or $cmp.comparison.overlap.points -lt 1) { throw "Measurement comparison failed" }
+
+            $variant = PostJson '/api/variant/create' @{
+              project=$b01; variant_id='windows-gate-v1'; name='Windows gate B01'
+            } 30
+            if (-not $variant.ok -or -not $variant.variant.model_ref.model_hash) { throw "Variant save failed" }
+
+            $bound = PostJson '/api/measurement/bind' @{
+              variant=$variant.variant; measurement=$parsed.measurement; raw_text=$measurementText
+              measurement_id='windows-gate-vna'
+              calibration=@{type='SOL'; reference_plane_note='feed connector'}
+              provenance=@{instrument_or_source='CI fixture'}
+            } 30
+            if (-not $bound.ok -or $bound.measurement_set.variant_ref.variant_id -ne 'windows-gate-v1') { throw "Measurement bind failed" }
+
+            $report = PostJson '/api/report/generate' @{
+              variant=$variant.variant; measurement_set=$bound.measurement_set
+              sweep=$sweep.sweep; measurement=$parsed.measurement; comparison=$cmp.comparison
+            } 30
+            if (-not $report.ok -or $report.report.markdown -notmatch 'Engineering Report') { throw "Engineering report generation failed" }
+
+            Write-Host "WINDOWS_PORTABLE_REV25_PASS version=$($health.version) optimization=PASS measurements=PASS"
+          } finally {
+            if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+            if (Test-Path $stdout) { Get-Content $stdout }
+            if (Test-Path $stderr) { Get-Content $stderr }
+          }
+
+      - name: Package Windows portable
+        shell: pwsh
+        working-directory: src/emmana_rev25
+        run: |
+          $version = (Get-Content VERSION).Trim()
+          $pkg = "dist/EMMana-Next-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          Copy-Item dist/EMMana-Next.exe $pkg/EMMana-Next.exe
+          Copy-Item build-win/Release/emnext.exe $pkg/emnext-cli.exe
+          Copy-Item VERSION $pkg/
+          @(
+            "EMMana-Next Portable Windows","",
+            "Запустите EMMana-Next.exe.",
+            "Программа работает локально на 127.0.0.1 и открывает браузер.",
+            "Отдельная установка Python не требуется.","",
+            "emnext-cli.exe предназначен для диагностики."
+          ) | Set-Content -Encoding UTF8 "$pkg/README-WINDOWS.txt"
+          Compress-Archive -Path "$pkg/*" -DestinationPath "$pkg.zip" -Force
+
+      - name: Upload verified Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-rev25-windows-x64
+          path: src/emmana_rev25/dist/EMMana-Next-0.1.0-alpha.20-rev25-windows-x64.zip
+          if-no-files-found: error
