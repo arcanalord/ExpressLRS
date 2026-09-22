@@ -1,4 +1,4 @@
-name: Mesh Wi-Fi v1.6 APK
+name: Mesh Wi-Fi v1.6.1 LAN APK
 
 on:
   push:
@@ -22,8 +22,8 @@ concurrency:
 
 env:
   DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
-  VERSION_NAME: "1.6.0"
-  VERSION_CODE: "26"
+  VERSION_NAME: "1.6.1"
+  VERSION_CODE: "27"
   GRADLE_VERSION: "8.13"
 
 jobs:
@@ -104,14 +104,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$ROOT/src/transports" "$ANDROID_DIR/app/src/main/assets/www/src/transports"
-          cp mesh-messenger-ci/v1.6.0/transports/*.js "$ROOT/src/transports/"
-          cp mesh-messenger-ci/v1.6.0/transports/*.js "$ANDROID_DIR/app/src/main/assets/www/src/transports/"
+          cp mesh-messenger-ci/v1.6.0/transports/lan-peer-transport.js "$ROOT/src/transports/"
+          cp mesh-messenger-ci/v1.6.0/transports/auto-route-selector.js "$ROOT/src/transports/"
+          cp mesh-messenger-ci/v1.6.0/transports/lan-peer-transport.js "$ANDROID_DIR/app/src/main/assets/www/src/transports/"
+          cp mesh-messenger-ci/v1.6.0/transports/auto-route-selector.js "$ANDROID_DIR/app/src/main/assets/www/src/transports/"
           python3 mesh-messenger-ci/v1.6.0/apply_wifi_v16.py "$ROOT"
           grep -q "LanPeerTransport" "$ROOT/src/app.js"
-          grep -q "InternetRelayTransport" "$ROOT/src/app.js"
           grep -q "AutoRouteSelector" "$ROOT/src/app.js"
           grep -q 'id="fastPairModal"' "$ROOT/index.html"
           grep -q 'id="fastPairModal"' "$ANDROID_DIR/app/src/main/assets/www/index.html"
+          ! grep -q "InternetRelayTransport" "$ROOT/src/app.js"
+          ! grep -q "relayUrl" "$ROOT/index.html"
+          ! grep -q "Internet-код" "$ROOT/index.html"
 
       - name: Set release identity and audit source
         shell: bash
@@ -120,7 +124,6 @@ jobs:
           python3 mesh-messenger-ci/prepare_current_source.py "$ROOT" "$VERSION_NAME" "$VERSION_CODE"
           node --check "$ROOT/src/app.js"
           node --check "$ROOT/src/transports/lan-peer-transport.js"
-          node --check "$ROOT/src/transports/internet-relay-transport.js"
           node --check "$ROOT/src/transports/auto-route-selector.js"
           python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
           python3 mesh-messenger-ci/release_source_audit.py "$ROOT"
@@ -194,12 +197,12 @@ jobs:
             echo "android_build=PASS"
             echo "apk_verify=PASS"
             echo "lan_two_device=PENDING"
-            echo "internet_two_networks=PENDING"
+            echo "internet_relay=DEFERRED"
             echo "phone_runtime=PENDING"
           } > _mesh160/out/BUILD_RESULT.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mesh-wifi-v1.6.0-debug
+          name: mesh-wifi-v1.6.1-lan-debug
           path: _mesh160/out/*
           retention-days: 30
