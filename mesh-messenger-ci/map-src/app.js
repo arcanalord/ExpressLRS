@@ -6,6 +6,9 @@ import { AndroidBridgeMeshtasticTransport } from './transports/android-bridge-me
 import { PhoneApiSession } from './transports/phoneapi-session.js';
 import { BROADCAST, PORTNUM, encodeTextToRadio, encodePositionToRadio, encodeWaypointToRadio, encodePortPayloadToRadio, encodeSmallFileManifest, encodeSmallFileChunk, encodeSmallFileStatus, encodeSmallFileStatusRequest, decodeSmallFileFrame, sharedContactUrl, channelSetUrl, parseMeshtasticShareUrl } from './transports/phoneapi-lite.js';
 import { HELP_FALLBACK_ID, ERROR_TOPIC_MAP, helpRegistry, parseHelpTopic, buildSafeDiagnostics } from './help-registry.js';
+import { createOfflineMapManager } from './offline-map-manager.js';
+import { createVectorPackageManager } from './vector-package-manager.js';
+import { createVectorMapAdapter } from './vector-map-adapter.js';
 
 const transportManager = new TransportManager();
 const queue = new MessageQueue();
@@ -27,6 +30,14 @@ let pendingWaypointPosition = null;
 let browserMapPosition = null;
 let mapTileState = 'loading';
 let mapTileGeneration = 0;
+const offlineMapManager = createOfflineMapManager({
+  provider: globalThis.__meshOfflineMapProvider || null,
+});
+const vectorPackageManager = createVectorPackageManager();
+const pmtilesProvider = globalThis.__meshPmtilesProvider || null;
+let vectorMapAdapter = null;
+let vectorRestoreAttempted = false;
+let offlineMapDownloadAbort = null;
 const mapViewport={centerX:.5,centerY:.5,zoom:1,initialized:false,userMoved:false,pointers:new Map(),pinch:null};
 let qrMode = 'contact';
 const importedContacts = new Map();
@@ -723,12 +734,196 @@ function panMapPixels(dx,dy){
   const world=mapWorldSize();
   mapViewport.centerX-=dx/world;mapViewport.centerY-=dy/world;mapViewport.initialized=true;mapViewport.userMoved=true;normalizeMapCenter();
 }
+function vectorAdapter(){
+  if(!vectorMapAdapter)vectorMapAdapter=createVectorMapAdapter({container:$('#mapVectorLayer')});
+  return vectorMapAdapter;
+}
+function vectorCenter(){
+  const p=inverseMercatorPoint(mapViewport.centerX,mapViewport.centerY);
+  return {longitude:p.longitude,latitude:p.latitude,zoom:mapViewport.zoom};
+}
+function syncVectorMap(){
+  const adapter=vectorAdapter();
+  if(!adapter?.activePackageId)return false;
+  adapter.syncView(vectorCenter());
+  const raster=$('#mapTileLayer'),grid=$('#mapGrid'),attrib=$('#mapAttribution');
+  if(raster)raster.hidden=true;if(grid)grid.hidden=true;
+  if(attrib){attrib.hidden=false;attrib.textContent='Vector PMTiles · offline';}
+  mapTileState='vector-offline';
+  return true;
+}
+async function activateVectorPackage(id){
+  const meta=vectorPackageManager.list().find(x=>x.id===id);
+  const file=await vectorPackageManager.file(id);
+  if(!meta||!file)throw new Error('PMTILES_PACKAGE_NOT_FOUND');
+  const adapter=vectorAdapter();
+  if(!adapter.isSupported())throw new Error('VECTOR_RUNTIME_UNAVAILABLE');
+  await adapter.activateFile(file,{id,attribution:meta.attribution||''});
+  vectorPackageManager.setActive(id);
+  syncVectorMap();
+  renderOfflinePackages();
+  return meta;
+}
+async function restoreVectorPackage(){
+  if(vectorRestoreAttempted)return;
+  vectorRestoreAttempted=true;
+  const id=vectorPackageManager.activeId();
+  if(!id)return;
+  try{await activateVectorPackage(id);renderMap({preserveViewport:true});}catch{vectorPackageManager.setActive('');vectorAdapter()?.deactivate();}
+}
+function pmtilesDownloadUrl(bounds,minZoom,maxZoom){
+  if(!pmtilesProvider?.offlineAllowed)return '';
+  if(typeof pmtilesProvider.buildUrl==='function')return pmtilesProvider.buildUrl({bounds,minZoom,maxZoom});
+  if(!pmtilesProvider.endpoint)return '';
+  const url=new URL(pmtilesProvider.endpoint,location.href);
+  url.searchParams.set('bbox',[bounds.west,bounds.south,bounds.east,bounds.north].join(','));
+  url.searchParams.set('minzoom',String(minZoom));
+  url.searchParams.set('maxzoom',String(maxZoom));
+  return url.toString();
+}
+async function importPmtilesFile(file){
+  const record=await vectorPackageManager.importFile(file,{name:file.name.replace(/\.pmtiles$/i,''),attribution:pmtilesProvider?.attribution||''});
+  await activateVectorPackage(record.id);
+  renderMap({preserveViewport:true});
+  return record;
+}
+function inverseMercatorPoint(x,y){
+  const lon=x*360-180;
+  const n=Math.PI-2*Math.PI*y;
+  const lat=180/Math.PI*Math.atan(.5*(Math.exp(n)-Math.exp(-n)));
+  return {latitude:lat,longitude:lon};
+}
+function currentMapBounds(){
+  const {w,h}=mapCanvasSize(),world=mapWorldSize();
+  const west=mapViewport.centerX-(w/2)/world,east=mapViewport.centerX+(w/2)/world;
+  const north=mapViewport.centerY-(h/2)/world,south=mapViewport.centerY+(h/2)/world;
+  const nw=inverseMercatorPoint(west,north),se=inverseMercatorPoint(east,south);
+  return {north:nw.latitude,south:se.latitude,west:nw.longitude,east:se.longitude};
+}
+function radiusBounds(radiusKm){
+  const center=inverseMercatorPoint(mapViewport.centerX,mapViewport.centerY),lat=center.latitude,lon=center.longitude;
+  const latDelta=Number(radiusKm)/111.32;
+  const lonDelta=Number(radiusKm)/(111.32*Math.max(.1,Math.cos(lat*Math.PI/180)));
+  return {north:lat+latDelta,south:lat-latDelta,west:lon-lonDelta,east:lon+lonDelta};
+}
+function selectedOfflineBounds(){
+  const value=$('#offlineMapArea')?.value||'viewport';
+  return value==='viewport'?currentMapBounds():radiusBounds(Number(value)||5);
+}
+function formatStorageBytes(bytes){
+  const n=Number(bytes)||0;
+  if(n<1024)return `${n} B`;
+  if(n<1024*1024)return `${(n/1024).toFixed(n<10240?1:0)} KB`;
+  if(n<1024*1024*1024)return `${(n/1024/1024).toFixed(n<100*1024*1024?1:0)} MB`;
+  return `${(n/1024/1024/1024).toFixed(2)} GB`;
+}
+function offlineEstimate(){
+  const maxZoom=Number($('#offlineMapDetail')?.value)||14;
+  return offlineMapManager.estimate(selectedOfflineBounds(),Math.max(5,maxZoom-5),maxZoom);
+}
+function renderOfflineEstimate(){
+  const estimate=offlineEstimate();
+  const count=$('#offlineMapTileCount'),size=$('#offlineMapEstimatedSize');
+  const button=$('#offlineMapDownload'),provider=$('#offlineMapProviderState');
+  const vectorReady=Boolean(pmtilesProvider?.offlineAllowed&&(pmtilesProvider.endpoint||typeof pmtilesProvider.buildUrl==='function'));
+  if(count)count.textContent=vectorReady?'PMTiles':String(estimate.tileCount);
+  if(size){
+    const vectorEstimate=vectorReady&&typeof pmtilesProvider?.estimateBytes==='function'
+      ? Number(pmtilesProvider.estimateBytes({bounds:selectedOfflineBounds(),minZoom:Math.max(5,(Number($('#offlineMapDetail')?.value)||14)-5),maxZoom:Number($('#offlineMapDetail')?.value)||14}))
+      : 0;
+    size.textContent=vectorReady
+      ? (vectorEstimate>0?`~${formatStorageBytes(vectorEstimate)}`:'уточнится при загрузке')
+      : `~${formatStorageBytes(estimate.estimatedBytes)}`;
+  }
+  const rasterReady=Boolean(offlineMapManager.provider);
+  const ready=vectorReady||rasterReady;
+  if(button)button.disabled=!ready||(!vectorReady&&estimate.tileCount>12000);
+  if(provider)provider.textContent=vectorReady
+    ? `Vector-first: PMTiles + MapLibre · ${pmtilesProvider.name||'provider настроен'}`
+    : rasterReady
+      ? `Raster fallback: ${offlineMapManager.provider.name||offlineMapManager.provider.id||'provider настроен'}`
+      : 'Импорт .pmtiles доступен локально. Для скачивания области нужен PMTiles provider; raster provider остаётся резервом.';
+  if(!vectorReady&&estimate.tileCount>12000&&provider)provider.textContent='Raster fallback: область слишком большая. Уменьшите радиус или детализацию.';
+}
+function renderOfflinePackages(){
+  const list=$('#offlinePackagesList'),total=$('#offlinePackagesTotal'),summary=$('#offlineMapsSummary');
+  const vectorPackages=vectorPackageManager.list();
+  const rasterPackages=offlineMapManager.list();
+  const packages=[...vectorPackages.map(x=>({...x,storageKind:'vector'})),...rasterPackages.map(x=>({...x,storageKind:'raster'}))];
+  if(total)total.textContent=packages.length?`${packages.length} шт.`:'';
+  if(summary)summary.textContent=packages.length?`${packages.length} областей сохранено`:'Выбрать область и скачать';
+  if(!list)return;
+  list.innerHTML='';
+  if(!packages.length){const empty=document.createElement('div');empty.className='node-empty';empty.textContent='Пока ничего не загружено.';list.appendChild(empty);return;}
+  for(const pkg of packages){
+    const row=document.createElement('div');row.className='offline-package-row';
+    const copy=document.createElement('div');copy.innerHTML=`<strong></strong><small></small>`;
+    copy.querySelector('strong').textContent=pkg.name;
+    copy.querySelector('small').textContent=pkg.storageKind==='vector'
+      ? `PMTiles · vector · ${formatStorageBytes(pkg.bytes)}${vectorPackageManager.activeId()===pkg.id?' · используется':''}`
+      : `Raster fallback · ${formatStorageBytes(pkg.bytes)} · z${pkg.minZoom}–${pkg.maxZoom} · ${pkg.tileCount} тайлов`;
+    const actions=document.createElement('div');actions.className='offline-package-actions';
+    if(pkg.storageKind==='vector'){
+      const use=document.createElement('button');use.type='button';use.className='quiet-button';use.textContent='Использовать';
+      use.addEventListener('click',async()=>{use.disabled=true;try{await activateVectorPackage(pkg.id);renderMap({preserveViewport:true});}finally{use.disabled=false;}});
+      actions.append(use);
+    }
+    const remove=document.createElement('button');remove.type='button';remove.className='quiet-button';remove.textContent='Удалить';
+    remove.addEventListener('click',async()=>{
+      remove.disabled=true;
+      if(pkg.storageKind==='vector'){
+        await vectorPackageManager.remove(pkg.id);
+        if(vectorMapAdapter?.activePackageId===pkg.id)vectorMapAdapter.deactivate();
+      }else await offlineMapManager.remove(pkg.id);
+      renderOfflinePackages();renderMap({preserveViewport:true});
+    });
+    actions.append(remove);row.append(copy,actions);list.appendChild(row);
+  }
+}
+function openOfflineMaps(){
+  renderOfflineEstimate();renderOfflinePackages();openModal($('#offlineMapsModal'));
+}
+async function downloadOfflineSelection(){
+  const vectorReady=Boolean(pmtilesProvider?.offlineAllowed&&(pmtilesProvider.endpoint||typeof pmtilesProvider.buildUrl==='function'));
+  if(!vectorReady&&!offlineMapManager.provider)return;
+  const button=$('#offlineMapDownload'),progress=$('#offlineMapProgress'),bar=$('#offlineMapProgressBar'),text=$('#offlineMapProgressText');
+  const maxZoom=Number($('#offlineMapDetail')?.value)||14,minZoom=Math.max(5,maxZoom-5),bounds=selectedOfflineBounds();
+  const name=$('#offlineMapName')?.value||'Моя область';
+  offlineMapDownloadAbort?.abort();offlineMapDownloadAbort=new AbortController();
+  if(button)button.disabled=true;if(progress)progress.hidden=false;
+  try{
+    if(vectorReady){
+      const url=pmtilesDownloadUrl(bounds,minZoom,maxZoom);
+      if(!url)throw new Error('PMTILES_PROVIDER_NOT_CONFIGURED');
+      const record=await vectorPackageManager.download({url,name,attribution:pmtilesProvider?.attribution||'',signal:offlineMapDownloadAbort.signal,onProgress:({bytes,total})=>{
+        const pct=total?Math.round(bytes/Math.max(1,total)*100):0;
+        if(bar)bar.style.width=total?`${pct}%`:'35%';if(text)text.textContent=total?`${pct}% · ${formatStorageBytes(bytes)}`:`Загружено ${formatStorageBytes(bytes)}`;
+      }});
+      await activateVectorPackage(record.id);
+    }else await offlineMapManager.download({name,bounds,minZoom,maxZoom,signal:offlineMapDownloadAbort.signal,onProgress:({done,total,bytes})=>{
+      const pct=Math.round(done/Math.max(1,total)*100);
+      if(bar)bar.style.width=`${pct}%`;if(text)text.textContent=`${pct}% · ${formatStorageBytes(bytes)}`;
+    }});
+    renderOfflinePackages();renderMap({preserveViewport:true});
+    if(text)text.textContent='Готово';
+  }catch(error){
+    if(text)text.textContent=error?.name==='AbortError'?'Отменено':`Ошибка: ${error?.message||error}`;
+  }finally{renderOfflineEstimate();}
+}
+async function tileObjectUrl(z,x,y){
+  const cached=await offlineMapManager.cachedTile(z,x,y);
+  if(!cached)return '';
+  const blob=await cached.blob();
+  return URL.createObjectURL(blob);
+}
+
 function renderOnlineTiles(){
   const layer=$('#mapTileLayer'),grid=$('#mapGrid'),attribution=$('#mapAttribution');
+  if(syncVectorMap())return;
   if(!layer)return;
   const generation=++mapTileGeneration,{w,h}=mapCanvasSize();
   layer.innerHTML='';
-  if(navigator.onLine===false){mapTileState='offline';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;return;}
+  if(navigator.onLine===false){mapTileState='offline';layer.hidden=false;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;}
   const tileZ=Math.max(1,Math.min(19,Math.floor(mapViewport.zoom))),fractionScale=Math.pow(2,mapViewport.zoom-tileZ);
   const n=2**tileZ,baseWorld=256*n,cx=mapViewport.centerX*baseWorld,cy=mapViewport.centerY*baseWorld,tileSize=256*fractionScale;
   const leftBase=cx-(w/2)/fractionScale,topBase=cy-(h/2)/fractionScale;
@@ -738,7 +933,7 @@ function renderOnlineTiles(){
   mapTileState='loading';layer.hidden=false;if(grid)grid.hidden=false;if(attribution)attribution.hidden=false;
   const settle=()=>{
     if(generation!==mapTileGeneration)return;
-    if(loaded>0){mapTileState='online';if(grid)grid.hidden=true;}
+    if(loaded>0){mapTileState=navigator.onLine===false?'raster-offline':'online';if(grid)grid.hidden=true;}
     else if(pending===failed){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;}
     renderMapTileStatus();
   };
@@ -748,13 +943,25 @@ function renderOnlineTiles(){
     img.style.left=`${(tx*256-cx)*fractionScale+w/2}px`;img.style.top=`${(ty*256-cy)*fractionScale+h/2}px`;img.style.width=`${tileSize+.5}px`;img.style.height=`${tileSize+.5}px`;
     img.addEventListener('load',()=>{loaded++;settle();},{once:true});
     img.addEventListener('error',()=>{failed++;img.remove();settle();},{once:true});
-    img.src=`https://tile.openstreetmap.org/${tileZ}/${wrapped}/${ty}.png`;layer.appendChild(img);
+    layer.appendChild(img);
+    tileObjectUrl(tileZ,wrapped,ty).then(localUrl=>{
+      if(generation!==mapTileGeneration){if(localUrl)URL.revokeObjectURL(localUrl);return;}
+      if(localUrl){img.dataset.offline='1';img.src=localUrl;img.addEventListener('load',()=>URL.revokeObjectURL(localUrl),{once:true});}
+      else if(navigator.onLine!==false)img.src=`https://tile.openstreetmap.org/${tileZ}/${wrapped}/${ty}.png`;
+      else {failed++;img.remove();settle();}
+    }).catch(()=>{if(navigator.onLine!==false)img.src=`https://tile.openstreetmap.org/${tileZ}/${wrapped}/${ty}.png`;else{failed++;img.remove();settle();}});
+
   }
   setTimeout(()=>{if(generation===mapTileGeneration&&loaded===0){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;renderMapTileStatus();}},4500);
 }
 function renderMapTileStatus(){
   const title=$('#mapOverlayTitle');if(!title)return;
-  title.textContent=mapTileState==='online'?'OSM · Позиции NodeDB':mapTileState==='loading'?'Карта загружается · Позиции NodeDB':'Карта недоступна · локальная сетка';
+  title.textContent=
+    mapTileState==='vector-offline'?'PMTiles · векторная офлайн-карта':
+    mapTileState==='raster-offline'?'Raster · офлайн-кэш':
+    mapTileState==='online'?'OSM · online':
+    mapTileState==='loading'?'Карта загружается':
+    'Карта недоступна · локальная сетка';
 }
 function renderMap({fallback=browserMapPosition,preserveViewport=false}={}){
   const holder=$('#mapMarkers'),trackLayer=$('#mapTrackLayer');if(!holder)return;
@@ -1025,6 +1232,22 @@ function wireEvents() {
   $('#messageTypeSelect').addEventListener('change',renderRoute);
   $('#engineeringToggle').addEventListener('change',e=>{$('#engineeringBlock').hidden=!e.target.checked;storageSet('engineering',e.target.checked?'1':'0');});
   $('#networkDetailsToggle')?.addEventListener('click',toggleNetworkDetails);
+  $('#offlineMapsButton')?.addEventListener('click',openOfflineMaps);
+  $('#closeOfflineMaps')?.addEventListener('click',()=>closeModal($('#offlineMapsModal')));
+  $('#offlineMapsModal')?.addEventListener('click',e=>{if(e.target===$('#offlineMapsModal'))closeModal($('#offlineMapsModal'));});
+  $('#offlineMapArea')?.addEventListener('change',renderOfflineEstimate);
+  $('#offlineMapDetail')?.addEventListener('change',renderOfflineEstimate);
+  $('#offlineMapUseCurrent')?.addEventListener('click',()=>{$('#offlineMapArea').value='viewport';renderOfflineEstimate();});
+  $('#offlineMapDownload')?.addEventListener('click',downloadOfflineSelection);
+  $('#offlineMapImportButton')?.addEventListener('click',()=>$('#offlineMapImportInput')?.click());
+  $('#offlineMapImportInput')?.addEventListener('change',async e=>{
+    const file=e.target.files?.[0];if(!file)return;
+    const progress=$('#offlineMapProgress'),text=$('#offlineMapProgressText');
+    if(progress)progress.hidden=false;if(text)text.textContent='Импорт PMTiles…';
+    try{await importPmtilesFile(file);if(text)text.textContent='PMTiles подключён';}
+    catch(error){if(text)text.textContent=`Ошибка PMTiles: ${error?.message||error}`;}
+    finally{e.target.value='';renderOfflinePackages();}
+  });
   $('#networkHealthDetails')?.addEventListener('click',()=>setNetworkDetails(true));
   const usbButton=$('#connectUsbRadio');if(usbButton&&!WebSerialMeshtasticTransport.isSupported()){usbButton.disabled=true;usbButton.title='USB/Web Serial недоступен в этом runtime';}
   $('#relaySwitch').addEventListener('change',e=>e.currentTarget.closest('.relay-card').classList.toggle('disabled-state',!e.target.checked));
@@ -1057,11 +1280,11 @@ function wireEvents() {
 
 initTheme();
 mockRadio.onState(snapshot=>{if(activeRadio===mockRadio)renderRadioState(snapshot);}); webSerialRadio.onState(snapshot=>{if(activeRadio===webSerialRadio)renderRadioState(snapshot);}); androidBleRadio.onState(snapshot=>{if(activeRadio===androidBleRadio)renderRadioState(snapshot);});
-renderConversations();renderConversationHeader();renderMessages();renderTransportCards();renderGlobalStatus();renderRoute();renderDeliveryQueue();renderSystemBanner('syncing');renderMap();
+renderConversations();renderConversationHeader();renderMessages();renderTransportCards();renderGlobalStatus();renderRoute();renderDeliveryQueue();renderSystemBanner('syncing');renderMap();restoreVectorPackage();
 const eng=storageGet('engineering')==='1';$('#engineeringToggle').checked=eng;$('#engineeringBlock').hidden=!eng;wireEvents();
 const initialHelpTopic=parseHelpTopic(location.search);if(initialHelpTopic)openFullHelp(initialHelpTopic,{pushHistory:false});
 if(globalThis.__meshPendingDeepLink){handleAndroidDeepLink(globalThis.__meshPendingDeepLink);globalThis.__meshPendingDeepLink='';}
 if(!globalThis.__meshDisableAutoConnect)activateRadio(AndroidBridgeMeshtasticTransport.isSupported()?androidBleRadio:mockRadio).catch(()=>{});
 
-window.__meshDebug={transportManager,queue,mockRadio,androidBleRadio,getPhoneApiSnapshot:()=>currentSnapshot(),getCurrentConversation:()=>currentConversation(),selectConversation,sendMessage,retryQueueItem,renderDeliveryQueue,exportPhoneApiCapture,simulateReboot:()=>mockRadio.simulateReboot(),setNextRoutingResult:(code)=>mockRadio.setNextRoutingResult(code),setFileDisconnectAfter:(n)=>mockRadio.setFileDisconnectAfter(n),getConversationUi:(id)=>({...uiState(id)}),sendSmallFile,getFileTransfers:()=>fileTransfers.list().map(t=>({id:t.id,name:t.name,status:t.status,confirmed:fileTransfers.confirmedCount(t.id),total:t.total,targetNode:t.targetNode,conversationId:t.conversationId,error:t.error})),simulateFileSubsystemRestart,resumeIncompleteFileTransfers,renderMap,getMapViewport:()=>({...mapViewport,pointers:undefined,pinch:undefined}),locateOnMap,shareCurrentPosition,currentShareUrls,renderShareQr,trackHistory,getWaypoints:()=>[...sharedWaypoints.values()],sendWaypointFromModal,helpRegistry,renderQuickHelp,openFullHelp,copySafeDiagnostics,currentHelpTopic:()=>currentHelpTopicId};
+window.__meshDebug={transportManager,queue,mockRadio,androidBleRadio,getPhoneApiSnapshot:()=>currentSnapshot(),getCurrentConversation:()=>currentConversation(),selectConversation,sendMessage,retryQueueItem,renderDeliveryQueue,exportPhoneApiCapture,simulateReboot:()=>mockRadio.simulateReboot(),setNextRoutingResult:(code)=>mockRadio.setNextRoutingResult(code),setFileDisconnectAfter:(n)=>mockRadio.setFileDisconnectAfter(n),getConversationUi:(id)=>({...uiState(id)}),sendSmallFile,getFileTransfers:()=>fileTransfers.list().map(t=>({id:t.id,name:t.name,status:t.status,confirmed:fileTransfers.confirmedCount(t.id),total:t.total,targetNode:t.targetNode,conversationId:t.conversationId,error:t.error})),simulateFileSubsystemRestart,resumeIncompleteFileTransfers,renderMap,getMapViewport:()=>({...mapViewport,pointers:undefined,pinch:undefined}),locateOnMap,shareCurrentPosition,currentShareUrls,renderShareQr,trackHistory,getWaypoints:()=>[...sharedWaypoints.values()],sendWaypointFromModal,helpRegistry,renderQuickHelp,openFullHelp,copySafeDiagnostics,currentHelpTopic:()=>currentHelpTopicId,offlineMapManager,openOfflineMaps,renderOfflineEstimate};
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!AndroidBridgeMeshtasticTransport.isSupported())navigator.serviceWorker.register('./sw.js').catch(()=>{});

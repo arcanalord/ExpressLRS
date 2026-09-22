@@ -1,27 +1,29 @@
-name: Mesh Messenger v1.5.9 Map Interaction
+name: Mesh Messenger v1.5.9 Offline Maps
 # rerun: clean-source-audit-v2
 
 on:
   push:
-    branches: [fix/mesh-map-interaction-v1.5.9]
+    branches: [feature/mesh-main-offline-maps-v1.5.9]
     paths:
       - ".github/workflows/mesh-messenger-v1.5.9-map-interaction.yml"
       - "mesh-messenger-ci/map-src/**"
       - "mesh-messenger-ci/prepare_current_source.py"
       - "mesh-messenger-ci/release_source_audit.py"
       - "mesh-messenger-ci/ui_startup_smoke.py"
+      - "mesh-messenger-ci/offline_map_regression_test.py"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: mesh-messenger-v1.5.9-map-interaction
+  group: mesh-messenger-v1.5.9-offline-maps
   cancel-in-progress: true
 
 env:
-  SOURCE_SHA256: f2193d3589dd39b14f9b5077096cebf2c5d0480604c7cb2494fb6bf2bc406c63
-  DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
+  SOURCE_SHA256: 4047f60859dbc5ad37d4708ebf9e826d3ed5be6226c5c1d66ca2c03a25a5aa87
+  BASE_RUN_ID: "35638627323"
+  BASE_ARTIFACT: mesh-messenger-v1.5.9-map-interaction
   VERSION_NAME: "1.5.9"
   VERSION_CODE: "25"
   GRADLE_VERSION: "8.13"
@@ -33,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/mesh-map-interaction-v1.5.9
+          ref: feature/mesh-main-offline-maps-v1.5.9
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -49,30 +51,17 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
-      - name: Restore exact v1.5.5 baseline
+      - name: Restore exact validated v1.5.9 baseline
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           rm -rf _mesh159
-          mkdir -p _mesh159/dropbox _mesh159/unpacked _mesh159/out
-          curl -L --fail --retry 3 "$DROPBOX_FOLDER_URL" -o _mesh159/dropbox.zip
-          python3 - <<'PY'
-          import pathlib, shutil, zipfile
-          outer=pathlib.Path("_mesh159/dropbox.zip")
-          out=pathlib.Path("_mesh159/dropbox")
-          with zipfile.ZipFile(outer) as z:
-              for info in z.infolist():
-                  raw=info.filename.replace("\\","/").lstrip("/")
-                  parts=[p for p in raw.split("/") if p not in ("",".","..")]
-                  if not parts: continue
-                  p=out.joinpath(*parts)
-                  if info.is_dir(): p.mkdir(parents=True,exist_ok=True)
-                  else:
-                      p.parent.mkdir(parents=True,exist_ok=True)
-                      with z.open(info) as a,p.open("wb") as b: shutil.copyfileobj(a,b)
-          PY
-          BASE="$(find _mesh159/dropbox -type f -name 'SOURCE_CURRENT_v1.5.5.zip' -print -quit)"
-          test -n "$BASE"
+          mkdir -p _mesh159/base_artifact _mesh159/unpacked _mesh159/out
+          gh run download "$BASE_RUN_ID" -R "$GITHUB_REPOSITORY" -n "$BASE_ARTIFACT" -D _mesh159/base_artifact
+          BASE="_mesh159/base_artifact/SOURCE_CURRENT_v${VERSION_NAME}.zip"
+          test -s "$BASE"
           echo "$SOURCE_SHA256  $BASE" | sha256sum -c -
           unzip -q "$BASE" -d _mesh159/unpacked
           ANDROID_DIR="$(find _mesh159/unpacked -type d -name android-app -print -quit)"
@@ -80,16 +69,51 @@ jobs:
           ROOT="$(dirname "$ANDROID_DIR")"
           echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
           echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+      - name: Vendor vector map runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _mesh_vendor
+          mkdir -p _mesh_vendor/node_modules
+          cd _mesh_vendor
+          npm init -y >/dev/null 2>&1
+          npm install --ignore-scripts --no-audit --no-fund maplibre-gl@6.10.0 pmtiles@4.5.0
+          test -f node_modules/maplibre-gl/dist/maplibre-gl.mjs
+          test -f node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs
+          test -f node_modules/maplibre-gl/dist/maplibre-gl.css
+          test -f node_modules/pmtiles/dist/pmtiles.js
+          cd "$GITHUB_WORKSPACE"
+
       - name: Apply current map + location work
         shell: bash
         run: |
           set -euo pipefail
           cp mesh-messenger-ci/map-src/index.html "$ROOT/index.html"
           cp mesh-messenger-ci/map-src/app.js "$ROOT/src/app.js"
+          cp mesh-messenger-ci/map-src/offline-map-manager.js "$ROOT/src/offline-map-manager.js"
+          cp mesh-messenger-ci/map-src/vector-package-manager.js "$ROOT/src/vector-package-manager.js"
+          cp mesh-messenger-ci/map-src/vector-map-adapter.js "$ROOT/src/vector-map-adapter.js"
+          cp mesh-messenger-ci/map-src/openmaptiles-basic-style.js "$ROOT/src/openmaptiles-basic-style.js"
+          cp mesh-messenger-ci/map-src/vector-runtime-bootstrap.js "$ROOT/src/vector-runtime-bootstrap.js"
+          mkdir -p "$ROOT/vendor"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.mjs "$ROOT/vendor/maplibre-gl.mjs"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs "$ROOT/vendor/maplibre-gl-shared.mjs"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.css "$ROOT/vendor/maplibre-gl.css"
+          cp _mesh_vendor/node_modules/pmtiles/dist/pmtiles.js "$ROOT/vendor/pmtiles.js"
           cp mesh-messenger-ci/map-src/styles.css "$ROOT/src/styles.css"
           cp mesh-messenger-ci/map-src/AndroidManifest.xml "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
           cp mesh-messenger-ci/map-src/android-index.html "$ANDROID_DIR/app/src/main/assets/www/index.html"
           cp mesh-messenger-ci/map-src/android-app.js "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
+          cp mesh-messenger-ci/map-src/offline-map-manager.js "$ANDROID_DIR/app/src/main/assets/www/src/offline-map-manager.js"
+          cp mesh-messenger-ci/map-src/vector-package-manager.js "$ANDROID_DIR/app/src/main/assets/www/src/vector-package-manager.js"
+          cp mesh-messenger-ci/map-src/vector-map-adapter.js "$ANDROID_DIR/app/src/main/assets/www/src/vector-map-adapter.js"
+          cp mesh-messenger-ci/map-src/openmaptiles-basic-style.js "$ANDROID_DIR/app/src/main/assets/www/src/openmaptiles-basic-style.js"
+          cp mesh-messenger-ci/map-src/vector-runtime-bootstrap.js "$ANDROID_DIR/app/src/main/assets/www/src/vector-runtime-bootstrap.js"
+          mkdir -p "$ANDROID_DIR/app/src/main/assets/www/vendor"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.mjs "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl.mjs"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl-shared.mjs"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.css "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl.css"
+          cp _mesh_vendor/node_modules/pmtiles/dist/pmtiles.js "$ANDROID_DIR/app/src/main/assets/www/vendor/pmtiles.js"
           cp mesh-messenger-ci/map-src/android-styles.css "$ANDROID_DIR/app/src/main/assets/www/src/styles.css"
           MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
           python3 - "$MAIN_FILE" <<'PY'
@@ -118,8 +142,20 @@ jobs:
           set -euo pipefail
           python3 mesh-messenger-ci/prepare_current_source.py "$ROOT" "$VERSION_NAME" "$VERSION_CODE"
           node --check "$ROOT/src/app.js"
+          node --check "$ROOT/src/offline-map-manager.js"
+          node --check "$ROOT/src/vector-package-manager.js"
+          node --check "$ROOT/src/vector-map-adapter.js"
+          node --check "$ROOT/src/openmaptiles-basic-style.js"
+          node --check "$ROOT/src/vector-runtime-bootstrap.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/offline-map-manager.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/vector-package-manager.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/vector-map-adapter.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/openmaptiles-basic-style.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/vector-runtime-bootstrap.js"
           node --check "$ROOT/src/core.js"
           python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
+          python3 mesh-messenger-ci/offline_map_regression_test.py "$ROOT"
           python3 mesh-messenger-ci/release_source_audit.py "$ROOT"
           grep -q "onGeolocationPermissionsShowPrompt" "$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
           grep -Fq "versionName = \"$VERSION_NAME\"" "$ANDROID_DIR/app/build.gradle.kts"
@@ -180,12 +216,42 @@ jobs:
                       z.write(p,pathlib.Path(f"mesh-messenger-v{ver}-work")/rel)
           PY
           sha256sum "_mesh159/out/SOURCE_CURRENT_v${VERSION_NAME}.zip" > _mesh159/out/SOURCE_SHA256.txt
+
+          PC_DIR="_mesh159/pc/MeshMessenger-PC-v${VERSION_NAME}-vector-offline"
+          rm -rf "_mesh159/pc"
+          mkdir -p "$PC_DIR"
+          cp "$ROOT/index.html" "$PC_DIR/index.html"
+          cp "$ROOT/manifest.webmanifest" "$PC_DIR/manifest.webmanifest"
+          cp "$ROOT/sw.js" "$PC_DIR/sw.js"
+          cp -a "$ROOT/src" "$PC_DIR/src"
+          cp -a "$ROOT/vendor" "$PC_DIR/vendor"
+          echo 'QGVjaG8gb2ZmCnNldGxvY2FsCmNkIC9kICIlfmRwMCIKcG93ZXJzaGVsbCAtTm9Qcm9maWxlIC1FeGVjdXRpb25Qb2xpY3kgQnlwYXNzIC1GaWxlICIlfmRwMHN0YXJ0LXdpbmRvd3MucHMxIgo=' | base64 -d > "$PC_DIR/start-windows.bat"
+          echo 'JEVycm9yQWN0aW9uUHJlZmVyZW5jZSA9ICdTdG9wJwpTZXQtTG9jYXRpb24gJFBTU2NyaXB0Um9vdAokcmVxdWlyZWQgPSBAKAogICd2ZW5kb3JcbWFwbGlicmUtZ2wubWpzJywKICAndmVuZG9yXG1hcGxpYnJlLWdsLmNzcycsCiAgJ3ZlbmRvclxwbXRpbGVzLmpzJwopCmZvcmVhY2ggKCRmaWxlIGluICRyZXF1aXJlZCkgewogIGlmICgtbm90IChUZXN0LVBhdGggJGZpbGUpIC1vciAoR2V0LUl0ZW0gJGZpbGUpLkxlbmd0aCAtZXEgMCkgewogICAgdGhyb3cgItCe0YLRgdGD0YLRgdGC0LLRg9C10YIg0LLRgdGC0YDQvtC10L3QvdCw0Y8g0LHQuNCx0LvQuNC+0YLQtdC60LA6ICRmaWxlIgogIH0KfQokcG9ydCA9IDQxNzMKJHVybCA9ICJodHRwOi8vMTI3LjAuMC4xOiRwb3J0LyIKJHB5ID0gR2V0LUNvbW1hbmQgcHkgLUVycm9yQWN0aW9uIFNpbGVudGx5Q29udGludWUKJHB5dGhvbiA9IEdldC1Db21tYW5kIHB5dGhvbiAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZQppZiAoJHB5KSB7CiAgU3RhcnQtUHJvY2VzcyAkdXJsCiAgJiBweSAtMyAtbSBodHRwLnNlcnZlciAkcG9ydCAtLWJpbmQgMTI3LjAuMC4xCiAgZXhpdCAkTEFTVEVYSVRDT0RFCn0KaWYgKCRweXRob24pIHsKICBTdGFydC1Qcm9jZXNzICR1cmwKICAmIHB5dGhvbiAtbSBodHRwLnNlcnZlciAkcG9ydCAtLWJpbmQgMTI3LjAuMC4xCiAgZXhpdCAkTEFTVEVYSVRDT0RFCn0KJGxpc3RlbmVyID0gTmV3LU9iamVjdCBTeXN0ZW0uTmV0Lkh0dHBMaXN0ZW5lcgokbGlzdGVuZXIuUHJlZml4ZXMuQWRkKCR1cmwpCiRsaXN0ZW5lci5TdGFydCgpClN0YXJ0LVByb2Nlc3MgJHVybAokbWltZSA9IEB7CiAgJy5odG1sJz0ndGV4dC9odG1sOyBjaGFyc2V0PXV0Zi04JwogICcuanMnPSd0ZXh0L2phdmFzY3JpcHQ7IGNoYXJzZXQ9dXRmLTgnCiAgJy5tanMnPSd0ZXh0L2phdmFzY3JpcHQ7IGNoYXJzZXQ9dXRmLTgnCiAgJy5jc3MnPSd0ZXh0L2NzczsgY2hhcnNldD11dGYtOCcKICAnLmpzb24nPSdhcHBsaWNhdGlvbi9qc29uOyBjaGFyc2V0PXV0Zi04JwogICcud2VibWFuaWZlc3QnPSdhcHBsaWNhdGlvbi9tYW5pZmVzdCtqc29uOyBjaGFyc2V0PXV0Zi04JwogICcucG5nJz0naW1hZ2UvcG5nJwogICcuc3ZnJz0naW1hZ2Uvc3ZnK3htbCcKICAnLnBtdGlsZXMnPSdhcHBsaWNhdGlvbi92bmQucG10aWxlcycKfQp0cnkgewogIHdoaWxlICgkbGlzdGVuZXIuSXNMaXN0ZW5pbmcpIHsKICAgICRjdHggPSAkbGlzdGVuZXIuR2V0Q29udGV4dCgpCiAgICAkcmVsID0gW1VyaV06OlVuZXNjYXBlRGF0YVN0cmluZygkY3R4LlJlcXVlc3QuVXJsLkFic29sdXRlUGF0aC5UcmltU3RhcnQoJy8nKSkKICAgIGlmIChbc3RyaW5nXTo6SXNOdWxsT3JXaGl0ZVNwYWNlKCRyZWwpKSB7ICRyZWwgPSAnaW5kZXguaHRtbCcgfQogICAgJHJvb3QgPSBbSU8uUGF0aF06OkdldEZ1bGxQYXRoKCRQU1NjcmlwdFJvb3QpCiAgICAkZnVsbCA9IFtJTy5QYXRoXTo6R2V0RnVsbFBhdGgoKEpvaW4tUGF0aCAkcm9vdCAkcmVsKSkKICAgIGlmICgtbm90ICRmdWxsLlN0YXJ0c1dpdGgoJHJvb3QpIC1vciAtbm90IChUZXN0LVBhdGggJGZ1bGwgLVBhdGhUeXBlIExlYWYpKSB7CiAgICAgICRjdHguUmVzcG9uc2UuU3RhdHVzQ29kZSA9IDQwNAogICAgICAkY3R4LlJlc3BvbnNlLkNsb3NlKCkKICAgICAgY29udGludWUKICAgIH0KICAgICRleHQgPSBbSU8uUGF0aF06OkdldEV4dGVuc2lvbigkZnVsbCkuVG9Mb3dlckludmFyaWFudCgpCiAgICBpZiAoJG1pbWUuQ29udGFpbnNLZXkoJGV4dCkpIHsgJGN0eC5SZXNwb25zZS5Db250ZW50VHlwZSA9ICRtaW1lWyRleHRdIH0KICAgICRieXRlcyA9IFtJTy5GaWxlXTo6UmVhZEFsbEJ5dGVzKCRmdWxsKQogICAgJGN0eC5SZXNwb25zZS5Db250ZW50TGVuZ3RoNjQgPSAkYnl0ZXMuTGVuZ3RoCiAgICAkY3R4LlJlc3BvbnNlLk91dHB1dFN0cmVhbS5Xcml0ZSgkYnl0ZXMsMCwkYnl0ZXMuTGVuZ3RoKQogICAgJGN0eC5SZXNwb25zZS5DbG9zZSgpCiAgfQp9IGZpbmFsbHkgewogIGlmICgkbGlzdGVuZXIuSXNMaXN0ZW5pbmcpIHsgJGxpc3RlbmVyLlN0b3AoKSB9CiAgJGxpc3RlbmVyLkNsb3NlKCkKfQo=' | base64 -d > "$PC_DIR/start-windows.ps1"
+          echo 'TWVzaCBNZXNzZW5nZXIgUEMg4oCUIHZlY3Rvci1maXJzdCBvZmZsaW5lIGNhbmRpZGF0ZQpCYXNlbGluZTogdjEuNS45Ck1hcCBzdGFjazogUE1UaWxlcyArIE1hcExpYnJlLCByYXN0ZXIgZmFsbGJhY2sgcmV0YWluZWQuCgrQn9C+0LvQvdC+0YHRgtGM0Y4g0LDQstGC0L7QvdC+0LzQvdGL0LkgcnVudGltZToKLSBNYXBMaWJyZSBHTCBKUyA2LjEwLjAg0LLRgdGC0YDQvtC10L0g0LIgdmVuZG9yLwotIFBNVGlsZXMgSlMgNC41LjAg0LLRgdGC0YDQvtC10L0g0LIgdmVuZG9yLwotINC/0YDQuCDQt9Cw0L/Rg9GB0LrQtSDQsdC40LHQu9C40L7RgtC10LrQuCDQuNC3INC40L3RgtC10YDQvdC10YLQsCDQvdC1INGB0LrQsNGH0LjQstCw0Y7RgtGB0Y8KCldpbmRvd3M6CjEuINCg0LDRgdC/0LDQutGD0LnRgtC1IFpJUC4KMi4g0JfQsNC/0YPRgdGC0LjRgtC1IHN0YXJ0LXdpbmRvd3MuYmF0LgozLiDQndCw0YHRgtGA0L7QudC60LggLT4g0J7RhNC70LDQudC9LdC60LDRgNGC0YsgLT4g0JjQvNC/0L7RgNGCIC5wbXRpbGVzLgo=' | base64 -d > "$PC_DIR/README_PC.txt"
+          test -s "$PC_DIR/vendor/maplibre-gl.mjs"
+          test -s "$PC_DIR/vendor/maplibre-gl-shared.mjs"
+          test -s "$PC_DIR/vendor/maplibre-gl.css"
+          test -s "$PC_DIR/vendor/pmtiles.js"
+          ! grep -R -E "unpkg\.com|cdn\.jsdelivr\.net" "$PC_DIR" --exclude='README_PC.txt'
+          python3 - "$PC_DIR" "_mesh159/out/MeshMessenger-PC-v${VERSION_NAME}-vector-offline.zip" <<'PY'
+          import pathlib,sys,zipfile
+          src=pathlib.Path(sys.argv[1]); out=pathlib.Path(sys.argv[2])
+          with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as z:
+              for p in src.rglob("*"):
+                  if p.is_file(): z.write(p,src.name+"/"+p.relative_to(src).as_posix())
+          PY
+          sha256sum "_mesh159/out/MeshMessenger-PC-v${VERSION_NAME}-vector-offline.zip" > _mesh159/out/PC_ZIP_SHA256.txt
           {
             echo "version=$VERSION_NAME"
             echo "version_code=$VERSION_CODE"
             echo "base_source_sha256=$SOURCE_SHA256"
             echo "source_audit=PASS"
             echo "map_regression=PASS"
+            echo "map_architecture=VECTOR_FIRST_PMTILES_MAPLIBRE"
+            echo "maplibre_version=6.10.0"
+            echo "pmtiles_version=4.5.0"
+            echo "pc_vendor_runtime=OFFLINE_EMBEDDED"
+            echo "raster_fallback=ENABLED"
             echo "deterministic_regression=PASS"
             echo "android_build=PASS"
             echo "apk_verify=PASS"
@@ -194,6 +260,6 @@ jobs:
           } > _mesh159/out/BUILD_RESULT.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: mesh-messenger-v1.5.9-map-interaction
+          name: mesh-messenger-v1.5.9-offline-maps
           path: _mesh159/out/*
           retention-days: 30
