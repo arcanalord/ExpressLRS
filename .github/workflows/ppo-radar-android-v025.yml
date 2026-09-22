@@ -1,4 +1,4 @@
-name: PPO Radar Android v0.2.5 APK
+name: PPO Radar Android v0.2.6 APK
 
 on:
   push:
@@ -18,8 +18,8 @@ concurrency:
 
 env:
   DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/gca5cqopw6r0b194shp0z/ACc1Sa9cLgqFvlVcbpLv9-0?rlkey=zo23mjd3x6bm73u2rx8oy1pg4&st=n7jcdyy8&dl=1
-  VERSION_NAME: "0.2.5"
-  VERSION_CODE: "25"
+  VERSION_NAME: "0.2.6"
+  VERSION_CODE: "26"
   GRADLE_VERSION: "8.10.2"
 
 jobs:
@@ -89,6 +89,14 @@ jobs:
           test -f "$ANDROID_DIR/app/src/main/assets/web/index.html"
           grep -q "0.2.5" "$ANDROID_DIR/app/src/main/assets/web/src/version.js"
 
+      - name: Apply v0.2.6 mobile hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ppo-radar-ci/patch_v026.py "$ANDROID_DIR"
+          grep -q "0.2.6" "$ANDROID_DIR/app/src/main/assets/web/src/version.js"
+          grep -q "versionCode 26" "$ANDROID_DIR/app/build.gradle"
+
       - name: Validate shared runtime
         shell: bash
         run: |
@@ -116,17 +124,17 @@ jobs:
           apksigner verify --verbose --print-certs "$APK" | tee _ppo/out/APK_SIGNATURE.txt
           aapt dump badging "$APK" | tee _ppo/out/AAPT_BADGING.txt
           grep -q "package: name='ru.fpvclub.pporadar'" _ppo/out/AAPT_BADGING.txt
-          grep -q "versionCode='25'" _ppo/out/AAPT_BADGING.txt
-          grep -q "versionName='0.2.5'" _ppo/out/AAPT_BADGING.txt
+          grep -q "versionCode='26'" _ppo/out/AAPT_BADGING.txt
+          grep -q "versionName='0.2.6'" _ppo/out/AAPT_BADGING.txt
           unzip -l "$APK" | tee _ppo/out/APK_CONTENTS.txt
           grep -q "assets/web/index.html" _ppo/out/APK_CONTENTS.txt
           grep -q "assets/web/vendor/maplibre-gl.mjs" _ppo/out/APK_CONTENTS.txt
           grep -q "assets/web/vendor/pmtiles.js" _ppo/out/APK_CONTENTS.txt
-          cp "$APK" "_ppo/out/PPO_RADAR_v0.2.5-debug.apk"
+          cp "$APK" "_ppo/out/PPO_RADAR_v0.2.6-debug.apk"
           sha256sum "_ppo/out/PPO_RADAR_v0.2.5-debug.apk" | tee _ppo/out/APK_SHA256.txt
           {
-            echo "version=0.2.5"
-            echo "version_code=25"
+            echo "version=0.2.6"
+            echo "version_code=26"
             echo "runtime_regression=PASS"
             echo "android_build=PASS"
             echo "zipalign=PASS"
@@ -139,6 +147,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ppo-radar-v0.2.5-debug
+          name: ppo-radar-v0.2.6-debug
           path: _ppo/out/*
           retention-days: 30
