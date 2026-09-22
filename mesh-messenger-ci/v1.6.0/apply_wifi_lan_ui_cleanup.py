@@ -114,6 +114,26 @@ async function applyLanCode(){
 """
     s=once(s,old,new,"pairing functions")
 
+    old="""  appPeerId=storageGet('mesh-wifi-peer-id')||((globalThis.crypto?.randomUUID?.())||('peer-'+Date.now().toString(36)));
+  appDisplayName=storageGet('mesh-wifi-name')||'Mesh Wi-Fi';
+  storageSet('mesh-wifi-peer-id',appPeerId);storageSet('mesh-wifi-name',appDisplayName);
+  try{for(const c of JSON.parse(storageGet('mesh-wifi-contacts')||'[]'))if(c?.peerId)peerContacts.set(String(c.peerId),c);}catch{}
+"""
+    new="""  appPeerId=storageGet('mesh-wifi-peer-id')||((globalThis.crypto?.randomUUID?.())||('peer-'+Date.now().toString(36)));
+  if(storageGet('mesh-wifi-data-schema')!=='lan-v2'){
+    storageRemove('mesh-wifi-contacts');
+    const previous=storageGet('mesh-current-conversation')||'';
+    if(previous.startsWith('peer:'))storageRemove('mesh-current-conversation');
+    if(storageGet('mesh-wifi-name')==='Mesh Wi-Fi')storageRemove('mesh-wifi-name');
+    storageSet('mesh-wifi-data-schema','lan-v2');
+  }
+  appDisplayName=storageGet('mesh-wifi-name')||'Устройство';
+  storageSet('mesh-wifi-peer-id',appPeerId);storageSet('mesh-wifi-name',appDisplayName);
+  try{for(const c of JSON.parse(storageGet('mesh-wifi-contacts')||'[]'))if(c?.peerId)peerContacts.set(String(c.peerId),c);}catch{}
+  const nameInput=$('#pairingMyName');if(nameInput)nameInput.value=appDisplayName==='Устройство'?'':appDisplayName;
+"""
+    s=once(s,old,new,"LAN data migration")
+
     old="function buildConversations(snapshot=currentSnapshot()) {\n  const result=[];\n"
     new="""function buildConversations(snapshot=currentSnapshot()) {
   const result=[];
