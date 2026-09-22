@@ -20,8 +20,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SOURCE_SHA256: f2193d3589dd39b14f9b5077096cebf2c5d0480604c7cb2494fb6bf2bc406c63
-  DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
+  SOURCE_SHA256: 4047f60859dbc5ad37d4708ebf9e826d3ed5be6226c5c1d66ca2c03a25a5aa87
+  BASE_RUN_ID: "35638627323"
+  BASE_ARTIFACT: mesh-messenger-v1.5.9-map-interaction
   VERSION_NAME: "1.5.9"
   VERSION_CODE: "25"
   GRADLE_VERSION: "8.13"
@@ -49,30 +50,17 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
-      - name: Restore exact v1.5.5 baseline
+      - name: Restore exact validated v1.5.9 baseline
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           rm -rf _mesh159
-          mkdir -p _mesh159/dropbox _mesh159/unpacked _mesh159/out
-          curl -L --fail --retry 3 "$DROPBOX_FOLDER_URL" -o _mesh159/dropbox.zip
-          python3 - <<'PY'
-          import pathlib, shutil, zipfile
-          outer=pathlib.Path("_mesh159/dropbox.zip")
-          out=pathlib.Path("_mesh159/dropbox")
-          with zipfile.ZipFile(outer) as z:
-              for info in z.infolist():
-                  raw=info.filename.replace("\\","/").lstrip("/")
-                  parts=[p for p in raw.split("/") if p not in ("",".","..")]
-                  if not parts: continue
-                  p=out.joinpath(*parts)
-                  if info.is_dir(): p.mkdir(parents=True,exist_ok=True)
-                  else:
-                      p.parent.mkdir(parents=True,exist_ok=True)
-                      with z.open(info) as a,p.open("wb") as b: shutil.copyfileobj(a,b)
-          PY
-          BASE="$(find _mesh159/dropbox -type f -name 'SOURCE_CURRENT_v1.5.5.zip' -print -quit)"
-          test -n "$BASE"
+          mkdir -p _mesh159/base_artifact _mesh159/unpacked _mesh159/out
+          gh run download "$BASE_RUN_ID" -R "$GITHUB_REPOSITORY" -n "$BASE_ARTIFACT" -D _mesh159/base_artifact
+          BASE="_mesh159/base_artifact/SOURCE_CURRENT_v${VERSION_NAME}.zip"
+          test -s "$BASE"
           echo "$SOURCE_SHA256  $BASE" | sha256sum -c -
           unzip -q "$BASE" -d _mesh159/unpacked
           ANDROID_DIR="$(find _mesh159/unpacked -type d -name android-app -print -quit)"
@@ -89,7 +77,7 @@ jobs:
           cd _mesh_vendor
           npm init -y >/dev/null 2>&1
           npm install --ignore-scripts --no-audit --no-fund maplibre-gl@6.10.0 pmtiles@4.5.0
-          test -f node_modules/maplibre-gl/dist/maplibre-gl.js
+          test -f node_modules/maplibre-gl/dist/maplibre-gl.mjs
           test -f node_modules/maplibre-gl/dist/maplibre-gl.css
           test -f node_modules/pmtiles/dist/pmtiles.js
           cd "$GITHUB_WORKSPACE"
@@ -104,8 +92,9 @@ jobs:
           cp mesh-messenger-ci/map-src/vector-package-manager.js "$ROOT/src/vector-package-manager.js"
           cp mesh-messenger-ci/map-src/vector-map-adapter.js "$ROOT/src/vector-map-adapter.js"
           cp mesh-messenger-ci/map-src/openmaptiles-basic-style.js "$ROOT/src/openmaptiles-basic-style.js"
+          cp mesh-messenger-ci/map-src/vector-runtime-bootstrap.js "$ROOT/src/vector-runtime-bootstrap.js"
           mkdir -p "$ROOT/vendor"
-          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.js "$ROOT/vendor/maplibre-gl.js"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.mjs "$ROOT/vendor/maplibre-gl.mjs"
           cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.css "$ROOT/vendor/maplibre-gl.css"
           cp _mesh_vendor/node_modules/pmtiles/dist/pmtiles.js "$ROOT/vendor/pmtiles.js"
           cp mesh-messenger-ci/map-src/styles.css "$ROOT/src/styles.css"
@@ -116,8 +105,9 @@ jobs:
           cp mesh-messenger-ci/map-src/vector-package-manager.js "$ANDROID_DIR/app/src/main/assets/www/src/vector-package-manager.js"
           cp mesh-messenger-ci/map-src/vector-map-adapter.js "$ANDROID_DIR/app/src/main/assets/www/src/vector-map-adapter.js"
           cp mesh-messenger-ci/map-src/openmaptiles-basic-style.js "$ANDROID_DIR/app/src/main/assets/www/src/openmaptiles-basic-style.js"
+          cp mesh-messenger-ci/map-src/vector-runtime-bootstrap.js "$ANDROID_DIR/app/src/main/assets/www/src/vector-runtime-bootstrap.js"
           mkdir -p "$ANDROID_DIR/app/src/main/assets/www/vendor"
-          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.js "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl.js"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.mjs "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl.mjs"
           cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.css "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl.css"
           cp _mesh_vendor/node_modules/pmtiles/dist/pmtiles.js "$ANDROID_DIR/app/src/main/assets/www/vendor/pmtiles.js"
           cp mesh-messenger-ci/map-src/android-styles.css "$ANDROID_DIR/app/src/main/assets/www/src/styles.css"
@@ -152,11 +142,13 @@ jobs:
           node --check "$ROOT/src/vector-package-manager.js"
           node --check "$ROOT/src/vector-map-adapter.js"
           node --check "$ROOT/src/openmaptiles-basic-style.js"
+          node --check "$ROOT/src/vector-runtime-bootstrap.js"
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/offline-map-manager.js"
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/vector-package-manager.js"
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/vector-map-adapter.js"
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/openmaptiles-basic-style.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/vector-runtime-bootstrap.js"
           node --check "$ROOT/src/core.js"
           python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
           python3 mesh-messenger-ci/offline_map_regression_test.py "$ROOT"
@@ -220,13 +212,124 @@ jobs:
                       z.write(p,pathlib.Path(f"mesh-messenger-v{ver}-work")/rel)
           PY
           sha256sum "_mesh159/out/SOURCE_CURRENT_v${VERSION_NAME}.zip" > _mesh159/out/SOURCE_SHA256.txt
+
+          PC_DIR="_mesh159/pc/MeshMessenger-PC-v${VERSION_NAME}-vector-offline"
+          rm -rf "_mesh159/pc"
+          mkdir -p "$PC_DIR"
+          cp "$ROOT/index.html" "$PC_DIR/index.html"
+          cp "$ROOT/manifest.webmanifest" "$PC_DIR/manifest.webmanifest"
+          cp "$ROOT/sw.js" "$PC_DIR/sw.js"
+          cp -a "$ROOT/src" "$PC_DIR/src"
+          cp -a "$ROOT/vendor" "$PC_DIR/vendor"
+          cat > "$PC_DIR/start-windows.bat" <<'BAT'
+@echo off
+setlocal
+cd /d "%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-windows.ps1"
+BAT
+          cat > "$PC_DIR/start-windows.ps1" <<'POWERSHELL'
+$ErrorActionPreference = 'Stop'
+Set-Location $PSScriptRoot
+$required = @(
+  'vendor\maplibre-gl.mjs',
+  'vendor\maplibre-gl.css',
+  'vendor\pmtiles.js'
+)
+foreach ($file in $required) {
+  if (-not (Test-Path $file) -or (Get-Item $file).Length -eq 0) {
+    throw "Отсутствует встроенная библиотека: $file"
+  }
+}
+$port = 4173
+$url = "http://127.0.0.1:$port/"
+$py = Get-Command py -ErrorAction SilentlyContinue
+$python = Get-Command python -ErrorAction SilentlyContinue
+if ($py) {
+  Start-Process $url
+  & py -3 -m http.server $port --bind 127.0.0.1
+  exit $LASTEXITCODE
+}
+if ($python) {
+  Start-Process $url
+  & python -m http.server $port --bind 127.0.0.1
+  exit $LASTEXITCODE
+}
+$listener = New-Object System.Net.HttpListener
+$listener.Prefixes.Add($url)
+$listener.Start()
+Start-Process $url
+$mime = @{
+  '.html'='text/html; charset=utf-8'
+  '.js'='text/javascript; charset=utf-8'
+  '.mjs'='text/javascript; charset=utf-8'
+  '.css'='text/css; charset=utf-8'
+  '.json'='application/json; charset=utf-8'
+  '.webmanifest'='application/manifest+json; charset=utf-8'
+  '.png'='image/png'
+  '.svg'='image/svg+xml'
+  '.pmtiles'='application/vnd.pmtiles'
+}
+try {
+  while ($listener.IsListening) {
+    $ctx = $listener.GetContext()
+    $rel = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
+    if ([string]::IsNullOrWhiteSpace($rel)) { $rel = 'index.html' }
+    $root = [IO.Path]::GetFullPath($PSScriptRoot)
+    $full = [IO.Path]::GetFullPath((Join-Path $root $rel))
+    if (-not $full.StartsWith($root) -or -not (Test-Path $full -PathType Leaf)) {
+      $ctx.Response.StatusCode = 404
+      $ctx.Response.Close()
+      continue
+    }
+    $ext = [IO.Path]::GetExtension($full).ToLowerInvariant()
+    if ($mime.ContainsKey($ext)) { $ctx.Response.ContentType = $mime[$ext] }
+    $bytes = [IO.File]::ReadAllBytes($full)
+    $ctx.Response.ContentLength64 = $bytes.Length
+    $ctx.Response.OutputStream.Write($bytes,0,$bytes.Length)
+    $ctx.Response.Close()
+  }
+} finally {
+  if ($listener.IsListening) { $listener.Stop() }
+  $listener.Close()
+}
+POWERSHELL
+          cat > "$PC_DIR/README_PC.txt" <<EOF
+Mesh Messenger PC — vector-first offline candidate
+Baseline: v${VERSION_NAME}
+Map stack: PMTiles + MapLibre, raster fallback retained.
+
+Полностью автономный runtime:
+- MapLibre GL JS 6.10.0 встроен в vendor/
+- PMTiles JS 4.5.0 встроен в vendor/
+- при запуске библиотеки из интернета не скачиваются
+
+Windows:
+1. Распакуйте ZIP.
+2. Запустите start-windows.bat.
+3. Настройки -> Офлайн-карты -> Импорт .pmtiles.
+EOF
+          test -s "$PC_DIR/vendor/maplibre-gl.mjs"
+          test -s "$PC_DIR/vendor/maplibre-gl.css"
+          test -s "$PC_DIR/vendor/pmtiles.js"
+          ! grep -R -E "unpkg\.com|cdn\.jsdelivr\.net" "$PC_DIR" --exclude='README_PC.txt'
+          python3 - "$PC_DIR" "_mesh159/out/MeshMessenger-PC-v${VERSION_NAME}-vector-offline.zip" <<'PY'
+          import pathlib,sys,zipfile
+          src=pathlib.Path(sys.argv[1]); out=pathlib.Path(sys.argv[2])
+          with zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as z:
+              for p in src.rglob("*"):
+                  if p.is_file(): z.write(p,src.name+"/"+p.relative_to(src).as_posix())
+          PY
+          sha256sum "_mesh159/out/MeshMessenger-PC-v${VERSION_NAME}-vector-offline.zip" > _mesh159/out/PC_ZIP_SHA256.txt
           {
             echo "version=$VERSION_NAME"
             echo "version_code=$VERSION_CODE"
             echo "base_source_sha256=$SOURCE_SHA256"
             echo "source_audit=PASS"
             echo "map_regression=PASS"
-            echo "map_architecture=VECTOR_FIRST_PMtiles_MAPLIBRE"
+            echo "map_architecture=VECTOR_FIRST_PMTILES_MAPLIBRE"
+            echo "maplibre_version=6.10.0"
+            echo "pmtiles_version=4.5.0"
+            echo "pc_vendor_runtime=OFFLINE_EMBEDDED"
             echo "raster_fallback=ENABLED"
             echo "deterministic_regression=PASS"
             echo "android_build=PASS"
