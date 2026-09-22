@@ -125,6 +125,7 @@ jobs:
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/offline-map-manager.js"
           node --check "$ROOT/src/core.js"
           python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
+          python3 mesh-messenger-ci/offline_map_regression_test.py "$ROOT"
           python3 mesh-messenger-ci/release_source_audit.py "$ROOT"
           grep -q "onGeolocationPermissionsShowPrompt" "$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
           grep -Fq "versionName = \"$VERSION_NAME\"" "$ANDROID_DIR/app/build.gradle.kts"
