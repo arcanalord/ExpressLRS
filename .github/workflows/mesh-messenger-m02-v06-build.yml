@@ -50,7 +50,7 @@ jobs:
           set -euo pipefail
           mkdir -p _m02v06
           curl -L --fail --retry 3 "$SOURCE_URL" -o _m02v06/source.zip
-          echo "a8b60739838206d4912b53f4d9d8e56fc7165de7faadd390425c328d4727ee82  _m02v06/source.zip" | sha256sum -c -
+          echo "8517934af6f7f54c431412625c7ee7fc097dcb2a65e74288518ddb517ffa23ee  _m02v06/source.zip" | sha256sum -c -
           unzip -q _m02v06/source.zip -d _m02v06/unpacked
           ROOT="$(find _m02v06/unpacked -maxdepth 2 -type d -name 'mesh-messenger-m02-v0.6' -print -quit)"
           test -n "$ROOT"
