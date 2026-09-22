@@ -78,6 +78,8 @@ jobs:
       - name: Contract check
         run: |
           set -euo pipefail
-          grep -q "The user sees one contact and one chat" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
+          grep -q "One person = one contact = one chat" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
           grep -q "direct LAN / Wi-Fi" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
-          grep -q "Internet relay" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
+          grep -q "Internet relay remains a future transport" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
+          grep -q "persistent local delivery queue" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
+          grep -q "save the personal contact even while offline" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
