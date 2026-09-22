@@ -110,6 +110,7 @@ jobs:
           cp mesh-messenger-ci/v1.6.0/transports/auto-route-selector.js "$ANDROID_DIR/app/src/main/assets/www/src/transports/"
           python3 mesh-messenger-ci/v1.6.0/apply_wifi_v16.py "$ROOT"
           python3 mesh-messenger-ci/v1.6.0/apply_wifi_lan_ui_cleanup.py "$ROOT"
+          python3 mesh-messenger-ci/v1.6.0/apply_wifi_delivery_v163.py "$ROOT"
           grep -q "LanPeerTransport" "$ROOT/src/app.js"
           grep -q "AutoRouteSelector" "$ROOT/src/app.js"
           grep -q 'id="fastPairModal"' "$ROOT/index.html"
