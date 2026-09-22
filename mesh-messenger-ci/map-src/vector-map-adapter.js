@@ -32,6 +32,7 @@ export class VectorMapAdapter {
 
   ensureMap() {
     if (this.map) return this.map;
+    if (this.container) this.container.hidden = false;
     const { maplibregl } = ensureProtocol();
     this.map = new maplibregl.Map({
       container: this.container,
@@ -61,6 +62,7 @@ export class VectorMapAdapter {
     this.activePackageId = id;
     this.header = header;
     this.container.hidden = false;
+    map.resize();
     return header;
   }
 
