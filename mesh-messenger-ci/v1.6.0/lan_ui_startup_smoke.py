@@ -65,7 +65,23 @@ try:
         if page.locator("#addMenuModal").get_attribute("aria-hidden")=="false":
             raise AssertionError("legacy quick actions opened instead of pairing")
         if page.locator("#saveFastPeer").is_enabled():
-            raise AssertionError("contact save must stay disabled before LAN READY")
+            raise AssertionError("contact save must stay disabled before contact identity is known")
+
+        page.evaluate("""() => {
+          const t=window.__meshDebug.lanTransport;
+          t.remotePeerId='peer-offline-test';
+          t.remoteName='Алексей';
+          t.onState({state:'pairing',remotePeerId:t.remotePeerId,remoteName:t.remoteName});
+        }""")
+        page.wait_for_timeout(50)
+        if not page.locator("#saveFastPeer").is_enabled():
+            raise AssertionError("offline contact save must enable after identity is known, even without LAN READY")
+        page.locator("#saveFastPeer").click()
+        page.wait_for_timeout(80)
+        if page.locator("#fastPairModal").get_attribute("aria-hidden")!="true":
+            raise AssertionError("offline contact save did not close pairing modal")
+        if "Алексей" not in page.locator("#conversationList").inner_text():
+            raise AssertionError("offline-saved contact did not appear in Chats")
         modal=page.locator("#fastPairModal").inner_text()
         if "личный контакт" not in modal.lower() or "не группа" not in modal.lower():
             raise AssertionError("pairing modal does not explain personal chat semantics")
