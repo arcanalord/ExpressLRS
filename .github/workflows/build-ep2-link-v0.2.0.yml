@@ -53,6 +53,13 @@ jobs:
           print('GZ_SIZE', gz.stat().st_size)
           print(manifest.read_text())
           PY
+      - name: Package compiled source and build notes
+        working-directory: /tmp/ep2src
+        run: |
+          mkdir -p /tmp/ep2-package-docs
+          cp "$GITHUB_WORKSPACE/ep2_build_docs/EP2_LINK_v0.2.0_BUILD_REPORT.md" /tmp/ep2-package-docs/
+          cp "$GITHUB_WORKSPACE/ep2_build_docs/WORKLOG_2026-09-22_FIRMWARE_v0.2.0.md" /tmp/ep2-package-docs/
+          zip -qr /tmp/EP2_LINK_v0.2.0_COMPILED_SOURCE.zip . -x '.pio/*'
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
@@ -61,3 +68,6 @@ jobs:
             /tmp/ep2src/.pio/build/ep2_esp8285/EP2_LINK_v0.2.0_ESP8285.bin
             /tmp/ep2src/.pio/build/ep2_esp8285/EP2_LINK_v0.2.0_ESP8285.bin.gz
             /tmp/ep2src/.pio/build/ep2_esp8285/EP2_LINK_v0.2.0_MANIFEST.json
+            /tmp/EP2_LINK_v0.2.0_COMPILED_SOURCE.zip
+            /tmp/ep2-package-docs/EP2_LINK_v0.2.0_BUILD_REPORT.md
+            /tmp/ep2-package-docs/WORKLOG_2026-09-22_FIRMWARE_v0.2.0.md
