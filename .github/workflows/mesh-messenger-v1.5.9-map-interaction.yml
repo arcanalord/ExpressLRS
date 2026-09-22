@@ -221,93 +221,9 @@ jobs:
           cp "$ROOT/sw.js" "$PC_DIR/sw.js"
           cp -a "$ROOT/src" "$PC_DIR/src"
           cp -a "$ROOT/vendor" "$PC_DIR/vendor"
-          cat > "$PC_DIR/start-windows.bat" <<'BAT'
-@echo off
-setlocal
-cd /d "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0start-windows.ps1"
-BAT
-          cat > "$PC_DIR/start-windows.ps1" <<'POWERSHELL'
-$ErrorActionPreference = 'Stop'
-Set-Location $PSScriptRoot
-$required = @(
-  'vendor\maplibre-gl.mjs',
-  'vendor\maplibre-gl.css',
-  'vendor\pmtiles.js'
-)
-foreach ($file in $required) {
-  if (-not (Test-Path $file) -or (Get-Item $file).Length -eq 0) {
-    throw "Отсутствует встроенная библиотека: $file"
-  }
-}
-$port = 4173
-$url = "http://127.0.0.1:$port/"
-$py = Get-Command py -ErrorAction SilentlyContinue
-$python = Get-Command python -ErrorAction SilentlyContinue
-if ($py) {
-  Start-Process $url
-  & py -3 -m http.server $port --bind 127.0.0.1
-  exit $LASTEXITCODE
-}
-if ($python) {
-  Start-Process $url
-  & python -m http.server $port --bind 127.0.0.1
-  exit $LASTEXITCODE
-}
-$listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add($url)
-$listener.Start()
-Start-Process $url
-$mime = @{
-  '.html'='text/html; charset=utf-8'
-  '.js'='text/javascript; charset=utf-8'
-  '.mjs'='text/javascript; charset=utf-8'
-  '.css'='text/css; charset=utf-8'
-  '.json'='application/json; charset=utf-8'
-  '.webmanifest'='application/manifest+json; charset=utf-8'
-  '.png'='image/png'
-  '.svg'='image/svg+xml'
-  '.pmtiles'='application/vnd.pmtiles'
-}
-try {
-  while ($listener.IsListening) {
-    $ctx = $listener.GetContext()
-    $rel = [Uri]::UnescapeDataString($ctx.Request.Url.AbsolutePath.TrimStart('/'))
-    if ([string]::IsNullOrWhiteSpace($rel)) { $rel = 'index.html' }
-    $root = [IO.Path]::GetFullPath($PSScriptRoot)
-    $full = [IO.Path]::GetFullPath((Join-Path $root $rel))
-    if (-not $full.StartsWith($root) -or -not (Test-Path $full -PathType Leaf)) {
-      $ctx.Response.StatusCode = 404
-      $ctx.Response.Close()
-      continue
-    }
-    $ext = [IO.Path]::GetExtension($full).ToLowerInvariant()
-    if ($mime.ContainsKey($ext)) { $ctx.Response.ContentType = $mime[$ext] }
-    $bytes = [IO.File]::ReadAllBytes($full)
-    $ctx.Response.ContentLength64 = $bytes.Length
-    $ctx.Response.OutputStream.Write($bytes,0,$bytes.Length)
-    $ctx.Response.Close()
-  }
-} finally {
-  if ($listener.IsListening) { $listener.Stop() }
-  $listener.Close()
-}
-POWERSHELL
-          cat > "$PC_DIR/README_PC.txt" <<EOF
-Mesh Messenger PC — vector-first offline candidate
-Baseline: v${VERSION_NAME}
-Map stack: PMTiles + MapLibre, raster fallback retained.
-
-Полностью автономный runtime:
-- MapLibre GL JS 6.10.0 встроен в vendor/
-- PMTiles JS 4.5.0 встроен в vendor/
-- при запуске библиотеки из интернета не скачиваются
-
-Windows:
-1. Распакуйте ZIP.
-2. Запустите start-windows.bat.
-3. Настройки -> Офлайн-карты -> Импорт .pmtiles.
-EOF
+          echo 'QGVjaG8gb2ZmCnNldGxvY2FsCmNkIC9kICIlfmRwMCIKcG93ZXJzaGVsbCAtTm9Qcm9maWxlIC1FeGVjdXRpb25Qb2xpY3kgQnlwYXNzIC1GaWxlICIlfmRwMHN0YXJ0LXdpbmRvd3MucHMxIgo=' | base64 -d > "$PC_DIR/start-windows.bat"
+          echo 'JEVycm9yQWN0aW9uUHJlZmVyZW5jZSA9ICdTdG9wJwpTZXQtTG9jYXRpb24gJFBTU2NyaXB0Um9vdAokcmVxdWlyZWQgPSBAKAogICd2ZW5kb3JcbWFwbGlicmUtZ2wubWpzJywKICAndmVuZG9yXG1hcGxpYnJlLWdsLmNzcycsCiAgJ3ZlbmRvclxwbXRpbGVzLmpzJwopCmZvcmVhY2ggKCRmaWxlIGluICRyZXF1aXJlZCkgewogIGlmICgtbm90IChUZXN0LVBhdGggJGZpbGUpIC1vciAoR2V0LUl0ZW0gJGZpbGUpLkxlbmd0aCAtZXEgMCkgewogICAgdGhyb3cgItCe0YLRgdGD0YLRgdGC0LLRg9C10YIg0LLRgdGC0YDQvtC10L3QvdCw0Y8g0LHQuNCx0LvQuNC+0YLQtdC60LA6ICRmaWxlIgogIH0KfQokcG9ydCA9IDQxNzMKJHVybCA9ICJodHRwOi8vMTI3LjAuMC4xOiRwb3J0LyIKJHB5ID0gR2V0LUNvbW1hbmQgcHkgLUVycm9yQWN0aW9uIFNpbGVudGx5Q29udGludWUKJHB5dGhvbiA9IEdldC1Db21tYW5kIHB5dGhvbiAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZQppZiAoJHB5KSB7CiAgU3RhcnQtUHJvY2VzcyAkdXJsCiAgJiBweSAtMyAtbSBodHRwLnNlcnZlciAkcG9ydCAtLWJpbmQgMTI3LjAuMC4xCiAgZXhpdCAkTEFTVEVYSVRDT0RFCn0KaWYgKCRweXRob24pIHsKICBTdGFydC1Qcm9jZXNzICR1cmwKICAmIHB5dGhvbiAtbSBodHRwLnNlcnZlciAkcG9ydCAtLWJpbmQgMTI3LjAuMC4xCiAgZXhpdCAkTEFTVEVYSVRDT0RFCn0KJGxpc3RlbmVyID0gTmV3LU9iamVjdCBTeXN0ZW0uTmV0Lkh0dHBMaXN0ZW5lcgokbGlzdGVuZXIuUHJlZml4ZXMuQWRkKCR1cmwpCiRsaXN0ZW5lci5TdGFydCgpClN0YXJ0LVByb2Nlc3MgJHVybAokbWltZSA9IEB7CiAgJy5odG1sJz0ndGV4dC9odG1sOyBjaGFyc2V0PXV0Zi04JwogICcuanMnPSd0ZXh0L2phdmFzY3JpcHQ7IGNoYXJzZXQ9dXRmLTgnCiAgJy5tanMnPSd0ZXh0L2phdmFzY3JpcHQ7IGNoYXJzZXQ9dXRmLTgnCiAgJy5jc3MnPSd0ZXh0L2NzczsgY2hhcnNldD11dGYtOCcKICAnLmpzb24nPSdhcHBsaWNhdGlvbi9qc29uOyBjaGFyc2V0PXV0Zi04JwogICcud2VibWFuaWZlc3QnPSdhcHBsaWNhdGlvbi9tYW5pZmVzdCtqc29uOyBjaGFyc2V0PXV0Zi04JwogICcucG5nJz0naW1hZ2UvcG5nJwogICcuc3ZnJz0naW1hZ2Uvc3ZnK3htbCcKICAnLnBtdGlsZXMnPSdhcHBsaWNhdGlvbi92bmQucG10aWxlcycKfQp0cnkgewogIHdoaWxlICgkbGlzdGVuZXIuSXNMaXN0ZW5pbmcpIHsKICAgICRjdHggPSAkbGlzdGVuZXIuR2V0Q29udGV4dCgpCiAgICAkcmVsID0gW1VyaV06OlVuZXNjYXBlRGF0YVN0cmluZygkY3R4LlJlcXVlc3QuVXJsLkFic29sdXRlUGF0aC5UcmltU3RhcnQoJy8nKSkKICAgIGlmIChbc3RyaW5nXTo6SXNOdWxsT3JXaGl0ZVNwYWNlKCRyZWwpKSB7ICRyZWwgPSAnaW5kZXguaHRtbCcgfQogICAgJHJvb3QgPSBbSU8uUGF0aF06OkdldEZ1bGxQYXRoKCRQU1NjcmlwdFJvb3QpCiAgICAkZnVsbCA9IFtJTy5QYXRoXTo6R2V0RnVsbFBhdGgoKEpvaW4tUGF0aCAkcm9vdCAkcmVsKSkKICAgIGlmICgtbm90ICRmdWxsLlN0YXJ0c1dpdGgoJHJvb3QpIC1vciAtbm90IChUZXN0LVBhdGggJGZ1bGwgLVBhdGhUeXBlIExlYWYpKSB7CiAgICAgICRjdHguUmVzcG9uc2UuU3RhdHVzQ29kZSA9IDQwNAogICAgICAkY3R4LlJlc3BvbnNlLkNsb3NlKCkKICAgICAgY29udGludWUKICAgIH0KICAgICRleHQgPSBbSU8uUGF0aF06OkdldEV4dGVuc2lvbigkZnVsbCkuVG9Mb3dlckludmFyaWFudCgpCiAgICBpZiAoJG1pbWUuQ29udGFpbnNLZXkoJGV4dCkpIHsgJGN0eC5SZXNwb25zZS5Db250ZW50VHlwZSA9ICRtaW1lWyRleHRdIH0KICAgICRieXRlcyA9IFtJTy5GaWxlXTo6UmVhZEFsbEJ5dGVzKCRmdWxsKQogICAgJGN0eC5SZXNwb25zZS5Db250ZW50TGVuZ3RoNjQgPSAkYnl0ZXMuTGVuZ3RoCiAgICAkY3R4LlJlc3BvbnNlLk91dHB1dFN0cmVhbS5Xcml0ZSgkYnl0ZXMsMCwkYnl0ZXMuTGVuZ3RoKQogICAgJGN0eC5SZXNwb25zZS5DbG9zZSgpCiAgfQp9IGZpbmFsbHkgewogIGlmICgkbGlzdGVuZXIuSXNMaXN0ZW5pbmcpIHsgJGxpc3RlbmVyLlN0b3AoKSB9CiAgJGxpc3RlbmVyLkNsb3NlKCkKfQo=' | base64 -d > "$PC_DIR/start-windows.ps1"
+          echo 'TWVzaCBNZXNzZW5nZXIgUEMg4oCUIHZlY3Rvci1maXJzdCBvZmZsaW5lIGNhbmRpZGF0ZQpCYXNlbGluZTogdjEuNS45Ck1hcCBzdGFjazogUE1UaWxlcyArIE1hcExpYnJlLCByYXN0ZXIgZmFsbGJhY2sgcmV0YWluZWQuCgrQn9C+0LvQvdC+0YHRgtGM0Y4g0LDQstGC0L7QvdC+0LzQvdGL0LkgcnVudGltZToKLSBNYXBMaWJyZSBHTCBKUyA2LjEwLjAg0LLRgdGC0YDQvtC10L0g0LIgdmVuZG9yLwotIFBNVGlsZXMgSlMgNC41LjAg0LLRgdGC0YDQvtC10L0g0LIgdmVuZG9yLwotINC/0YDQuCDQt9Cw0L/Rg9GB0LrQtSDQsdC40LHQu9C40L7RgtC10LrQuCDQuNC3INC40L3RgtC10YDQvdC10YLQsCDQvdC1INGB0LrQsNGH0LjQstCw0Y7RgtGB0Y8KCldpbmRvd3M6CjEuINCg0LDRgdC/0LDQutGD0LnRgtC1IFpJUC4KMi4g0JfQsNC/0YPRgdGC0LjRgtC1IHN0YXJ0LXdpbmRvd3MuYmF0LgozLiDQndCw0YHRgtGA0L7QudC60LggLT4g0J7RhNC70LDQudC9LdC60LDRgNGC0YsgLT4g0JjQvNC/0L7RgNGCIC5wbXRpbGVzLgo=' | base64 -d > "$PC_DIR/README_PC.txt"
           test -s "$PC_DIR/vendor/maplibre-gl.mjs"
           test -s "$PC_DIR/vendor/maplibre-gl.css"
           test -s "$PC_DIR/vendor/pmtiles.js"
