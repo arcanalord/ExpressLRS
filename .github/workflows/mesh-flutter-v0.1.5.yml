@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter APK v0.1.6
+name: Mesh Messenger Flutter APK v0.1.6-dev.2
 
 on:
   push:
@@ -24,7 +24,27 @@ jobs:
           cat .ci/mesh-v016/source.b64.part00 .ci/mesh-v016/source.b64.part01 .ci/mesh-v016/source.b64.part02 .ci/mesh-v016/source.b64.part03 .ci/mesh-v016/p4s00 .ci/mesh-v016/p4s01 .ci/mesh-v016/p4s02 .ci/mesh-v016/p4s03 .ci/mesh-v016/p4s04 .ci/mesh-v016/p4s05 | base64 -d > /tmp/mesh-src/source.zip
           echo 'a3640109a6cc74e2a0abf637d829ea322a00ed5d1cc5a6a421026ef129d59b6d  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
-          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.6-dev.1/flutter_app" >> "$GITHUB_ENV"
+          APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.6-dev.1/flutter_app
+          python3 - <<'PY'
+          from pathlib import Path
+          app = Path("/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.6-dev.1/flutter_app")
+          p = app / "lib/src/application/mesh_app_controller.dart"
+          s = p.read_text()
+          old = "'ROUTING ${event.ok ? 'ACK' : 'NAK'} packet=${event.packetId} message=${event.messageId}'"
+          new = "'ROUTING ${event.ok ? 'ACK' : 'NAK'} message=${event.messageId} reason=${event.errorReason}'"
+          if old not in s:
+              raise SystemExit("dev.2 controller patch target not found")
+          p.write_text(s.replace(old, new))
+          p = app / "pubspec.yaml"
+          s = p.read_text()
+          old = "version: 0.1.6-dev.1+9"
+          if old not in s:
+              raise SystemExit("dev.2 pubspec patch target not found")
+          p.write_text(s.replace(old, "version: 0.1.6-dev.2+10"))
+          PY
+          echo 'cb7345076e51d05b612b703867adfe6e6d7d37fdb87a3478dae27957459837df  /tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.6-dev.1/flutter_app/lib/src/application/mesh_app_controller.dart' | sha256sum -c -
+          echo '6544f75e3845b0022290e349eef361f4ade265f50453f39a8c227ca36a9fe00b  /tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.6-dev.1/flutter_app/pubspec.yaml' | sha256sum -c -
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
         uses: subosito/flutter-action@v2
@@ -66,15 +86,15 @@ jobs:
         run: |
           set -euo pipefail
           test -s build/app/outputs/flutter-apk/app-debug.apk
-          sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee /tmp/MeshMessenger-Flutter-v0.1.6-dev.1-debug.apk.sha256
-          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.6-dev.1-debug.apk
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee /tmp/MeshMessenger-Flutter-v0.1.6-dev.2-debug.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.6-dev.2-debug.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.6-dev.1-debug
+          name: MeshMessenger-Flutter-v0.1.6-dev.2-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.6-dev.1-debug.apk
-            /tmp/MeshMessenger-Flutter-v0.1.6-dev.1-debug.apk.sha256
+            /tmp/MeshMessenger-Flutter-v0.1.6-dev.2-debug.apk
+            /tmp/MeshMessenger-Flutter-v0.1.6-dev.2-debug.apk.sha256
           if-no-files-found: error
           retention-days: 14
