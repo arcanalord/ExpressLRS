@@ -17,7 +17,6 @@ def patch_tree(base: Path):
 
     s=app.read_text(encoding="utf-8")
     imports="""import { LanPeerTransport } from './transports/lan-peer-transport.js';
-import { InternetRelayTransport } from './transports/internet-relay-transport.js';
 import { AutoRouteSelector } from './transports/auto-route-selector.js';
 """
     anchor="import { HELP_FALLBACK_ID, ERROR_TOPIC_MAP, helpRegistry, parseHelpTopic, buildSafeDiagnostics } from './help-registry.js';\n"
@@ -27,7 +26,6 @@ import { AutoRouteSelector } from './transports/auto-route-selector.js';
 
     helpers="""const peerContacts = new Map();
 let lanTransport = null;
-let internetTransport = null;
 let autoRoute = null;
 let appPeerId = '';
 let appDisplayName = '';
@@ -49,7 +47,7 @@ function selectDeliveryRoute(payload={}){
 }
 function fastRouteLabel(){
   const r=autoRoute?.select?.();
-  return r?.id==='wifi'?'Напрямую':r?.id==='ip'?'Интернет':'Офлайн';
+  return r?.id==='wifi'?'Напрямую':'Офлайн';
 }
 function handleFastEnvelope(payload,meta={}){
   if(meta.system && payload?.type==='transport_ack'){
@@ -58,7 +56,7 @@ function handleFastEnvelope(payload,meta={}){
     return;
   }
   const from=String(meta.from||'').trim(); if(!from)return;
-  const transport=meta.transportId==='wifi'?lanTransport:internetTransport;
+  const transport=lanTransport;
   if(!peerContacts.has(from)){
     peerContacts.set(from,{peerId:from,displayName:transport?.remoteName||'Контакт'});
     persistPeerContacts();
@@ -79,8 +77,7 @@ function initFastTransports(){
   try{for(const c of JSON.parse(storageGet('mesh-wifi-contacts')||'[]'))if(c?.peerId)peerContacts.set(String(c.peerId),c);}catch{}
   const state=()=>{renderGlobalStatus();renderRoute();renderConversations($('#chatSearch')?.value||'');renderFastPairingState();};
   lanTransport=new LanPeerTransport({peerId:appPeerId,displayName:appDisplayName,onEnvelope:handleFastEnvelope,onState:state});
-  internetTransport=new InternetRelayTransport({peerId:appPeerId,displayName:appDisplayName,onEnvelope:handleFastEnvelope,onState:state});
-  autoRoute=new AutoRouteSelector({lan:lanTransport,internet:internetTransport});
+  autoRoute=new AutoRouteSelector({lan:lanTransport});
 }
 function rememberFastPeer(transport){
   const peerId=transport?.remotePeerId;if(!peerId)return;
@@ -91,8 +88,8 @@ function rememberFastPeer(transport){
 }
 function renderFastPairingState(){
   const el=$('#fastPairState');if(!el)return;
-  const l=lanTransport?.snapshot?.()||{},n=internetTransport?.snapshot?.()||{};
-  el.textContent='LAN: '+(l.ready?'готов':'не подключён')+' · Internet: '+(n.ready?'готов':n.state||'не подключён');
+  const l=lanTransport?.snapshot?.()||{};
+  el.textContent='LAN: '+(l.ready?'готов':'не подключён');
 }
 async function createLanInvite(){
   const code=await lanTransport.createInvite();$('#pairingCode').value=code;renderFastPairingState();
@@ -101,14 +98,6 @@ async function applyLanCode(){
   const code=$('#pairingCode').value.trim();if(!code)return;
   const r=await lanTransport.applySignal(code);if(r.response)$('#pairingCode').value=r.response;
   rememberFastPeer(lanTransport);renderFastPairingState();
-}
-function createInternetInvite(){
-  const relay=$('#relayUrl').value.trim();if(!relay)throw new Error('Укажите relay URL');
-  const code=internetTransport.createInvite(relay);$('#pairingCode').value=code;renderFastPairingState();
-}
-function applyInternetCode(){
-  const code=$('#pairingCode').value.trim();if(!code)return;
-  internetTransport.acceptInvite(code);rememberFastPeer(internetTransport);renderFastPairingState();
 }
 """
     anchor2="const storageRemove = key => { try { localStorage.removeItem(key); } catch {} };\n"
@@ -165,8 +154,6 @@ function applyInternetCode(){
   $('#fastPairModal')?.addEventListener('click',e=>{if(e.target===$('#fastPairModal'))closeModal($('#fastPairModal'));});
   $('#createLanInvite')?.addEventListener('click',()=>createLanInvite().catch(e=>renderSystemBanner('error',e.message)));
   $('#applyLanCode')?.addEventListener('click',()=>applyLanCode().catch(e=>renderSystemBanner('error',e.message)));
-  $('#createInternetInvite')?.addEventListener('click',()=>{try{createInternetInvite();}catch(e){renderSystemBanner('error',e.message);}});
-  $('#applyInternetCode')?.addEventListener('click',()=>{try{applyInternetCode();}catch(e){renderSystemBanner('error',e.message);}});
   $('#copyPairingCode')?.addEventListener('click',async()=>{const v=$('#pairingCode').value;if(!v)return;try{await navigator.clipboard.writeText(v);}catch{}});
 """
     anchor4="  $('#newContactButton').onclick=()=>openModal($('#addMenuModal'));\n"
@@ -180,26 +167,24 @@ function applyInternetCode(){
 
     debug_old="window.__meshDebug={transportManager,queue,"
     if debug_old in s:
-        s=s.replace(debug_old,"window.__meshDebug={transportManager,queue,lanTransport,internetTransport,autoRoute,peerContacts,",1)
+        s=s.replace(debug_old,"window.__meshDebug={transportManager,queue,lanTransport,autoRoute,peerContacts,",1)
 
     app.write_text(s,encoding="utf-8")
 
     h=index.read_text(encoding="utf-8")
     h=h.replace('<title>Mesh Messenger Prototype</title>','<title>Mesh Wi-Fi 1.6</title>')
-    h=h.replace('<strong>Mesh Messenger</strong>\n          <span>local QA runtime</span>','<strong>Mesh Wi‑Fi</strong>\n          <span>LAN + Internet</span>')
+    h=h.replace('<strong>Mesh Messenger</strong>\n          <span>local QA runtime</span>','<strong>Mesh Wi‑Fi</strong>\n          <span>LAN only</span>')
     h=h.replace('<strong>Mesh Messenger</strong>\n          <span id="mobileSubstatus">Сеть активна</span>','<strong>Mesh Wi‑Fi</strong>\n          <span id="mobileSubstatus">Проверяем маршрут</span>')
     if 'id="openFastPairing"' not in h:
-        h=h.replace('<div class="add-menu-grid">','<div class="add-menu-grid">\n            <button type="button" id="openFastPairing"><strong>Добавить контакт</strong><small>LAN / Internet · один контакт</small></button>',1)
+        h=h.replace('<div class="add-menu-grid">','<div class="add-menu-grid">\n            <button type="button" id="openFastPairing"><strong>Добавить контакт</strong><small>LAN · один контакт</small></button>',1)
     modal="""
       <section class="modal-layer" id="fastPairModal" aria-hidden="true">
         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="fastPairTitle">
           <div class="modal-header"><div><p class="eyebrow">Mesh Wi‑Fi 1.6</p><h2 id="fastPairTitle">Добавить контакт</h2></div><button class="icon-button" id="closeFastPairing" aria-label="Закрыть" type="button">×</button></div>
-          <p class="modal-copy">Один контакт работает и напрямую по Wi‑Fi, и через интернет. Маршрут выбирается автоматически.</p>
-          <div class="pending-card"><strong id="fastPairState">LAN: не подключён · Internet: не подключён</strong><span>Для LAN устройства должны быть в одной локальной сети. Для удалённой связи используйте Internet relay.</span></div>
-          <label class="field-stack"><span>Relay URL</span><input id="relayUrl" placeholder="wss://relay.example.com" /></label>
+          <p class="modal-copy">Добавьте контакт для прямой связи по локальной Wi‑Fi сети или hotspot. Интернет и relay на этом этапе отключены.</p>
+          <div class="pending-card"><strong id="fastPairState">LAN: не подключён</strong><span>Оба устройства должны быть в одной локальной Wi‑Fi сети или hotspot.</span></div>
           <label class="field-stack"><span>Код подключения</span><textarea id="pairingCode" rows="6" placeholder="Создайте код на одном устройстве и вставьте его на другом"></textarea></label>
           <div class="modal-actions"><button class="secondary-button" id="createLanInvite" type="button">Создать LAN-код</button><button class="secondary-button" id="applyLanCode" type="button">Применить LAN-код</button></div>
-          <div class="modal-actions"><button class="secondary-button" id="createInternetInvite" type="button">Создать Internet-код</button><button class="secondary-button" id="applyInternetCode" type="button">Применить Internet-код</button></div>
           <div class="modal-actions"><button class="primary-button" id="copyPairingCode" type="button">Копировать код</button></div>
         </div>
       </section>
