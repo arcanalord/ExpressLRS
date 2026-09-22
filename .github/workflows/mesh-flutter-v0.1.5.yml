@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/mesh-src
-          cat .ci/mesh-v016/source.b64.part* | base64 -d > /tmp/mesh-src/source.zip
+          cat .ci/mesh-v016/source.b64.part00 .ci/mesh-v016/source.b64.part01 .ci/mesh-v016/source.b64.part02 .ci/mesh-v016/source.b64.part03 .ci/mesh-v016/p4s00 .ci/mesh-v016/p4s01 .ci/mesh-v016/p4s02 .ci/mesh-v016/p4s03 .ci/mesh-v016/p4s04 .ci/mesh-v016/p4s05 | base64 -d > /tmp/mesh-src/source.zip
           echo 'a3640109a6cc74e2a0abf637d829ea322a00ed5d1cc5a6a421026ef129d59b6d  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
           echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.6-dev.1/flutter_app" >> "$GITHUB_ENV"
