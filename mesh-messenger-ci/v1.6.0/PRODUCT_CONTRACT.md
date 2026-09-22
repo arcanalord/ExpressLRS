@@ -11,7 +11,9 @@ The active Mesh Wi-Fi build must work without an Internet relay.
 Current transport:
 1. direct LAN / Wi-Fi only.
 
-If the peer is unavailable, the message stays in the local delivery queue. There is no hidden Internet fallback in the active build.
+A contact is saved from valid identity material even when no LAN route exists. Contact existence, trust and route availability are independent states.
+
+If the peer is unavailable, the message stays in the persistent local delivery queue. There is no hidden Internet fallback in the active build.
 
 Internet relay remains a future transport in the shared architecture and is intentionally deferred.
 
@@ -21,8 +23,10 @@ Normal flow:
 - open Chats;
 - add a contact;
 - exchange QR/code;
+- save the personal contact even while offline;
 - open one chat;
-- send over direct LAN.
+- write immediately; if no route exists the message queues;
+- when LAN appears, the same contact/chat resumes delivery.
 
 The user must not see or configure:
 - relay URL;
@@ -57,8 +61,8 @@ Keep:
 ## Delivery
 
 Preserve:
-- stable messageId;
-- queue;
+- stable first-class messageId;
+- persistent queue across app restart;
 - retry/reconnect;
 - ACK;
 - deduplication;
@@ -76,6 +80,9 @@ Preserve:
 - reconnect PASS;
 - queue + ACK PASS;
 - duplicate-delivery protection PASS;
+- offline contact save PASS;
+- outbox restart persistence PASS;
+- stable messageId / ACK correlation PASS;
 - phone runtime PASS.
 
 ## Deferred gates
