@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0b0d10" />
   <meta name="description" content="Mesh Messenger — offline-first multi-transport messenger prototype" />
   <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="stylesheet" href="./vendor/maplibre-gl.css" />
   <link rel="stylesheet" href="./src/styles.css" />
   <title>Mesh Messenger Prototype</title>
 </head>
@@ -102,6 +103,7 @@
         <div class="map-layout">
           <div class="map-canvas" id="mapCanvas" role="img" aria-label="Карта узлов Meshtastic">
             <div class="map-grid" id="mapGrid"></div>
+            <div class="map-vector-layer" id="mapVectorLayer" aria-hidden="true" hidden></div>
             <div class="map-tile-layer" id="mapTileLayer" aria-hidden="true"></div>
             <div class="map-attribution" id="mapAttribution">© OpenStreetMap contributors</div>
             <div class="map-controls" aria-label="Управление картой">
@@ -326,6 +328,8 @@
       <button data-view="settings" type="button"><span>⚙</span><small>Настройки</small></button>
     </nav>
   </div>
+  <script src="./vendor/maplibre-gl.js"></script>
+  <script src="./vendor/pmtiles.js"></script>
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>
