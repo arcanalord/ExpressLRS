@@ -824,10 +824,17 @@ function offlineEstimate(){
 function renderOfflineEstimate(){
   const estimate=offlineEstimate();
   const count=$('#offlineMapTileCount'),size=$('#offlineMapEstimatedSize');
-  if(count)count.textContent=String(estimate.tileCount);
-  if(size)size.textContent=`~${formatStorageBytes(estimate.estimatedBytes)}`;
   const button=$('#offlineMapDownload'),provider=$('#offlineMapProviderState');
   const vectorReady=Boolean(pmtilesProvider?.offlineAllowed&&(pmtilesProvider.endpoint||typeof pmtilesProvider.buildUrl==='function'));
+  if(count)count.textContent=vectorReady?'PMTiles':String(estimate.tileCount);
+  if(size){
+    const vectorEstimate=vectorReady&&typeof pmtilesProvider?.estimateBytes==='function'
+      ? Number(pmtilesProvider.estimateBytes({bounds:selectedOfflineBounds(),minZoom:Math.max(5,(Number($('#offlineMapDetail')?.value)||14)-5),maxZoom:Number($('#offlineMapDetail')?.value)||14}))
+      : 0;
+    size.textContent=vectorReady
+      ? (vectorEstimate>0?`~${formatStorageBytes(vectorEstimate)}`:'уточнится при загрузке')
+      : `~${formatStorageBytes(estimate.estimatedBytes)}`;
+  }
   const rasterReady=Boolean(offlineMapManager.provider);
   const ready=vectorReady||rasterReady;
   if(button)button.disabled=!ready||(!vectorReady&&estimate.tileCount>12000);
@@ -926,7 +933,7 @@ function renderOnlineTiles(){
   mapTileState='loading';layer.hidden=false;if(grid)grid.hidden=false;if(attribution)attribution.hidden=false;
   const settle=()=>{
     if(generation!==mapTileGeneration)return;
-    if(loaded>0){mapTileState='online';if(grid)grid.hidden=true;}
+    if(loaded>0){mapTileState=navigator.onLine===false?'raster-offline':'online';if(grid)grid.hidden=true;}
     else if(pending===failed){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;}
     renderMapTileStatus();
   };
@@ -949,7 +956,12 @@ function renderOnlineTiles(){
 }
 function renderMapTileStatus(){
   const title=$('#mapOverlayTitle');if(!title)return;
-  title.textContent=mapTileState==='online'?'OSM · Позиции NodeDB':mapTileState==='loading'?'Карта загружается · Позиции NodeDB':'Карта недоступна · локальная сетка';
+  title.textContent=
+    mapTileState==='vector-offline'?'PMTiles · векторная офлайн-карта':
+    mapTileState==='raster-offline'?'Raster · офлайн-кэш':
+    mapTileState==='online'?'OSM · online':
+    mapTileState==='loading'?'Карта загружается':
+    'Карта недоступна · локальная сетка';
 }
 function renderMap({fallback=browserMapPosition,preserveViewport=false}={}){
   const holder=$('#mapMarkers'),trackLayer=$('#mapTrackLayer');if(!holder)return;
