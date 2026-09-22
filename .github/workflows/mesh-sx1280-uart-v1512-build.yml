@@ -1,0 +1,90 @@
+name: Mesh Messenger SX1280 UART 1.5.12 APK
+
+on:
+  push:
+    branches: [build/mesh-sx1280-uart-v1.5.12]
+    paths:
+      - ".github/workflows/mesh-sx1280-uart-v1512-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-sx1280-uart-v1512
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Fetch exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _v1512/src _v1512/out
+          curl -L --fail --retry 3 'https://uc44c8999804cf7123e66f68444e.dl.dropboxusercontent.com/cd/0/get/DIrVV3oNRd6tzvM8D7P9sqBqNS5gAwT2SpqztyVhcTlGYf3ggLzOQzXt4Wn_wqawi4-DxjF8yCNn6jT0ISZ7mVp01N6wkISc6yNUNaJaVkgqjnBU9smgkO7c_KLYiCXRugA83t7F0mAuvij-jNrNi5rZRX64VaHMzyQgeDMifV4cfw/file?c_luid=cfbe8875' -o _v1512/source.zip
+          echo 'f47d95f6916a26a7af0da7509355d1df5629a4eb5dd8271656680a6a10163a9a  _v1512/source.zip' | sha256sum -c -
+          unzip -q _v1512/source.zip -d _v1512/src
+
+      - name: Source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/_v1512/src"
+          node --check "$ROOT/src/app.js"
+          node --check "$ROOT/src/help-registry.js"
+          node --check "$ROOT/src/transports/android-external-radio.js"
+          node --check "$ROOT/src/transports/external-radio/mm-uart-codec.js"
+          node "$ROOT/tests/core.test.mjs"
+          node "$ROOT/tests/m02_real_queue_integration.test.mjs"
+          node "$ROOT/tests/help-registry.test.mjs"
+          bash "$ROOT/tests/android_app_source_check.sh"
+
+      - name: Build Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/_v1512/src"
+          gradle -p "$ROOT/android-app" --no-daemon :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/_v1512/src"
+          APK="$ROOT/android-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose "$APK"
+          aapt dump badging "$APK" | tee _v1512/out/aapt-badging.txt
+          grep -q "versionCode='28'" _v1512/out/aapt-badging.txt
+          grep -q "versionName='1.5.12'" _v1512/out/aapt-badging.txt
+          cp "$APK" _v1512/out/MeshMessenger-1.5.12-SX1280-UART-debug.apk
+          sha256sum _v1512/out/MeshMessenger-1.5.12-SX1280-UART-debug.apk > _v1512/out/APK_SHA256.txt
+          printf 'candidate=1.5.12_SX1280_UART\nversionName=1.5.12\nversionCode=28\nbaseline=v1.5.9\nphone_pass=PENDING\nusb_uart_hardware=PENDING\nsx1280_rf=PENDING\n' > _v1512/out/BUILD_RESULT.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mesh-messenger-1.5.12-sx1280-uart-apk
+          path: _v1512/out/*
+          retention-days: 30
