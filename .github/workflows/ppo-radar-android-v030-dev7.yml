@@ -1,0 +1,196 @@
+name: PPO Radar Android v0.3.0-dev.7 APK
+
+on:
+  push:
+    branches:
+      - build/ppo-radar-android-v030-dev7
+    paths:
+      - ".github/workflows/ppo-radar-android-v030-dev7.yml"
+      - "ppo-radar-ci/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ppo-radar-android-v030-dev7
+  cancel-in-progress: true
+
+env:
+  VERSION_NAME: "0.3.0-dev.7"
+  VERSION_CODE: "31"
+  GRADLE_VERSION: "8.10.2"
+  BASE_PROJECT_URL: "https://uca6027bcb8506d0c7fdf5d8c14f.dl.dropboxusercontent.com/cd/0/get/DIn1g5U7ZS-eFOrh55A5QnXO5pVuNKokTfHylPVrDtC5N5zmqsVpUDp3sSx6BQ6rySohSS4VH9JMgDdw02JWms3TBVSy9ViY-BL4lqOwaVYSLnXm16taOQ4zQk7_Pp5uv3tnn7HFONBxA6pDjyd5d1J7TSXwA-XwhODNHMnsB2W6iA/file?c_luid=cfbe8875"
+  RECOVERY_URL: "https://uca88a990c09553ef72fa42ad30b.dl.dropboxusercontent.com/cd/0/get/DIlGTqz68g9LjEaOCRzZBjY4XApI5VLWhmdJE5r5jgYMHngpwEj83RN1MfN87ORHdC4VsMUBW8nkV4LxnAPKPvJSv7qrU5hTZwFzHGKv8fCy68-1ZuRMS5pGTWfnoN2Q7VrhmuDLL01QZN_dTn062cFuv_Zv8zDfNHtXOyR7Mo36ow/file?c_luid=cfbe8875"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Restore Android baseline and recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _ppo
+          mkdir -p _ppo/base _ppo/recovery _ppo/out
+          curl -L --fail --retry 3 --connect-timeout 20 "$BASE_PROJECT_URL" -o _ppo/base.zip
+          curl -L --fail --retry 3 --connect-timeout 20 "$RECOVERY_URL" -o _ppo/recovery.zip
+          unzip -q _ppo/base.zip -d _ppo/base
+          unzip -q _ppo/recovery.zip -d _ppo/recovery
+          ANDROID_DIR="$(find _ppo/base -type f -path '*/app/build.gradle' -printf '%h\n' | sed 's#/app$##' | head -n1)"
+          test -n "$ANDROID_DIR"
+          echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
+          echo "RECOVERY_DIR=$PWD/_ppo/recovery/ppo_android_dev7" >> "$GITHUB_ENV"
+          test -f "$ANDROID_DIR/app/src/main/assets/web/index.html"
+          test -f "_ppo/recovery/ppo_android_dev7/tools/apply-runtime-recovery.mjs"
+          sha256sum _ppo/base.zip | tee _ppo/out/BASE_PROJECT_SHA256.txt
+          sha256sum _ppo/recovery.zip | tee _ppo/out/RECOVERY_SHA256.txt
+
+      - name: Apply runtime recovery dev.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$RECOVERY_DIR/tools/apply-runtime-recovery.mjs" "$ANDROID_DIR/app/src/main/assets/web"
+          node --test "$RECOVERY_DIR/tests/"*.test.js
+          node "$RECOVERY_DIR/tools/check-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
+
+      - name: Apply Android host integration
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+
+          root = Path(os.environ["ANDROID_DIR"])
+          gradle = root / "app/build.gradle"
+          s = gradle.read_text(encoding="utf-8")
+          s = s.replace("versionCode 26", "versionCode 31")
+          s = s.replace("versionName '0.2.6'", "versionName '0.3.0-dev.7'")
+          gradle.write_text(s, encoding="utf-8")
+
+          p = root / "app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+          s = p.read_text(encoding="utf-8")
+          s = s.replace("PPO-Radar-Android/0.2.6", "PPO-Radar-Android/0.3.0-dev.7")
+          anchor = "    public final class AndroidBridge {\n"
+          method = """    public final class AndroidBridge {
+              @JavascriptInterface public void appReady(String payloadJson) {
+                  try {
+                      JSONObject response = new JSONObject();
+                      response.put("protocolVersion", 1);
+                      response.put("platform", "android");
+                      response.put("appVersion", "0.3.0-dev.7");
+                      JSONArray capabilities = new JSONArray();
+                      capabilities.put("save-text");
+                      capabilities.put("open-file");
+                      capabilities.put("offline-download");
+                      capabilities.put("offline-delete");
+                      capabilities.put("system-insets");
+                      response.put("capabilities", capabilities);
+                      jsCall("__ppoNativeReady", response.toString());
+                  } catch (Exception error) {
+                      jsCall("__ppoNativeReady", "{\\\"protocolVersion\\\":1,\\\"platform\\\":\\\"android\\\",\\\"capabilities\\\":[]}");
+                  }
+              }
+
+          """
+          if "@JavascriptInterface public void appReady(String payloadJson)" not in s:
+              if anchor not in s:
+                  raise SystemExit("AndroidBridge anchor not found")
+              s = s.replace(anchor, method)
+          p.write_text(s, encoding="utf-8")
+
+      - name: Verify packaged runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ANDROID_DIR/app/src/main/assets/web"
+          npm test
+          node --check src/app.js
+          grep -q "0.3.0-dev.7" package.json
+          grep -q "0.3.0-dev.7" src/version.js
+          grep -q "const initHelpRegistry" src/app.js
+          grep -q "const openHelp" src/app.js
+          grep -q "const openErrorHelp" src/app.js
+          grep -q "const safeDiagnosticsText" src/app.js
+          grep -q "nativeRuntime.markAppReady" src/app.js
+
+      - name: Verify Android source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "versionCode 31" "$ANDROID_DIR/app/build.gradle"
+          grep -q "versionName '0.3.0-dev.7'" "$ANDROID_DIR/app/build.gradle"
+          grep -q "@JavascriptInterface public void appReady" "$ANDROID_DIR/app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+          grep -q "__ppoNativeReady" "$ANDROID_DIR/app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+
+      - name: Build Android APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'android.useAndroidX=true\n' > "$ANDROID_DIR/gradle.properties"
+          gradle -p "$ANDROID_DIR" --no-daemon clean :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose --print-certs "$APK" | tee _ppo/out/APK_SIGNATURE.txt
+          aapt dump badging "$APK" | tee _ppo/out/AAPT_BADGING.txt
+          grep -q "package: name='ru.fpvclub.pporadar'" _ppo/out/AAPT_BADGING.txt
+          grep -q "versionCode='31'" _ppo/out/AAPT_BADGING.txt
+          grep -q "versionName='0.3.0-dev.7'" _ppo/out/AAPT_BADGING.txt
+          unzip -l "$APK" | tee _ppo/out/APK_CONTENTS.txt
+          grep -q "assets/web/index.html" _ppo/out/APK_CONTENTS.txt
+          grep -q "assets/web/vendor/maplibre-gl.mjs" _ppo/out/APK_CONTENTS.txt
+          grep -q "assets/web/vendor/pmtiles.js" _ppo/out/APK_CONTENTS.txt
+          unzip -p "$APK" assets/web/src/app.js > _ppo/out/PACKAGED_APP_JS.txt
+          grep -q "const initHelpRegistry" _ppo/out/PACKAGED_APP_JS.txt
+          grep -q "nativeRuntime.markAppReady" _ppo/out/PACKAGED_APP_JS.txt
+          cp "$APK" "_ppo/out/PPO_RADAR_v0.3.0-dev.7-debug.apk"
+          sha256sum "_ppo/out/PPO_RADAR_v0.3.0-dev.7-debug.apk" | tee _ppo/out/APK_SHA256.txt
+          {
+            echo "version=0.3.0-dev.7"
+            echo "version_code=31"
+            echo "recovery_tests=PASS"
+            echo "packaged_web_gate=PASS"
+            echo "android_build=PASS"
+            echo "zipalign=PASS"
+            echo "apksigner=PASS"
+            echo "aapt_badging=PASS"
+            echo "apk_content_gate=PASS"
+            echo "phone_install=PENDING"
+            echo "phone_runtime=PENDING"
+          } > _ppo/out/BUILD_RESULT.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ppo-radar-v0.3.0-dev.7-debug
+          path: _ppo/out/*
+          retention-days: 30
