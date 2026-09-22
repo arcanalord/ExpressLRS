@@ -110,7 +110,8 @@ jobs:
           cp mesh-messenger-ci/v1.6.0/transports/auto-route-selector.js "$ANDROID_DIR/app/src/main/assets/www/src/transports/"
           python3 mesh-messenger-ci/v1.6.0/apply_wifi_v16.py "$ROOT"
           python3 mesh-messenger-ci/v1.6.0/apply_wifi_lan_ui_cleanup.py "$ROOT"
-          python3 mesh-messenger-ci/v1.6.0/apply_wifi_delivery_v163.py "$ROOT"\n          python3 mesh-messenger-ci/v1.6.0/apply_map_points_v164.py "$ROOT"
+          python3 mesh-messenger-ci/v1.6.0/apply_wifi_delivery_v163.py "$ROOT"
+          python3 mesh-messenger-ci/v1.6.0/apply_map_points_v164.py "$ROOT"
           grep -q "LanPeerTransport" "$ROOT/src/app.js"
           grep -q "AutoRouteSelector" "$ROOT/src/app.js"
           grep -q 'id="fastPairModal"' "$ROOT/index.html"
@@ -160,7 +161,8 @@ jobs:
           bash tests/android_app_source_check.sh
           python3 tests/ui_compact_batch_a.test.py
           python3 tests/ui_compact_batch_b.test.py
-          python3 "$GITHUB_WORKSPACE/mesh-messenger-ci/v1.6.0/lan_ui_startup_smoke.py" "."\n          python3 "$GITHUB_WORKSPACE/mesh-messenger-ci/v1.6.0/map_point_v164.py" "."
+          python3 "$GITHUB_WORKSPACE/mesh-messenger-ci/v1.6.0/lan_ui_startup_smoke.py" "."
+          python3 "$GITHUB_WORKSPACE/mesh-messenger-ci/v1.6.0/map_point_v164.py" "."
 
       - name: Build Android APK
         shell: bash
@@ -199,7 +201,8 @@ jobs:
             echo "version_code=$VERSION_CODE"
             echo "baseline=validated-v1.5.9-map"
             echo "transport_tests=PASS"
-            echo "map_regression=PASS"\n            echo "map_point_transport=PASS"
+            echo "map_regression=PASS"
+            echo "map_point_transport=PASS"
             echo "deterministic_regression=PASS"
             echo "android_build=PASS"
             echo "apk_verify=PASS"
