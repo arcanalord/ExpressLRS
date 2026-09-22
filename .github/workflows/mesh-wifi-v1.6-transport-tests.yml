@@ -1,0 +1,83 @@
+name: Mesh Wi-Fi v1.6 Transport Tests
+
+on:
+  push:
+    branches:
+      - feature/mesh-wifi-v1.6
+    paths:
+      - ".github/workflows/mesh-wifi-v1.6-transport-tests.yml"
+      - "mesh-messenger-ci/v1.6.0/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-wifi-v1.6-transport-tests
+  cancel-in-progress: true
+
+jobs:
+  transport-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Syntax check transport modules
+        run: |
+          set -euo pipefail
+          node --check mesh-messenger-ci/v1.6.0/transports/auto-route-selector.js
+          node --check mesh-messenger-ci/v1.6.0/transports/lan-peer-transport.js
+          node --check mesh-messenger-ci/v1.6.0/transports/internet-relay-transport.js
+          node --check mesh-messenger-ci/v1.6.0/relay/server.mjs
+          node --check mesh-messenger-ci/v1.6.0/relay/test.mjs
+
+      - name: Install relay dependencies
+        working-directory: mesh-messenger-ci/v1.6.0/relay
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Relay routing smoke
+        working-directory: mesh-messenger-ci/v1.6.0/relay
+        run: npm test
+
+      - name: Auto route selector smoke
+        run: |
+          node --input-type=module <<'EOF'
+          import assert from 'node:assert/strict';
+          import { AutoRouteSelector } from './mesh-messenger-ci/v1.6.0/transports/auto-route-selector.js';
+
+          const make = (id, ready) => ({
+            id,
+            isReady: () => ready.value,
+            snapshot: () => ({ id, ready: ready.value }),
+            async send(payload, options) { return { queued:false, payload, options }; }
+          });
+
+          const lanReady={value:false}, netReady={value:false};
+          const selector=new AutoRouteSelector({
+            lan:make('wifi',lanReady),
+            internet:make('ip',netReady)
+          });
+
+          assert.equal(selector.select().id,null);
+          netReady.value=true;
+          assert.equal(selector.select().id,'ip');
+          lanReady.value=true;
+          assert.equal(selector.select().id,'wifi');
+
+          const sent=await selector.send({type:'text',text:'hello'},{messageId:'m1'});
+          assert.equal(sent.id,'wifi');
+          assert.equal(sent.queued,false);
+          console.log('AUTO_ROUTE_TEST_PASS');
+          EOF
+
+      - name: Contract check
+        run: |
+          set -euo pipefail
+          grep -q "One person = one contact = one chat" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
+          grep -q "direct LAN / Wi-Fi" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
+          grep -q "Internet relay" mesh-messenger-ci/v1.6.0/PRODUCT_CONTRACT.md
