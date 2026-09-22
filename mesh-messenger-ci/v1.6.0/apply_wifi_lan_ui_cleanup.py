@@ -263,23 +263,24 @@ def patch_html(base):
     h=h.replace('<button class="nav-item is-active" data-view="chats" type="button"><span>Чаты</span><small>3</small></button>','<button class="nav-item is-active" data-view="chats" type="button"><span>Чаты</span><small></small></button>',1)
     h=h.replace('<button class="nav-item" data-view="map" type="button"><span>Карта</span><small>7</small></button>','<button class="nav-item" data-view="map" type="button"><span>Карта</span><small></small></button>',1)
 
-    old="""          <p class="modal-copy">Добавьте контакт для прямой связи по локальной Wi-Fi сети или hotspot. Интернет и relay на этом этапе отключены.</p>
-          <div class="pending-card"><strong id="fastPairState">LAN: не подключён</strong><span>Оба устройства должны быть в одной локальной Wi-Fi сети или hotspot.</span></div>
-          <label class="field-stack"><span>Код подключения</span><textarea id="pairingCode" rows="6" placeholder="Создайте код на одном устройстве и вставьте его на другом"></textarea></label>
-          <div class="modal-actions"><button class="secondary-button" id="createLanInvite" type="button">Создать LAN-код</button><button class="secondary-button" id="applyLanCode" type="button">Применить LAN-код</button></div>
-          <div class="modal-actions"><button class="primary-button" id="copyPairingCode" type="button">Копировать код</button></div>
-"""
-    new="""          <p class="modal-copy">Это личный контакт 1↔1, не группа. Оба устройства должны быть в одной Wi‑Fi сети или hotspot.</p>
+    modal_start=h.find('<section class="modal-layer" id="fastPairModal"')
+    modal_end=h.find('</section>',modal_start)
+    if modal_start<0 or modal_end<0:
+        raise SystemExit("fastPairModal not found under "+str(base))
+    modal_end+=len('</section>')
+    new_modal="""<section class="modal-layer" id="fastPairModal" aria-hidden="true">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="fastPairTitle">
+          <div class="modal-header"><div><p class="eyebrow">Mesh Wi-Fi</p><h2 id="fastPairTitle">Добавить личный контакт</h2></div><button class="icon-button" id="closeFastPairing" aria-label="Закрыть" type="button">×</button></div>
+          <p class="modal-copy">Это личный контакт 1↔1, не группа. Оба устройства должны быть в одной Wi‑Fi сети или hotspot.</p>
           <label class="field-stack"><span>Моё имя</span><input id="pairingMyName" maxlength="40" placeholder="Например: Кирилл" /></label>
           <div class="pending-card"><strong id="fastPairState">LAN: не подключён</strong><span id="fastPairHint">Оба устройства должны быть в одной локальной Wi‑Fi сети или hotspot.</span></div>
           <div class="pending-card is-error" id="fastPairError" hidden></div>
           <label class="field-stack"><span>Код подключения</span><textarea id="pairingCode" rows="6" placeholder="1. Создай код на A → 2. Вставь на B → 3. Ответ B вставь обратно на A"></textarea></label>
           <div class="modal-actions"><button class="secondary-button" id="createLanInvite" type="button">Создать код</button><button class="secondary-button" id="applyLanCode" type="button">Применить код</button></div>
           <div class="modal-actions"><button class="quiet-button" id="copyPairingCode" type="button">Копировать код</button><button class="primary-button" id="saveFastPeer" type="button" disabled>Сохранить и открыть чат</button></div>
-"""
-    if old not in h:
-        raise SystemExit("missing pairing html under "+str(base))
-    h=h.replace(old,new,1)
+        </div>
+      </section>"""
+    h=h[:modal_start]+new_modal+h[modal_end:]
 
     start=h.find('<div class="add-menu-grid">')
     end=h.find('</div>',start)
