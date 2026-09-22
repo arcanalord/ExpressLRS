@@ -131,7 +131,7 @@ jobs:
           grep -q "assets/web/vendor/maplibre-gl.mjs" _ppo/out/APK_CONTENTS.txt
           grep -q "assets/web/vendor/pmtiles.js" _ppo/out/APK_CONTENTS.txt
           cp "$APK" "_ppo/out/PPO_RADAR_v0.2.6-debug.apk"
-          sha256sum "_ppo/out/PPO_RADAR_v0.2.5-debug.apk" | tee _ppo/out/APK_SHA256.txt
+          sha256sum "_ppo/out/PPO_RADAR_v0.2.6-debug.apk" | tee _ppo/out/APK_SHA256.txt
           {
             echo "version=0.2.6"
             echo "version_code=26"
