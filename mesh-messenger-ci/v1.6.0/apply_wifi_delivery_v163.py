@@ -15,7 +15,7 @@ def patch_core(base):
     p=base/"src"/"core.js"
     s=p.read_text(encoding="utf-8")
     start=s.find("export class MessageQueue {")
-    end=s.find("export class SmallFileTransferManager",start)
+    end=s.find("export class PositionTrackHistory",start)
     if start<0 or end<0:
         raise SystemExit("MessageQueue anchors missing under "+str(base))
     new=r"""export class MessageQueue {
