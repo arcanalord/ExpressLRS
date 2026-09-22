@@ -124,4 +124,18 @@ for p in [root/"index.html",root/"android-app/app/src/main/assets/www/index.html
           <div class="modal-actions"><button class="quiet-button" id="cancelWaypoint" type="button">Отмена</button><button class="secondary-button" id="saveWaypointLocal" type="button">Сохранить</button><button class="primary-button" id="confirmWaypoint" type="button">Отправить</button></div>"""
     h=one(h,old,new,"waypoint modal")
     p.write_text(h,encoding="utf-8")
+for hp in [root/"src/help-registry.js",root/"android-app/app/src/main/assets/www/src/help-registry.js"]:
+    hs=hp.read_text(encoding="utf-8")
+    lines=hs.splitlines()
+    changed=False
+    out=[]
+    for line in lines:
+        if "id:'mesh-messenger.map.waypoint'" in line:
+            out.append("  { id:'mesh-messenger.map.waypoint', title:'Точка на карте', summary:'Как поставить, сохранить и отправить точку.', body:'Нажмите на свободное место карты или «Поставить точку». Точка хранится как operational overlay, может быть сохранена локально или отправлена в текущий чат через Delivery Manager. Транспорт выбирается отдельно; для совместимости с Meshtastic поддерживается WAYPOINT_APP.', keywords:['waypoint','point','точка','карта','отправить'], category:'map' },")
+            changed=True
+        else:
+            out.append(line)
+    if not changed: raise SystemExit("missing waypoint help")
+    hp.write_text("\n".join(out)+"\n",encoding="utf-8")
+
 print("PATCH_MAP_POINTS_V164_PASS")
