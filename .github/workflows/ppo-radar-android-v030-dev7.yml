@@ -20,7 +20,7 @@ env:
   VERSION_NAME: "0.3.0-dev.7"
   VERSION_CODE: "31"
   GRADLE_VERSION: "8.10.2"
-  BASE_PROJECT_URL: "https://ucaf68f37aa57f5aa21572c3fa3b.dl.dropboxusercontent.com/cd/0/get/DIpqueno_CCeapMaAurpn4-4ZpPphKE-Ki5-H5UC6T-EwlgcnGtJXay-Qgq4pJSFPEa9234WixgdF0t5T03vGCQYfC_m8tGXQj8JnmEb9WJdaNmtGzfbyzRhgmQVCMSrXyXJc47qJgo4x-9NBrn9I36P5s2koGzSMyvRwoDAkwZxkA/file?c_luid=cfbe8875"
+  BASE_PROJECT_URL: "https://uc90b3e2b1ad3a04a9b77ec30073.dl.dropboxusercontent.com/cd/0/get/DIp-jrs7A3nbM7EKC02Q6-1t5WL0p2zKtE2hp5lBt9R0CapzjJfUPiJbUgbRK5knGvynrlv4q30a-OfvhOUPgEGPl5O7G4S0mlyCLcEltBmnHmEMcjnZYT_ge_LcY15AhR0uoREuQHlKUxs6u_lRxwdZDGuVxEBehd3L8BQ_EBlZCg/file?c_luid=cfbe8875"
 
 jobs:
   build:
@@ -101,6 +101,7 @@ jobs:
           if p.exists():
               s = p.read_text(encoding='utf-8')
               s = s.replace('0.3.0-dev.5','0.3.0-dev.7')
+              s = s.replace(r'0\.3\.0-dev\.5', r'0\.3\.0-dev\.7')
               s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.7/')
               s = s.replace(r'/v0\.3\.0-dev\.7 mobile shell \+ no-overlap release gate/', r'/v0\.2\.6 mobile shell \+ no-overlap release gate/')
               s = s.replace(r'/v0\.3\.0-dev\.7 mobile shell[\s\S]*aside\{position:absolute/', r'/v0\.2\.6 mobile shell[\s\S]*aside\{position:absolute/')
