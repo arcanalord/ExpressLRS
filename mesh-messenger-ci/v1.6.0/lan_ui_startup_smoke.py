@@ -86,7 +86,6 @@ try:
         if "личный контакт" not in modal.lower() or "не группа" not in modal.lower():
             raise AssertionError("pairing modal does not explain personal chat semantics")
 
-        page.locator("#closeFastPairing").click()
 
         for view in ("map","network","settings","chats"):
             page.locator(f".mobile-bottom-nav [data-view='{view}']").click()
