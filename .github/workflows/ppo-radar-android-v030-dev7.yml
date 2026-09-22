@@ -20,8 +20,7 @@ env:
   VERSION_NAME: "0.3.0-dev.7"
   VERSION_CODE: "31"
   GRADLE_VERSION: "8.10.2"
-  BASE_PROJECT_URL: "https://uc8bc7692d3ec3aec7c50d8df229.dl.dropboxusercontent.com/cd/0/get/DIlt-xsWkZ7xgzTkmAVkdepyrVYLLkC_HlEYIvqM1ALoYVmOGg70xkoXWTSzWe-IFCW1O5rBHQ1X9gK4_yaS7gn1JbBetSV46gRLNdBhcwfC8aZhvPr4tTLvNISnoBQUHRS0x3EgOorgVo3nhR8qZ-beAeB7TWVoWcRekS_iGm2xNg/file?c_luid=cfbe8875"
-  RECOVERY_URL: "https://uc6000461dc9b1c1cd1e015d5c79.dl.dropboxusercontent.com/cd/0/get/DIkpMJg5dkOwDUK-CdRHsWin_ck0sjHa2Z-TDo0nBugZlmAtaOSsAm_p-jNWd_Jd64LT5H09z-45L8vA5er4NNX7gZQk8jpnyxbx8_ruD6Hnhktne-it7ZSzPDqUPwBcp02NfLDwEM8ZMXIDfLeLRW5fgvPVM3894oMqJYxUltQM_g/file?c_luid=cfbe8875"
+  BASE_PROJECT_URL: "https://ucd1c427e1ac8af599095a8886e3.dl.dropboxusercontent.com/cd/0/get/DIq3QN2sCzuFpqNb7SQDBaqu_9OFC8yh49afcFxlDyaiiSv9-uQ9WhlsA3r2VIp5tFLcX5rykxDgQmxTrsXmPBdmyIu-ukjc1Oi-3TASwkxI3JxjpP6TRxPurN8ger4aMp1AiwAga6AQeVhk3nPkZf30uSBXTsOaQ7R7rWe5-VpZMQ/file?c_luid=cfbe8875"
 
 jobs:
   build:
@@ -57,19 +56,16 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf _ppo
-          mkdir -p _ppo/base _ppo/recovery _ppo/out
+          mkdir -p _ppo/base _ppo/out
           curl -L --fail --retry 3 --connect-timeout 20 "$BASE_PROJECT_URL" -o _ppo/base.zip
-          curl -L --fail --retry 3 --connect-timeout 20 "$RECOVERY_URL" -o _ppo/recovery.zip
           unzip -q _ppo/base.zip -d _ppo/base
-          unzip -q _ppo/recovery.zip -d _ppo/recovery
           ANDROID_DIR="$(find _ppo/base -type f -path '*/app/build.gradle' -printf '%h\n' | sed 's#/app$##' | head -n1)"
           test -n "$ANDROID_DIR"
           echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
-          echo "RECOVERY_DIR=$PWD/_ppo/recovery/ppo_android_dev7" >> "$GITHUB_ENV"
+          echo "RECOVERY_DIR=$GITHUB_WORKSPACE/ppo-radar-ci/dev7-recovery" >> "$GITHUB_ENV"
           test -f "$ANDROID_DIR/app/src/main/assets/web/index.html"
-          test -f "_ppo/recovery/ppo_android_dev7/tools/apply-runtime-recovery.mjs"
+          test -f "ppo-radar-ci/dev7-recovery/tools/apply-runtime-recovery.mjs"
           sha256sum _ppo/base.zip | tee _ppo/out/BASE_PROJECT_SHA256.txt
-          sha256sum _ppo/recovery.zip | tee _ppo/out/RECOVERY_SHA256.txt
 
       - name: Apply runtime recovery dev.7
         shell: bash
