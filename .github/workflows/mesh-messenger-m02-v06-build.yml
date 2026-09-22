@@ -1,0 +1,127 @@
+name: Mesh Messenger M02 v0.6 APK
+
+on:
+  push:
+    branches: [build/mesh-m02-v0.6-apk]
+    paths:
+      - ".github/workflows/mesh-messenger-m02-v06-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-m02-v06-apk
+  cancel-in-progress: true
+
+env:
+  VERSION_NAME: "1.5.9-m02-v0.6"
+  VERSION_CODE: "26"
+  SOURCE_URL: "https://ucd91a3289c022d8ec9c01ca3fca.dl.dropboxusercontent.com/cd/0/get/DInuQsO5lL-Mgpl-c4bF71QUnzh_uPcPJt-MUe8cYk2kqStjhlzzpXUp6LgkrkhTw916cCadjQq15Z7cW8oWaoGzq5IZ-xTWLyUTJW2vNwAhBzTfYGv_1uoWCcr46eE_BLntEs7-9z1KisfoGmR4rjskPJ-DwZq8gpXDrUAYuC6LnA/file?c_luid=cfbe8875"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Download exact M02 v0.6 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _m02v06
+          curl -L --fail --retry 3 "$SOURCE_URL" -o _m02v06/source.zip
+          echo "a8b60739838206d4912b53f4d9d8e56fc7165de7faadd390425c328d4727ee82  _m02v06/source.zip" | sha256sum -c -
+          unzip -q _m02v06/source.zip -d _m02v06/unpacked
+          ROOT="$(find _m02v06/unpacked -maxdepth 2 -type d -name 'mesh-messenger-m02-v0.6' -print -quit)"
+          test -n "$ROOT"
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Candidate identity and source parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["ROOT"])
+          build=root/"android-app/app/build.gradle.kts"
+          s=build.read_text(encoding="utf-8")
+          s=re.sub(r"versionCode\s*=\s*\d+", f"versionCode = {os.environ['VERSION_CODE']}", s, count=1)
+          s=re.sub(r'versionName\s*=\s*"[^"]+"', f'versionName = "{os.environ["VERSION_NAME"]}"', s, count=1)
+          build.write_text(s, encoding="utf-8")
+          for p in [root/"src/app.js", root/"android-app/app/src/main/assets/www/src/app.js"]:
+              t=p.read_text(encoding="utf-8")
+              t=re.sub(r"appVersion:'[^']+'", f"appVersion:'{os.environ['VERSION_NAME']}'", t, count=1)
+              p.write_text(t, encoding="utf-8")
+          PY
+          bash "$ROOT/tools/sync_android_assets.sh"
+          cmp "$ROOT/src/app.js" "$ROOT/android-app/app/src/main/assets/www/src/app.js"
+          cmp "$ROOT/src/core.js" "$ROOT/android-app/app/src/main/assets/www/src/core.js"
+          cmp "$ROOT/src/message-receipt-correlator.js" "$ROOT/android-app/app/src/main/assets/www/src/message-receipt-correlator.js"
+          cmp "$ROOT/src/transports/phoneapi-lite.js" "$ROOT/android-app/app/src/main/assets/www/src/transports/phoneapi-lite.js"
+
+      - name: M02 and core gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check "$ROOT/src/app.js"
+          node --check "$ROOT/src/core.js"
+          node --check "$ROOT/src/message-receipt-correlator.js"
+          node --check "$ROOT/src/transports/phoneapi-lite.js"
+          cd "$ROOT"
+          node tests/core.test.mjs
+          node tests/m02_real_queue_integration.test.mjs
+          node tests/m02_recipient_receipt.test.mjs
+          node tests/m02_two_node_receipt_e2e.test.mjs
+          node tests/phoneapi-lite.test.mjs
+          node tests/meshtastic-stream.test.mjs
+          bash tests/android_app_source_check.sh
+          bash tests/android_ble_contract.sh
+          bash tests/android_ble_power_contract.sh
+
+      - name: Build Android debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p "$ROOT/android-app" --no-daemon :app:assembleDebug
+
+      - name: Verify and package APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$ROOT/android-app/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose "$APK"
+          mkdir -p _m02v06/out
+          aapt dump badging "$APK" | tee _m02v06/out/aapt-badging.txt
+          grep -q "versionCode='$VERSION_CODE'" _m02v06/out/aapt-badging.txt
+          grep -q "versionName='$VERSION_NAME'" _m02v06/out/aapt-badging.txt
+          cp "$APK" "_m02v06/out/MeshMessenger-M02-v0.6-debug.apk"
+          sha256sum "_m02v06/out/MeshMessenger-M02-v0.6-debug.apk" > _m02v06/out/APK_SHA256.txt
+          printf "candidate=m02-v0.6\nversionName=%s\nversionCode=%s\nbaseline=v1.5.9\nhardware_e2e=PENDING\n" "$VERSION_NAME" "$VERSION_CODE" > _m02v06/out/BUILD_RESULT.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mesh-messenger-m02-v0.6-apk
+          path: _m02v06/out/*
+          retention-days: 30
