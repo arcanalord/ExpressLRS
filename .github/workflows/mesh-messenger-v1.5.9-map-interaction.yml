@@ -80,6 +80,20 @@ jobs:
           ROOT="$(dirname "$ANDROID_DIR")"
           echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
           echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+      - name: Vendor vector map runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _mesh_vendor
+          mkdir -p _mesh_vendor/node_modules
+          cd _mesh_vendor
+          npm init -y >/dev/null 2>&1
+          npm install --ignore-scripts --no-audit --no-fund maplibre-gl@6.10.0 pmtiles@4.5.0
+          test -f node_modules/maplibre-gl/dist/maplibre-gl.js
+          test -f node_modules/maplibre-gl/dist/maplibre-gl.css
+          test -f node_modules/pmtiles/dist/pmtiles.js
+          cd "$GITHUB_WORKSPACE"
+
       - name: Apply current map + location work
         shell: bash
         run: |
@@ -87,11 +101,25 @@ jobs:
           cp mesh-messenger-ci/map-src/index.html "$ROOT/index.html"
           cp mesh-messenger-ci/map-src/app.js "$ROOT/src/app.js"
           cp mesh-messenger-ci/map-src/offline-map-manager.js "$ROOT/src/offline-map-manager.js"
+          cp mesh-messenger-ci/map-src/vector-package-manager.js "$ROOT/src/vector-package-manager.js"
+          cp mesh-messenger-ci/map-src/vector-map-adapter.js "$ROOT/src/vector-map-adapter.js"
+          cp mesh-messenger-ci/map-src/openmaptiles-basic-style.js "$ROOT/src/openmaptiles-basic-style.js"
+          mkdir -p "$ROOT/vendor"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.js "$ROOT/vendor/maplibre-gl.js"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.css "$ROOT/vendor/maplibre-gl.css"
+          cp _mesh_vendor/node_modules/pmtiles/dist/pmtiles.js "$ROOT/vendor/pmtiles.js"
           cp mesh-messenger-ci/map-src/styles.css "$ROOT/src/styles.css"
           cp mesh-messenger-ci/map-src/AndroidManifest.xml "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
           cp mesh-messenger-ci/map-src/android-index.html "$ANDROID_DIR/app/src/main/assets/www/index.html"
           cp mesh-messenger-ci/map-src/android-app.js "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
           cp mesh-messenger-ci/map-src/offline-map-manager.js "$ANDROID_DIR/app/src/main/assets/www/src/offline-map-manager.js"
+          cp mesh-messenger-ci/map-src/vector-package-manager.js "$ANDROID_DIR/app/src/main/assets/www/src/vector-package-manager.js"
+          cp mesh-messenger-ci/map-src/vector-map-adapter.js "$ANDROID_DIR/app/src/main/assets/www/src/vector-map-adapter.js"
+          cp mesh-messenger-ci/map-src/openmaptiles-basic-style.js "$ANDROID_DIR/app/src/main/assets/www/src/openmaptiles-basic-style.js"
+          mkdir -p "$ANDROID_DIR/app/src/main/assets/www/vendor"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.js "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl.js"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.css "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl.css"
+          cp _mesh_vendor/node_modules/pmtiles/dist/pmtiles.js "$ANDROID_DIR/app/src/main/assets/www/vendor/pmtiles.js"
           cp mesh-messenger-ci/map-src/android-styles.css "$ANDROID_DIR/app/src/main/assets/www/src/styles.css"
           MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
           python3 - "$MAIN_FILE" <<'PY'
@@ -121,8 +149,14 @@ jobs:
           python3 mesh-messenger-ci/prepare_current_source.py "$ROOT" "$VERSION_NAME" "$VERSION_CODE"
           node --check "$ROOT/src/app.js"
           node --check "$ROOT/src/offline-map-manager.js"
+          node --check "$ROOT/src/vector-package-manager.js"
+          node --check "$ROOT/src/vector-map-adapter.js"
+          node --check "$ROOT/src/openmaptiles-basic-style.js"
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
           node --check "$ANDROID_DIR/app/src/main/assets/www/src/offline-map-manager.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/vector-package-manager.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/vector-map-adapter.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/openmaptiles-basic-style.js"
           node --check "$ROOT/src/core.js"
           python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
           python3 mesh-messenger-ci/offline_map_regression_test.py "$ROOT"
@@ -192,6 +226,8 @@ jobs:
             echo "base_source_sha256=$SOURCE_SHA256"
             echo "source_audit=PASS"
             echo "map_regression=PASS"
+            echo "map_architecture=VECTOR_FIRST_PMtiles_MAPLIBRE"
+            echo "raster_fallback=ENABLED"
             echo "deterministic_regression=PASS"
             echo "android_build=PASS"
             echo "apk_verify=PASS"
