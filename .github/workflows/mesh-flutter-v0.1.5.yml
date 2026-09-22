@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter APK v0.1.5
+name: Mesh Messenger Flutter APK v0.1.6
 
 on:
   push:
@@ -16,15 +16,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch canonical source snapshot from Dropbox
+      - name: Reconstruct source snapshot
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/mesh-src
-          curl -L --fail --retry 2 -o /tmp/mesh-src/source.zip 'https://uc8411f0f99b92cdb151c4019471.dl.dropboxusercontent.com/cd/0/get/DInfBBq4M_pntvQYsLzuSr6BKnh9qIFzgtsJtLfvxsIaHw3XYIDySO_IIlqmXKXBJgPpBwdj1dRooL62MTYt7ItSFyw9U5VjjdYPjY53BkFSOIvLRCeeMd_7g6va7AtpFzNeUMHAFZI72P8AmuG8kdRux1Z2SBv7DENbns4MyzcYAg/file?c_luid=cfbe8875'
-          echo '7a448e3a40fdea1b3569d1a2e3fff32eb9b79fd676cf28b72caa607c7b32713b  /tmp/mesh-src/source.zip' | sha256sum -c -
+          cat .ci/mesh-v016/source.b64.part* | base64 -d > /tmp/mesh-src/source.zip
+          echo 'a3640109a6cc74e2a0abf637d829ea322a00ed5d1cc5a6a421026ef129d59b6d  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
-          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.5-dev.3/flutter_app" >> "$GITHUB_ENV"
+          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.6-dev.1/flutter_app" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
         uses: subosito/flutter-action@v2
@@ -66,16 +66,15 @@ jobs:
         run: |
           set -euo pipefail
           test -s build/app/outputs/flutter-apk/app-debug.apk
-          sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee /tmp/mesh-apk.sha256
-          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.5-dev.3-debug.apk
-          cp /tmp/mesh-apk.sha256 /tmp/MeshMessenger-Flutter-v0.1.5-dev.3-debug.apk.sha256
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee /tmp/MeshMessenger-Flutter-v0.1.6-dev.1-debug.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.6-dev.1-debug.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.5-dev.3-debug
+          name: MeshMessenger-Flutter-v0.1.6-dev.1-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.5-dev.3-debug.apk
-            /tmp/MeshMessenger-Flutter-v0.1.5-dev.3-debug.apk.sha256
+            /tmp/MeshMessenger-Flutter-v0.1.6-dev.1-debug.apk
+            /tmp/MeshMessenger-Flutter-v0.1.6-dev.1-debug.apk.sha256
           if-no-files-found: error
           retention-days: 14
