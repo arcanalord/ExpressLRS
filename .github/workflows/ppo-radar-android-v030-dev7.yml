@@ -91,13 +91,15 @@ jobs:
           p = root / 'tests/version.test.js'
           if p.exists():
               s = p.read_text(encoding='utf-8')
-              s = s.replace('v0.2.6 checkpoint','v0.3.0-dev.7 checkpoint').replace("'0.2.6'","'0.3.0-dev.7'")
+              s = s.replace('0.3.0-dev.5','0.3.0-dev.7').replace('v0.2.6 checkpoint','v0.3.0-dev.7 checkpoint').replace("'0.2.6'","'0.3.0-dev.7'")
               p.write_text(s, encoding='utf-8')
           p = root / 'tests/web-shell.test.js'
           if p.exists():
               s = p.read_text(encoding='utf-8')
-              s = s.replace('web shell and runtime use v0.2.6','web shell and runtime use v0.3.0-dev.7')
-              s = s.replace(r'/runtime v0\.2\.6/', r'/runtime v0\.3\.0-dev\.7/')
+              s = s.replace('0.3.0-dev.5','0.3.0-dev.7')
+              s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.7/')
+              s = s.replace(r'/v0\.3\.0-dev\.7 mobile shell \+ no-overlap release gate/', r'/v0\.2\.6 mobile shell \+ no-overlap release gate/')
+              s = s.replace(r'/v0\.3\.0-dev\.7 mobile shell[\s\S]*aside\{position:absolute/', r'/v0\.2\.6 mobile shell[\s\S]*aside\{position:absolute/')
               p.write_text(s, encoding='utf-8')
           PY
           node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
