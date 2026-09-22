@@ -1,9 +1,9 @@
-name: Mesh Messenger v1.5.9 Map Interaction
+name: Mesh Messenger v1.5.9 Offline Maps
 # rerun: clean-source-audit-v2
 
 on:
   push:
-    branches: [fix/mesh-map-interaction-v1.5.9]
+    branches: [feature/mesh-main-offline-maps-v1.5.9]
     paths:
       - ".github/workflows/mesh-messenger-v1.5.9-map-interaction.yml"
       - "mesh-messenger-ci/map-src/**"
@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: mesh-messenger-v1.5.9-map-interaction
+  group: mesh-messenger-v1.5.9-offline-maps
   cancel-in-progress: true
 
 env:
@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: fix/mesh-map-interaction-v1.5.9
+          ref: feature/mesh-main-offline-maps-v1.5.9
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -86,10 +86,12 @@ jobs:
           set -euo pipefail
           cp mesh-messenger-ci/map-src/index.html "$ROOT/index.html"
           cp mesh-messenger-ci/map-src/app.js "$ROOT/src/app.js"
+          cp mesh-messenger-ci/map-src/offline-map-manager.js "$ROOT/src/offline-map-manager.js"
           cp mesh-messenger-ci/map-src/styles.css "$ROOT/src/styles.css"
           cp mesh-messenger-ci/map-src/AndroidManifest.xml "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
           cp mesh-messenger-ci/map-src/android-index.html "$ANDROID_DIR/app/src/main/assets/www/index.html"
           cp mesh-messenger-ci/map-src/android-app.js "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
+          cp mesh-messenger-ci/map-src/offline-map-manager.js "$ANDROID_DIR/app/src/main/assets/www/src/offline-map-manager.js"
           cp mesh-messenger-ci/map-src/android-styles.css "$ANDROID_DIR/app/src/main/assets/www/src/styles.css"
           MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
           python3 - "$MAIN_FILE" <<'PY'
@@ -118,6 +120,9 @@ jobs:
           set -euo pipefail
           python3 mesh-messenger-ci/prepare_current_source.py "$ROOT" "$VERSION_NAME" "$VERSION_CODE"
           node --check "$ROOT/src/app.js"
+          node --check "$ROOT/src/offline-map-manager.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
+          node --check "$ANDROID_DIR/app/src/main/assets/www/src/offline-map-manager.js"
           node --check "$ROOT/src/core.js"
           python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
           python3 mesh-messenger-ci/release_source_audit.py "$ROOT"
@@ -194,6 +199,6 @@ jobs:
           } > _mesh159/out/BUILD_RESULT.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: mesh-messenger-v1.5.9-map-interaction
+          name: mesh-messenger-v1.5.9-offline-maps
           path: _mesh159/out/*
           retention-days: 30
