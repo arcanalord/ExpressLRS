@@ -1,0 +1,81 @@
+name: Mesh Messenger Flutter APK v0.1.5
+
+on:
+  push:
+    branches:
+      - build/mesh-flutter-v0.1.5
+    paths:
+      - '.github/workflows/mesh-flutter-v0.1.5.yml'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch canonical source snapshot from Dropbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mesh-src
+          curl -L --fail --retry 2 -o /tmp/mesh-src/source.zip 'https://uc90a3feba42dde271831290d3bc.dl.dropboxusercontent.com/cd/0/get/DIlsLDv_kHj7r_bn7QadseJYGeLYMvEvM5TTP8V76f_fJhZNLGZkpaypXmngJO2q_VYNQxN7hdliPdOQM_6pW8wBrg339AH9iiunLXchVpbzMAMzxHyvgC88P-Rct8_pAVjgIPI_xyCHPj20ZA-8KrbO0BeNJyxb1sBc7uBVV9kr9Q/file?c_luid=cfbe8875'
+          echo '35dc9ffc7c0d022d1f9dccd727848d445fd0d82ecae44a59f63304ec9b34e43c  /tmp/mesh-src/source.zip' | sha256sum -c -
+          unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
+          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.5-dev.1/flutter_app" >> "$GITHUB_ENV"
+
+      - name: Setup Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: 'stable'
+          cache: true
+
+      - name: Flutter doctor
+        run: flutter doctor -v
+
+      - name: Dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter analyze
+
+      - name: Core self test
+        working-directory: ${{ env.APP_DIR }}
+        run: dart run tool/core_self_test.dart
+
+      - name: PhoneAPI self test
+        working-directory: ${{ env.APP_DIR }}
+        run: dart run tool/phoneapi_self_test.dart
+
+      - name: Android source gate
+        working-directory: ${{ env.APP_DIR }}
+        run: python3 tool/android_source_gate.py
+
+      - name: Build debug APK
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter build apk --debug
+
+      - name: Verify APK
+        working-directory: ${{ env.APP_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee /tmp/mesh-apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.5-dev.1-debug.apk
+          cp /tmp/mesh-apk.sha256 /tmp/MeshMessenger-Flutter-v0.1.5-dev.1-debug.apk.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshMessenger-Flutter-v0.1.5-dev.1-debug
+          path: |
+            /tmp/MeshMessenger-Flutter-v0.1.5-dev.1-debug.apk
+            /tmp/MeshMessenger-Flutter-v0.1.5-dev.1-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
