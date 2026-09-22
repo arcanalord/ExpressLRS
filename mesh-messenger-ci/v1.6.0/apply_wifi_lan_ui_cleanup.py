@@ -59,9 +59,9 @@ function showFastPairError(message=''){
 }
 function rememberFastPeer(transport){
   const peerId=transport?.remotePeerId;
-  if(!peerId || !transport?.isReady?.()){showFastPairError('Сначала дождитесь статуса «LAN подключён».');return false;}
+  if(!peerId){showFastPairError('Сначала примените код контакта, чтобы получить его идентификатор.');return false;}
   const displayName=(transport.remoteName||'Контакт').trim()||'Контакт';
-  peerContacts.set(String(peerId),{peerId:String(peerId),displayName});
+  peerContacts.set(String(peerId),{peerId:String(peerId),displayName,trust:'unverified'});
   persistPeerContacts();
   currentConversationId=fastConversationId(peerId);storageSet('mesh-current-conversation',currentConversationId);
   renderConversations();renderConversationHeader();renderMessages();
@@ -74,8 +74,13 @@ function renderFastPairingState(){
   const save=$('#saveFastPeer');
   const hint=$('#fastPairHint');
   if(l.ready){
-    el.textContent='LAN подключён'+(l.remoteName?' · '+l.remoteName:'');
-    if(hint)hint.textContent='Соединение установлено. Теперь сохраните контакт и откройте личный чат.';
+    el.textContent='Контакт получен · LAN подключён'+(l.remoteName?' · '+l.remoteName:'');
+    if(hint)hint.textContent='Можно сохранить контакт и открыть личный чат.';
+    if(save)save.disabled=!l.remotePeerId;
+    showFastPairError('');
+  }else if(l.remotePeerId){
+    el.textContent='Контакт получен · сейчас офлайн'+(l.remoteName?' · '+l.remoteName:'');
+    if(hint)hint.textContent='Контакт можно сохранить сейчас. LAN подключится отдельно, когда маршрут станет доступен.';
     if(save)save.disabled=false;
     showFastPairError('');
   }else if(l.state==='connecting'){
@@ -291,13 +296,13 @@ def patch_html(base):
     new_modal="""<section class="modal-layer" id="fastPairModal" aria-hidden="true">
         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="fastPairTitle">
           <div class="modal-header"><div><p class="eyebrow">Mesh Wi-Fi</p><h2 id="fastPairTitle">Добавить личный контакт</h2></div><button class="icon-button" id="closeFastPairing" aria-label="Закрыть" type="button">×</button></div>
-          <p class="modal-copy">Это личный контакт 1↔1, не группа. Оба устройства должны быть в одной Wi‑Fi сети или hotspot.</p>
+          <p class="modal-copy">Это личный контакт 1↔1, не группа. Контакт сохраняется независимо от того, есть ли сейчас связь. Wi‑Fi нужен только для доставки сообщений.</p>
           <label class="field-stack"><span>Моё имя</span><input id="pairingMyName" maxlength="40" placeholder="Например: Кирилл" /></label>
           <div class="pending-card"><strong id="fastPairState">LAN: не подключён</strong><span id="fastPairHint">Оба устройства должны быть в одной локальной Wi‑Fi сети или hotspot.</span></div>
           <div class="pending-card is-error" id="fastPairError" hidden></div>
           <label class="field-stack"><span>Код подключения</span><textarea id="pairingCode" rows="6" placeholder="1. Создай код на A → 2. Вставь на B → 3. Ответ B вставь обратно на A"></textarea></label>
           <div class="modal-actions"><button class="secondary-button" id="createLanInvite" type="button">Создать код</button><button class="secondary-button" id="applyLanCode" type="button">Применить код</button></div>
-          <div class="modal-actions"><button class="quiet-button" id="copyPairingCode" type="button">Копировать код</button><button class="primary-button" id="saveFastPeer" type="button" disabled>Сохранить и открыть чат</button></div>
+          <div class="modal-actions"><button class="quiet-button" id="copyPairingCode" type="button">Копировать код</button><button class="primary-button" id="saveFastPeer" type="button" disabled>Сохранить контакт</button></div>
         </div>
       </section>"""
     h=h[:modal_start]+new_modal+h[modal_end:]
