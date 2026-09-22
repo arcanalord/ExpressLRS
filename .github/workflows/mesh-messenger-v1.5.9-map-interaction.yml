@@ -79,6 +79,7 @@ jobs:
           npm init -y >/dev/null 2>&1
           npm install --ignore-scripts --no-audit --no-fund maplibre-gl@6.10.0 pmtiles@4.5.0
           test -f node_modules/maplibre-gl/dist/maplibre-gl.mjs
+          test -f node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs
           test -f node_modules/maplibre-gl/dist/maplibre-gl.css
           test -f node_modules/pmtiles/dist/pmtiles.js
           cd "$GITHUB_WORKSPACE"
@@ -96,6 +97,7 @@ jobs:
           cp mesh-messenger-ci/map-src/vector-runtime-bootstrap.js "$ROOT/src/vector-runtime-bootstrap.js"
           mkdir -p "$ROOT/vendor"
           cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.mjs "$ROOT/vendor/maplibre-gl.mjs"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs "$ROOT/vendor/maplibre-gl-shared.mjs"
           cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.css "$ROOT/vendor/maplibre-gl.css"
           cp _mesh_vendor/node_modules/pmtiles/dist/pmtiles.js "$ROOT/vendor/pmtiles.js"
           cp mesh-messenger-ci/map-src/styles.css "$ROOT/src/styles.css"
@@ -109,6 +111,7 @@ jobs:
           cp mesh-messenger-ci/map-src/vector-runtime-bootstrap.js "$ANDROID_DIR/app/src/main/assets/www/src/vector-runtime-bootstrap.js"
           mkdir -p "$ANDROID_DIR/app/src/main/assets/www/vendor"
           cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.mjs "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl.mjs"
+          cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl-shared.mjs"
           cp _mesh_vendor/node_modules/maplibre-gl/dist/maplibre-gl.css "$ANDROID_DIR/app/src/main/assets/www/vendor/maplibre-gl.css"
           cp _mesh_vendor/node_modules/pmtiles/dist/pmtiles.js "$ANDROID_DIR/app/src/main/assets/www/vendor/pmtiles.js"
           cp mesh-messenger-ci/map-src/android-styles.css "$ANDROID_DIR/app/src/main/assets/www/src/styles.css"
@@ -226,6 +229,7 @@ jobs:
           echo 'JEVycm9yQWN0aW9uUHJlZmVyZW5jZSA9ICdTdG9wJwpTZXQtTG9jYXRpb24gJFBTU2NyaXB0Um9vdAokcmVxdWlyZWQgPSBAKAogICd2ZW5kb3JcbWFwbGlicmUtZ2wubWpzJywKICAndmVuZG9yXG1hcGxpYnJlLWdsLmNzcycsCiAgJ3ZlbmRvclxwbXRpbGVzLmpzJwopCmZvcmVhY2ggKCRmaWxlIGluICRyZXF1aXJlZCkgewogIGlmICgtbm90IChUZXN0LVBhdGggJGZpbGUpIC1vciAoR2V0LUl0ZW0gJGZpbGUpLkxlbmd0aCAtZXEgMCkgewogICAgdGhyb3cgItCe0YLRgdGD0YLRgdGC0LLRg9C10YIg0LLRgdGC0YDQvtC10L3QvdCw0Y8g0LHQuNCx0LvQuNC+0YLQtdC60LA6ICRmaWxlIgogIH0KfQokcG9ydCA9IDQxNzMKJHVybCA9ICJodHRwOi8vMTI3LjAuMC4xOiRwb3J0LyIKJHB5ID0gR2V0LUNvbW1hbmQgcHkgLUVycm9yQWN0aW9uIFNpbGVudGx5Q29udGludWUKJHB5dGhvbiA9IEdldC1Db21tYW5kIHB5dGhvbiAtRXJyb3JBY3Rpb24gU2lsZW50bHlDb250aW51ZQppZiAoJHB5KSB7CiAgU3RhcnQtUHJvY2VzcyAkdXJsCiAgJiBweSAtMyAtbSBodHRwLnNlcnZlciAkcG9ydCAtLWJpbmQgMTI3LjAuMC4xCiAgZXhpdCAkTEFTVEVYSVRDT0RFCn0KaWYgKCRweXRob24pIHsKICBTdGFydC1Qcm9jZXNzICR1cmwKICAmIHB5dGhvbiAtbSBodHRwLnNlcnZlciAkcG9ydCAtLWJpbmQgMTI3LjAuMC4xCiAgZXhpdCAkTEFTVEVYSVRDT0RFCn0KJGxpc3RlbmVyID0gTmV3LU9iamVjdCBTeXN0ZW0uTmV0Lkh0dHBMaXN0ZW5lcgokbGlzdGVuZXIuUHJlZml4ZXMuQWRkKCR1cmwpCiRsaXN0ZW5lci5TdGFydCgpClN0YXJ0LVByb2Nlc3MgJHVybAokbWltZSA9IEB7CiAgJy5odG1sJz0ndGV4dC9odG1sOyBjaGFyc2V0PXV0Zi04JwogICcuanMnPSd0ZXh0L2phdmFzY3JpcHQ7IGNoYXJzZXQ9dXRmLTgnCiAgJy5tanMnPSd0ZXh0L2phdmFzY3JpcHQ7IGNoYXJzZXQ9dXRmLTgnCiAgJy5jc3MnPSd0ZXh0L2NzczsgY2hhcnNldD11dGYtOCcKICAnLmpzb24nPSdhcHBsaWNhdGlvbi9qc29uOyBjaGFyc2V0PXV0Zi04JwogICcud2VibWFuaWZlc3QnPSdhcHBsaWNhdGlvbi9tYW5pZmVzdCtqc29uOyBjaGFyc2V0PXV0Zi04JwogICcucG5nJz0naW1hZ2UvcG5nJwogICcuc3ZnJz0naW1hZ2Uvc3ZnK3htbCcKICAnLnBtdGlsZXMnPSdhcHBsaWNhdGlvbi92bmQucG10aWxlcycKfQp0cnkgewogIHdoaWxlICgkbGlzdGVuZXIuSXNMaXN0ZW5pbmcpIHsKICAgICRjdHggPSAkbGlzdGVuZXIuR2V0Q29udGV4dCgpCiAgICAkcmVsID0gW1VyaV06OlVuZXNjYXBlRGF0YVN0cmluZygkY3R4LlJlcXVlc3QuVXJsLkFic29sdXRlUGF0aC5UcmltU3RhcnQoJy8nKSkKICAgIGlmIChbc3RyaW5nXTo6SXNOdWxsT3JXaGl0ZVNwYWNlKCRyZWwpKSB7ICRyZWwgPSAnaW5kZXguaHRtbCcgfQogICAgJHJvb3QgPSBbSU8uUGF0aF06OkdldEZ1bGxQYXRoKCRQU1NjcmlwdFJvb3QpCiAgICAkZnVsbCA9IFtJTy5QYXRoXTo6R2V0RnVsbFBhdGgoKEpvaW4tUGF0aCAkcm9vdCAkcmVsKSkKICAgIGlmICgtbm90ICRmdWxsLlN0YXJ0c1dpdGgoJHJvb3QpIC1vciAtbm90IChUZXN0LVBhdGggJGZ1bGwgLVBhdGhUeXBlIExlYWYpKSB7CiAgICAgICRjdHguUmVzcG9uc2UuU3RhdHVzQ29kZSA9IDQwNAogICAgICAkY3R4LlJlc3BvbnNlLkNsb3NlKCkKICAgICAgY29udGludWUKICAgIH0KICAgICRleHQgPSBbSU8uUGF0aF06OkdldEV4dGVuc2lvbigkZnVsbCkuVG9Mb3dlckludmFyaWFudCgpCiAgICBpZiAoJG1pbWUuQ29udGFpbnNLZXkoJGV4dCkpIHsgJGN0eC5SZXNwb25zZS5Db250ZW50VHlwZSA9ICRtaW1lWyRleHRdIH0KICAgICRieXRlcyA9IFtJTy5GaWxlXTo6UmVhZEFsbEJ5dGVzKCRmdWxsKQogICAgJGN0eC5SZXNwb25zZS5Db250ZW50TGVuZ3RoNjQgPSAkYnl0ZXMuTGVuZ3RoCiAgICAkY3R4LlJlc3BvbnNlLk91dHB1dFN0cmVhbS5Xcml0ZSgkYnl0ZXMsMCwkYnl0ZXMuTGVuZ3RoKQogICAgJGN0eC5SZXNwb25zZS5DbG9zZSgpCiAgfQp9IGZpbmFsbHkgewogIGlmICgkbGlzdGVuZXIuSXNMaXN0ZW5pbmcpIHsgJGxpc3RlbmVyLlN0b3AoKSB9CiAgJGxpc3RlbmVyLkNsb3NlKCkKfQo=' | base64 -d > "$PC_DIR/start-windows.ps1"
           echo 'TWVzaCBNZXNzZW5nZXIgUEMg4oCUIHZlY3Rvci1maXJzdCBvZmZsaW5lIGNhbmRpZGF0ZQpCYXNlbGluZTogdjEuNS45Ck1hcCBzdGFjazogUE1UaWxlcyArIE1hcExpYnJlLCByYXN0ZXIgZmFsbGJhY2sgcmV0YWluZWQuCgrQn9C+0LvQvdC+0YHRgtGM0Y4g0LDQstGC0L7QvdC+0LzQvdGL0LkgcnVudGltZToKLSBNYXBMaWJyZSBHTCBKUyA2LjEwLjAg0LLRgdGC0YDQvtC10L0g0LIgdmVuZG9yLwotIFBNVGlsZXMgSlMgNC41LjAg0LLRgdGC0YDQvtC10L0g0LIgdmVuZG9yLwotINC/0YDQuCDQt9Cw0L/Rg9GB0LrQtSDQsdC40LHQu9C40L7RgtC10LrQuCDQuNC3INC40L3RgtC10YDQvdC10YLQsCDQvdC1INGB0LrQsNGH0LjQstCw0Y7RgtGB0Y8KCldpbmRvd3M6CjEuINCg0LDRgdC/0LDQutGD0LnRgtC1IFpJUC4KMi4g0JfQsNC/0YPRgdGC0LjRgtC1IHN0YXJ0LXdpbmRvd3MuYmF0LgozLiDQndCw0YHRgtGA0L7QudC60LggLT4g0J7RhNC70LDQudC9LdC60LDRgNGC0YsgLT4g0JjQvNC/0L7RgNGCIC5wbXRpbGVzLgo=' | base64 -d > "$PC_DIR/README_PC.txt"
           test -s "$PC_DIR/vendor/maplibre-gl.mjs"
+          test -s "$PC_DIR/vendor/maplibre-gl-shared.mjs"
           test -s "$PC_DIR/vendor/maplibre-gl.css"
           test -s "$PC_DIR/vendor/pmtiles.js"
           ! grep -R -E "unpkg\.com|cdn\.jsdelivr\.net" "$PC_DIR" --exclude='README_PC.txt'
