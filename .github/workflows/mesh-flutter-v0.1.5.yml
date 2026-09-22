@@ -21,10 +21,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/mesh-src
-          curl -L --fail --retry 2 -o /tmp/mesh-src/source.zip 'https://uc7d6cf6eced084efac9e2c4612a.dl.dropboxusercontent.com/cd/0/get/DIlFaEenZIXe7PlkaBA_6kwv-wLz_Zsd0X6AWyuu1pujy6Gg4dqnhbL0wJEmyClp3-BjSBQue-5k2qt2OHmf7F1ZG4R9HvIc-OgmhuBWg6Zzm54p4dnRWMUHKLee9UZHLQceM1YwMjhxgJt7daOPhS6H8wxg7HixvVNfSN2EUVdpNg/file?c_luid=cfbe8875'
-          echo '2ac239bba95f9638bbb3c82b5afccaecd60e9549a1e15e98cb165c18cce5737d  /tmp/mesh-src/source.zip' | sha256sum -c -
+          curl -L --fail --retry 2 -o /tmp/mesh-src/source.zip 'https://uc8411f0f99b92cdb151c4019471.dl.dropboxusercontent.com/cd/0/get/DInfBBq4M_pntvQYsLzuSr6BKnh9qIFzgtsJtLfvxsIaHw3XYIDySO_IIlqmXKXBJgPpBwdj1dRooL62MTYt7ItSFyw9U5VjjdYPjY53BkFSOIvLRCeeMd_7g6va7AtpFzNeUMHAFZI72P8AmuG8kdRux1Z2SBv7DENbns4MyzcYAg/file?c_luid=cfbe8875'
+          echo '7a448e3a40fdea1b3569d1a2e3fff32eb9b79fd676cf28b72caa607c7b32713b  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
-          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.5-dev.2/flutter_app" >> "$GITHUB_ENV"
+          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.5-dev.3/flutter_app" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
         uses: subosito/flutter-action@v2
@@ -67,15 +67,15 @@ jobs:
           set -euo pipefail
           test -s build/app/outputs/flutter-apk/app-debug.apk
           sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee /tmp/mesh-apk.sha256
-          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.5-dev.2-debug.apk
-          cp /tmp/mesh-apk.sha256 /tmp/MeshMessenger-Flutter-v0.1.5-dev.2-debug.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.5-dev.3-debug.apk
+          cp /tmp/mesh-apk.sha256 /tmp/MeshMessenger-Flutter-v0.1.5-dev.3-debug.apk.sha256
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.5-dev.2-debug
+          name: MeshMessenger-Flutter-v0.1.5-dev.3-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.5-dev.2-debug.apk
-            /tmp/MeshMessenger-Flutter-v0.1.5-dev.2-debug.apk.sha256
+            /tmp/MeshMessenger-Flutter-v0.1.5-dev.3-debug.apk
+            /tmp/MeshMessenger-Flutter-v0.1.5-dev.3-debug.apk.sha256
           if-no-files-found: error
           retention-days: 14
