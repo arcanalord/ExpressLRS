@@ -82,12 +82,23 @@ jobs:
               data = json.loads(pkg.read_text(encoding='utf-8'))
               data['version'] = '0.3.0-dev.7'
               pkg.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-          for rel in ['index.html','src/version.js','tests/version.test.js','tests/web-shell.test.js']:
+          for rel in ['index.html','src/version.js']:
               p = root / rel
               if p.exists():
                   s = p.read_text(encoding='utf-8')
                   s = s.replace('0.3.0-dev.5','0.3.0-dev.7').replace('0.2.6','0.3.0-dev.7')
                   p.write_text(s, encoding='utf-8')
+          p = root / 'tests/version.test.js'
+          if p.exists():
+              s = p.read_text(encoding='utf-8')
+              s = s.replace('v0.2.6 checkpoint','v0.3.0-dev.7 checkpoint').replace("'0.2.6'","'0.3.0-dev.7'")
+              p.write_text(s, encoding='utf-8')
+          p = root / 'tests/web-shell.test.js'
+          if p.exists():
+              s = p.read_text(encoding='utf-8')
+              s = s.replace('web shell and runtime use v0.2.6','web shell and runtime use v0.3.0-dev.7')
+              s = s.replace(r'/runtime v0\.2\.6/', r'/runtime v0\.3\.0-dev\.7/')
+              p.write_text(s, encoding='utf-8')
           PY
           node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
 
