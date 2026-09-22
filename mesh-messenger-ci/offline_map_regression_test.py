@@ -19,8 +19,9 @@ required_html = [
     'id="offlineMapImportButton"',
     'id="offlineMapImportInput"',
     'id="mapVectorLayer"',
-    './vendor/maplibre-gl.js',
+    './vendor/maplibre-gl.css',
     './vendor/pmtiles.js',
+    './src/vector-runtime-bootstrap.js',
 ]
 for token in required_html:
     assert token in html, f"missing offline map UI token: {token}"
@@ -60,6 +61,10 @@ for token in ["PMTILES_FILE_REQUIRED", "application/vnd.pmtiles", "ACTIVE_KEY", 
 
 for token in ["maplibregl", "pmtiles.Protocol", "pmtiles.FileSource", "pmtiles.PMTiles", "map.resize"]:
     assert token in vector_adapter, f"missing MapLibre/PMTiles adapter token: {token}"
+
+bootstrap = (root / "src" / "vector-runtime-bootstrap.js").read_text(encoding="utf-8")
+for token in ["../vendor/maplibre-gl.mjs", "globalThis.maplibregl", "offlineVendor: true"]:
+    assert token in bootstrap, f"missing local vector runtime bootstrap token: {token}"
 
 for token in ["type:'vector'", "'source-layer':'water'", "'source-layer':'transportation'"]:
     assert token in vector_style, f"missing vector style token: {token}"
