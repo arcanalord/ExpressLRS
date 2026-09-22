@@ -21,7 +21,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SOURCE_SHA256: f2193d3589dd39b14f9b5077096cebf2c5d0480604c7cb2494fb6bf2bc406c63
   DROPBOX_FOLDER_URL: https://www.dropbox.com/scl/fo/ge8s6nkcgktgslxmpduil/AD361z8LQV-t5MZyimbpd2E?rlkey=zlcsukzyorqh9ggtfl36mhikg&st=1j9v34kw&dl=1
   VERSION_NAME: "1.6.0"
   VERSION_CODE: "26"
@@ -56,7 +55,7 @@ jobs:
           "$SDKMANAGER" "platforms;android-36" "build-tools;35.0.0" "platform-tools"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
 
-      - name: Restore clean baseline
+      - name: Restore validated v1.5.9 baseline
         shell: bash
         run: |
           set -euo pipefail
@@ -78,48 +77,27 @@ jobs:
                       p.parent.mkdir(parents=True,exist_ok=True)
                       with z.open(info) as a,p.open("wb") as b: shutil.copyfileobj(a,b)
           PY
-          BASE="$(find _mesh160/dropbox -type f -name 'SOURCE_CURRENT_v1.5.5.zip' -print -quit)"
+          BASE="$(find _mesh160/dropbox -type f -path '*/10_Релизы/SOURCE_CURRENT_v1.5.9.zip' -print -quit)"
+          if [ -z "$BASE" ]; then BASE="$(find _mesh160/dropbox -type f -name 'SOURCE_CURRENT_v1.5.9.zip' -not -path '*/00_Baseline_v1.5.9/*' -print -quit)"; fi
           test -n "$BASE"
-          echo "$SOURCE_SHA256  $BASE" | sha256sum -c -
+          sha256sum "$BASE" | tee _mesh160/BASE_SOURCE_SHA256.txt
           unzip -q "$BASE" -d _mesh160/unpacked
           ANDROID_DIR="$(find _mesh160/unpacked -type d -name android-app -print -quit)"
           test -n "$ANDROID_DIR"
           ROOT="$(dirname "$ANDROID_DIR")"
+          test -f "$ROOT/src/app.js"
+          test -f "$ROOT/index.html"
           echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
           echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+          cp _mesh160/BASE_SOURCE_SHA256.txt _mesh160/out/BASE_SOURCE_SHA256.txt
 
-      - name: Apply validated v1.5.9 map baseline
+      - name: Validate v1.5.9 map baseline
         shell: bash
         run: |
           set -euo pipefail
-          cp mesh-messenger-ci/map-src/index.html "$ROOT/index.html"
-          cp mesh-messenger-ci/map-src/app.js "$ROOT/src/app.js"
-          cp mesh-messenger-ci/map-src/styles.css "$ROOT/src/styles.css"
-          cp mesh-messenger-ci/map-src/AndroidManifest.xml "$ANDROID_DIR/app/src/main/AndroidManifest.xml"
-          cp mesh-messenger-ci/map-src/android-index.html "$ANDROID_DIR/app/src/main/assets/www/index.html"
-          cp mesh-messenger-ci/map-src/android-app.js "$ANDROID_DIR/app/src/main/assets/www/src/app.js"
-          cp mesh-messenger-ci/map-src/android-styles.css "$ANDROID_DIR/app/src/main/assets/www/src/styles.css"
-          MAIN_FILE="$ANDROID_DIR/app/src/main/kotlin/org/fpvclub/mesh/app/MainActivity.kt"
-          python3 - "$MAIN_FILE" <<'PY'
-          import pathlib, sys
-          p=pathlib.Path(sys.argv[1]); s=p.read_text(encoding="utf-8")
-          if "geolocationPermissionRequest=1404" not in s:
-              s=s.replace("    private val bluetoothEnableRequest=1403\n",
-              "    private val bluetoothEnableRequest=1403\n    private val geolocationPermissionRequest=1404\n    private var pendingGeolocationOrigin:String?=null\n    private var pendingGeolocationCallback:GeolocationPermissions.Callback?=null\n")
-          s=s.replace(
-              "        webView.settings.javaScriptEnabled=true;webView.settings.domStorageEnabled=true;webView.settings.mediaPlaybackRequiresUserGesture=false\n",
-              "        webView.settings.javaScriptEnabled=true;webView.settings.domStorageEnabled=true;webView.settings.mediaPlaybackRequiresUserGesture=false;webView.settings.setGeolocationEnabled(true)\n"
-          )
-          if "onGeolocationPermissionsShowPrompt" not in s:
-              marker="        webView.webViewClient=object:WebViewClientCompat(){"
-              chrome='''        webView.webChromeClient=object:WebChromeClient(){\n            override fun onGeolocationPermissionsShowPrompt(origin:String,callback:GeolocationPermissions.Callback){\n                val granted=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED\n                if(granted){callback.invoke(origin,true,false);return}\n                pendingGeolocationOrigin=origin;pendingGeolocationCallback=callback\n                requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION),geolocationPermissionRequest)\n            }\n        }\n'''
-              s=s.replace(marker,chrome+marker)
-          if "if(requestCode==geolocationPermissionRequest)" not in s:
-              anchor='''        if(requestCode==permissionRequest){\n            val denied=permissions.indices.filter{grantResults.getOrNull(it)!=PackageManager.PERMISSION_GRANTED}.map{permissions[it]}\n            if(hasBleRuntimePermissions())maybeStartMeshService()\n            val cont=permissionContinuation;permissionContinuation=null;cont?.invoke(denied.isEmpty(),denied)\n        }\n'''
-              geo='''        if(requestCode==geolocationPermissionRequest){\n            val granted=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED\n            val origin=pendingGeolocationOrigin;val callback=pendingGeolocationCallback\n            pendingGeolocationOrigin=null;pendingGeolocationCallback=null\n            if(origin!=null&&callback!=null)callback.invoke(origin,granted,false)\n        }\n'''
-              s=s.replace(anchor,anchor+geo)
-          p.write_text(s,encoding="utf-8")
-          PY
+          python3 mesh-messenger-ci/map-src/map_regression_test.py "$ROOT"
+          grep -q "mapZoomInButton" "$ROOT/src/app.js"
+          grep -q "locateMapButton" "$ROOT/index.html"
 
       - name: Apply Mesh Wi-Fi v1.6 transport layer
         shell: bash
