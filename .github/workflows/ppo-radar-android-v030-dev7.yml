@@ -20,7 +20,7 @@ env:
   VERSION_NAME: "0.3.0-dev.7"
   VERSION_CODE: "31"
   GRADLE_VERSION: "8.10.2"
-  BASE_PROJECT_URL: "https://ucd1c427e1ac8af599095a8886e3.dl.dropboxusercontent.com/cd/0/get/DIq3QN2sCzuFpqNb7SQDBaqu_9OFC8yh49afcFxlDyaiiSv9-uQ9WhlsA3r2VIp5tFLcX5rykxDgQmxTrsXmPBdmyIu-ukjc1Oi-3TASwkxI3JxjpP6TRxPurN8ger4aMp1AiwAga6AQeVhk3nPkZf30uSBXTsOaQ7R7rWe5-VpZMQ/file?c_luid=cfbe8875"
+  BASE_PROJECT_URL: "https://ucaf68f37aa57f5aa21572c3fa3b.dl.dropboxusercontent.com/cd/0/get/DIpqueno_CCeapMaAurpn4-4ZpPphKE-Ki5-H5UC6T-EwlgcnGtJXay-Qgq4pJSFPEa9234WixgdF0t5T03vGCQYfC_m8tGXQj8JnmEb9WJdaNmtGzfbyzRhgmQVCMSrXyXJc47qJgo4x-9NBrn9I36P5s2koGzSMyvRwoDAkwZxkA/file?c_luid=cfbe8875"
 
 jobs:
   build:
