@@ -16,7 +16,7 @@ def patch_app(p):
       "mapViewport")
     s=one(s,
       "function persistWaypoints(){try{storageSet('mesh-waypoints-v1',JSON.stringify([...sharedWaypoints.values()]));}catch{}}\nfunction restoreWaypoints(){try{for(const w of JSON.parse(storageGet('mesh-waypoints-v1')||'[]'))if(w?.id)sharedWaypoints.set(w.id>>>0,w);}catch{}}",
-      "function waypointStorageKey(w){return \`${w?.sourcePeerId||w?.sourceNode||'local'}:${Number(w?.id)>>>0}\`;}\nfunction persistWaypoints(){try{storageSet('mesh-waypoints-v1',JSON.stringify([...sharedWaypoints.values()]));}catch{}}\nfunction restoreWaypoints(){try{for(const w of JSON.parse(storageGet('mesh-waypoints-v1')||'[]'))if(w?.id)sharedWaypoints.set(waypointStorageKey(w),w);}catch{}}",
+      "function waypointStorageKey(w){return `${w?.sourcePeerId||w?.sourceNode||'local'}:${Number(w?.id)>>>0}`;}\nfunction persistWaypoints(){try{storageSet('mesh-waypoints-v1',JSON.stringify([...sharedWaypoints.values()]));}catch{}}\nfunction restoreWaypoints(){try{for(const w of JSON.parse(storageGet('mesh-waypoints-v1')||'[]'))if(w?.id)sharedWaypoints.set(waypointStorageKey(w),w);}catch{}}",
       "waypoint persistence")
     s=one(s,
       "  } else if(payload?.type==='text' && payload.text){\n    bucket.push({side:'in',author:peerContacts.get(from)?.displayName||'Контакт',text:payload.text,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});\n  } else return;",
@@ -94,9 +94,10 @@ async function sendWaypointFromModal(){
       "$('#mapCreateWaypointButton')?.addEventListener('click',()=>openWaypointModal());$('#cancelWaypoint')?.addEventListener('click',()=>{pendingWaypointPosition=null;closeModal($('#waypointModal'));});$('#saveWaypointLocal')?.addEventListener('click',()=>saveWaypointLocal());$('#confirmWaypoint')?.addEventListener('click',()=>sendWaypointFromModal());",
       "waypoint events")
     # Chat card for waypoint
-    needle=" : m.position ? \`<div class=\"position-message\"><strong>⌖ Позиция</strong>"
+    needle=' : m.position ? `<div class="position-message"><strong>⌖ Позиция</strong>'
     if needle not in s: raise SystemExit("missing chat waypoint insertion")
-    s=s.replace(needle," : m.waypoint ? \`<div class=\"position-message map-point-message\"><strong>⌖ ${m.waypoint.name||'Точка'}</strong><small>${formatCoords(m.waypoint)}${m.waypoint.description?\` · ${m.waypoint.description}\`:''}</small><button class=\"text-button\" type=\"button\" data-show-map-point=\"1\" data-lat=\"${m.waypoint.latitude}\" data-lon=\"${m.waypoint.longitude}\">Показать на карте →</button></div>\` : m.position ? \`<div class=\"position-message\"><strong>⌖ Позиция</strong>",1)
+    replacement=' : m.waypoint ? `<div class="position-message map-point-message"><strong>⌖ ${m.waypoint.name||\'Точка\'}</strong><small>${formatCoords(m.waypoint)}${m.waypoint.description?` · ${m.waypoint.description}`:\'\'}</small><button class="text-button" type="button" data-show-map-point="1" data-lat="${m.waypoint.latitude}" data-lon="${m.waypoint.longitude}">Показать на карте →</button></div>` : m.position ? `<div class="position-message"><strong>⌖ Позиция</strong>'
+    s=s.replace(needle,replacement,1)
     s=one(s,
       "  stream.scrollTop = stream.scrollHeight;",
       "  stream.querySelectorAll('[data-show-map-point]').forEach(button=>button.addEventListener('click',()=>{selectedMapNodeNum=0;const p={latitude:Number(button.dataset.lat),longitude:Number(button.dataset.lon)};setMapView(p,Math.max(16,mapViewport.zoom));setView('map');renderMap({preserveViewport:true});}));\n  stream.scrollTop = stream.scrollHeight;",
