@@ -6,6 +6,7 @@ import { AndroidBridgeMeshtasticTransport } from './transports/android-bridge-me
 import { PhoneApiSession } from './transports/phoneapi-session.js';
 import { BROADCAST, PORTNUM, encodeTextToRadio, encodePositionToRadio, encodeWaypointToRadio, encodePortPayloadToRadio, encodeSmallFileManifest, encodeSmallFileChunk, encodeSmallFileStatus, encodeSmallFileStatusRequest, decodeSmallFileFrame, sharedContactUrl, channelSetUrl, parseMeshtasticShareUrl } from './transports/phoneapi-lite.js';
 import { HELP_FALLBACK_ID, ERROR_TOPIC_MAP, helpRegistry, parseHelpTopic, buildSafeDiagnostics } from './help-registry.js';
+import { createOfflineMapManager } from './offline-map-manager.js';
 
 const transportManager = new TransportManager();
 const queue = new MessageQueue();
@@ -27,6 +28,10 @@ let pendingWaypointPosition = null;
 let browserMapPosition = null;
 let mapTileState = 'loading';
 let mapTileGeneration = 0;
+const offlineMapManager = createOfflineMapManager({
+  provider: globalThis.__meshOfflineMapProvider || null,
+});
+let offlineMapDownloadAbort = null;
 const mapViewport={centerX:.5,centerY:.5,zoom:1,initialized:false,userMoved:false,pointers:new Map(),pinch:null};
 let qrMode = 'contact';
 const importedContacts = new Map();
@@ -723,6 +728,99 @@ function panMapPixels(dx,dy){
   const world=mapWorldSize();
   mapViewport.centerX-=dx/world;mapViewport.centerY-=dy/world;mapViewport.initialized=true;mapViewport.userMoved=true;normalizeMapCenter();
 }
+function inverseMercatorPoint(x,y){
+  const lon=x*360-180;
+  const n=Math.PI-2*Math.PI*y;
+  const lat=180/Math.PI*Math.atan(.5*(Math.exp(n)-Math.exp(-n)));
+  return {latitude:lat,longitude:lon};
+}
+function currentMapBounds(){
+  const {w,h}=mapCanvasSize(),world=mapWorldSize();
+  const west=mapViewport.centerX-(w/2)/world,east=mapViewport.centerX+(w/2)/world;
+  const north=mapViewport.centerY-(h/2)/world,south=mapViewport.centerY+(h/2)/world;
+  const nw=inverseMercatorPoint(west,north),se=inverseMercatorPoint(east,south);
+  return {north:nw.latitude,south:se.latitude,west:nw.longitude,east:se.longitude};
+}
+function radiusBounds(radiusKm){
+  const center=inverseMercatorPoint(mapViewport.centerX,mapViewport.centerY),lat=center.latitude,lon=center.longitude;
+  const latDelta=Number(radiusKm)/111.32;
+  const lonDelta=Number(radiusKm)/(111.32*Math.max(.1,Math.cos(lat*Math.PI/180)));
+  return {north:lat+latDelta,south:lat-latDelta,west:lon-lonDelta,east:lon+lonDelta};
+}
+function selectedOfflineBounds(){
+  const value=$('#offlineMapArea')?.value||'viewport';
+  return value==='viewport'?currentMapBounds():radiusBounds(Number(value)||5);
+}
+function formatStorageBytes(bytes){
+  const n=Number(bytes)||0;
+  if(n<1024)return `${n} B`;
+  if(n<1024*1024)return `${(n/1024).toFixed(n<10240?1:0)} KB`;
+  if(n<1024*1024*1024)return `${(n/1024/1024).toFixed(n<100*1024*1024?1:0)} MB`;
+  return `${(n/1024/1024/1024).toFixed(2)} GB`;
+}
+function offlineEstimate(){
+  const maxZoom=Number($('#offlineMapDetail')?.value)||14;
+  return offlineMapManager.estimate(selectedOfflineBounds(),Math.max(5,maxZoom-5),maxZoom);
+}
+function renderOfflineEstimate(){
+  const estimate=offlineEstimate();
+  const count=$('#offlineMapTileCount'),size=$('#offlineMapEstimatedSize');
+  if(count)count.textContent=String(estimate.tileCount);
+  if(size)size.textContent=`~${formatStorageBytes(estimate.estimatedBytes)}`;
+  const button=$('#offlineMapDownload'),provider=$('#offlineMapProviderState');
+  const ready=Boolean(offlineMapManager.provider);
+  if(button)button.disabled=!ready||estimate.tileCount>12000;
+  if(provider)provider.textContent=ready
+    ? `Источник: ${offlineMapManager.provider.name||offlineMapManager.provider.id||'настроен'} · офлайн-разрешение подтверждено`
+    : 'Источник офлайн-карт пока не настроен. Online OSM остаётся доступен только для обычного просмотра.';
+  if(estimate.tileCount>12000&&provider)provider.textContent='Область слишком большая. Уменьшите радиус или детализацию.';
+}
+function renderOfflinePackages(){
+  const list=$('#offlinePackagesList'),total=$('#offlinePackagesTotal'),summary=$('#offlineMapsSummary');
+  const packages=offlineMapManager.list();
+  if(total)total.textContent=packages.length?`${packages.length} шт.`:'';
+  if(summary)summary.textContent=packages.length?`${packages.length} областей сохранено`:'Выбрать область и скачать';
+  if(!list)return;
+  list.innerHTML='';
+  if(!packages.length){const empty=document.createElement('div');empty.className='node-empty';empty.textContent='Пока ничего не загружено.';list.appendChild(empty);return;}
+  for(const pkg of packages){
+    const row=document.createElement('div');row.className='offline-package-row';
+    const copy=document.createElement('div');copy.innerHTML=`<strong></strong><small></small>`;
+    copy.querySelector('strong').textContent=pkg.name;
+    copy.querySelector('small').textContent=`${formatStorageBytes(pkg.bytes)} · z${pkg.minZoom}–${pkg.maxZoom} · ${pkg.tileCount} тайлов`;
+    const remove=document.createElement('button');remove.type='button';remove.className='quiet-button';remove.textContent='Удалить';
+    remove.addEventListener('click',async()=>{remove.disabled=true;await offlineMapManager.remove(pkg.id);renderOfflinePackages();renderMap({preserveViewport:true});});
+    row.append(copy,remove);list.appendChild(row);
+  }
+}
+function openOfflineMaps(){
+  renderOfflineEstimate();renderOfflinePackages();openModal($('#offlineMapsModal'));
+}
+async function downloadOfflineSelection(){
+  if(!offlineMapManager.provider)return;
+  const button=$('#offlineMapDownload'),progress=$('#offlineMapProgress'),bar=$('#offlineMapProgressBar'),text=$('#offlineMapProgressText');
+  const maxZoom=Number($('#offlineMapDetail')?.value)||14,minZoom=Math.max(5,maxZoom-5),bounds=selectedOfflineBounds();
+  const name=$('#offlineMapName')?.value||'Моя область';
+  offlineMapDownloadAbort?.abort();offlineMapDownloadAbort=new AbortController();
+  if(button)button.disabled=true;if(progress)progress.hidden=false;
+  try{
+    await offlineMapManager.download({name,bounds,minZoom,maxZoom,signal:offlineMapDownloadAbort.signal,onProgress:({done,total,bytes})=>{
+      const pct=Math.round(done/Math.max(1,total)*100);
+      if(bar)bar.style.width=`${pct}%`;if(text)text.textContent=`${pct}% · ${formatStorageBytes(bytes)}`;
+    }});
+    renderOfflinePackages();renderMap({preserveViewport:true});
+    if(text)text.textContent='Готово';
+  }catch(error){
+    if(text)text.textContent=error?.name==='AbortError'?'Отменено':`Ошибка: ${error?.message||error}`;
+  }finally{renderOfflineEstimate();}
+}
+async function tileObjectUrl(z,x,y){
+  const cached=await offlineMapManager.cachedTile(z,x,y);
+  if(!cached)return '';
+  const blob=await cached.blob();
+  return URL.createObjectURL(blob);
+}
+
 function renderOnlineTiles(){
   const layer=$('#mapTileLayer'),grid=$('#mapGrid'),attribution=$('#mapAttribution');
   if(!layer)return;
@@ -748,7 +846,14 @@ function renderOnlineTiles(){
     img.style.left=`${(tx*256-cx)*fractionScale+w/2}px`;img.style.top=`${(ty*256-cy)*fractionScale+h/2}px`;img.style.width=`${tileSize+.5}px`;img.style.height=`${tileSize+.5}px`;
     img.addEventListener('load',()=>{loaded++;settle();},{once:true});
     img.addEventListener('error',()=>{failed++;img.remove();settle();},{once:true});
-    img.src=`https://tile.openstreetmap.org/${tileZ}/${wrapped}/${ty}.png`;layer.appendChild(img);
+    layer.appendChild(img);
+    tileObjectUrl(tileZ,wrapped,ty).then(localUrl=>{
+      if(generation!==mapTileGeneration){if(localUrl)URL.revokeObjectURL(localUrl);return;}
+      if(localUrl){img.dataset.offline='1';img.src=localUrl;img.addEventListener('load',()=>URL.revokeObjectURL(localUrl),{once:true});}
+      else if(navigator.onLine!==false)img.src=`https://tile.openstreetmap.org/${tileZ}/${wrapped}/${ty}.png`;
+      else {failed++;img.remove();settle();}
+    }).catch(()=>{if(navigator.onLine!==false)img.src=`https://tile.openstreetmap.org/${tileZ}/${wrapped}/${ty}.png`;else{failed++;img.remove();settle();}});
+
   }
   setTimeout(()=>{if(generation===mapTileGeneration&&loaded===0){mapTileState='fallback';layer.hidden=true;if(grid)grid.hidden=false;if(attribution)attribution.hidden=true;renderMapTileStatus();}},4500);
 }
@@ -1025,6 +1130,13 @@ function wireEvents() {
   $('#messageTypeSelect').addEventListener('change',renderRoute);
   $('#engineeringToggle').addEventListener('change',e=>{$('#engineeringBlock').hidden=!e.target.checked;storageSet('engineering',e.target.checked?'1':'0');});
   $('#networkDetailsToggle')?.addEventListener('click',toggleNetworkDetails);
+  $('#offlineMapsButton')?.addEventListener('click',openOfflineMaps);
+  $('#closeOfflineMaps')?.addEventListener('click',()=>closeModal($('#offlineMapsModal')));
+  $('#offlineMapsModal')?.addEventListener('click',e=>{if(e.target===$('#offlineMapsModal'))closeModal($('#offlineMapsModal'));});
+  $('#offlineMapArea')?.addEventListener('change',renderOfflineEstimate);
+  $('#offlineMapDetail')?.addEventListener('change',renderOfflineEstimate);
+  $('#offlineMapUseCurrent')?.addEventListener('click',()=>{$('#offlineMapArea').value='viewport';renderOfflineEstimate();});
+  $('#offlineMapDownload')?.addEventListener('click',downloadOfflineSelection);
   $('#networkHealthDetails')?.addEventListener('click',()=>setNetworkDetails(true));
   const usbButton=$('#connectUsbRadio');if(usbButton&&!WebSerialMeshtasticTransport.isSupported()){usbButton.disabled=true;usbButton.title='USB/Web Serial недоступен в этом runtime';}
   $('#relaySwitch').addEventListener('change',e=>e.currentTarget.closest('.relay-card').classList.toggle('disabled-state',!e.target.checked));
@@ -1063,5 +1175,5 @@ const initialHelpTopic=parseHelpTopic(location.search);if(initialHelpTopic)openF
 if(globalThis.__meshPendingDeepLink){handleAndroidDeepLink(globalThis.__meshPendingDeepLink);globalThis.__meshPendingDeepLink='';}
 if(!globalThis.__meshDisableAutoConnect)activateRadio(AndroidBridgeMeshtasticTransport.isSupported()?androidBleRadio:mockRadio).catch(()=>{});
 
-window.__meshDebug={transportManager,queue,mockRadio,androidBleRadio,getPhoneApiSnapshot:()=>currentSnapshot(),getCurrentConversation:()=>currentConversation(),selectConversation,sendMessage,retryQueueItem,renderDeliveryQueue,exportPhoneApiCapture,simulateReboot:()=>mockRadio.simulateReboot(),setNextRoutingResult:(code)=>mockRadio.setNextRoutingResult(code),setFileDisconnectAfter:(n)=>mockRadio.setFileDisconnectAfter(n),getConversationUi:(id)=>({...uiState(id)}),sendSmallFile,getFileTransfers:()=>fileTransfers.list().map(t=>({id:t.id,name:t.name,status:t.status,confirmed:fileTransfers.confirmedCount(t.id),total:t.total,targetNode:t.targetNode,conversationId:t.conversationId,error:t.error})),simulateFileSubsystemRestart,resumeIncompleteFileTransfers,renderMap,getMapViewport:()=>({...mapViewport,pointers:undefined,pinch:undefined}),locateOnMap,shareCurrentPosition,currentShareUrls,renderShareQr,trackHistory,getWaypoints:()=>[...sharedWaypoints.values()],sendWaypointFromModal,helpRegistry,renderQuickHelp,openFullHelp,copySafeDiagnostics,currentHelpTopic:()=>currentHelpTopicId};
+window.__meshDebug={transportManager,queue,mockRadio,androidBleRadio,getPhoneApiSnapshot:()=>currentSnapshot(),getCurrentConversation:()=>currentConversation(),selectConversation,sendMessage,retryQueueItem,renderDeliveryQueue,exportPhoneApiCapture,simulateReboot:()=>mockRadio.simulateReboot(),setNextRoutingResult:(code)=>mockRadio.setNextRoutingResult(code),setFileDisconnectAfter:(n)=>mockRadio.setFileDisconnectAfter(n),getConversationUi:(id)=>({...uiState(id)}),sendSmallFile,getFileTransfers:()=>fileTransfers.list().map(t=>({id:t.id,name:t.name,status:t.status,confirmed:fileTransfers.confirmedCount(t.id),total:t.total,targetNode:t.targetNode,conversationId:t.conversationId,error:t.error})),simulateFileSubsystemRestart,resumeIncompleteFileTransfers,renderMap,getMapViewport:()=>({...mapViewport,pointers:undefined,pinch:undefined}),locateOnMap,shareCurrentPosition,currentShareUrls,renderShareQr,trackHistory,getWaypoints:()=>[...sharedWaypoints.values()],sendWaypointFromModal,helpRegistry,renderQuickHelp,openFullHelp,copySafeDiagnostics,currentHelpTopic:()=>currentHelpTopicId,offlineMapManager,openOfflineMaps,renderOfflineEstimate};
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')&&!AndroidBridgeMeshtasticTransport.isSupported())navigator.serviceWorker.register('./sw.js').catch(()=>{});
