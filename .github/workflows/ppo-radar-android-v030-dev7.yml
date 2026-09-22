@@ -20,7 +20,7 @@ env:
   VERSION_NAME: "0.3.0-dev.7"
   VERSION_CODE: "31"
   GRADLE_VERSION: "8.10.2"
-  BASE_PROJECT_URL: "https://uc90b3e2b1ad3a04a9b77ec30073.dl.dropboxusercontent.com/cd/0/get/DIp-jrs7A3nbM7EKC02Q6-1t5WL0p2zKtE2hp5lBt9R0CapzjJfUPiJbUgbRK5knGvynrlv4q30a-OfvhOUPgEGPl5O7G4S0mlyCLcEltBmnHmEMcjnZYT_ge_LcY15AhR0uoREuQHlKUxs6u_lRxwdZDGuVxEBehd3L8BQ_EBlZCg/file?c_luid=cfbe8875"
+  BASE_PROJECT_URL: "https://uc3419eda6dee82c868b701372c5.dl.dropboxusercontent.com/cd/0/get/DIohQuHdaRiqu4Fk-hE1DtMqnFvMVyMXai6m-bfT3rG6F9-m66AFk6SCAQKAuZKeM3sjtm7QBIV0r7D-ZmDL08agtSgjxpBVnLLC7iIg4vr50Zo9FxhHtmNJO4u25RrkEmWuykpR_tyz6VeQEzc4oz8h0dyX4pI6LO4naGxTdq4iNw/file?c_luid=cfbe8875"
 
 jobs:
   build:
@@ -103,8 +103,6 @@ jobs:
               s = s.replace('0.3.0-dev.5','0.3.0-dev.7')
               s = s.replace(r'0\.3\.0-dev\.5', r'0\.3\.0-dev\.7')
               s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.7/')
-              s = s.replace(r'/v0\.3\.0-dev\.7 mobile shell \+ no-overlap release gate/', r'/v0\.2\.6 mobile shell \+ no-overlap release gate/')
-              s = s.replace(r'/v0\.3\.0-dev\.7 mobile shell[\s\S]*aside\{position:absolute/', r'/v0\.2\.6 mobile shell[\s\S]*aside\{position:absolute/')
               p.write_text(s, encoding='utf-8')
           PY
           node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
