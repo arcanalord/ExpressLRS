@@ -77,17 +77,23 @@ jobs:
           set -euo pipefail
           node "$RECOVERY_DIR/tools/apply-runtime-recovery.mjs" "$ANDROID_DIR/app/src/main/assets/web"
           node --test "$RECOVERY_DIR/tests/"*.test.js
-          node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
           python3 - <<'PY'
           from pathlib import Path
-          root = Path(__import__('os').environ['ANDROID_DIR']) / 'app/src/main/assets/web'
-          for rel in ['package.json','index.html','src/version.js','tests/version.test.js','tests/web-shell.test.js']:
+          import json, os
+          root = Path(os.environ['ANDROID_DIR']) / 'app/src/main/assets/web'
+          pkg = root / 'package.json'
+          if pkg.exists():
+              data = json.loads(pkg.read_text(encoding='utf-8'))
+              data['version'] = '0.3.0-dev.7'
+              pkg.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          for rel in ['index.html','src/version.js','tests/version.test.js','tests/web-shell.test.js']:
               p = root / rel
               if p.exists():
                   s = p.read_text(encoding='utf-8')
-                  s = s.replace('0.3.0-dev.5','0.3.0-dev.7')
+                  s = s.replace('0.3.0-dev.5','0.3.0-dev.7').replace('0.2.6','0.3.0-dev.7')
                   p.write_text(s, encoding='utf-8')
           PY
+          node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
 
       - name: Apply Android host integration
         shell: python
