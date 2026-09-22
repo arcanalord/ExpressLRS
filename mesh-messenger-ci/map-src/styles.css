@@ -619,3 +619,30 @@ button:disabled{opacity:.46;cursor:not-allowed}
 
 /* v1.5.5 desktop composer alignment for voice shortcut */
 .composer{grid-template-columns:44px minmax(0,1fr) auto auto}
+
+
+.offline-maps-card{width:min(680px,100%);max-height:min(88vh,860px);overflow:auto}
+.offline-maps-intro{margin:4px 0 16px;color:var(--text-2)}
+.offline-map-form{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:10px}
+.offline-map-form label{display:grid;gap:6px;color:var(--text-2);font-size:13px}
+.offline-map-form input,.offline-map-form select{width:100%;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--text);padding:0 12px}
+.offline-map-estimate{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0}
+.offline-map-estimate>div{padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);display:grid;gap:3px}
+.offline-map-estimate span{font-size:12px;color:var(--text-2)}
+.offline-map-provider{padding:10px 12px;border-radius:12px;background:var(--surface-2);color:var(--text-2);font-size:13px;margin-bottom:12px}
+.offline-map-progress{position:relative;height:34px;border-radius:12px;overflow:hidden;background:var(--surface-2);margin:10px 0 14px}
+.offline-map-progress>div{position:absolute;inset:0 auto 0 0;width:0;background:var(--accent-soft);transition:width .15s linear}
+.offline-map-progress>span{position:relative;z-index:1;display:grid;place-items:center;height:100%;font-size:13px;font-weight:650}
+.offline-packages{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.offline-packages-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.offline-packages-head span{color:var(--text-2);font-size:13px}
+.offline-packages-list{display:grid;gap:8px}
+.offline-package-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:14px}
+.offline-package-row strong,.offline-package-row small{display:block}
+.offline-package-row small{margin-top:3px;color:var(--text-2);font-size:12px}
+@media(max-width:760px){
+  .offline-maps-card{max-height:92vh}
+  .offline-map-form{grid-template-columns:1fr}
+  .offline-map-estimate{grid-template-columns:1fr 1fr}
+  .offline-maps-card .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+}
