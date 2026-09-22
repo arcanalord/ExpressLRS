@@ -20,8 +20,8 @@ env:
   VERSION_NAME: "0.3.0-dev.7"
   VERSION_CODE: "31"
   GRADLE_VERSION: "8.10.2"
-  BASE_PROJECT_URL: "https://uca6027bcb8506d0c7fdf5d8c14f.dl.dropboxusercontent.com/cd/0/get/DIn1g5U7ZS-eFOrh55A5QnXO5pVuNKokTfHylPVrDtC5N5zmqsVpUDp3sSx6BQ6rySohSS4VH9JMgDdw02JWms3TBVSy9ViY-BL4lqOwaVYSLnXm16taOQ4zQk7_Pp5uv3tnn7HFONBxA6pDjyd5d1J7TSXwA-XwhODNHMnsB2W6iA/file?c_luid=cfbe8875"
-  RECOVERY_URL: "https://uca88a990c09553ef72fa42ad30b.dl.dropboxusercontent.com/cd/0/get/DIlGTqz68g9LjEaOCRzZBjY4XApI5VLWhmdJE5r5jgYMHngpwEj83RN1MfN87ORHdC4VsMUBW8nkV4LxnAPKPvJSv7qrU5hTZwFzHGKv8fCy68-1ZuRMS5pGTWfnoN2Q7VrhmuDLL01QZN_dTn062cFuv_Zv8zDfNHtXOyR7Mo36ow/file?c_luid=cfbe8875"
+  BASE_PROJECT_URL: "https://uc8bc7692d3ec3aec7c50d8df229.dl.dropboxusercontent.com/cd/0/get/DIlt-xsWkZ7xgzTkmAVkdepyrVYLLkC_HlEYIvqM1ALoYVmOGg70xkoXWTSzWe-IFCW1O5rBHQ1X9gK4_yaS7gn1JbBetSV46gRLNdBhcwfC8aZhvPr4tTLvNISnoBQUHRS0x3EgOorgVo3nhR8qZ-beAeB7TWVoWcRekS_iGm2xNg/file?c_luid=cfbe8875"
+  RECOVERY_URL: "https://uc6000461dc9b1c1cd1e015d5c79.dl.dropboxusercontent.com/cd/0/get/DIkpMJg5dkOwDUK-CdRHsWin_ck0sjHa2Z-TDo0nBugZlmAtaOSsAm_p-jNWd_Jd64LT5H09z-45L8vA5er4NNX7gZQk8jpnyxbx8_ruD6Hnhktne-it7ZSzPDqUPwBcp02NfLDwEM8ZMXIDfLeLRW5fgvPVM3894oMqJYxUltQM_g/file?c_luid=cfbe8875"
 
 jobs:
   build:
@@ -78,6 +78,16 @@ jobs:
           node "$RECOVERY_DIR/tools/apply-runtime-recovery.mjs" "$ANDROID_DIR/app/src/main/assets/web"
           node --test "$RECOVERY_DIR/tests/"*.test.js
           node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path(__import__('os').environ['ANDROID_DIR']) / 'app/src/main/assets/web'
+          for rel in ['package.json','index.html','src/version.js','tests/version.test.js','tests/web-shell.test.js']:
+              p = root / rel
+              if p.exists():
+                  s = p.read_text(encoding='utf-8')
+                  s = s.replace('0.3.0-dev.5','0.3.0-dev.7')
+                  p.write_text(s, encoding='utf-8')
+          PY
 
       - name: Apply Android host integration
         shell: python
