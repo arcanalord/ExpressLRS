@@ -66,7 +66,7 @@ bootstrap = (root / "src" / "vector-runtime-bootstrap.js").read_text(encoding="u
 for token in ["../vendor/maplibre-gl.mjs", "globalThis.maplibregl", "offlineVendor: true"]:
     assert token in bootstrap, f"missing local vector runtime bootstrap token: {token}"
 
-for token in ["type:'vector'", "'source-layer':'water'", "'source-layer':'transportation'"]:
+for token in ["type: 'vector'", "'source-layer':'water'", "'source-layer':'transportation'"]:
     assert token in vector_style, f"missing vector style token: {token}"
 
 assert app.index("syncVectorMap()") < app.index("tileObjectUrl"), "vector path must be evaluated before raster fallback"
