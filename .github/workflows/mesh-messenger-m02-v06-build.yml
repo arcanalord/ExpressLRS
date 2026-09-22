@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  VERSION_NAME: "1.5.9-m02-v0.6"
+  VERSION_NAME: "1.5.10"
   VERSION_CODE: "26"
   SOURCE_URL: "https://ucd91a3289c022d8ec9c01ca3fca.dl.dropboxusercontent.com/cd/0/get/DInuQsO5lL-Mgpl-c4bF71QUnzh_uPcPJt-MUe8cYk2kqStjhlzzpXUp6LgkrkhTw916cCadjQq15Z7cW8oWaoGzq5IZ-xTWLyUTJW2vNwAhBzTfYGv_1uoWCcr46eE_BLntEs7-9z1KisfoGmR4rjskPJ-DwZq8gpXDrUAYuC6LnA/file?c_luid=cfbe8875"
 
