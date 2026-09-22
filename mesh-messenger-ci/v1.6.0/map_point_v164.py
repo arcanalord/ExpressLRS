@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import re
+import re, sys, shutil
 from playwright.sync_api import sync_playwright
 
-ROOT=Path(__file__).resolve().parents[1]
+ROOT=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else Path(__file__).resolve().parents[1]
 index=(ROOT/'index.html').read_text(encoding='utf-8')
 css=(ROOT/'src/styles.css').read_text(encoding='utf-8')
 modules=[
@@ -25,7 +25,10 @@ script="window.__meshDisableAutoConnect=true; const __testStore=new Map(); Objec
 
 errors=[]
 with sync_playwright() as p:
-    browser=p.chromium.launch(headless=True)
+    executable=(shutil.which("google-chrome") or shutil.which("google-chrome-stable") or shutil.which("chromium") or shutil.which("chromium-browser"))
+    args={"headless":True}
+    if executable: args["executable_path"]=executable
+    browser=p.chromium.launch(**args)
     page=browser.new_page(viewport={'width':412,'height':915})
     page.on('pageerror',lambda e:errors.append(str(e)))
     page.on('console',lambda m: errors.append(m.text) if m.type=='error' and 'Failed to load resource' not in m.text else None)
