@@ -212,10 +212,52 @@
         <div class="screen-header"><div><p class="eyebrow">Локальные параметры</p><h1 id="settingsTitle">Настройки</h1><p>То, что не должно мешать основному сценарию, вынесено сюда.</p></div></div>
         <div class="settings-list">
           <button type="button" data-help-topic="mesh-messenger.settings.security"><span><strong>Безопасность</strong><small>Identity & Trust · план развития</small></span><b>›</b></button>
-          <button type="button" data-help-topic="mesh-messenger.settings.offline-maps"><span><strong>Офлайн-карты</strong><small>Менеджер пакетов · планируется</small></span><b>›</b></button>
+          <button type="button" id="offlineMapsButton"><span><strong>Офлайн-карты</strong><small id="offlineMapsSummary">Выбрать область и скачать</small></span><b>›</b></button>
           <button type="button" data-help-topic="mesh-messenger.settings.voice"><span><strong>Голос</strong><small>Сообщения → PTT на быстром канале</small></span><b>›</b></button>
           <button type="button" data-open-network><span><strong>Транспорт</strong><small>Meshtastic BLE / USB · состояние связи</small></span><b>›</b></button>
           <button type="button" data-help-topic="mesh-messenger.settings.storage"><span><strong>Хранение</strong><small>Локальная очередь и история</small></span><b>›</b></button>
+        </div>
+      </section>
+
+      <section class="modal-layer" id="offlineMapsModal" aria-hidden="true">
+        <div class="modal-card offline-maps-card" role="dialog" aria-modal="true" aria-labelledby="offlineMapsTitle">
+          <div class="modal-header">
+            <div><p class="eyebrow">Offline maps</p><h2 id="offlineMapsTitle">Офлайн-карты</h2></div>
+            <button class="icon-button" id="closeOfflineMaps" aria-label="Закрыть" type="button">×</button>
+          </div>
+          <p class="offline-maps-intro">Скачивайте только нужные районы. Перед загрузкой приложение покажет примерный объём.</p>
+          <div class="offline-map-form">
+            <label><span>Название области</span><input id="offlineMapName" type="text" value="Моя область" /></label>
+            <label><span>Область</span>
+              <select id="offlineMapArea">
+                <option value="viewport">Текущая область карты</option>
+                <option value="5">Вокруг центра · 5 км</option>
+                <option value="15">Вокруг центра · 15 км</option>
+                <option value="30">Вокруг центра · 30 км</option>
+              </select>
+            </label>
+            <label><span>Детализация</span>
+              <select id="offlineMapDetail">
+                <option value="12">Базовая · до z12</option>
+                <option value="14" selected>Обычная · до z14</option>
+                <option value="16">Подробная · до z16</option>
+              </select>
+            </label>
+          </div>
+          <div class="offline-map-estimate">
+            <div><span>Тайлов</span><strong id="offlineMapTileCount">—</strong></div>
+            <div><span>Примерный размер</span><strong id="offlineMapEstimatedSize">—</strong></div>
+          </div>
+          <div class="offline-map-provider" id="offlineMapProviderState"></div>
+          <div class="offline-map-progress" id="offlineMapProgress" hidden><div id="offlineMapProgressBar"></div><span id="offlineMapProgressText">0%</span></div>
+          <div class="modal-actions">
+            <button class="secondary-button" id="offlineMapUseCurrent" type="button">Использовать текущую карту</button>
+            <button class="primary-button" id="offlineMapDownload" type="button">Скачать область</button>
+          </div>
+          <div class="offline-packages">
+            <div class="offline-packages-head"><strong>Загруженные области</strong><span id="offlinePackagesTotal"></span></div>
+            <div id="offlinePackagesList" class="offline-packages-list"></div>
+          </div>
         </div>
       </section>
 
