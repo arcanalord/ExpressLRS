@@ -90,7 +90,7 @@ jobs:
                   p.write_text(s, encoding='utf-8')
           p = root / 'styles.css'
           if p.exists():
-              s = p.read_text(encoding='utf-8').replace('v0.2.6 mobile shell + no-overlap release gate','v0.3.0-dev.8 mobile shell + no-overlap release gate')
+              s = p.read_text(encoding='utf-8').replace('v0.2.6 mobile shell + no-overlap release gate','v0.3.0-dev.8 mobile shell + no-overlap release gate').replace('v0.3.0-dev.7 mobile shell + no-overlap release gate','v0.3.0-dev.8 mobile shell + no-overlap release gate')
               p.write_text(s, encoding='utf-8')
           p = root / 'tests/version.test.js'
           if p.exists():
@@ -101,8 +101,8 @@ jobs:
           if p.exists():
               s = p.read_text(encoding='utf-8')
               s = s.replace('0.3.0-dev.5','0.3.0-dev.8')
-              s = s.replace(r'0\.3\.0-dev\.5', r'0\.3\.0-dev\.7')
-              s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.7/')
+              s = s.replace(r'0\.3\.0-dev\.5', r'0\.3\.0-dev\.8').replace(r'0\.3\.0-dev\.7', r'0\.3\.0-dev\.8')
+              s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.8/').replace(r'/runtime v0\.3\.0-dev\.7/', r'/runtime v0\.3\.0-dev\.8/')
               p.write_text(s, encoding='utf-8')
           PY
           node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
