@@ -1,0 +1,32 @@
+name: Fetch Mesh EP2 UART inputs
+
+on:
+  push:
+    branches: [build/mesh-ep2-uart-v1.5.11]
+    paths:
+      - ".github/workflows/mesh-ep2-uart-fetch-inputs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch exact Dropbox inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _inputs
+          curl -L --fail --retry 3 'https://uca3c7af82c92077d0b114a4e5a0.dl.dropboxusercontent.com/cd/0/get/DIrID_GsYs4yBy2KUwHMzWc8Dmj-qTZAe0f1Hf2CRX82n1BNEAfyNk_kiOMzIYwYx65pzfOyjIDFhsEFg7i-xblu0WYY5x-S3iKq-ja6NwrQ0t_v0wSxqXXcSOXXgn4fjaKQpaftBAeFBCbmYUrcbW-lTt-bkklJOdts53HjmVDchg/file?c_luid=cfbe8875' -o _inputs/SOURCE_CANDIDATE_M02_v0.6.zip
+          echo '8517934af6f7f54c431412625c7ee7fc097dcb2a65e74288518ddb517ffa23ee  _inputs/SOURCE_CANDIDATE_M02_v0.6.zip' | sha256sum -c -
+          curl -L --fail --retry 3 'https://uce0e629586c9e2bc45565b29102.dl.dropboxusercontent.com/cd/0/get/DIqU-7mDCADe6byplEc2ZaT2roPXnU7KSNHoC0PqjEeaEIghL4kDLsww8wk9S1lCSD0t83IWqlJDBwlw4SlNzoQpwZJddcWMVRWZSoD-vRWsc77Mt55JR-a-QhZoh0DcLGbKfZxEiesbT3PLSVvBuTFrjMSckwqa5vBoUtAsA0e2ow/file?c_luid=cfbe8875' -o _inputs/External_Radio_M03-ER_v0.2.1.zip
+          sha256sum _inputs/* > _inputs/SHA256SUMS.txt
+          ls -lh _inputs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mesh-ep2-uart-inputs
+          path: _inputs/*
+          retention-days: 7
