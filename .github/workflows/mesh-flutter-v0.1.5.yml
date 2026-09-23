@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter Android v0.1.10-dev.1
+name: Mesh Messenger Flutter Android v0.1.10-dev.2
 
 on:
   push:
@@ -17,15 +17,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct exact v0.1.10-dev.1 source
+      - name: Reconstruct exact v0.1.10-dev.2 source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/mesh-src
-          base64 -d .ci/mesh-v0110/source_v0110_dev1.zip.b64 > /tmp/mesh-src/source.zip
-          echo 'a0676bfa55fb1c27552e7b88e3b738c4124ee061e6e92811329645d7b857c8ca  /tmp/mesh-src/source.zip' | sha256sum -c -
+          base64 -d .ci/mesh-v0110/source_v0110_dev2.zip.b64 > /tmp/mesh-src/source.zip
+          echo '2488ffb6320be81395fa67b6557f74e2724228a8d7fba4efd836ddda133b1797  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
-          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.10-dev.1/flutter_app" >> "$GITHUB_ENV"
+          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.10-dev.2/flutter_app" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
         uses: subosito/flutter-action@v2
@@ -88,17 +88,17 @@ jobs:
           set -euo pipefail
           APK=build/app/outputs/flutter-apk/app-release.apk
           test -s "$APK"
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.1-arm64-release.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.1-arm64-release.apk | tee /tmp/SHA256SUM-v0.1.10-dev.1.txt
-          stat -c '%n %s bytes' /tmp/MeshMessenger-Flutter-v0.1.10-dev.1-arm64-release.apk | tee /tmp/SIZE-v0.1.10-dev.1.txt
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.2-arm64-release.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.2-arm64-release.apk | tee /tmp/SHA256SUM-v0.1.10-dev.2.txt
+          stat -c '%n %s bytes' /tmp/MeshMessenger-Flutter-v0.1.10-dev.2-arm64-release.apk | tee /tmp/SIZE-v0.1.10-dev.2.txt
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.10-dev.1-arm64-release
+          name: MeshMessenger-Flutter-v0.1.10-dev.2-arm64-release
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.10-dev.1-arm64-release.apk
-            /tmp/SHA256SUM-v0.1.10-dev.1.txt
-            /tmp/SIZE-v0.1.10-dev.1.txt
+            /tmp/MeshMessenger-Flutter-v0.1.10-dev.2-arm64-release.apk
+            /tmp/SHA256SUM-v0.1.10-dev.2.txt
+            /tmp/SIZE-v0.1.10-dev.2.txt
           if-no-files-found: error
           retention-days: 14
