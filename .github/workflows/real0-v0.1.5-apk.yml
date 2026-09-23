@@ -36,8 +36,8 @@ jobs:
           set -euxo pipefail
           test -f "${PROJECT_DIR}/app/build.gradle"
           test -f "${PROJECT_DIR}/core/src/main/kotlin/club/fpv/real0/core/TrackerCore.kt"
-          grep -q "versionName '0.1.4'" "${PROJECT_DIR}/app/build.gradle"
-          grep -q "versionCode 5" "${PROJECT_DIR}/app/build.gradle"
+          grep -q "versionName '0.1.5'" "${PROJECT_DIR}/app/build.gradle"
+          grep -q "versionCode 6" "${PROJECT_DIR}/app/build.gradle"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
