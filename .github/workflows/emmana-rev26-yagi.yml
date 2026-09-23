@@ -21,7 +21,7 @@ jobs:
           $url = 'https://www.dropbox.com/scl/fi/j8oha5gkjy12hifwln1j6/EMMana-Next-0.1.0-alpha.20-rev25-source-artifact.zip?rlkey=c47dijoj2drn2rr8lxrgoytxh&dl=1'
           Invoke-WebRequest -Uri $url -OutFile rev25.zip -TimeoutSec 120
           $sha = (Get-FileHash rev25.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($sha -ne '31c19421cc8088bbc0ed52a8ca7455a485f795ddad7a8eb0a6002d102b38c6d5') { throw "rev25 source SHA mismatch: $sha" }
+          if ($sha -ne 'ebe1139e0e3f45f7eea72959070abddaff76b9ac3c2e973607b2d8f8bef866cc') { throw "rev25 source SHA mismatch: $sha" }
           Expand-Archive rev25.zip -DestinationPath src -Force
           $v = (Get-Content src/emmana_rev25/VERSION).Trim()
           if ($v -ne '0.1.0-alpha.20-rev25') { throw "Unexpected source VERSION: $v" }
