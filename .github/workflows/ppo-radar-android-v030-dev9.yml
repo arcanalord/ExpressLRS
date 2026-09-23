@@ -20,7 +20,7 @@ env:
   VERSION_NAME: "0.3.0-dev.9"
   VERSION_CODE: "33"
   GRADLE_VERSION: "8.10.2"
-  BASE_PROJECT_URL: "https://uccbd570cfd1ad5e3d1e61935f90.dl.dropboxusercontent.com/cd/0/get/DIoAh-jDKTi7PXmH_53rHx04lAy7TtG0BkfdxgKyETi9vodLVE9dfFVy1Zu5x7jI5Y9BgiURGO2IhR_vi56xKIMjGmpPKxjv8PWhO-2e5gJi__H_UkYcFz5rOGr91BXWppT-2j0BxdBIIAikOtvQmQLIvg9WaN6OATi0ywMBMX004Q/file?c_luid=cfbe8875"
+  BASE_PROJECT_URL: "https://ucdd92c7ca0ff44942b233575aa7.dl.dropboxusercontent.com/cd/0/get/DIq5XpbnGL7XdqnG_yMr2D_i8xaNy2oglWaaxbUylxmTJnpi0wVpmF8KGK71w9flKHoVI47_B32Fagh5bnIZsNbjtu7NA-NfSfmHuapkFd_tIk02K4pgF2iCp5NPw_STmSgQfvf_urxfLrFxcI2sOgT8_tscc7YTelI61J_PB2KrnA/file?c_luid=cfbe8875"
 
 jobs:
   build:
@@ -375,7 +375,7 @@ jobs:
           grep -q "const safeDiagnosticsText" src/app.js
           grep -q "nativeRuntime.markAppReady" src/app.js
           grep -q "createLightRasterBackdrop" src/app.js
-          grep -q "light-raster-map" ../styles.css
+          grep -q "light-raster-map" styles.css
 
       - name: Verify Android source contract
         shell: bash
