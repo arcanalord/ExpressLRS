@@ -325,12 +325,14 @@ private class TargetModelCore {
 
 private fun descriptor(frame: GrayFrame, b: BoxF): FloatArray? {
     if (!inside(b, frame.width, frame.height)) return null
-    val out = FloatArray(35)
+    val cols = 11
+    val rows = 9
+    val out = FloatArray(cols * rows)
     var k = 0
-    for (j in 0 until 5) {
-        for (i in 0 until 7) {
-            val x = (b.left + (i + 0.5f) * b.width() / 7f).toInt()
-            val y = (b.top + (j + 0.5f) * b.height() / 5f).toInt()
+    for (j in 0 until rows) {
+        for (i in 0 until cols) {
+            val x = (b.left + (i + 0.5f) * b.width() / cols).toInt()
+            val y = (b.top + (j + 0.5f) * b.height() / rows).toInt()
             if (x < 1 || y < 1 || x >= frame.width - 1 || y >= frame.height - 1) return null
             out[k++] = frame.gray(x, y)
         }
