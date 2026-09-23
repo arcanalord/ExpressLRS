@@ -22,8 +22,10 @@ private class SyntheticFrame(
     private fun targetPattern(b: BoxF, x: Int, y: Int): Float {
         val u = ((x - b.left) / b.width()).coerceIn(0f, 1f)
         val v = ((y - b.top) / b.height()).coerceIn(0f, 1f)
-        val checker = if ((((u * 8).toInt()) + ((v * 6).toInt())) % 2 == 0) 0.92f else 0.18f
-        return (checker + 0.05f * u + 0.03f * v).coerceIn(0f, 1f)
+        val markA = if (u > 0.12f && u < 0.36f && v > 0.10f && v < 0.42f) 0.56f else 0f
+        val markB = if (u > 0.58f && u < 0.88f && v > 0.55f && v < 0.82f) 0.34f else 0f
+        val diagonal = if (kotlin.math.abs(v - (0.20f + 0.55f * u)) < 0.09f) 0.28f else 0f
+        return (0.10f + 0.18f * u + 0.11f * v + markA + markB + diagonal).coerceIn(0f, 1f)
     }
 
     private fun distractorPattern(b: BoxF, x: Int, y: Int): Float {
