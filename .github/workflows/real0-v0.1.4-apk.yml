@@ -1,0 +1,127 @@
+name: Real0 Android v0.1.4 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ci/real0-v0.1.4-apk
+    paths:
+      - '.github/workflows/real0-v0.1.4-apk.yml'
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_REPO: https://github.com/arcanalord/fpv-club-site.git
+  SOURCE_SHA: 76148ffec872cb5b2f8cc1e463ca3e2f0d900492
+  PROJECT_DIR: source/android/real0-tracker-lab-v0.1
+  ANDROID_API: '36'
+  ANDROID_BUILD_TOOLS: '36.0.0'
+  GRADLE_VERSION: '8.13'
+
+jobs:
+  build:
+    name: build-and-verify
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout LRS build branch
+        uses: actions/checkout@v4
+
+      - name: Fetch exact Real0 source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone --filter=blob:none --no-checkout "${SOURCE_REPO}" source
+          git -C source sparse-checkout init --cone
+          git -C source sparse-checkout set android/real0-tracker-lab-v0.1
+          git -C source checkout "${SOURCE_SHA}"
+          test "$(git -C source rev-parse HEAD)" = "${SOURCE_SHA}"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install pinned Android SDK packages
+        shell: bash
+        run: |
+          set -euxo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager             "platform-tools"             "platforms;android-${ANDROID_API}"             "build-tools;${ANDROID_BUILD_TOOLS}"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Generate wrapper
+        shell: bash
+        run: |
+          set -euxo pipefail
+          gradle --no-daemon -p "${PROJECT_DIR}" wrapper             --gradle-version "${GRADLE_VERSION}"             --distribution-type bin
+          chmod +x "${PROJECT_DIR}/gradlew"
+          "${PROJECT_DIR}/gradlew" -p "${PROJECT_DIR}" --no-daemon --version
+
+      - name: Core smoke and APK build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          "${PROJECT_DIR}/gradlew" -p "${PROJECT_DIR}"             --no-daemon             --stacktrace             :core:coreSmoke             :app:clean             :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APK="${PROJECT_DIR}/app/build/outputs/apk/debug/app-debug.apk"
+          BT="${ANDROID_HOME}/build-tools/${ANDROID_BUILD_TOOLS}"
+          test -s "${APK}"
+          unzip -t "${APK}"
+          "${BT}/zipalign" -c -P 16 -v 4 "${APK}" | tee real0-zipalign.txt
+          "${BT}/apksigner" verify --verbose --print-certs "${APK}" | tee real0-apksigner.txt
+          "${BT}/aapt" dump badging "${APK}" | tee real0-apk-badging.txt
+          grep -q "package: name='club.fpv.real0.trackerlab'" real0-apk-badging.txt
+          grep -q "versionCode='5'" real0-apk-badging.txt
+          grep -q "versionName='0.1.4'" real0-apk-badging.txt
+          cp "${APK}" Real0_v0.1.4_debug.apk
+
+      - name: Record provenance
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sha256sum Real0_v0.1.4_debug.apk | tee Real0_v0.1.4_debug.apk.sha256
+          {
+            echo "source_repo=arcanalord/fpv-club-site"
+            echo "source_commit=${SOURCE_SHA}"
+            echo "build_repo=${GITHUB_REPOSITORY}"
+            echo "build_commit=${GITHUB_SHA}"
+            echo "build_ref=${GITHUB_REF}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            echo "java=$(java -version 2>&1 | head -n 1)"
+            echo "gradle=${GRADLE_VERSION}"
+            echo "android_api=${ANDROID_API}"
+            echo "build_tools=${ANDROID_BUILD_TOOLS}"
+            echo "package=club.fpv.real0.trackerlab"
+            echo "version_name=0.1.4"
+            echo "version_code=5"
+          } | tee Real0_v0.1.4_build_provenance.txt
+
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Real0_v0.1.4_verified_apk
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            Real0_v0.1.4_debug.apk
+            Real0_v0.1.4_debug.apk.sha256
+            Real0_v0.1.4_build_provenance.txt
+            real0-zipalign.txt
+            real0-apksigner.txt
+            real0-apk-badging.txt
