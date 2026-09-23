@@ -1,0 +1,450 @@
+name: PPO Radar Android v0.3.0-dev.10 APK
+
+on:
+  push:
+    branches:
+      - build/ppo-radar-android-v030-dev10
+    paths:
+      - ".github/workflows/ppo-radar-android-v030-dev10.yml"
+      - "ppo-radar-ci/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ppo-radar-android-v030-dev10
+  cancel-in-progress: true
+
+env:
+  VERSION_NAME: "0.3.0-dev.10"
+  VERSION_CODE: "34"
+  GRADLE_VERSION: "8.10.2"
+  BASE_PROJECT_URL: "https://uc53fc0e9e9fc93d0795b8eb0964.dl.dropboxusercontent.com/cd/0/get/DIqZGlLd_sFzV1BuzvnRX2zEN6_kQven9UNtMvgwQz43yaGpj6KeEssFcjYkf9CL0vahiGiA1hi7kf5QLpapSSIEml3ze_JVBS0BkQ2KVMx9IBK65eAV0B5PRaNai2v8-D_1dlQz-yo68U5m-Jt0v0tY-0NLM55VM8_2phPVC1jScg/file?c_luid=cfbe8875"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print | sort | tail -n1)"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
+
+      - name: Restore Android baseline and recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _ppo
+          mkdir -p _ppo/base _ppo/out
+          curl -L --fail --retry 3 --connect-timeout 20 "$BASE_PROJECT_URL" -o _ppo/base.zip
+          unzip -q _ppo/base.zip -d _ppo/base
+          ANDROID_DIR="$(find _ppo/base -type f -path '*/app/build.gradle' -printf '%h\n' | sed 's#/app$##' | head -n1)"
+          test -n "$ANDROID_DIR"
+          echo "ANDROID_DIR=$ANDROID_DIR" >> "$GITHUB_ENV"
+          echo "RECOVERY_DIR=$GITHUB_WORKSPACE/ppo-radar-ci/dev7-recovery" >> "$GITHUB_ENV"
+          test -f "$ANDROID_DIR/app/src/main/assets/web/index.html"
+          test -f "ppo-radar-ci/dev7-recovery/tools/apply-runtime-recovery.mjs"
+          sha256sum _ppo/base.zip | tee _ppo/out/BASE_PROJECT_SHA256.txt
+
+      - name: Apply runtime recovery dev.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          node "$RECOVERY_DIR/tools/apply-runtime-recovery.mjs" "$ANDROID_DIR/app/src/main/assets/web"
+          node --test "$RECOVERY_DIR/tests/"*.test.js
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, os
+          root = Path(os.environ['ANDROID_DIR']) / 'app/src/main/assets/web'
+          pkg = root / 'package.json'
+          if pkg.exists():
+              data = json.loads(pkg.read_text(encoding='utf-8'))
+              data['version'] = '0.3.0-dev.10'
+              pkg.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          for rel in ['index.html','src/version.js']:
+              p = root / rel
+              if p.exists():
+                  s = p.read_text(encoding='utf-8')
+                  s = s.replace('0.3.0-dev.5','0.3.0-dev.10').replace('0.2.6','0.3.0-dev.10')
+                  p.write_text(s, encoding='utf-8')
+          p = root / 'styles.css'
+          if p.exists():
+              s = p.read_text(encoding='utf-8').replace('v0.2.6 mobile shell + no-overlap release gate','v0.3.0-dev.10 mobile shell + no-overlap release gate').replace('v0.3.0-dev.7 mobile shell + no-overlap release gate','v0.3.0-dev.10 mobile shell + no-overlap release gate').replace('v0.3.0-dev.8 mobile shell + no-overlap release gate','v0.3.0-dev.10 mobile shell + no-overlap release gate')
+              p.write_text(s, encoding='utf-8')
+          p = root / 'tests/version.test.js'
+          if p.exists():
+              s = p.read_text(encoding='utf-8')
+              s = s.replace('0.3.0-dev.5','0.3.0-dev.10').replace('v0.2.6 checkpoint','v0.3.0-dev.10 checkpoint').replace("'0.2.6'","'0.3.0-dev.10'")
+              p.write_text(s, encoding='utf-8')
+          p = root / 'tests/web-shell.test.js'
+          if p.exists():
+              s = p.read_text(encoding='utf-8')
+              s = s.replace('0.3.0-dev.5','0.3.0-dev.10')
+              s = s.replace(r'0\.3\.0-dev\.5', r'0\.3\.0-dev\.9').replace(r'0\.3\.0-dev\.7', r'0\.3\.0-dev\.9').replace(r'0\.3\.0-dev\.8', r'0\.3\.0-dev\.9')
+              s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.9/').replace(r'/runtime v0\.3\.0-dev\.7/', r'/runtime v0\.3\.0-dev\.9/').replace(r'/runtime v0\.3\.0-dev\.8/', r'/runtime v0\.3\.0-dev\.9/')
+              p.write_text(s, encoding='utf-8')
+          PY
+          node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
+
+      - name: Apply Android host integration
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+
+          root = Path(os.environ["ANDROID_DIR"])
+          gradle = root / "app/build.gradle"
+          s = gradle.read_text(encoding="utf-8")
+          s = s.replace("versionCode 26", "versionCode 34")
+          s = s.replace("versionName '0.2.6'", "versionName '0.3.0-dev.10'")
+          gradle.write_text(s, encoding="utf-8")
+
+          p = root / "app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+          s = p.read_text(encoding="utf-8")
+          s = s.replace("PPO-Radar-Android/0.2.6", "PPO-Radar-Android/0.3.0-dev.10")
+          s = s.replace(
+              "https://appassets.androidplatform.net/assets/web/index.html?profile=safe&map=maplibre&platform=android",
+              "https://appassets.androidplatform.net/assets/web/index.html?profile=safe&map=schematic&platform=android"
+          )
+          anchor = "    public final class AndroidBridge {\n"
+          method = """    public final class AndroidBridge {
+              @JavascriptInterface public void appReady(String payloadJson) {
+                  try {
+                      JSONObject response = new JSONObject();
+                      response.put("protocolVersion", 1);
+                      response.put("platform", "android");
+                      response.put("appVersion", "0.3.0-dev.10");
+                      JSONArray capabilities = new JSONArray();
+                      capabilities.put("save-text");
+                      capabilities.put("open-file");
+                      capabilities.put("offline-download");
+                      capabilities.put("offline-delete");
+                      capabilities.put("system-insets");
+                      response.put("capabilities", capabilities);
+                      jsCall("__ppoNativeReady", response.toString());
+                  } catch (Exception error) {
+                      jsCall("__ppoNativeReady", "{\\\"protocolVersion\\\":1,\\\"platform\\\":\\\"android\\\",\\\"capabilities\\\":[]}");
+                  }
+              }
+
+          """
+          if "@JavascriptInterface public void appReady(String payloadJson)" not in s:
+              if anchor not in s:
+                  raise SystemExit("AndroidBridge anchor not found")
+              s = s.replace(anchor, method)
+          p.write_text(s, encoding="utf-8")
+
+      - name: Apply Android safe-area UI fix
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+
+          root = Path(os.environ["ANDROID_DIR"])
+          css = root / "app/src/main/assets/web/styles.css"
+          s = css.read_text(encoding="utf-8")
+          marker = "/* v0.3.0-dev.10 Android safe-area */"
+          patch = r'''
+          /* v0.3.0-dev.10 Android safe-area */
+          :root{
+            --android-inset-top:0px;
+            --android-inset-right:0px;
+            --android-inset-bottom:0px;
+            --android-inset-left:0px;
+            --safe-top:max(env(safe-area-inset-top,0px),var(--android-inset-top));
+            --safe-right:max(env(safe-area-inset-right,0px),var(--android-inset-right));
+            --safe-bottom:max(env(safe-area-inset-bottom,0px),var(--android-inset-bottom));
+            --safe-left:max(env(safe-area-inset-left,0px),var(--android-inset-left));
+          }
+          body{
+            width:100%;
+            height:100dvh;
+            min-height:100dvh;
+            padding:var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+            overflow:hidden;
+          }
+          main{height:calc(100dvh - 64px - var(--safe-top) - var(--safe-bottom));}
+          @media(max-width:800px){
+            header{margin:0;}
+            main{height:calc(100dvh - 60px - var(--safe-top) - var(--safe-bottom));}
+            aside{padding-bottom:max(12px,var(--safe-bottom));}
+          }
+          '''
+          if marker not in s:
+              s += "\n" + patch.strip() + "\n"
+          css.write_text(s, encoding="utf-8")
+
+          p = root / "app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+          s = p.read_text(encoding="utf-8").replace("\u00a0", " ")
+
+          method_start = s.find("    private void applySystemBarInsets() {")
+          method_end = s.find("    private void jsCall(", method_start)
+          if method_start < 0 or method_end < 0:
+              raise SystemExit("applySystemBarInsets method boundary not found")
+
+          new_method = '''    private int insetTop = 0;
+              private int insetRight = 0;
+              private int insetBottom = 0;
+              private int insetLeft = 0;
+
+              private void applySystemBarInsets() {
+                  if (Build.VERSION.SDK_INT < 30) return;
+                  getWindow().setDecorFitsSystemWindows(false);
+                  getWindow().setStatusBarColor(Color.TRANSPARENT);
+                  getWindow().setNavigationBarColor(Color.TRANSPARENT);
+                  if (Build.VERSION.SDK_INT >= 29) getWindow().setNavigationBarContrastEnforced(false);
+
+                  webView.setOnApplyWindowInsetsListener((view, insets) -> {
+                      android.graphics.Insets bars = insets.getInsets(
+                          WindowInsets.Type.statusBars()
+                              | WindowInsets.Type.navigationBars()
+                              | WindowInsets.Type.displayCutout()
+                      );
+                      insetLeft = bars.left;
+                      insetTop = bars.top;
+                      insetRight = bars.right;
+                      insetBottom = bars.bottom;
+                      view.setPadding(0, 0, 0, 0);
+                      pushSystemInsetsToWeb();
+                      return insets;
+                  });
+                  webView.requestApplyInsets();
+              }
+
+              private void pushSystemInsetsToWeb() {
+                  if (webView == null) return;
+                  float density = Math.max(1f, getResources().getDisplayMetrics().density);
+                  int cssTop = Math.round(insetTop / density);
+                  int cssRight = Math.round(insetRight / density);
+                  int cssBottom = Math.round(insetBottom / density);
+                  int cssLeft = Math.round(insetLeft / density);
+                  String js = "(function(){var r=document.documentElement.style;"
+                      + "r.setProperty('--android-inset-top','" + cssTop + "px');"
+                      + "r.setProperty('--android-inset-right','" + cssRight + "px');"
+                      + "r.setProperty('--android-inset-bottom','" + cssBottom + "px');"
+                      + "r.setProperty('--android-inset-left','" + cssLeft + "px');"
+                      + "})();";
+                  runOnUiThread(() -> webView.evaluateJavascript(js, null));
+              }
+
+          '''
+          s = s[:method_start] + new_method + s[method_end:]
+
+          client_start = s.find("        webView.setWebViewClient(new WebViewClient() {")
+          client_end = s.find("        });", client_start)
+          if client_start < 0 or client_end < 0:
+              raise SystemExit("WebViewClient block boundary not found")
+          client_block = s[client_start:client_end]
+          if "onPageFinished(WebView view, String url)" not in client_block:
+              addition = '''
+              @Override public void onPageFinished(WebView view, String url) {
+                  super.onPageFinished(view, url);
+                  pushSystemInsetsToWeb();
+              }
+
+          '''
+              s = s[:client_end] + addition + s[client_end:]
+
+          p.write_text(s, encoding="utf-8")
+
+      - name: Apply lightweight online map fallback
+        shell: python
+        run: |
+          from pathlib import Path
+          import os
+
+          root = Path(os.environ["ANDROID_DIR"]) / "app/src/main/assets/web"
+          src = Path("ppo-radar-ci/dev9/light-raster-map.js")
+          dst = root / "src/light-raster-map.js"
+          dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+
+          app = root / "src/app.js"
+          s = app.read_text(encoding="utf-8")
+          import_anchor = "import { buildAzimuthRay, buildRangeZone, parseKmlOverlay } from './markup-overlay.js';"
+          import_line = "import { createLightRasterBackdrop } from './light-raster-map.js';"
+          if import_line not in s:
+              if import_anchor not in s:
+                  raise SystemExit("light-raster import anchor not found")
+              s = s.replace(import_anchor, import_anchor + "\n" + import_line)
+
+          adapter_anchor = """let mapAdapter = createMapAdapter('schematic', {
+            width: 1000,
+            height: 650,
+            bounds: { minLat: 54.28, maxLat: 54.38, minLon: 48.34, maxLon: 48.48 },
+            coveragePxPerKm: 18
+          });"""
+          light_setup = adapter_anchor + """
+          const lightRaster = createLightRasterBackdrop({
+            container: mapWrap,
+            bounds: { west:48.34, south:54.28, east:48.48, north:54.38 },
+            onState:(update)=>{
+              if (!mapProviderStatus) return;
+              if (update.state === 'ONLINE') {
+                mapProviderStatus.textContent='Карта: LIGHT RASTER · online';
+                mapProviderStatus.classList.remove('issue','warn');
+              } else if (update.state === 'DEGRADED' || update.state === 'ERROR') {
+                mapProviderStatus.textContent='Карта: локальная сетка · фон недоступен';
+                mapProviderStatus.classList.add('warn');
+              }
+            }
+          });"""
+          if "const lightRaster = createLightRasterBackdrop" not in s:
+              if adapter_anchor not in s:
+                  raise SystemExit("map adapter anchor not found")
+              s = s.replace(adapter_anchor, light_setup)
+
+          fn_anchor = "async function initMapProvider() {\n"
+          fn_prefix = """async function initMapProvider() {
+            try {
+              lightRaster.mount();
+              mapWrap.classList.add('light-raster-active');
+            } catch { /* local grid remains available */ }
+          """
+          if "lightRaster.mount();" not in s:
+              if fn_anchor not in s:
+                  raise SystemExit("initMapProvider anchor not found")
+              s = s.replace(fn_anchor, fn_prefix, 1)
+
+          success_anchor = "mapWrap.classList.add('maplibre-active');"
+          success_replace = """mapWrap.classList.add('maplibre-active');
+              mapWrap.classList.remove('light-raster-active');
+              lightRaster.hide();"""
+          if "lightRaster.hide();" not in s:
+              if success_anchor not in s:
+                  raise SystemExit("MapLibre success anchor not found")
+              s = s.replace(success_anchor, success_replace, 1)
+
+          catch_old = "mapProviderStatus.textContent='Карта: SCHEMATIC_SVG · OSM недоступна';"
+          catch_new = "mapProviderStatus.textContent='Карта: LIGHT RASTER · резервный online фон';"
+          s = s.replace(catch_old, catch_new)
+
+          resize_old = "mapAdapter.resize?.(); renderMap();"
+          resize_new = "mapAdapter.resize?.(); lightRaster.resize?.(); renderMap();"
+          s = s.replace(resize_old, resize_new)
+
+          app.write_text(s, encoding="utf-8")
+
+          css = root / "styles.css"
+          cs = css.read_text(encoding="utf-8")
+          marker = "/* v0.3.0-dev.10 light raster fallback */"
+          patch = r'''
+          /* v0.3.0-dev.10 light raster fallback */
+          .light-raster-map{position:absolute;inset:0;z-index:0;overflow:hidden;background:#101a20}
+          .light-raster-map img{position:absolute;display:block;max-width:none;user-select:none;pointer-events:none}
+          .light-raster-attribution{position:absolute;right:6px;bottom:6px;z-index:2;padding:3px 6px;border-radius:7px;background:#0b1116cc;color:#8f9da6;font-size:9px;pointer-events:none}
+          .map-wrap.light-raster-active>#map{background:transparent}
+          .map-wrap.light-raster-active>#map>rect{fill-opacity:0!important;stroke-opacity:.16!important}
+          .map-wrap.light-raster-active #map{position:relative;z-index:1}
+          '''
+          if marker not in cs:
+              cs += "\n" + patch.strip() + "\n"
+          css.write_text(cs, encoding="utf-8")
+
+      - name: Test lightweight map module
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp ppo-radar-ci/dev9/light-raster-map.js /tmp/light-raster-map.mjs
+          sed "s#'./light-raster-map.js'#'/tmp/light-raster-map.mjs'#" ppo-radar-ci/dev9/light-raster-map.test.js > /tmp/light-raster-map.test.mjs
+          node --test /tmp/light-raster-map.test.mjs
+
+      - name: Verify packaged runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ANDROID_DIR/app/src/main/assets/web"
+          npm test
+          node --check src/app.js
+          grep -q "0.3.0-dev.10" package.json
+          grep -q "0.3.0-dev.10" src/version.js
+          grep -q "const initHelpRegistry" src/app.js
+          grep -q "const openHelp" src/app.js
+          grep -q "const openErrorHelp" src/app.js
+          grep -q "const safeDiagnosticsText" src/app.js
+          grep -q "nativeRuntime.markAppReady" src/app.js
+          grep -q "createLightRasterBackdrop" src/app.js
+          grep -q "light-raster-map" styles.css
+
+      - name: Verify Android source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "versionCode 34" "$ANDROID_DIR/app/build.gradle"
+          grep -q "versionName '0.3.0-dev.10'" "$ANDROID_DIR/app/build.gradle"
+          grep -q "@JavascriptInterface public void appReady" "$ANDROID_DIR/app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+          grep -q "__ppoNativeReady" "$ANDROID_DIR/app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+          grep -q "map=schematic&platform=android" "$ANDROID_DIR/app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+          grep -q "getDisplayMetrics().density" "$ANDROID_DIR/app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+          grep -q "light-raster-map" "$ANDROID_DIR/app/src/main/assets/web/styles.css"
+          grep -q "lightRaster.mount" "$ANDROID_DIR/app/src/main/assets/web/src/app.js"
+          grep -q "pushSystemInsetsToWeb" "$ANDROID_DIR/app/src/main/java/ru/fpvclub/pporadar/MainActivity.java"
+          grep -q "android-inset-top" "$ANDROID_DIR/app/src/main/assets/web/styles.css"
+
+      - name: Build Android APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'android.useAndroidX=true\n' > "$ANDROID_DIR/gradle.properties"
+          gradle -p "$ANDROID_DIR" --no-daemon clean :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$ANDROID_DIR/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          zipalign -c -v 4 "$APK"
+          apksigner verify --verbose --print-certs "$APK" | tee _ppo/out/APK_SIGNATURE.txt
+          aapt dump badging "$APK" | tee _ppo/out/AAPT_BADGING.txt
+          grep -q "package: name='ru.fpvclub.pporadar'" _ppo/out/AAPT_BADGING.txt
+          grep -q "versionCode='34'" _ppo/out/AAPT_BADGING.txt
+          grep -q "versionName='0.3.0-dev.10'" _ppo/out/AAPT_BADGING.txt
+          unzip -l "$APK" | tee _ppo/out/APK_CONTENTS.txt
+          grep -q "assets/web/index.html" _ppo/out/APK_CONTENTS.txt
+          grep -q "assets/web/vendor/maplibre-gl.mjs" _ppo/out/APK_CONTENTS.txt
+          grep -q "assets/web/vendor/pmtiles.js" _ppo/out/APK_CONTENTS.txt
+          unzip -p "$APK" assets/web/src/app.js > _ppo/out/PACKAGED_APP_JS.txt
+          grep -q "const initHelpRegistry" _ppo/out/PACKAGED_APP_JS.txt
+          grep -q "nativeRuntime.markAppReady" _ppo/out/PACKAGED_APP_JS.txt
+          cp "$APK" "_ppo/out/PPO_RADAR_v0.3.0-dev.10-debug.apk"
+          sha256sum "_ppo/out/PPO_RADAR_v0.3.0-dev.10-debug.apk" | tee _ppo/out/APK_SHA256.txt
+          {
+            echo "version=0.3.0-dev.10"
+            echo "version_code=33"
+            echo "recovery_tests=PASS"
+            echo "packaged_web_gate=PASS"
+            echo "android_build=PASS"
+            echo "zipalign=PASS"
+            echo "apksigner=PASS"
+            echo "aapt_badging=PASS"
+            echo "apk_content_gate=PASS"
+            echo "phone_install=PENDING"
+            echo "phone_runtime=PENDING"
+          } > _ppo/out/BUILD_RESULT.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ppo-radar-v0.3.0-dev.10-debug
+          path: _ppo/out/*
+          retention-days: 30
