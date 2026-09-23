@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter APK v0.1.8-dev.1
+name: Mesh Messenger Flutter APK v0.1.8-dev.2
 
 on:
   push:
@@ -26,8 +26,8 @@ jobs:
           echo '91f7039be42d85697600e2e59f9466249c3b851a0a53b21a74dc28f6a0866b42  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
           BASE=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.7-dev.3
-          base64 -d .ci/mesh-v018/overlay_exact.b64 | gzip -d > /tmp/mesh-src/v018.patch
-          echo '86c8f08a841bce30be1ff80e1177e436ab60f1b85bdb3b7ebcbb711cae1033f3  /tmp/mesh-src/v018.patch' | sha256sum -c -
+          base64 -d .ci/mesh-v018/overlay_dev2_exact.b64 | gzip -d > /tmp/mesh-src/v018.patch
+          echo 'a6aff70bd8991d9bc6d896f2e2f2e583c6eb14dd6e8098e691b44687a1976cc6  /tmp/mesh-src/v018.patch' | sha256sum -c -
           cd "$BASE"
           patch -p0 < /tmp/mesh-src/v018.patch
           echo "APP_DIR=$BASE/flutter_app" >> "$GITHUB_ENV"
@@ -88,15 +88,15 @@ jobs:
         run: |
           set -euo pipefail
           test -s build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.8-dev.1-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.8-dev.1-debug.apk | tee /tmp/MeshMessenger-Flutter-v0.1.8-dev.1-debug.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk | tee /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk.sha256
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.8-dev.1-debug
+          name: MeshMessenger-Flutter-v0.1.8-dev.2-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.8-dev.1-debug.apk
-            /tmp/MeshMessenger-Flutter-v0.1.8-dev.1-debug.apk.sha256
+            /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk
+            /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk.sha256
           if-no-files-found: error
           retention-days: 14
