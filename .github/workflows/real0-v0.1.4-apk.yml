@@ -49,8 +49,10 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager             "platform-tools"             "platforms;android-${ANDROID_API}"             "build-tools;${ANDROID_BUILD_TOOLS}"
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          test -x "${SDKMANAGER}"
+          yes | "${SDKMANAGER}" --licenses >/dev/null || true
+          "${SDKMANAGER}" "platform-tools" "platforms;android-${ANDROID_API}" "build-tools;${ANDROID_BUILD_TOOLS}"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -61,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          gradle --no-daemon -p "${PROJECT_DIR}" wrapper             --gradle-version "${GRADLE_VERSION}"             --distribution-type bin
+          gradle --no-daemon -p "${PROJECT_DIR}" wrapper --gradle-version "${GRADLE_VERSION}" --distribution-type bin
           chmod +x "${PROJECT_DIR}/gradlew"
           "${PROJECT_DIR}/gradlew" -p "${PROJECT_DIR}" --no-daemon --version
 
@@ -69,7 +71,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          "${PROJECT_DIR}/gradlew" -p "${PROJECT_DIR}"             --no-daemon             --stacktrace             :core:coreSmoke             :app:clean             :app:assembleDebug
+          "${PROJECT_DIR}/gradlew" -p "${PROJECT_DIR}" --no-daemon --stacktrace :core:coreSmoke :app:clean :app:assembleDebug
 
       - name: Verify APK
         shell: bash
