@@ -1,47 +1,24 @@
-# Real-0 Android Tracker Lab v0.1.4
+# Real-0 Android Tracker Lab v0.1.5
 
-Native Android camera/video tracking bench with a shared pure-Kotlin production core.
+Corrective build after v0.1.4 compiled but failed real phone tracking.
 
-## Current architecture
+## Root causes fixed
+- CAMERA display and tracker now use the same rotated ImageAnalysis frame; the separate PreviewView transform was removed.
+- CameraX RGBA rowStride/padding is handled before crop/rotation.
+- The shared core again follows the Real-0 v0.4 supervisor design: multi-scale local search, guarded target model, QualityGate, prediction, LOST/SEARCHING, and full-frame reacquire with two-frame confirmation.
+- Android analysis is reduced to 320 px width and converted with bulk getPixels(), rather than repeated Bitmap.getPixel() on full-resolution frames.
+- QUICK/PRECISE LOCK freezes the exact displayed frame before tracker init.
 
-- Android shell: CameraX live camera + local video through Storage Access Framework / MediaMetadataRetriever.
-- Manual target selection: QUICK LOCK / PRECISE LOCK.
-- Shared tracking core: `core/NccTrackerCore`, independent from Android UI and CameraX.
-- Android adapter: `BitmapGrayFrame` converts `Bitmap` to the shared `GrayFrame` contract.
-- Synthetic replay: `core/src/test/.../ReplaySmoke.kt` runs the same production core on the JVM.
-- Tracking output: TRACKING / UNCERTAIN / LOST, measured box, predicted box, quality and processing time.
-- Local-only runtime; no network dependency.
+## Core smoke
+The JVM replay now covers:
+1. fast translation;
+2. scale change;
+3. occlusion to LOST/SEARCHING;
+4. far reappearance and full-frame reacquire;
+5. reset to IDLE.
 
-Package: `club.fpv.real0.trackerlab`
-Version: `0.1.4` / versionCode `5`
+Version: 0.1.5
+Version code: 6
+Package: club.fpv.real0.trackerlab
 
-## Operator behavior
-
-- QUICK/PRECISE LOCK is one-shot: after one lock gesture normal touches do not re-lock.
-- RESET clears the current target and cancels pending lock.
-- VIDEO pauses while the operator selects the target.
-- VIDEO initializes the tracker on the frame actually displayed when ROI is selected.
-
-## Build / tests
-
-Core smoke:
-```
-gradle --no-daemon -p android/real0-tracker-lab-v0.1 :core:coreSmoke
-```
-
-Android debug APK:
-```
-gradle --no-daemon -p android/real0-tracker-lab-v0.1 :core:coreSmoke :app:assembleDebug
-```
-
-CI workflow: `.github/workflows/real0-android-apk.yml`.
-The workflow must pass `:core:coreSmoke` before APK assembly and then verify ZIP integrity, zipalign, APK signature, package ID, SHA-256 and build provenance.
-
-## Gates
-
-- CORE_PASS: available through the shared JVM replay smoke.
-- ANDROID_BUILD_PASS: pending while GitHub Actions runner fails before the first step.
-- PHONE_PASS: pending for exact v0.1.4 APK.
-- HELP_REGISTRY_PASS: pending; the current HELP dialog is temporary.
-
-Do not add ReacquireManager until the exact v0.1.4 Android baseline has passed build and phone smoke.
+v0.1.4 remains build-valid but PHONE_FAIL and is not a runtime baseline.
