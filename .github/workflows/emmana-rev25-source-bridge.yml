@@ -1,0 +1,24 @@
+name: EMMana rev25 source bridge
+on:
+  push:
+    branches: [ emmana-next-alpha20 ]
+    paths:
+      - '.github/workflows/emmana-rev25-source-bridge.yml'
+jobs:
+  bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Fetch exact rev25 source from Dropbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 2 'https://uc0f5b7a691c5298c003f1ad132e.dl.dropboxusercontent.com/cd/0/get/DIoNX0IuFkCdfRKJZNpx3GJLHXgq1i19xXe7PWc4g3mEnPjY_-Hcazouq0WanYEGs3nkyBUuSyWRwl-2P0Ze9-9_i6va7mtBndEOZ5_AWMzfqc61p1rYKKIgE03vSG6yHS6pyShCQyPEalRNdzRLsUVgusF9gCvXEfoLzScXvjb-IQ/file?c_luid=cfbe8875' -o rev25-source.zip
+          echo '31c19421cc8088bbc0ed52a8ca7455a485f795ddad7a8eb0a6002d102b38c6d5  rev25-source.zip' | sha256sum -c -
+      - name: Upload exact rev25 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-rev25-source-bridge
+          path: rev25-source.zip
+          if-no-files-found: error
+          retention-days: 1
