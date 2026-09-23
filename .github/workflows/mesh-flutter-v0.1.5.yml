@@ -22,7 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/mesh-src
-          curl -L --fail --retry 2 -o /tmp/mesh-src/source.zip 'https://uc356c37957bb735b3a3526858d0.dl.dropboxusercontent.com/cd/0/get/DIqSmSDPV9IX7TlgFOIyYkh9l0_0mdhy1gnOFRJaAz2lAUNyt6p2azfuhO5HDpyHYfmUhAx0PhAcAqtDyTOKeucn_af5xGTJvZkvu7BStBuMh98xfH2uwdawFlK2xp8stdFOaNlZHrfHR3JJXmrDc_cb1-soBHZtbmJ34bkgER62cg/file?c_luid=cfbe8875'
+          base64 -d .ci/mesh-v018/baseline_v017_source.zip.b64 > /tmp/mesh-src/source.zip
           echo '91f7039be42d85697600e2e59f9466249c3b851a0a53b21a74dc28f6a0866b42  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
           BASE=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.7-dev.3
