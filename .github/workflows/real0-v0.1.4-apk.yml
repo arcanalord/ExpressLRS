@@ -12,9 +12,8 @@ permissions:
   contents: read
 
 env:
-  SOURCE_REPO: https://github.com/arcanalord/fpv-club-site.git
   SOURCE_SHA: 76148ffec872cb5b2f8cc1e463ca3e2f0d900492
-  PROJECT_DIR: source/android/real0-tracker-lab-v0.1
+  PROJECT_DIR: tools/real0-tracker-lab-v0.1
   ANDROID_API: '36'
   ANDROID_BUILD_TOOLS: '36.0.0'
   GRADLE_VERSION: '8.13'
@@ -29,15 +28,14 @@ jobs:
       - name: Checkout LRS build branch
         uses: actions/checkout@v4
 
-      - name: Fetch exact Real0 source
+      - name: Verify imported Real0 source
         shell: bash
         run: |
           set -euxo pipefail
-          git clone --filter=blob:none --no-checkout "${SOURCE_REPO}" source
-          git -C source sparse-checkout init --cone
-          git -C source sparse-checkout set android/real0-tracker-lab-v0.1
-          git -C source checkout "${SOURCE_SHA}"
-          test "$(git -C source rev-parse HEAD)" = "${SOURCE_SHA}"
+          test -f "${PROJECT_DIR}/app/build.gradle"
+          test -f "${PROJECT_DIR}/core/src/main/kotlin/club/fpv/real0/core/TrackerCore.kt"
+          grep -q "versionName '0.1.4'" "${PROJECT_DIR}/app/build.gradle"
+          grep -q "versionCode 5" "${PROJECT_DIR}/app/build.gradle"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
