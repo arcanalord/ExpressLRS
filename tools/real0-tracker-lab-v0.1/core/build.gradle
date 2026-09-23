@@ -1,0 +1,9 @@
+plugins { id 'org.jetbrains.kotlin.jvm' }
+
+kotlin { jvmToolchain(17) }
+
+tasks.register('coreSmoke', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'club.fpv.real0.core.ReplaySmokeKt'
+}
