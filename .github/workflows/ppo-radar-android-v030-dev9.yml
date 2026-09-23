@@ -20,7 +20,7 @@ env:
   VERSION_NAME: "0.3.0-dev.9"
   VERSION_CODE: "33"
   GRADLE_VERSION: "8.10.2"
-  BASE_PROJECT_URL: "https://ucb09e81d8cac81807841302367d.dl.dropboxusercontent.com/cd/0/get/DIo4ntXRuZanX_5Ws59xJ0LENx5NP9u8U-kh6i3-v2_94LNyed0X4MTKzW39EQX-iysNeF0oVj4l7fTrBVxKVdC-FBNYDYEEEkw3k8wmXRKL8wqxnXormX-jLp1FT5MVn5mJ93CkpX8YfPp-uu6MR-CMRLC01txDeTvmnBMSCMPr6w/file?c_luid=cfbe8875"
+  BASE_PROJECT_URL: "https://uccbd570cfd1ad5e3d1e61935f90.dl.dropboxusercontent.com/cd/0/get/DIoAh-jDKTi7PXmH_53rHx04lAy7TtG0BkfdxgKyETi9vodLVE9dfFVy1Zu5x7jI5Y9BgiURGO2IhR_vi56xKIMjGmpPKxjv8PWhO-2e5gJi__H_UkYcFz5rOGr91BXWppT-2j0BxdBIIAikOtvQmQLIvg9WaN6OATi0ywMBMX004Q/file?c_luid=cfbe8875"
 
 jobs:
   build:
@@ -90,7 +90,7 @@ jobs:
                   p.write_text(s, encoding='utf-8')
           p = root / 'styles.css'
           if p.exists():
-              s = p.read_text(encoding='utf-8').replace('v0.2.6 mobile shell + no-overlap release gate','v0.3.0-dev.9 mobile shell + no-overlap release gate').replace('v0.3.0-dev.7 mobile shell + no-overlap release gate','v0.3.0-dev.9 mobile shell + no-overlap release gate')
+              s = p.read_text(encoding='utf-8').replace('v0.2.6 mobile shell + no-overlap release gate','v0.3.0-dev.9 mobile shell + no-overlap release gate').replace('v0.3.0-dev.7 mobile shell + no-overlap release gate','v0.3.0-dev.9 mobile shell + no-overlap release gate').replace('v0.3.0-dev.8 mobile shell + no-overlap release gate','v0.3.0-dev.9 mobile shell + no-overlap release gate')
               p.write_text(s, encoding='utf-8')
           p = root / 'tests/version.test.js'
           if p.exists():
@@ -101,8 +101,8 @@ jobs:
           if p.exists():
               s = p.read_text(encoding='utf-8')
               s = s.replace('0.3.0-dev.5','0.3.0-dev.9')
-              s = s.replace(r'0\.3\.0-dev\.5', r'0\.3\.0-dev\.8').replace(r'0\.3\.0-dev\.7', r'0\.3\.0-dev\.8')
-              s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.8/').replace(r'/runtime v0\.3\.0-dev\.7/', r'/runtime v0\.3\.0-dev\.8/')
+              s = s.replace(r'0\.3\.0-dev\.5', r'0\.3\.0-dev\.9').replace(r'0\.3\.0-dev\.7', r'0\.3\.0-dev\.9').replace(r'0\.3\.0-dev\.8', r'0\.3\.0-dev\.9')
+              s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.9/').replace(r'/runtime v0\.3\.0-dev\.7/', r'/runtime v0\.3\.0-dev\.9/').replace(r'/runtime v0\.3\.0-dev\.8/', r'/runtime v0\.3\.0-dev\.9/')
               p.write_text(s, encoding='utf-8')
           PY
           node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
