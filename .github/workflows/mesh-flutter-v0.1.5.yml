@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter APK v0.1.8-dev.3
+name: Mesh Messenger Flutter Android v0.1.9-dev.1
 
 on:
   push:
@@ -6,26 +6,26 @@ on:
       - build/mesh-flutter-v0.1.5
     paths:
       - '.github/workflows/mesh-flutter-v0.1.5.yml'
-      - '.ci/mesh-v018/**'
+      - '.ci/mesh-v019/**'
   workflow_dispatch:
 
 jobs:
-  build-apk:
+  build-android:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct exact v0.1.8-dev.3 source
+      - name: Reconstruct exact v0.1.9-dev.1 source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/mesh-src
-          base64 -d .ci/mesh-v018/source_v018_dev3.zip.b64 > /tmp/mesh-src/source.zip
-          echo 'a7ffe62465fbdebc1a94e65376ed629d9c2b173f8281742c4799bc1559b1a158  /tmp/mesh-src/source.zip' | sha256sum -c -
+          base64 -d .ci/mesh-v019/source_v019_dev1.zip.b64 > /tmp/mesh-src/source.zip
+          echo 'a7987091849c8c5fc258512f476a0d4be11271860341c1c692599a06f7b29bf6  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
-          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.8-dev.3/flutter_app" >> "$GITHUB_ENV"
+          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.9-dev.1/flutter_app" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
         uses: subosito/flutter-action@v2
@@ -75,31 +75,43 @@ jobs:
         run: |
           set -euo pipefail
           grep -q "Автоматический маршрут" lib/src/features/connection/connection_page.dart
-          grep -q "Локальная сеть" lib/src/features/connection/connection_page.dart
-          grep -q "EP2 / SX1280" lib/src/features/connection/connection_page.dart
-          grep -q "Meshtastic BLE" lib/src/features/connection/connection_page.dart
-          grep -q "ExpansionTile" lib/src/features/connection/connection_page.dart
-          grep -q "В контакты" lib/src/features/connection/connection_page.dart
+          grep -q "UDP DISCOVER" lib/src/features/connection/connection_page.dart
+          grep -q "PRESENCE" lib/src/features/connection/connection_page.dart
+          grep -q "Проверить связь" lib/src/features/connection/connection_page.dart
+          grep -q "ключи не проверены" lib/src/features/connection/connection_page.dart
+          grep -q "Добавить контакт" lib/src/features/connection/connection_page.dart
 
-      - name: Build debug APK
+      - name: Build release APKs per ABI
         working-directory: ${{ env.APP_DIR }}
-        run: flutter build apk --debug
+        run: flutter build apk --release --split-per-abi
 
-      - name: Verify APK
+      - name: Verify and measure release APKs
         working-directory: ${{ env.APP_DIR }}
         shell: bash
         run: |
           set -euo pipefail
-          test -s build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk | tee /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk.sha256
+          OUT=build/app/outputs/flutter-apk
+          for f in             "$OUT/app-arm64-v8a-release.apk"             "$OUT/app-armeabi-v7a-release.apk"             "$OUT/app-x86_64-release.apk"; do
+            test -s "$f"
+            sha256sum "$f"
+            stat -c '%n %s bytes' "$f"
+          done
+          cp "$OUT/app-arm64-v8a-release.apk" /tmp/MeshMessenger-Flutter-v0.1.9-dev.1-arm64-v8a-release.apk
+          cp "$OUT/app-armeabi-v7a-release.apk" /tmp/MeshMessenger-Flutter-v0.1.9-dev.1-armeabi-v7a-release.apk
+          cp "$OUT/app-x86_64-release.apk" /tmp/MeshMessenger-Flutter-v0.1.9-dev.1-x86_64-release.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.9-dev.1-*-release.apk > /tmp/SHA256SUMS-v0.1.9-dev.1.txt
+          stat -c '%n %s' /tmp/MeshMessenger-Flutter-v0.1.9-dev.1-*-release.apk > /tmp/SIZES-v0.1.9-dev.1.txt
+          cat /tmp/SIZES-v0.1.9-dev.1.txt
 
-      - name: Upload APK artifact
+      - name: Upload release APKs
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.8-dev.3-debug
+          name: MeshMessenger-Flutter-v0.1.9-dev.1-release-apks
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk
-            /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk.sha256
+            /tmp/MeshMessenger-Flutter-v0.1.9-dev.1-arm64-v8a-release.apk
+            /tmp/MeshMessenger-Flutter-v0.1.9-dev.1-armeabi-v7a-release.apk
+            /tmp/MeshMessenger-Flutter-v0.1.9-dev.1-x86_64-release.apk
+            /tmp/SHA256SUMS-v0.1.9-dev.1.txt
+            /tmp/SIZES-v0.1.9-dev.1.txt
           if-no-files-found: error
           retention-days: 14
