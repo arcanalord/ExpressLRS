@@ -420,7 +420,7 @@ jobs:
           sha256sum "_ppo/out/PPO_RADAR_v0.3.0-dev.9-debug.apk" | tee _ppo/out/APK_SHA256.txt
           {
             echo "version=0.3.0-dev.9"
-            echo "version_code=31"
+            echo "version_code=33"
             echo "recovery_tests=PASS"
             echo "packaged_web_gate=PASS"
             echo "android_build=PASS"
