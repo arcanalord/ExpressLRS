@@ -6,6 +6,7 @@ on:
     branches:
       - ci/real0-v0.1.5-apk
     paths:
+      - 'tools/real0-tracker-lab-v0.1/**'
       - '.github/workflows/real0-v0.1.5-apk.yml'
 
 permissions:
