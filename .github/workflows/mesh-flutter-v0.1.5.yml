@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter APK v0.1.8-dev.2
+name: Mesh Messenger Flutter APK v0.1.8-dev.3
 
 on:
   push:
@@ -17,15 +17,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reconstruct exact v0.1.8-dev.2 source
+      - name: Reconstruct exact v0.1.8-dev.3 source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/mesh-src
-          base64 -d .ci/mesh-v018/source_v018_dev2.zip.b64 > /tmp/mesh-src/source.zip
-          echo '616b68ed14c3fe39cc26fbe5a466fa7d44d9936a3bcaafe5ae54614b69233610  /tmp/mesh-src/source.zip' | sha256sum -c -
+          base64 -d .ci/mesh-v018/source_v018_dev3.zip.b64 > /tmp/mesh-src/source.zip
+          echo 'a7ffe62465fbdebc1a94e65376ed629d9c2b173f8281742c4799bc1559b1a158  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
-          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.8-dev.2/flutter_app" >> "$GITHUB_ENV"
+          echo "APP_DIR=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.8-dev.3/flutter_app" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
         uses: subosito/flutter-action@v2
@@ -83,15 +83,15 @@ jobs:
         run: |
           set -euo pipefail
           test -s build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk | tee /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk.sha256
+          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk | tee /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk.sha256
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.8-dev.2-debug
+          name: MeshMessenger-Flutter-v0.1.8-dev.3-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk
-            /tmp/MeshMessenger-Flutter-v0.1.8-dev.2-debug.apk.sha256
+            /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk
+            /tmp/MeshMessenger-Flutter-v0.1.8-dev.3-debug.apk.sha256
           if-no-files-found: error
           retention-days: 14
