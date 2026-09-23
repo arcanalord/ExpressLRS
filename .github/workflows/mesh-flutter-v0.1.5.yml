@@ -26,7 +26,7 @@ jobs:
           echo '91f7039be42d85697600e2e59f9466249c3b851a0a53b21a74dc28f6a0866b42  /tmp/mesh-src/source.zip' | sha256sum -c -
           unzip -q /tmp/mesh-src/source.zip -d /tmp/mesh-src/unpacked
           BASE=/tmp/mesh-src/unpacked/mesh_messenger_flutter_v0.1.7-dev.3
-          base64 -d .ci/mesh-v018/overlay.patch.gz.b64 | gzip -d > /tmp/mesh-src/v018.patch
+          cat .ci/mesh-v018/parts/p00 .ci/mesh-v018/parts/p01 .ci/mesh-v018/parts/p02 .ci/mesh-v018/parts/p03 .ci/mesh-v018/parts/p04 .ci/mesh-v018/parts/p05 .ci/mesh-v018/parts/p06 | base64 -d | gzip -d > /tmp/mesh-src/v018.patch
           echo '86c8f08a841bce30be1ff80e1177e436ab60f1b85bdb3b7ebcbb711cae1033f3  /tmp/mesh-src/v018.patch' | sha256sum -c -
           cd "$BASE"
           patch -p0 < /tmp/mesh-src/v018.patch
