@@ -294,7 +294,7 @@ private class TargetModelCore {
 
     fun score(desc: FloatArray): Float {
         if (adaptive.isEmpty()) return -1f
-        return maxOf(ncc(anchor, desc), ncc(stable, desc), ncc(adaptive, desc))
+        return maxOf(appearanceScore(anchor, desc), appearanceScore(stable, desc), appearanceScore(adaptive, desc))
     }
 
     fun update(desc: FloatArray, score: Float) {
@@ -336,6 +336,16 @@ private fun descriptor(frame: GrayFrame, b: BoxF): FloatArray? {
         }
     }
     return out
+}
+
+private fun appearanceScore(a: FloatArray, b: FloatArray): Float {
+    if (a.size != b.size || a.isEmpty()) return -1f
+    val structural = ncc(a, b)
+    var mad = 0f
+    for (i in a.indices) mad += kotlin.math.abs(a[i] - b[i])
+    mad /= a.size
+    val absolute = (1f - mad / 0.35f).coerceIn(-1f, 1f)
+    return 0.72f * structural + 0.28f * absolute
 }
 
 private fun ncc(a: FloatArray, b: FloatArray): Float {
