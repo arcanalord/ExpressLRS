@@ -53,7 +53,7 @@ jobs:
           ROOT="$GITHUB_WORKSPACE/_v1512/src"
           node --check "$ROOT/src/app.js"
           node --check "$ROOT/src/help-registry.js"
-          node --check "$ROOT/src/transports/android-external-radio.js"
+          node --check "$ROOT/src/transports/external-radio/android-external-radio.js"
           node --check "$ROOT/src/transports/external-radio/mm-uart-codec.js"
           node "$ROOT/tests/core.test.mjs"
           node "$ROOT/tests/m02_real_queue_integration.test.mjs"
