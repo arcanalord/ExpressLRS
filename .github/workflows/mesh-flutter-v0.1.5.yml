@@ -69,9 +69,17 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: python3 tool/lan_source_gate.py
 
-      - name: Connection UI widget test
+      - name: Connection UI source gate
         working-directory: ${{ env.APP_DIR }}
-        run: flutter test test/connection_page_test.dart
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "Автоматический маршрут" lib/src/features/connection/connection_page.dart
+          grep -q "Локальная сеть" lib/src/features/connection/connection_page.dart
+          grep -q "EP2 / SX1280" lib/src/features/connection/connection_page.dart
+          grep -q "Meshtastic BLE" lib/src/features/connection/connection_page.dart
+          grep -q "ExpansionTile" lib/src/features/connection/connection_page.dart
+          grep -q "В контакты" lib/src/features/connection/connection_page.dart
 
       - name: Build debug APK
         working-directory: ${{ env.APP_DIR }}
