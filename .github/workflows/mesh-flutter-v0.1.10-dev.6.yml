@@ -9,6 +9,10 @@ on:
       - '.ci/mesh-v0110/dev5-overlay/**'
   workflow_dispatch:
 
+concurrency:
+  group: mesh-flutter-v0.1.10-dev.6
+  cancel-in-progress: true
+
 jobs:
   build-android:
     runs-on: ubuntu-latest
