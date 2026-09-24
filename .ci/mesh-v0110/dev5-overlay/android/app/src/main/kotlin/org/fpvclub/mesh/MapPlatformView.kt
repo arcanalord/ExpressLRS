@@ -191,6 +191,9 @@ private class MapPlatformView(
 
     inner class JsBridge {
         @JavascriptInterface
+        fun sourceMode(): String = packageStore.sourceMode()
+
+        @JavascriptInterface
         fun readPmtiles(offsetText: String, lengthText: String): String {
             val file = packageStore.activeFile() ?: return ""
             val offset = offsetText.toLongOrNull() ?: return ""
