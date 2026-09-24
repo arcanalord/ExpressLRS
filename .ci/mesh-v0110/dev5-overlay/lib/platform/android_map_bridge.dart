@@ -26,6 +26,26 @@ final class OfflineMapPackage {
       );
 }
 
+final class MapSourceState {
+  const MapSourceState({
+    required this.mode,
+    required this.selectedId,
+    required this.hasOffline,
+  });
+
+  final String mode;
+  final String? selectedId;
+  final bool hasOffline;
+
+  bool get isOffline => mode == 'offline';
+
+  factory MapSourceState.fromMap(Map<Object?, Object?> raw) => MapSourceState(
+        mode: raw['mode'] as String? ?? 'online',
+        selectedId: raw['selectedId'] as String?,
+        hasOffline: raw['hasOffline'] == true,
+      );
+}
+
 final class AndroidMapPackagesBridge {
   static const _channel = MethodChannel('org.fpvclub.mesh/maps');
 
@@ -39,6 +59,45 @@ final class AndroidMapPackagesBridge {
         .whereType<Map>()
         .map((item) => OfflineMapPackage.fromMap(item.cast<Object?, Object?>()))
         .toList();
+  }
+
+  Future<MapSourceState> sourceState() async {
+    if (!supported) {
+      return const MapSourceState(
+        mode: 'online',
+        selectedId: null,
+        hasOffline: false,
+      );
+    }
+    final raw = await _channel.invokeMapMethod<Object?, Object?>('sourceState');
+    return raw == null
+        ? const MapSourceState(
+            mode: 'online',
+            selectedId: null,
+            hasOffline: false,
+          )
+        : MapSourceState.fromMap(raw);
+  }
+
+  Future<MapSourceState> setSourceMode(String mode) async {
+    if (!supported) {
+      return MapSourceState(
+        mode: mode,
+        selectedId: null,
+        hasOffline: false,
+      );
+    }
+    final raw = await _channel.invokeMapMethod<Object?, Object?>(
+      'setSourceMode',
+      {'mode': mode},
+    );
+    return raw == null
+        ? MapSourceState(
+            mode: mode,
+            selectedId: null,
+            hasOffline: false,
+          )
+        : MapSourceState.fromMap(raw);
   }
 
   Future<OfflineMapPackage?> importPackage() async {
