@@ -53,6 +53,11 @@ final class Ep2IncomingText extends Ep2TransportEvent {
   final String text;
 }
 
+final class Ep2RawBytesEvent extends Ep2TransportEvent {
+  const Ep2RawBytesEvent(this.bytes);
+  final Uint8List bytes;
+}
+
 final class Ep2OtaReadyEvent extends Ep2TransportEvent {
   const Ep2OtaReadyEvent({
     required this.ssid,
@@ -220,6 +225,7 @@ final class Ep2UartTransport implements MessageTransport {
       return;
     }
     if (event is AndroidUsbSerialBytes) {
+      _events.add(Ep2RawBytesEvent(Uint8List.fromList(event.bytes)));
       _ingest(event.bytes);
     }
   }
