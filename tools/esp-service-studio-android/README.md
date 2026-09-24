@@ -36,5 +36,6 @@ The v0.5 dependency changes are isolated in one release so hardware behavior can
 - normalizes the detected physical flash size and checks every image end address before the first write;
 - aborts preflight with `IMAGE_OUT_OF_FLASH` / `PREFLIGHT_FAIL` if a selected binary would extend beyond the detected flash;
 - emits `FLASH_BOUNDS_OK` when the full image set fits, and `FLASH_BOUNDS_UNKNOWN` when the chip does not report a usable size.
+- keeps `usb-serial-for-android 3.11.0`, but excludes its `androidx.annotation 1.10.0` transitive dependency and pins `androidx.annotation 1.8.2` so the pinned Kotlin 1.9.22 / AGP 8.2.2 toolchain can compile the APK.
 
 Hardware validation remains required on Pixel 7a with CH340/CH341 and native USB ESP32-C3/S3 before marking PHONE_PASS.

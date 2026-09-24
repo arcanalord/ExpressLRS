@@ -770,8 +770,11 @@ gradle = gradle_path.read_text(encoding="utf-8")
 gradle = replace_once(
     gradle,
     "implementation 'com.github.mik3y:usb-serial-for-android:3.7.3'",
-    "implementation 'com.github.mik3y:usb-serial-for-android:3.11.0'",
-    "usb-serial-for-android 3.11.0",
+    "implementation('com.github.mik3y:usb-serial-for-android:3.11.0') {\n"
+    "    exclude group: 'androidx.annotation', module: 'annotation'\n"
+    "}\n"
+    "implementation 'androidx.annotation:annotation:1.8.2'",
+    "usb-serial-for-android 3.11.0 with Kotlin-compatible annotation",
 )
 gradle_path.write_text(gradle, encoding="utf-8")
 

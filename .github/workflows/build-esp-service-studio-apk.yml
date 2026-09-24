@@ -50,6 +50,7 @@ jobs:
           grep -q "Android.usbVendorId()" upstream/app/src/main/assets/flash.html
           grep -q "IMAGE_OUT_OF_FLASH" upstream/app/src/main/assets/flash.html
           grep -q "FLASH_BOUNDS_OK" upstream/app/src/main/assets/flash.html
+          grep -q "androidx.annotation:annotation:1.8.2" upstream/app/build.gradle
 
       - name: Bundle esptool-js 0.7.0
         shell: bash
