@@ -301,28 +301,33 @@ html = replace_once(
     "  btn.disabled = true;\n"
     "  openLog();\n"
     "  let session = null;\n"
+    "  let stage = 'ROM_SYNC';\n"
     "  try {\n"
     "    log(t().probeStart, 'info');\n"
+    "    diag('ROM_SYNC', t().syncing, 'info');\n"
     "    session = await openChip(false);\n"
+    "    diag('ROM_SYNC_OK', session.chip, 'ok');\n"
     "    log(t().chip(session.chip), 'ok');\n"
-    "    try {\n"
-    "      const fid = await session.loader.readFlashId();\n"
-    "      const fidText = '0x' + Number(fid).toString(16).padStart(6, '0');\n"
-    "      log(t().flashId(fidText), 'ok');\n"
-    "    } catch (e) {\n"
-    "      log(t().error(e.message), 'err');\n"
-    "    }\n"
+    "    stage = 'FLASH_ID';\n"
+    "    const fid = await session.loader.readFlashId();\n"
+    "    const fidText = '0x' + Number(fid).toString(16).padStart(6, '0');\n"
+    "    log(t().flashId(fidText), 'ok');\n"
+    "    diag('FLASH_ID_OK', fidText, 'ok');\n"
     "    try {\n"
     "      const size = session.loader.detectFlashSize ? await session.loader.detectFlashSize() : undefined;\n"
     "      log(size ? t().flashSize(size) : t().flashSizeUnknown, size ? 'ok' : 'info');\n"
-    "    } catch (_) {\n"
+    "      if (size) diag('FLASH_SIZE_OK', size, 'ok');\n"
+    "    } catch (e) {\n"
+    "      diag('FLASH_SIZE_UNKNOWN', String(e?.message || e), 'info');\n"
     "      log(t().flashSizeUnknown, 'info');\n"
     "    }\n"
     "    document.getElementById('usbStatus').textContent = t().probeReady(session.chip);\n"
+    "    diag('DEVICE_READY', session.chip, 'ok');\n"
     "    log(t().probeSuccess, 'ok');\n"
     "  } catch (e) {\n"
+    "    diagError(stage, e);\n"
     "    log(t().probeFailed(e.message), 'err');\n"
-    "    log(t().bootHint, 'info');\n"
+    "    if (stage === 'ROM_SYNC') log(t().bootHint, 'info');\n"
     "    console.error(e);\n"
     "  } finally {\n"
     "    try { await session?.serialPort.close(); } catch(_) {}\n"
@@ -341,6 +346,69 @@ html = replace_once(
     "    validateRanges(fileArray);\n"
     "    setProgress(t().flashing, 10);\n",
     "partition preflight",
+)
+
+html = replace_once(
+    html,
+    "  let session = null;\n\n  try {\n    setProgress(t().syncing, 5);\n",
+    "  let session = null;\n"
+    "  let stage = 'ROM_SYNC';\n\n"
+    "  try {\n"
+    "    setProgress(t().syncing, 5);\n"
+    "    diag('ROM_SYNC', t().syncing, 'info');\n",
+    "flash stage start",
+)
+html = replace_once(
+    html,
+    "    session = await openChip(false);\n"
+    "    log(t().chip(session.chip), 'ok');\n\n"
+    "    const fileArray = loadParts();\n"
+    "    validateRanges(fileArray);\n"
+    "    setProgress(t().flashing, 10);\n",
+    "    session = await openChip(false);\n"
+    "    diag('ROM_SYNC_OK', session.chip, 'ok');\n"
+    "    log(t().chip(session.chip), 'ok');\n\n"
+    "    stage = 'PREFLIGHT';\n"
+    "    const fileArray = loadParts();\n"
+    "    validateRanges(fileArray);\n"
+    "    diag('PREFLIGHT_OK', fileArray.length + ' part(s)', 'ok');\n"
+    "    stage = 'WRITE';\n"
+    "    setProgress(t().flashing, 10);\n",
+    "flash stage transitions",
+)
+html = replace_once(
+    html,
+    "    setProgress(t().done, 100);\n"
+    "    log(t().success, 'ok');\n",
+    "    setProgress(t().done, 100);\n"
+    "    diag('WRITE_OK', totalBytes + ' B', 'ok');\n"
+    "    log(t().success, 'ok');\n",
+    "flash success diagnostic",
+)
+html = replace_once(
+    html,
+    "  } catch (e) {\n"
+    "    log(t().error(e.message), 'err');\n"
+    "    log(t().bootHint, 'info');\n"
+    "    console.error(e);\n"
+    "  } finally {\n"
+    "    try { await session?.serialPort.close(); } catch(_) {}\n"
+    "    btn.disabled = false;\n"
+    "  }\n"
+    "}\n\n"
+    "async function doErase() {\n",
+    "  } catch (e) {\n"
+    "    diagError(stage, e);\n"
+    "    log(t().error(e.message), 'err');\n"
+    "    if (stage === 'ROM_SYNC') log(t().bootHint, 'info');\n"
+    "    console.error(e);\n"
+    "  } finally {\n"
+    "    try { await session?.serialPort.close(); } catch(_) {}\n"
+    "    btn.disabled = false;\n"
+    "  }\n"
+    "}\n\n"
+    "async function doErase() {\n",
+    "flash error diagnostic",
 )
 
 html = replace_once(
