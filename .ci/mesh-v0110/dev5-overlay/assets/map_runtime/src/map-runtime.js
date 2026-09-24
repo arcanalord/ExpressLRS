@@ -18,23 +18,35 @@ function bridgeReady(){
 function emptyStyle(){
   return {version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#151a20'}}]};
 }
-function vectorStyle(sourceUrl){
-  return {version:8,sources:{basemap:{type:'vector',url:sourceUrl}},layers:[
-    {id:'background',type:'background',paint:{'background-color':'#eef2f4'}},
-    {id:'landcover',type:'fill',source:'basemap','source-layer':'landcover',paint:{'fill-color':'#dfe8dd','fill-opacity':0.72}},
-    {id:'landuse',type:'fill',source:'basemap','source-layer':'landuse',paint:{'fill-color':'#e7e1d5','fill-opacity':0.56}},
-    {id:'water',type:'fill',source:'basemap','source-layer':'water',paint:{'fill-color':'#a9cee5'}},
-    {id:'waterway',type:'line',source:'basemap','source-layer':'waterway',paint:{'line-color':'#91c3e2','line-width':1.2}},
-    {id:'buildings-v4',type:'fill',source:'basemap','source-layer':'buildings',minzoom:12,paint:{'fill-color':'#d7d2ca','fill-outline-color':'#c0bbb4'}},
-    {id:'buildings-legacy',type:'fill',source:'basemap','source-layer':'building',minzoom:12,paint:{'fill-color':'#d7d2ca','fill-outline-color':'#c0bbb4'}},
-    {id:'roads-v4-casing',type:'line',source:'basemap','source-layer':'roads',minzoom:6,paint:{'line-color':'#fff','line-width':['interpolate',['linear'],['zoom'],6,1.1,16,5.4]}},
-    {id:'roads-v4',type:'line',source:'basemap','source-layer':'roads',minzoom:6,paint:{'line-color':'#c3b9aa','line-width':['interpolate',['linear'],['zoom'],6,0.6,16,3.1]}},
-    {id:'roads-legacy-casing',type:'line',source:'basemap','source-layer':'transportation',minzoom:6,paint:{'line-color':'#fff','line-width':['interpolate',['linear'],['zoom'],6,1.1,16,5.4]}},
-    {id:'roads-legacy',type:'line',source:'basemap','source-layer':'transportation',minzoom:6,paint:{'line-color':'#c3b9aa','line-width':['interpolate',['linear'],['zoom'],6,0.6,16,3.1]}},
-    {id:'boundaries-v4',type:'line',source:'basemap','source-layer':'boundaries',paint:{'line-color':'#9aa5ad','line-width':0.8,'line-dasharray':[3,2]}},
-    {id:'boundaries-legacy',type:'line',source:'basemap','source-layer':'boundary',paint:{'line-color':'#9aa5ad','line-width':0.8,'line-dasharray':[3,2]}},
-    {id:'pois-v4',type:'circle',source:'basemap','source-layer':'pois',minzoom:12,paint:{'circle-radius':2.4,'circle-color':'#8b6f47','circle-opacity':0.75}}
-  ]};
+function vectorStyle(sourceUrl, layerNames=[]){
+  const names=new Set(layerNames||[]);
+  const pick=(...candidates)=>candidates.find(name=>names.has(name))||null;
+  const layers=[
+    {id:'background',type:'background',paint:{'background-color':'#eef2f4'}}
+  ];
+  const add=(layer)=>{ if(layer?.['source-layer']) layers.push(layer); };
+  const landcover=pick('landcover','land_cover');
+  const landuse=pick('landuse','land_use');
+  const water=pick('water','water_polygons');
+  const waterway=pick('waterway','waterways');
+  const buildings=pick('buildings','building');
+  const roads=pick('roads','transportation','road');
+  const boundaries=pick('boundaries','boundary');
+  const pois=pick('pois','poi');
+
+  add(landcover&&{id:'landcover',type:'fill',source:'basemap','source-layer':landcover,paint:{'fill-color':'#dfe8dd','fill-opacity':0.72}});
+  add(landuse&&{id:'landuse',type:'fill',source:'basemap','source-layer':landuse,paint:{'fill-color':'#e7e1d5','fill-opacity':0.56}});
+  add(water&&{id:'water',type:'fill',source:'basemap','source-layer':water,paint:{'fill-color':'#a9cee5'}});
+  add(waterway&&{id:'waterway',type:'line',source:'basemap','source-layer':waterway,paint:{'line-color':'#91c3e2','line-width':1.2}});
+  add(buildings&&{id:'buildings',type:'fill',source:'basemap','source-layer':buildings,minzoom:12,paint:{'fill-color':'#d7d2ca','fill-outline-color':'#c0bbb4'}});
+  if(roads){
+    layers.push({id:'roads-casing',type:'line',source:'basemap','source-layer':roads,minzoom:6,paint:{'line-color':'#fff','line-width':['interpolate',['linear'],['zoom'],6,1.1,16,5.4]}});
+    layers.push({id:'roads',type:'line',source:'basemap','source-layer':roads,minzoom:6,paint:{'line-color':'#c3b9aa','line-width':['interpolate',['linear'],['zoom'],6,0.6,16,3.1]}});
+  }
+  add(boundaries&&{id:'boundaries',type:'line',source:'basemap','source-layer':boundaries,paint:{'line-color':'#9aa5ad','line-width':0.8,'line-dasharray':[3,2]}});
+  add(pois&&{id:'pois',type:'circle',source:'basemap','source-layer':pois,minzoom:12,paint:{'circle-radius':2.4,'circle-color':'#8b6f47','circle-opacity':0.75}});
+
+  return {version:8,sources:{basemap:{type:'vector',url:sourceUrl}},layers};
 }
 function rasterStyle(tileUrl){
   return {version:8,sources:{basemap:{type:'raster',tiles:[tileUrl],tileSize:256}},layers:[
@@ -60,34 +72,58 @@ async function createMap(){
     window.maplibregl = maplibregl;
     const protocol = new window.pmtiles.Protocol({metadata:true});
     maplibregl.addProtocol('pmtiles', protocol.tile);
-    let style=emptyStyle(), center=[0,0], zoom=1, packageReady=false;
+    let style=emptyStyle(), center=[0,0], zoom=1, packageReady=false, mapMode='grid', mapError='';
     try {
       const url='https://app.local/offline/active.pmtiles';
       const archive=new window.pmtiles.PMTiles(url);
       protocol.add(archive);
       const header=await archive.getHeader();
-      center=[header.centerLon||0,header.centerLat||0]; zoom=header.centerZoom||Math.max(1,header.minZoom||1);
+      center=[header.centerLon||0,header.centerLat||0];
+      zoom=header.centerZoom||Math.max(1,header.minZoom||1);
       if(header.tileType===window.pmtiles.TileType.Mvt){
-        style=vectorStyle(`pmtiles://${url}`);
+        let layerNames=[];
+        try {
+          const metadata=await archive.getMetadata();
+          layerNames=(metadata?.vector_layers||[]).map(layer=>String(layer?.id||'')).filter(Boolean);
+        } catch (_) {}
+        style=vectorStyle(`pmtiles://${url}`,layerNames);
       } else {
         style=rasterStyle(`pmtiles://${url}/{z}/{x}/{y}`);
       }
       packageReady=true;
-    } catch (_) {}
+      mapMode='pmtiles';
+    } catch (e) {
+      mapError=String(e||'PMTiles error');
+      if(navigator.onLine!==false){
+        style=rasterStyle('https://tile.openstreetmap.org/{z}/{x}/{y}.png');
+        center=[0,0];
+        zoom=2;
+        mapMode='osm';
+      }
+    }
     map = new maplibregl.Map({container:'map',style,center,zoom,attributionControl:false,fadeDuration:0});
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),'bottom-right');
     map.on('load',()=>{
-      fallbackEl.style.display=packageReady?'none':'flex';
+      fallbackEl.style.display=mapMode==='grid'?'flex':'none';
       installPointLayer();
-      status(packageReady?'Офлайн PMTiles':'Сетка · карта не выбрана');
+      if(mapMode==='pmtiles') status('Офлайн PMTiles');
+      else if(mapMode==='osm') status('OSM · лёгкая карта');
+      else status('Локальная сетка');
       bridgeReady();
+    });
+    map.on('error',event=>{
+      if(mapMode==='pmtiles'){
+        mapError=String(event?.error?.message||event?.error||mapError||'Ошибка PMTiles');
+        status('Ошибка офлайн-карты');
+      }
     });
     map.on('styledata',()=>{pointSourceReady=false;installPointLayer();});
     map.on('click',e=>bridgeTap(e.lngLat.lat,e.lngLat.lng));
   } catch (e) {
     mapEl.style.display='none';
     fallbackEl.style.display='flex';
-    status('Сетка · MapLibre runtime не подготовлен');
+    fallbackEl.textContent='Карта недоступна. Точки и координаты продолжают работать.';
+    status('Локальная сетка');
     bridgeReady();
     fallbackEl.addEventListener('click', ev=>{
       const r=fallbackEl.getBoundingClientRect();
