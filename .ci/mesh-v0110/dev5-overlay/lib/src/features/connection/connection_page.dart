@@ -198,6 +198,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
                           icon: const Icon(Icons.info_outline),
                           label: const Text('INFO / STATS'),
                         ),
+                      if (controller.ep2Connected)
+                        FilledButton.tonalIcon(
+                          onPressed: controller.startEp2WifiUpdate,
+                          icon: const Icon(Icons.wifi_tethering_outlined),
+                          label: const Text('Wi-Fi обновление'),
+                        ),
                       if (ep2Active)
                         OutlinedButton.icon(
                           onPressed: controller.disconnectEp2,
@@ -220,6 +226,36 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       controller.ep2Error!,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                  if (controller.ep2OtaSsid != null) ...[
+                    const SizedBox(height: 10),
+                    Card(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Wi-Fi обновление готово',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 6),
+                            SelectableText(
+                              'Сеть: ' + (controller.ep2OtaSsid ?? '—'),
+                            ),
+                            SelectableText(
+                              'Пароль: ' + (controller.ep2OtaPassword ?? '—'),
+                            ),
+                            SelectableText(
+                              'Адрес: ' + (controller.ep2OtaUrl ?? 'http://10.0.0.1'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
