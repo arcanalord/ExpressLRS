@@ -81,11 +81,18 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: dart run tool/phoneapi_self_test.dart
 
+      - name: UART protocol self tests
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          dart run tool/radio_uart_probe_self_test.dart
+          dart run tool/mm_uart_1_self_test.dart
+
       - name: Source gates
         working-directory: ${{ env.APP_DIR }}
         run: |
           python3 tool/android_source_gate.py
           python3 tool/ep2_uart_source_gate.py
+          python3 tool/uart_diagnostics_source_gate.py
           python3 tool/lan_source_gate.py
           python3 tool/identity_source_gate.py
           python3 tool/map_source_gate.py
