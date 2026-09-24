@@ -113,6 +113,16 @@ final class MeshAppController extends ChangeNotifier {
   int? ep2LocalNode;
   String? ep2Firmware;
   String? ep2Profile;
+  String ep2Protocol = 'unknown';
+  int? ep2Baud;
+  int? ep2Rssi10;
+  int? ep2Snr10;
+  int? ep2RttMs;
+  int? ep2TxCount;
+  int? ep2RxCount;
+  int? ep2LossCount;
+  int? ep2RetryCount;
+  String? ep2PingResult;
   String? ep2OtaSsid;
   String? ep2OtaPassword;
   String? ep2OtaUrl;
@@ -993,6 +1003,11 @@ final class MeshAppController extends ChangeNotifier {
     if (bridge == null) return;
     try {
       ep2Devices = await bridge.devices();
+      for (final device in ep2Devices) {
+        _addEp2Log(
+          'USB id=${device.deviceId} vid=${device.vendorId.toRadixString(16).padLeft(4, '0')} pid=${device.productId.toRadixString(16).padLeft(4, '0')} driver=${device.driver} permission=${device.permission}',
+        );
+      }
       final status = await bridge.status();
       final state = status['state'] as String?;
       if (state != null && state.isNotEmpty && ep2State == 'unavailable') {
@@ -1011,14 +1026,17 @@ final class MeshAppController extends ChangeNotifier {
     if (ep2 == null || busy) return;
     busy = true;
     ep2Error = null;
-    notifyListeners();
-    try {
       ep2DetectedProtocol = 'detecting';
       ep2RxBytes = 0;
       ep2TxBytes = 0;
       ep2LastHex = '';
-      _addEp2Log('CONNECT USB device=$deviceId baud=115200');
-      await ep2.connect(deviceId);
+    ep2Protocol = 'unknown';
+    ep2Baud = null;
+    ep2PingResult = null;
+    notifyListeners();
+    try {
+      _addEp2Log('AUTO USB device=$deviceId');
+      await ep2.connectAuto(deviceId);
     } catch (error) {
       ep2Error = '$error';
       _addEp2Log('CONNECT ERROR $error');
@@ -1041,6 +1059,26 @@ final class MeshAppController extends ChangeNotifier {
     if (ep2 == null || !ep2Connected) return;
     await ep2.requestInfo();
     await ep2.requestStats();
+  }
+
+  Future<void> pingEp2Neighbor() async {
+    final ep2 = _ep2;
+    final local = ep2LocalNode;
+    if (ep2 == null || !ep2Connected || local == null) return;
+    final target = local == 1 ? 2 : 1;
+    ep2PingResult = 'PING узла $target…';
+    ep2Error = null;
+    notifyListeners();
+    try {
+      final elapsed = await ep2.ping(target);
+      ep2PingResult = 'Узел $target · ${elapsed.inMilliseconds} мс';
+      _addEp2Log('PING node=$target RTT=${elapsed.inMilliseconds}ms');
+    } catch (error) {
+      ep2PingResult = 'Узел $target · нет ответа';
+      ep2Error = '$error';
+      _addEp2Log('PING ERROR node=$target $error');
+    }
+    notifyListeners();
   }
 
   Future<void> startEp2WifiUpdate() async {
@@ -1086,8 +1124,26 @@ final class MeshAppController extends ChangeNotifier {
     if (event is Ep2StateEvent) {
       ep2State = event.state;
       ep2Error = event.error;
+      if (event.state == 'disconnected') {
+        ep2Protocol = 'unknown';
+        ep2Baud = null;
+        ep2PingResult = null;
+      }
       _addEp2Log(
         'STATE ${event.state}${event.error == null ? '' : ' | ${event.error}'}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is Ep2ProbeEvent) {
+      ep2Protocol = switch (event.protocol) {
+        RadioUartProtocol.ep2Link => 'EP2 LINK',
+        RadioUartProtocol.crsf => 'ELRS / CRSF',
+        RadioUartProtocol.unknown => 'Не определён',
+      };
+      ep2Baud = event.baudRate;
+      _addEp2Log(
+        'PROBE ${ep2Protocol} baud=${event.baudRate}${event.detail == null ? '' : ' | ${event.detail}'}',
       );
       notifyListeners();
       return;
@@ -1100,6 +1156,17 @@ final class MeshAppController extends ChangeNotifier {
       _addEp2Log(
         'INFO node=${event.nodeId} fw=${event.firmware} radio=${event.radioState} profile=${event.profile}',
       );
+      notifyListeners();
+      return;
+    }
+    if (event is Ep2StatsEvent) {
+      ep2Rssi10 = event.rssi10;
+      ep2Snr10 = event.snr10;
+      ep2RttMs = event.rttMs;
+      ep2TxCount = event.tx;
+      ep2RxCount = event.rx;
+      ep2LossCount = event.loss;
+      ep2RetryCount = event.retries;
       notifyListeners();
       return;
     }
