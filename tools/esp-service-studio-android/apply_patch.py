@@ -231,8 +231,11 @@ html = replace_once(
     html,
     "let parts = [];\n"
     "let embedded = null;      // манифест зашитой прошивки или null\n"
+    "let nextSlot = 0;\n",
+    "let parts = [];\n"
+    "let embedded = null;      // манифест зашитой прошивки или null\n"
     "let nextSlot = 0;\n"
-    "let parts = [];\nlet embedded = null;      // манифест зашитой прошивки или null\nlet nextSlot = 0;\nlet detectedFlashSizeBytes = 0;\n",
+    "let detectedFlashSizeBytes = 0;\n",
     "v0.6 detected flash state",
 )
 
