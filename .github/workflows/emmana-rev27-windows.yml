@@ -17,7 +17,7 @@ jobs:
       - name: Fetch exact rev27 source from Dropbox
         shell: pwsh
         run: |
-          $url = 'https://uc8819e1d68c25828af86154fd55.dl.dropboxusercontent.com/cd/0/get/DIwUOqxLmSvV5NMWKNsi3gkKZEzR9Uj3TVxLLw5e1ks4CwaGGkSBaZb348QwtvF-8EswKtUmReV3PGcBl_yPeAIpjvnaWabqbLEKj_N1yhaGSDtodUXrPNLXLhwm6xt15YpQ2_EZhLvNpfnedGnAghXtfgkWmn78vwMVlJbRC5O9Nw/file?c_luid=cfbe8875'
+          $url = 'https://uceb7c1f5e20cfa2f662bfff3bc5.dl.dropboxusercontent.com/cd/0/get/DIz80Arq0R6zQNNvq6Gj5p5UC9MTMq3M0GuUixnqXTyY9VIGa0LmiKa8RYc4yHaCUBa5LyRmPkgWhRnZAcAnZFPZZ1705MDhmiiZk4IclMW37Afq1XnthSoduELIOzr6UNuSL1Ez555lP5vIwlSFN3nDQ3p6Q3R2_sLFAmsxb9mQ2w/file?c_luid=cfbe8875'
           Invoke-WebRequest -Uri $url -OutFile rev27.zip -TimeoutSec 120
           $sha = (Get-FileHash rev27.zip -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($sha -ne '6bc453110c666b78aef85c6fe8d96f2510d453e7df1d97118983dd4d79f9ddde') { throw "rev27 source SHA mismatch: $sha" }
