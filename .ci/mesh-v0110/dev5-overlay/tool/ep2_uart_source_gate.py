@@ -9,7 +9,7 @@ delivery = (root / 'lib/core/delivery.dart').read_text()
 
 checks = {
     'EP2 transport id': "String get id => 'ep2-uart'",
-    'UART baud': 'baudRate: 115200',
+    'UART baud': 'ep2Baud = 115200',
     'current EP2 text command': 'SEND_TEXT',
     'incoming EP2 text': "case 'RX_TEXT'",
     'RF ACK': "case 'ACK'",
