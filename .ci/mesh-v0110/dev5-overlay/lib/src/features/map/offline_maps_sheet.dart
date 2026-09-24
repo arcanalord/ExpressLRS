@@ -76,7 +76,7 @@ class _OfflineMapsSheetState extends State<OfflineMapsSheet> {
 
   Future<void> _disable() async {
     await _run(() async {
-      await widget.packages.setActive(null);
+      await widget.packages.setSourceMode('online');
       if (!mounted) return;
       Navigator.pop(context, true);
     });
@@ -135,7 +135,7 @@ class _OfflineMapsSheetState extends State<OfflineMapsSheet> {
               Text('Офлайн-карты', style: theme.textTheme.titleLarge),
               const SizedBox(height: 4),
               Text(
-                'Лёгкий .pmtiles на нужный район. Если локальная карта не откроется, приложение попробует лёгкую OSM-карту, а без сети оставит рабочую сетку.',
+                'Лёгкий .pmtiles на нужный район. Режим Онлайн использует OSM, Офлайн — выбранный PMTiles. Выбранный файл сохраняется при переключении.',
                 style: theme.textTheme.bodyMedium,
               ),
               if (_error != null) ...[
@@ -173,7 +173,9 @@ class _OfflineMapsSheetState extends State<OfflineMapsSheet> {
                             leading: Icon(
                               item.active
                                   ? Icons.check_circle
-                                  : Icons.map_outlined,
+                                  : item.selected
+                                      ? Icons.bookmark_added_outlined
+                                      : Icons.map_outlined,
                             ),
                             title: Text(
                               item.name,
@@ -182,8 +184,10 @@ class _OfflineMapsSheetState extends State<OfflineMapsSheet> {
                             ),
                             subtitle: Text(
                               item.active
-                                  ? '${_formatBytes(item.bytes)} · используется'
-                                  : _formatBytes(item.bytes),
+                                  ? '${_formatBytes(item.bytes)} · используется офлайн'
+                                  : item.selected
+                                      ? '${_formatBytes(item.bytes)} · выбрана для офлайна'
+                                      : _formatBytes(item.bytes),
                             ),
                             onTap: _busy || item.active
                                 ? null
@@ -198,7 +202,7 @@ class _OfflineMapsSheetState extends State<OfflineMapsSheet> {
                                 if (item.active)
                                   const PopupMenuItem(
                                     value: 'disable',
-                                    child: Text('Отключить карту'),
+                                    child: Text('Перейти на онлайн OSM'),
                                   ),
                                 const PopupMenuItem(
                                   value: 'delete',
