@@ -244,7 +244,7 @@ jobs:
           set -euxo pipefail
           python3 tools/esp-service-studio-android/apply_patch.py
           python3 tools/esp-service-studio-android/apply_ui_v08.py
-          grep -q "One-button manual BOOT" upstream/app/src/main/assets/flash.html
+          grep -q "Manual bootloader entry" upstream/app/src/main/assets/flash.html
           grep -q "IMAGE_OUT_OF_FLASH" upstream/app/src/main/assets/flash.html
           grep -q "FLASH_BOUNDS_OK" upstream/app/src/main/assets/flash.html
           grep -q "USB_PROFILE" upstream/app/src/main/assets/flash.html
