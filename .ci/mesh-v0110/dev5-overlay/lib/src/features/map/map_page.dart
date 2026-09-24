@@ -154,12 +154,6 @@ class _MapPageState extends State<MapPage> {
                   ),
                   label: Text(_source.isOffline ? 'Офлайн' : 'Онлайн'),
                 ),
-                const SizedBox(width: 6),
-                IconButton.filledTonal(
-                  tooltip: 'Карты',
-                  onPressed: () => _showOfflineMaps(context),
-                  icon: const Icon(Icons.layers_outlined),
-                ),
               ],
             ),
           ),
