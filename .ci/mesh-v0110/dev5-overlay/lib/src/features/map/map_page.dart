@@ -144,15 +144,20 @@ class _MapPageState extends State<MapPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton.tonalIcon(
-                  onPressed: _toggleSourceMode,
-                  onLongPress: () => _showOfflineMaps(context),
-                  icon: Icon(
-                    _source.isOffline
-                        ? Icons.download_for_offline_outlined
-                        : Icons.public_outlined,
+                Tooltip(
+                  message: _source.isOffline
+                      ? 'Нажмите: Онлайн · удерживайте: карты'
+                      : 'Нажмите: Офлайн · удерживайте: карты',
+                  child: FilledButton.tonalIcon(
+                    onPressed: _toggleSourceMode,
+                    onLongPress: () => _showOfflineMaps(context),
+                    icon: Icon(
+                      _source.isOffline
+                          ? Icons.download_for_offline_outlined
+                          : Icons.public_outlined,
+                    ),
+                    label: Text(_source.isOffline ? 'Офлайн' : 'Онлайн'),
                   ),
-                  label: Text(_source.isOffline ? 'Офлайн' : 'Онлайн'),
                 ),
               ],
             ),
