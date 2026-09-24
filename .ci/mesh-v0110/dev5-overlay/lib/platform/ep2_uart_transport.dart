@@ -5,6 +5,9 @@ import 'dart:typed_data';
 import '../core/delivery.dart';
 import '../core/models.dart';
 import 'android_usb_serial_bridge.dart';
+import 'radio_uart_probe.dart';
+
+enum RadioUartProtocol { unknown, ep2Link, crsf }
 
 sealed class Ep2TransportEvent {
   const Ep2TransportEvent();
@@ -14,6 +17,18 @@ final class Ep2StateEvent extends Ep2TransportEvent {
   const Ep2StateEvent(this.state, {this.error});
   final String state;
   final String? error;
+}
+
+final class Ep2ProbeEvent extends Ep2TransportEvent {
+  const Ep2ProbeEvent({
+    required this.protocol,
+    required this.baudRate,
+    this.detail,
+  });
+
+  final RadioUartProtocol protocol;
+  final int baudRate;
+  final String? detail;
 }
 
 final class Ep2InfoEvent extends Ep2TransportEvent {
@@ -27,6 +42,32 @@ final class Ep2InfoEvent extends Ep2TransportEvent {
   final String firmware;
   final String radioState;
   final String profile;
+}
+
+final class Ep2StatsEvent extends Ep2TransportEvent {
+  const Ep2StatsEvent({
+    this.rssi10,
+    this.snr10,
+    this.rttMs,
+    this.tx,
+    this.rx,
+    this.loss,
+    this.crcErrors,
+    this.txErrors,
+    this.retries,
+    this.duplicates,
+  });
+
+  final int? rssi10;
+  final int? snr10;
+  final int? rttMs;
+  final int? tx;
+  final int? rx;
+  final int? loss;
+  final int? crcErrors;
+  final int? txErrors;
+  final int? retries;
+  final int? duplicates;
 }
 
 final class Ep2DeliveryEvent extends Ep2TransportEvent {
@@ -80,6 +121,13 @@ final class _PendingEp2Tx {
   final String recipientMmId;
 }
 
+final class _PendingPing {
+  _PendingPing(this.started, this.completer, this.timer);
+  final DateTime started;
+  final Completer<Duration> completer;
+  final Timer timer;
+}
+
 final class Ep2UartTransport implements MessageTransport {
   Ep2UartTransport({
     required AndroidUsbSerialBridge bridge,
@@ -89,15 +137,23 @@ final class Ep2UartTransport implements MessageTransport {
     _subscription = _bridge.events.listen(_onBridgeEvent);
   }
 
+  static const int ep2Baud = 115200;
+  static const int crsfBaud = 420000;
+
   final AndroidUsbSerialBridge _bridge;
   final int? Function(String mmId) _resolvePeerNode;
   final StreamController<Ep2TransportEvent> _events =
       StreamController.broadcast();
   final Map<int, _PendingEp2Tx> _pending = {};
+  final Map<int, _PendingPing> _pendingPings = {};
+  final List<int> _binaryBuffer = <int>[];
   StreamSubscription<AndroidUsbSerialEvent>? _subscription;
   String _buffer = '';
   int _nextSequence = 1;
   Timer? _handshakeTimer;
+  Timer? _probeTimer;
+  int? _probeDeviceId;
+  String _probeStage = 'none';
 
   String state = 'disconnected';
   String? lastError;
@@ -105,6 +161,19 @@ final class Ep2UartTransport implements MessageTransport {
   String? firmwareVersion;
   String? radioState;
   String? profileId;
+  RadioUartProtocol protocol = RadioUartProtocol.unknown;
+  int? currentBaud;
+
+  int? rssi10;
+  int? snr10;
+  int? rttMs;
+  int? txCount;
+  int? rxCount;
+  int? lossCount;
+  int? crcErrors;
+  int? txErrors;
+  int? retryCount;
+  int? duplicateCount;
 
   Stream<Ep2TransportEvent> get events => _events.stream;
 
@@ -112,26 +181,120 @@ final class Ep2UartTransport implements MessageTransport {
   String get id => 'ep2-uart';
 
   @override
-  bool get isAvailable => state == 'ready';
+  bool get isAvailable =>
+      state == 'ready' && protocol == RadioUartProtocol.ep2Link;
 
   Future<void> connect(int deviceId) async {
+    await _beginEp2Probe(deviceId, allowCrsfFallback: false);
+  }
+
+  Future<void> connectAuto(int deviceId) async {
+    await _beginEp2Probe(deviceId, allowCrsfFallback: true);
+  }
+
+  Future<void> _beginEp2Probe(
+    int deviceId, {
+    required bool allowCrsfFallback,
+  }) async {
+    _cancelProbeTimers();
+    _probeDeviceId = deviceId;
+    _probeStage = allowCrsfFallback ? 'ep2-auto' : 'ep2-direct';
+    protocol = RadioUartProtocol.unknown;
+    currentBaud = ep2Baud;
     lastError = null;
+    _buffer = '';
+    _binaryBuffer.clear();
     state = 'connecting';
     _events.add(const Ep2StateEvent('connecting'));
-    await _bridge.connect(deviceId, baudRate: 115200);
+    _events.add(
+      const Ep2ProbeEvent(
+        protocol: RadioUartProtocol.unknown,
+        baudRate: ep2Baud,
+        detail: 'Проверяем EP2 LINK',
+      ),
+    );
+    await _bridge.connect(deviceId, baudRate: ep2Baud);
+  }
+
+  Future<void> _switchToCrsfProbe() async {
+    final deviceId = _probeDeviceId;
+    if (deviceId == null || _probeStage != 'ep2-auto') return;
+    _probeStage = 'switching';
+    _handshakeTimer?.cancel();
+    _handshakeTimer = null;
+    _buffer = '';
+    _binaryBuffer.clear();
+    protocol = RadioUartProtocol.unknown;
+    currentBaud = crsfBaud;
+    state = 'probing';
+    _events.add(
+      const Ep2ProbeEvent(
+        protocol: RadioUartProtocol.unknown,
+        baudRate: crsfBaud,
+        detail: 'EP2 LINK не найден, проверяем ELRS/CRSF',
+      ),
+    );
+    await _bridge.disconnect();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (_probeDeviceId != deviceId) return;
+    _probeStage = 'crsf';
+    await _bridge.connect(deviceId, baudRate: crsfBaud);
   }
 
   Future<void> disconnect() async {
-    _handshakeTimer?.cancel();
-    _handshakeTimer = null;
+    _cancelProbeTimers();
+    _probeDeviceId = null;
+    _probeStage = 'none';
     await _bridge.disconnect();
     _pending.clear();
+    _failPings(StateError('USB radio disconnected'));
     state = 'disconnected';
+    protocol = RadioUartProtocol.unknown;
+    currentBaud = null;
     _events.add(const Ep2StateEvent('disconnected'));
   }
 
   Future<void> requestInfo() => _writeLine('INFO');
   Future<void> requestStats() => _writeLine('STATS');
+
+  Future<Duration> ping(int targetNode) async {
+    if (!isAvailable) {
+      throw StateError('Радиомодуль не готов');
+    }
+    if (targetNode < 1 || targetNode > 15 || targetNode == localNodeId) {
+      throw ArgumentError.value(
+        targetNode,
+        'targetNode',
+        'Неверный номер узла',
+      );
+    }
+    if (_pending.isNotEmpty || _pendingPings.isNotEmpty) {
+      throw StateError('Радиомодуль занят');
+    }
+
+    final sequence = _allocateSequence();
+    final completer = Completer<Duration>();
+    late final Timer timer;
+    timer = Timer(const Duration(seconds: 6), () {
+      final pending = _pendingPings.remove(sequence);
+      if (pending != null && !pending.completer.isCompleted) {
+        pending.completer.completeError(
+          TimeoutException('PING timeout', const Duration(seconds: 6)),
+        );
+      }
+    });
+    _pendingPings[sequence] = _PendingPing(DateTime.now(), completer, timer);
+    try {
+      await _writeLine('CMD,$sequence,PING,$targetNode');
+    } catch (error, stackTrace) {
+      final pending = _pendingPings.remove(sequence);
+      pending?.timer.cancel();
+      if (pending != null && !pending.completer.isCompleted) {
+        pending.completer.completeError(error, stackTrace);
+      }
+    }
+    return completer.future;
+  }
   Future<void> startWifiUpdate() => _writeLine('WIFI_UPDATE');
 
   @override
@@ -155,7 +318,7 @@ final class Ep2UartTransport implements MessageTransport {
         detail: 'EP2_MESSAGE_CLASS_UNSUPPORTED',
       );
     }
-    if (_pending.isNotEmpty) {
+    if (_pending.isNotEmpty || _pendingPings.isNotEmpty) {
       return const TransportSendResult(
         TransportSendStatus.rejected,
         detail: 'EP2_BUSY',
@@ -197,17 +360,45 @@ final class Ep2UartTransport implements MessageTransport {
       final next = event.status['state'] as String? ?? 'unknown';
       final error = event.status['error'] as String?;
       if (next == 'ready') {
-        state = 'handshaking';
         lastError = null;
-        _events.add(const Ep2StateEvent('handshaking'));
-        _handshakeTimer?.cancel();
-        _handshakeTimer = Timer(const Duration(seconds: 3), () {
-          if (state != 'handshaking') return;
-          state = 'error';
-          lastError = 'EP2_PROTOCOL_TIMEOUT: нужна прошивка EP2 LINK v0.2.0';
-          _events.add(Ep2StateEvent('error', error: lastError));
-        });
-        unawaited(requestInfo());
+        if (_probeStage == 'crsf') {
+          state = 'probing';
+          _events.add(const Ep2StateEvent('probing'));
+          _probeTimer?.cancel();
+          _probeTimer = Timer(const Duration(seconds: 2), () {
+            if (_probeStage != 'crsf' ||
+                protocol != RadioUartProtocol.unknown) {
+              return;
+            }
+            _probeStage = 'done';
+            state = 'unknown';
+            lastError = 'UART_PROTOCOL_UNKNOWN';
+            _events.add(
+              const Ep2ProbeEvent(
+                protocol: RadioUartProtocol.unknown,
+                baudRate: crsfBaud,
+                detail: 'Протокол не определён',
+              ),
+            );
+            _events.add(Ep2StateEvent('unknown', error: lastError));
+          });
+        } else {
+          state = 'handshaking';
+          _events.add(const Ep2StateEvent('handshaking'));
+          _handshakeTimer?.cancel();
+          final autoFallback = _probeStage == 'ep2-auto';
+          _handshakeTimer = Timer(const Duration(milliseconds: 1800), () {
+            if (state != 'handshaking') return;
+            if (autoFallback) {
+              unawaited(_switchToCrsfProbe());
+            } else {
+              state = 'error';
+              lastError = 'EP2_PROTOCOL_TIMEOUT';
+              _events.add(Ep2StateEvent('error', error: lastError));
+            }
+          });
+          unawaited(requestInfo());
+        }
       } else if (next == 'permission') {
         state = 'permission';
         _events.add(const Ep2StateEvent('permission'));
@@ -216,21 +407,26 @@ final class Ep2UartTransport implements MessageTransport {
         lastError = error ?? next;
         _events.add(Ep2StateEvent('error', error: lastError));
       } else if (next == 'offline' || next == 'disconnected') {
-        _handshakeTimer?.cancel();
-        _handshakeTimer = null;
+        if (_probeStage == 'switching') return;
+        _cancelProbeTimers();
         state = 'disconnected';
         _failAll('EP2_UART_DISCONNECTED');
+        _failPings(StateError('USB radio disconnected'));
         _events.add(const Ep2StateEvent('disconnected'));
       }
       return;
     }
     if (event is AndroidUsbSerialBytes) {
       _events.add(Ep2RawBytesEvent(Uint8List.fromList(event.bytes)));
-      _ingest(event.bytes);
+      if (_probeStage == 'crsf') {
+        _ingestCrsf(event.bytes);
+      } else {
+        _ingestAscii(event.bytes);
+      }
     }
   }
 
-  void _ingest(Uint8List bytes) {
+  void _ingestAscii(Uint8List bytes) {
     _buffer += utf8.decode(bytes, allowMalformed: true).replaceAll('\r', '');
     if (_buffer.length > 8192 && !_buffer.contains('\n')) {
       _buffer = '';
@@ -245,6 +441,30 @@ final class Ep2UartTransport implements MessageTransport {
       _buffer = _buffer.substring(newline + 1);
       if (line.isNotEmpty) _handleLine(line);
     }
+  }
+
+  void _ingestCrsf(Uint8List bytes) {
+    _binaryBuffer.addAll(bytes);
+    if (_binaryBuffer.length > 512) {
+      _binaryBuffer.removeRange(0, _binaryBuffer.length - 512);
+    }
+    if (!CrsfFrameDetector.containsValidFrame(_binaryBuffer)) return;
+
+    _probeTimer?.cancel();
+    _probeTimer = null;
+    _probeStage = 'done';
+    protocol = RadioUartProtocol.crsf;
+    currentBaud = crsfBaud;
+    state = 'crsf';
+    lastError = null;
+    _events.add(
+      const Ep2ProbeEvent(
+        protocol: RadioUartProtocol.crsf,
+        baudRate: crsfBaud,
+        detail: 'Обнаружен ELRS / CRSF',
+      ),
+    );
+    _events.add(const Ep2StateEvent('crsf'));
   }
 
   void _handleLine(String line) {
@@ -265,12 +485,24 @@ final class Ep2UartTransport implements MessageTransport {
         if (parts.length >= 8) {
           _handshakeTimer?.cancel();
           _handshakeTimer = null;
+          _probeTimer?.cancel();
+          _probeTimer = null;
+          _probeStage = 'done';
+          protocol = RadioUartProtocol.ep2Link;
+          currentBaud = ep2Baud;
           localNodeId = int.tryParse(parts[1]);
           firmwareVersion = parts[2];
           radioState = parts[6];
           profileId = parts[7];
           state = radioState == 'RADIO_OK' ? 'ready' : 'error';
           lastError = state == 'ready' ? null : radioState;
+          _events.add(
+            const Ep2ProbeEvent(
+              protocol: RadioUartProtocol.ep2Link,
+              baudRate: ep2Baud,
+              detail: 'EP2 LINK',
+            ),
+          );
           _events.add(
             Ep2InfoEvent(
               nodeId: localNodeId ?? 0,
@@ -281,10 +513,41 @@ final class Ep2UartTransport implements MessageTransport {
           );
           _events.add(Ep2StateEvent(state, error: lastError));
         }
+      case 'LINK':
+        if (parts.length >= 7) {
+          rssi10 = int.tryParse(parts[1]);
+          snr10 = int.tryParse(parts[2]);
+          rttMs = int.tryParse(parts[3]);
+          txCount = int.tryParse(parts[4]);
+          rxCount = int.tryParse(parts[5]);
+          lossCount = int.tryParse(parts[6]);
+          _emitStats();
+        }
+      case 'RADIO_STATS':
+        if (parts.length >= 5) {
+          crcErrors = int.tryParse(parts[1]);
+          txErrors = int.tryParse(parts[2]);
+          retryCount = int.tryParse(parts[3]);
+          duplicateCount = int.tryParse(parts[4]);
+          _emitStats();
+        }
       case 'ACK':
         if (parts.length >= 2) {
           final sequence = int.tryParse(parts[1]);
-          if (sequence != null) _complete(sequence, ok: true);
+          if (sequence != null) {
+            final ping = _pendingPings.remove(sequence);
+            if (ping != null) {
+              ping.timer.cancel();
+              if (!ping.completer.isCompleted) {
+                ping.completer.complete(
+                  DateTime.now().difference(ping.started),
+                );
+              }
+              unawaited(requestStats());
+            } else {
+              _complete(sequence, ok: true);
+            }
+          }
         }
       case 'RX_TEXT':
         if (parts.length >= 4) {
@@ -311,6 +574,23 @@ final class Ep2UartTransport implements MessageTransport {
     }
   }
 
+  void _emitStats() {
+    _events.add(
+      Ep2StatsEvent(
+        rssi10: rssi10,
+        snr10: snr10,
+        rttMs: rttMs,
+        tx: txCount,
+        rx: rxCount,
+        loss: lossCount,
+        crcErrors: crcErrors,
+        txErrors: txErrors,
+        retries: retryCount,
+        duplicates: duplicateCount,
+      ),
+    );
+  }
+
   String _decodeText(String encoded) {
     try {
       var normalized = encoded.trim();
@@ -327,9 +607,19 @@ final class Ep2UartTransport implements MessageTransport {
     final code = parts.length > 1 ? parts[1] : 'UNKNOWN';
     int? sequence;
     if (parts.length > 2) sequence = int.tryParse(parts.last);
-    if (sequence != null && _pending.containsKey(sequence)) {
-      _complete(sequence, ok: false, detail: 'EP2_$code');
-      return;
+    if (sequence != null) {
+      final ping = _pendingPings.remove(sequence);
+      if (ping != null) {
+        ping.timer.cancel();
+        if (!ping.completer.isCompleted) {
+          ping.completer.completeError(StateError('EP2_$code'));
+        }
+        return;
+      }
+      if (_pending.containsKey(sequence)) {
+        _complete(sequence, ok: false, detail: 'EP2_$code');
+        return;
+      }
     }
     if (_pending.length == 1 &&
         {
@@ -377,9 +667,25 @@ final class Ep2UartTransport implements MessageTransport {
     }
   }
 
-  Future<void> close() async {
+  void _failPings(Object error) {
+    final pending = _pendingPings.values.toList(growable: false);
+    _pendingPings.clear();
+    for (final ping in pending) {
+      ping.timer.cancel();
+      if (!ping.completer.isCompleted) ping.completer.completeError(error);
+    }
+  }
+
+  void _cancelProbeTimers() {
     _handshakeTimer?.cancel();
     _handshakeTimer = null;
+    _probeTimer?.cancel();
+    _probeTimer = null;
+  }
+
+  Future<void> close() async {
+    _cancelProbeTimers();
+    _failPings(StateError('transport closed'));
     await _subscription?.cancel();
     await _events.close();
   }
