@@ -226,6 +226,21 @@ html = replace_once(
     "esp8266 preset",
 )
 
+# The upstream preset label incorrectly groups ESP32-S2 with zero-offset chips.
+# S2 uses BOOTLOADER_FLASH_OFFSET 0x1000, like classic ESP32.
+html = replace_once(
+    html,
+    "  { id: 'esp32s3', label: 'ESP32-S3 / S2 / C3 / C6 / H2',\n",
+    "  { id: 'esp32s3', label: 'ESP32-S3 / C2 / C3 / C6 / H2 / C61',\n",
+    "zero-offset preset label",
+)
+html = replace_once(
+    html,
+    "  { id: 'esp32', label: 'ESP32',\n",
+    "  { id: 'esp32', label: 'ESP32 / ESP32-S2',\n",
+    "0x1000 preset label",
+)
+
 # ---- v0.6 chip auto-preset and flash-boundary preflight ---------------------
 html = replace_once(
     html,
@@ -337,17 +352,25 @@ html = replace_once(
     "  return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;\n"
     "}\n"
     "\n"
-    "function presetForChip(chip) {\n"
-    "  const c = String(chip || '').toUpperCase();\n"
+    "function presetForSession(session) {\n"
+    "  const chip = String(session?.chip || '');\n"
+    "  const c = chip.toUpperCase();\n"
     "  if (c.includes('ESP8266') || c.includes('ESP8285')) return 'esp8266';\n"
-    "  if (/ESP32[- ]?(S2|S3|C3|C6|H2)/.test(c)) return 'esp32s3';\n"
-    "  if (c.includes('ESP32')) return 'esp32';\n"
+    "  const bootOffset = Number(session?.loader?.chip?.BOOTLOADER_FLASH_OFFSET);\n"
+    "  if (bootOffset === 0x0) return 'esp32s3';\n"
+    "  if (bootOffset === 0x1000) return 'esp32';\n"
     "  return null;\n"
     "}\n"
     "\n"
-    "function maybeAutoSelectPreset(chip) {\n"
-    "  const id = presetForChip(chip);\n"
-    "  if (!id) { diag('PRESET_UNKNOWN', String(chip || ''), 'info'); return; }\n"
+    "function maybeAutoSelectPreset(session) {\n"
+    "  const chip = String(session?.chip || '');\n"
+    "  const bootOffset = Number(session?.loader?.chip?.BOOTLOADER_FLASH_OFFSET);\n"
+    "  const id = presetForSession(session);\n"
+    "  if (!id) {\n"
+    "    const off = Number.isFinite(bootOffset) ? ('0x' + bootOffset.toString(16)) : '?';\n"
+    "    diag('PRESET_UNKNOWN', chip + '; bootloader=' + off, 'info');\n"
+    "    return;\n"
+    "  }\n"
     "  const preset = PRESETS.find(p => p.id === id);\n"
     "  const select = document.getElementById('preset');\n"
     "  if (!preset || !select) return;\n"
@@ -411,7 +434,7 @@ html = replace_once(
     "    session = await openChip(false);\n"
     "    diag('ROM_SYNC_OK', session.chip, 'ok');\n"
     "    log(t().chip(session.chip), 'ok');\n"
-    "    maybeAutoSelectPreset(session.chip);\n"
+    "    maybeAutoSelectPreset(session);\n"
     "    stage = 'FLASH_ID';\n"
     "    const fid = await session.loader.readFlashId();\n"
     "    const fidText = '0x' + Number(fid).toString(16).padStart(6, '0');\n"
@@ -475,7 +498,7 @@ html = replace_once(
     "    session = await openChip(false);\n"
     "    diag('ROM_SYNC_OK', session.chip, 'ok');\n"
     "    log(t().chip(session.chip), 'ok');\n"
-    "    maybeAutoSelectPreset(session.chip);\n"
+    "    maybeAutoSelectPreset(session);\n"
     "    detectedFlashSizeBytes = 0;\n"
     "    try {\n"
     "      const size = session.loader.detectFlashSize ? await session.loader.detectFlashSize() : undefined;\n"
@@ -796,7 +819,7 @@ checks = [
     "diag('USB_OK'",
     "WRITE_TIMEOUT",
     "Android.serialError",
-    "maybeAutoSelectPreset(session.chip)",
+    "maybeAutoSelectPreset(session)",
     "IMAGE_OUT_OF_FLASH",
     "FLASH_BOUNDS_OK",
     "detectedFlashSizeBytes",
