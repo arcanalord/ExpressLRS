@@ -136,6 +136,65 @@ html = replace_once(
     "russian diagnostics i18n",
 )
 
+# ---- v0.5 diagnostics and native serial error propagation -------------------
+html = replace_once(
+    html,
+    "const t = () => I18N[lang];\n",
+    "const t = () => I18N[lang];\n\n"
+    "function diag(code, message, type = 'info') {\n"
+    "  log(\`[\${code}] \${message}\`, type);\n"
+    "}\n\n"
+    "function diagnosticCode(stage, error) {\n"
+    "  const msg = String(error?.message || error || '').toLowerCase();\n"
+    "  if (msg.includes('permission')) return 'USB_PERMISSION_DENIED';\n"
+    "  if (msg.includes('no usb') || msg.includes('cannot open') || msg.includes('no driver')) return 'USB_OPEN_FAIL';\n"
+    "  if (msg.includes('timeout') || msg.includes('timed out')) {\n"
+    "    if (stage === 'WRITE') return 'WRITE_TIMEOUT';\n"
+    "    if (stage === 'ROM_SYNC') return 'ROM_SYNC_TIMEOUT';\n"
+    "    return stage + '_TIMEOUT';\n"
+    "  }\n"
+    "  if (stage === 'ROM_SYNC') return 'ROM_SYNC_FAIL';\n"
+    "  if (stage === 'FLASH_ID') return 'FLASH_ID_FAIL';\n"
+    "  if (stage === 'PREFLIGHT') return 'PREFLIGHT_FAIL';\n"
+    "  if (stage === 'WRITE') return 'WRITE_FAIL';\n"
+    "  if (stage === 'ERASE') return 'ERASE_FAIL';\n"
+    "  return 'UNEXPECTED_ERROR';\n"
+    "}\n\n"
+    "function diagError(stage, error) {\n"
+    "  const code = diagnosticCode(stage, error);\n"
+    "  diag(code, String(error?.message || error), 'err');\n"
+    "  return code;\n"
+    "}\n",
+    "diagnostic helpers",
+)
+
+html = replace_once(
+    html,
+    "          const b64 = Android.readData();\n"
+    "          if (b64) { ctrl.enqueue(b64ToBytes(b64)); return; }\n",
+    "          const serialErr = Android.serialError ? Android.serialError() : '';\n"
+    "          if (serialErr) throw new Error(serialErr);\n"
+    "          const b64 = Android.readData();\n"
+    "          if (b64) { ctrl.enqueue(b64ToBytes(b64)); return; }\n",
+    "serial read error surfacing",
+)
+html = replace_once(
+    html,
+    "      write: chunk => { Android.write(bytesToB64(chunk)); }\n",
+    "      write: chunk => {\n"
+    "        const result = Android.write(bytesToB64(chunk));\n"
+    "        if (result && result !== 'ok') throw new Error(result);\n"
+    "      }\n",
+    "serial write error surfacing",
+)
+html = replace_once(
+    html,
+    "  log(t().usbOpen, 'ok');\n",
+    "  log(t().usbOpen, 'ok');\n"
+    "  diag('USB_OK', Android.deviceInfo ? Android.deviceInfo() : t().usbOpen, 'ok');\n",
+    "USB OK diagnostic",
+)
+
 html = replace_once(
     html,
     "  getInfo() { return { usbVendorId: 0x303A, usbProductId: 0x1001 }; }\n",
