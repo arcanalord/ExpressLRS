@@ -124,7 +124,7 @@ class _ServiceHomePageState extends State<ServiceHomePage> {
             _Section(
               title: '2. Что обслуживаем',
               child: DropdownButtonFormField<DeviceProfile>(
-                value: profile,
+                initialValue: profile,
                 isExpanded: true,
                 items: profiles
                     .map(
