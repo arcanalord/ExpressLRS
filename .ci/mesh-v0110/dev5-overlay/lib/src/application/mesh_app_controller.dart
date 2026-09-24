@@ -116,6 +116,10 @@ final class MeshAppController extends ChangeNotifier {
   String? ep2OtaSsid;
   String? ep2OtaPassword;
   String? ep2OtaUrl;
+  String ep2DetectedProtocol = 'unknown';
+  int ep2RxBytes = 0;
+  int ep2TxBytes = 0;
+  String ep2LastHex = '';
   List<UsbSerialDevice> ep2Devices = const [];
   final List<String> ep2Log = <String>[];
 
@@ -1009,6 +1013,10 @@ final class MeshAppController extends ChangeNotifier {
     ep2Error = null;
     notifyListeners();
     try {
+      ep2DetectedProtocol = 'detecting';
+      ep2RxBytes = 0;
+      ep2TxBytes = 0;
+      ep2LastHex = '';
       _addEp2Log('CONNECT USB device=$deviceId baud=115200');
       await ep2.connect(deviceId);
     } catch (error) {
@@ -1085,12 +1093,28 @@ final class MeshAppController extends ChangeNotifier {
       return;
     }
     if (event is Ep2InfoEvent) {
+      ep2DetectedProtocol = 'ep2-link';
       ep2LocalNode = event.nodeId;
       ep2Firmware = event.firmware;
       ep2Profile = event.profile;
       _addEp2Log(
         'INFO node=${event.nodeId} fw=${event.firmware} radio=${event.radioState} profile=${event.profile}',
       );
+      notifyListeners();
+      return;
+    }
+    if (event is Ep2RawBytesEvent) {
+      ep2RxBytes += event.bytes.length;
+      final shown = event.bytes.take(32)
+          .map((b) => b.toRadixString(16).padLeft(2, '0'))
+          .join(' ');
+      ep2LastHex = shown;
+      if (ep2DetectedProtocol == 'detecting' && event.bytes.isNotEmpty) {
+        final first = event.bytes.first;
+        if (first == 0xC8 || first == 0xEE || first == 0xEA) {
+          ep2DetectedProtocol = 'crsf-like';
+        }
+      }
       notifyListeners();
       return;
     }
