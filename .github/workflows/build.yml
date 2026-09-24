@@ -208,3 +208,90 @@ jobs:
 
           echo "Uploading artifact index"
           aws s3 cp --endpoint-url $AWS_ENDPOINT_URL index.json s3://expresslrs/ExpressLRS/index.json
+
+
+  esp-service-studio-apk:
+    if: github.ref == 'refs/heads/esp-service-studio-android'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout build branch
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch pinned Android flasher source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/drakosha/esp-flash-android.git upstream
+          cd upstream
+          git checkout c4036ace9d2f5526e3535d1ac8bfb8ac3bafc23d
+          test "$(git rev-parse HEAD)" = "c4036ace9d2f5526e3535d1ac8bfb8ac3bafc23d"
+
+      - name: Apply ESP Service Studio v0.6 patch
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 tools/esp-service-studio-android/apply_patch.py
+          grep -q "One-button manual BOOT" upstream/app/src/main/assets/flash.html
+          grep -q "IMAGE_OUT_OF_FLASH" upstream/app/src/main/assets/flash.html
+          grep -q "FLASH_BOUNDS_OK" upstream/app/src/main/assets/flash.html
+
+      - name: Bundle esptool-js 0.7.0
+        shell: bash
+        working-directory: upstream
+        env:
+          ESPTOOL_VERSION: '0.7.0'
+        run: |
+          set -euxo pipefail
+          chmod +x scripts/bundle-esptool.sh
+          ./scripts/bundle-esptool.sh
+          test -s app/src/main/assets/esptool.bundle.js
+
+      - name: Build debug APK
+        shell: bash
+        working-directory: upstream
+        run: |
+          set -euxo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleDebug \
+            -PappId=com.arcanalord.espservicestudio \
+            -PappLabel='ESP Service Studio' \
+            -PversionName=0.6.0 \
+            -PversionCode=6
+
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APK="upstream/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          mkdir -p artifact
+          cp "$APK" artifact/ESP_Service_Studio_Pixel7a_v0.6.apk
+          sha256sum artifact/ESP_Service_Studio_Pixel7a_v0.6.apk | tee artifact/SHA256SUMS.txt
+          unzip -t artifact/ESP_Service_Studio_Pixel7a_v0.6.apk
+
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --verbose --print-certs artifact/ESP_Service_Studio_Pixel7a_v0.6.apk | tee artifact/APK_SIGNATURE.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ESP-Service-Studio-Pixel7a-v0.6
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 30
