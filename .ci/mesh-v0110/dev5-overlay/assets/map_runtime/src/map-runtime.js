@@ -6,7 +6,7 @@ let pointSourceReady = false;
 let pendingPoints = [];
 let readySent = false;
 
-function status(text){ statusEl.textContent = text; }
+function status(text){ statusEl.textContent=text; statusEl.style.display=String(text).startsWith('Ошибка')?'block':'none'; }
 function bridgeTap(lat, lon){
   try { window.MeshBridge?.onMapTap(Number(lat), Number(lon)); } catch (_) {}
 }
