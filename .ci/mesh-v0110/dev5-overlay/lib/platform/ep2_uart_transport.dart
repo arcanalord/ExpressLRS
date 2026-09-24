@@ -53,6 +53,17 @@ final class Ep2IncomingText extends Ep2TransportEvent {
   final String text;
 }
 
+final class Ep2OtaReadyEvent extends Ep2TransportEvent {
+  const Ep2OtaReadyEvent({
+    required this.ssid,
+    required this.password,
+    required this.url,
+  });
+  final String ssid;
+  final String password;
+  final String url;
+}
+
 final class Ep2LogEvent extends Ep2TransportEvent {
   const Ep2LogEvent(this.line);
   final String line;
@@ -116,6 +127,7 @@ final class Ep2UartTransport implements MessageTransport {
 
   Future<void> requestInfo() => _writeLine('INFO');
   Future<void> requestStats() => _writeLine('STATS');
+  Future<void> startWifiUpdate() => _writeLine('WIFI_UPDATE');
 
   @override
   Future<TransportSendResult> send(DeliveryEnvelope envelope) async {
@@ -276,6 +288,16 @@ final class Ep2UartTransport implements MessageTransport {
           final text = _decodeText(parts.sublist(3).join(','));
           _events.add(
             Ep2IncomingText(fromNode: fromNode, sequence: sequence, text: text),
+          );
+        }
+      case 'OTA':
+        if (parts.length >= 5 && parts[1] == 'READY') {
+          _events.add(
+            Ep2OtaReadyEvent(
+              ssid: parts[2],
+              password: parts[3],
+              url: parts.sublist(4).join(','),
+            ),
           );
         }
       case 'ERR':
