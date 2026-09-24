@@ -17,6 +17,11 @@ class _MapPageState extends State<MapPage> {
   final _packages = AndroidMapPackagesBridge();
   int _reloadToken = 0;
   List<OfflineMapPackage> _offline = const [];
+  MapSourceState _source = const MapSourceState(
+    mode: 'online',
+    selectedId: null,
+    hasOffline: false,
+  );
 
   @override
   void initState() {
@@ -46,9 +51,39 @@ class _MapPageState extends State<MapPage> {
 
   Future<void> _loadPackages() async {
     try {
-      final items = await _packages.listPackages();
-      if (mounted) setState(() => _offline = items);
+      final results = await Future.wait<Object>([
+        _packages.listPackages(),
+        _packages.sourceState(),
+      ]);
+      final items = results[0] as List<OfflineMapPackage>;
+      final source = results[1] as MapSourceState;
+      if (mounted) {
+        setState(() {
+          _offline = items;
+          _source = source;
+        });
+      }
     } catch (_) {}
+  }
+
+  Future<void> _toggleSourceMode() async {
+    final next = _source.isOffline ? 'online' : 'offline';
+    if (next == 'offline' && !_source.hasOffline) {
+      await _showOfflineMaps(context);
+      return;
+    }
+    try {
+      await _packages.setSourceMode(next);
+      if (!mounted) return;
+      await _loadPackages();
+      if (!mounted) return;
+      setState(() => _reloadToken++);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось переключить карту: $error')),
+      );
+    }
   }
 
   @override
@@ -110,11 +145,20 @@ class _MapPageState extends State<MapPage> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton.tonalIcon(
-                  onPressed: () => _showOfflineMaps(context),
-                  icon: const Icon(Icons.download_for_offline_outlined),
-                  label: Text(
-                    _offline.any((item) => item.active) ? 'Офлайн' : 'Карта',
+                  onPressed: _toggleSourceMode,
+                  onLongPress: () => _showOfflineMaps(context),
+                  icon: Icon(
+                    _source.isOffline
+                        ? Icons.download_for_offline_outlined
+                        : Icons.public_outlined,
                   ),
+                  label: Text(_source.isOffline ? 'Офлайн' : 'Онлайн'),
+                ),
+                const SizedBox(width: 6),
+                IconButton.filledTonal(
+                  tooltip: 'Карты',
+                  onPressed: () => _showOfflineMaps(context),
+                  icon: const Icon(Icons.layers_outlined),
                 ),
               ],
             ),
