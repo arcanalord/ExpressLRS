@@ -142,6 +142,16 @@ class MainActivity : FlutterActivity() {
     private fun handleMapMethod(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "listPackages" -> result.success(mapPackageStore.list())
+            "sourceState" -> result.success(mapPackageStore.sourceState())
+            "setSourceMode" -> {
+                try {
+                    val mode = call.argument<String>("mode")
+                        ?: return result.error("BAD_ARGUMENT", "mode required", null)
+                    result.success(mapPackageStore.setSourceMode(mode))
+                } catch (t: Throwable) {
+                    result.error("MAP_SOURCE", t.message ?: t.toString(), null)
+                }
+            }
             "setActive" -> {
                 try {
                     result.success(mapPackageStore.setActive(call.argument<String>("id")))
