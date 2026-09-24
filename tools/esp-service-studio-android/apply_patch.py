@@ -641,6 +641,126 @@ html = replace_once(
     "ROM flash finish",
 )
 
+
+# ---- v0.7 diagnostic log export and USB adapter profile ---------------------
+html = replace_once(
+    html,
+    "  .sheet-head button { width: auto; margin: 0; padding: 6px 14px; font-size: 14px;\n"
+    "                       background: #262626; color: #bbb; }\n",
+    "  .sheet-head button { width: auto; margin: 0; padding: 6px 14px; font-size: 14px;\n"
+    "                       background: #262626; color: #bbb; }\n"
+    "  .sheet-actions { display: flex; gap: 8px; align-items: center; }\n",
+    "log export CSS",
+)
+html = replace_once(
+    html,
+    "  <div class=\"sheet-head\">\n"
+    "    <h2 id=\"logTitle\"></h2>\n"
+    "    <button id=\"logClose\"></button>\n"
+    "  </div>\n",
+    "  <div class=\"sheet-head\">\n"
+    "    <h2 id=\"logTitle\"></h2>\n"
+    "    <div class=\"sheet-actions\">\n"
+    "      <button id=\"logExport\"></button>\n"
+    "      <button id=\"logClose\"></button>\n"
+    "    </div>\n"
+    "  </div>\n",
+    "log export button",
+)
+html = replace_once(
+    html,
+    "    logTitle: 'Log',\n"
+    "    close: 'Close',\n",
+    "    logTitle: 'Log',\n"
+    "    exportLog: 'Export',\n"
+    "    exportLogFailed: e => \`Log export failed: \${e}\`,\n"
+    "    close: 'Close',\n",
+    "english log export i18n",
+)
+html = replace_once(
+    html,
+    "    logTitle: 'Лог',\n"
+    "    close: 'Закрыть',\n",
+    "    logTitle: 'Лог',\n"
+    "    exportLog: 'Экспорт',\n"
+    "    exportLogFailed: e => \`Не удалось экспортировать лог: \${e}\`,\n"
+    "    close: 'Закрыть',\n",
+    "russian log export i18n",
+)
+html = replace_once(
+    html,
+    "const t = () => I18N[lang];\n\n"
+    "function diag(code, message, type = 'info') {\n",
+    "const t = () => I18N[lang];\n\n"
+    "const USB_PROFILES = [\n"
+    "  { vid: 0x1a86, pids: [0x7523, 0x5523], label: 'WCH CH340/CH341' },\n"
+    "  { vid: 0x10c4, pids: [0xea60], label: 'Silicon Labs CP210x' },\n"
+    "  { vid: 0x0403, pids: [0x6001, 0x6015], label: 'FTDI USB-UART' },\n"
+    "  { vid: 0x303a, pids: null, label: 'Espressif native USB' },\n"
+    "  { vid: 0x1a86, pids: null, label: 'WCH USB-UART' },\n"
+    "];\n"
+    "function hexUsb(value) { return '0x' + Number(value || 0).toString(16).padStart(4, '0'); }\n"
+    "function usbProfileText() {\n"
+    "  const vid = Number(Android.usbVendorId ? Android.usbVendorId() : 0);\n"
+    "  const pid = Number(Android.usbProductId ? Android.usbProductId() : 0);\n"
+    "  const profile = USB_PROFILES.find(p => p.vid === vid && (!p.pids || p.pids.includes(pid)));\n"
+    "  const label = profile ? profile.label : 'Unknown USB serial';\n"
+    "  return \`\${label} (\${hexUsb(vid)}:\${hexUsb(pid)})\`;\n"
+    "}\n\n"
+    "function diag(code, message, type = 'info') {\n",
+    "USB adapter profiles",
+)
+html = replace_once(
+    html,
+    "  diag('USB_OK', Android.deviceInfo ? Android.deviceInfo() : t().usbOpen, 'ok');\n",
+    "  diag('USB_OK', Android.deviceInfo ? Android.deviceInfo() : t().usbOpen, 'ok');\n"
+    "  diag('USB_PROFILE', usbProfileText(), 'info');\n",
+    "USB profile diagnostic",
+)
+html = replace_once(
+    html,
+    "function closeLog() {\n",
+    "function collectDiagnosticLog() {\n"
+    "  const lines = Array.from(document.querySelectorAll('#log > div'))\n"
+    "    .map(el => el.textContent || '');\n"
+    "  const preset = document.getElementById('preset')?.value || '-';\n"
+    "  const manual = document.getElementById('manualBoot')?.checked ? 'on' : 'off';\n"
+    "  const usb = Android.deviceInfo ? Android.deviceInfo() : '-';\n"
+    "  return [\n"
+    "    'ESP Service Studio v0.7 diagnostic log',\n"
+    "    new Date().toISOString(),\n"
+    "    'USB: ' + (usb || '-'),\n"
+    "    'USB profile: ' + usbProfileText(),\n"
+    "    'Preset: ' + preset,\n"
+    "    'Manual BOOT: ' + manual,\n"
+    "    '',\n"
+    "    ...lines,\n"
+    "  ].join('\\n');\n"
+    "}\n\n"
+    "function exportDiagnosticLog() {\n"
+    "  const result = Android.shareText\n"
+    "    ? Android.shareText('ESP Service Studio diagnostic log', collectDiagnosticLog())\n"
+    "    : 'error: shareText unavailable';\n"
+    "  if (result && result !== 'ok') log(t().exportLogFailed(result), 'err');\n"
+    "}\n\n"
+    "function closeLog() {\n",
+    "diagnostic log export JS",
+)
+html = replace_once(
+    html,
+    "  document.getElementById('logClose').textContent = T.close;\n",
+    "  document.getElementById('logExport').textContent = T.exportLog;\n"
+    "  document.getElementById('logClose').textContent = T.close;\n",
+    "log export language",
+)
+html = replace_once(
+    html,
+    "document.getElementById('logClose').addEventListener('click', closeLog);\n",
+    "document.getElementById('logExport').addEventListener('click', exportDiagnosticLog);\n"
+    "document.getElementById('logClose').addEventListener('click', closeLog);\n",
+    "log export listener",
+)
+
 html_path.write_text(html, encoding="utf-8")
 
 # ---- JsBridge.kt: expose the actual selected USB IDs to esptool-js ----------
@@ -668,6 +788,41 @@ bridge = replace_once(
     "    fun write(b64: String): String = usbManager.write(Base64.decode(b64, Base64.NO_WRAP))\n",
     "write result bridge",
 )
+
+# ---- v0.7 native Android share sheet for diagnostics ------------------------
+bridge = replace_once(
+    bridge,
+    "import android.content.Context\n",
+    "import android.content.Context\nimport android.content.Intent\n",
+    "Intent import for log export",
+)
+bridge = replace_once(
+    bridge,
+    "    @JavascriptInterface\n"
+    "    fun serialError(): String = usbManager.takeIoError()\n\n",
+    "    @JavascriptInterface\n"
+    "    fun serialError(): String = usbManager.takeIoError()\n\n"
+    "    @JavascriptInterface\n"
+    "    fun shareText(subject: String, text: String): String {\n"
+    "        return try {\n"
+    "            val send = Intent(Intent.ACTION_SEND).apply {\n"
+    "                type = \"text/plain\"\n"
+    "                putExtra(Intent.EXTRA_SUBJECT, subject)\n"
+    "                putExtra(Intent.EXTRA_TEXT, text)\n"
+    "            }\n"
+    "            val chooser = Intent.createChooser(send, subject).apply {\n"
+    "                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)\n"
+    "            }\n"
+    "            context.startActivity(chooser)\n"
+    "            \"ok\"\n"
+    "        } catch (e: Exception) {\n"
+    "            Log.e(TAG, \"shareText failed\", e)\n"
+    "            \"error: \${e.message ?: e.javaClass.simpleName}\"\n"
+    "        }\n"
+    "    }\n\n",
+    "native diagnostic log share",
+)
+
 bridge_path.write_text(bridge, encoding="utf-8")
 
 # ---- UsbSerialManager.kt: pin the device chosen by status/checkConnection ----
@@ -839,6 +994,10 @@ checks = [
     "IMAGE_OUT_OF_FLASH",
     "FLASH_BOUNDS_OK",
     "detectedFlashSizeBytes",
+    "id=\"logExport\"",
+    "Android.shareText",
+    "USB_PROFILE",
+    "WCH CH340/CH341",
 ]
 for needle in checks:
     if needle not in patched:
@@ -846,4 +1005,4 @@ for needle in checks:
 if "getInfo() { return { usbVendorId: 0x303A" in patched:
     raise SystemExit("hard-coded USB IDs survived patch")
 
-print("ESP Service Studio Android v0.6 patch applied successfully")
+print("ESP Service Studio Android v0.7 patch applied successfully")
