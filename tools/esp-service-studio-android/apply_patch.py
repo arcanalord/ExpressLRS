@@ -117,9 +117,17 @@ html = replace_once(
     html,
     "    if (loader.chip.postConnect) await loader.chip.postConnect(loader);\n    await loader.runStub();\n    return { loader, serialPort, chip };\n",
     "    if (loader.chip.postConnect) await loader.chip.postConnect(loader);\n"
-    "    if (useStub) await loader.runStub();\n"
+    "    if (useStub) {\n"
+    "      await loader.runStub();\n"
+    "    } else {\n"
+    "      // ROM bootloaders use 0x400-byte flash blocks. ESPLoader defaults to\n"
+    "      // 0x4000, which is correct only for the uploaded flasher stub. v0.2\n"
+    "      // disabled runStub() but accidentally kept the stub-sized blocks.\n"
+    "      loader.FLASH_WRITE_SIZE = (loader.chip && loader.chip.FLASH_WRITE_SIZE) || 0x400;\n"
+    "      log('ROM flash block: ' + loader.FLASH_WRITE_SIZE + ' B', 'info');\n"
+    "    }\n"
     "    return { loader, serialPort, chip };\n",
-    "conditional stub",
+    "ROM-safe flash block",
 )
 
 old_open = """async function openChip() {
@@ -215,6 +223,24 @@ html = replace_once(
     "manual checkbox listener",
 )
 
+# v0.3: when flashing directly through ROM (manual BOOT, no stub), use the
+# chip ROM block size (normally 0x400 = 1024 B). Also do not send FLASH_END
+# after a normal ROM write; esptool-js 0.6.1 only does that for the stub.
+html = replace_once(
+    html,
+    "  const BS = loader.FLASH_WRITE_SIZE;  // 16384 со стабом\n",
+    "  const BS = loader.IS_STUB ? loader.FLASH_WRITE_SIZE\n"
+    "                            : ((loader.chip && loader.chip.FLASH_WRITE_SIZE) || 0x400);\n"
+    "  loader.FLASH_WRITE_SIZE = BS;\n",
+    "ROM write block size",
+)
+html = replace_once(
+    html,
+    "  await loader.flashFinish(false);\n}\n",
+    "  if (loader.IS_STUB) await loader.flashFinish(false);\n}\n",
+    "ROM flash finish",
+)
+
 html_path.write_text(html, encoding="utf-8")
 
 # ---- JsBridge.kt: expose the actual selected USB IDs to esptool-js ----------
@@ -295,6 +321,8 @@ checks = [
     "Android.usbVendorId()",
     "connectLoader('no_reset', 3, useStub)",
     "session = await openChip(false)",
+    "loader.FLASH_WRITE_SIZE = (loader.chip && loader.chip.FLASH_WRITE_SIZE) || 0x400",
+    "if (loader.IS_STUB) await loader.flashFinish(false)",
 ]
 for needle in checks:
     if needle not in patched:
@@ -302,4 +330,4 @@ for needle in checks:
 if "getInfo() { return { usbVendorId: 0x303A" in patched:
     raise SystemExit("hard-coded USB IDs survived patch")
 
-print("ESP Service Studio Android v0.2 patch applied successfully")
+print("ESP Service Studio Android v0.3 patch applied successfully")
