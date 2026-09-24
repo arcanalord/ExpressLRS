@@ -113,6 +113,9 @@ final class MeshAppController extends ChangeNotifier {
   int? ep2LocalNode;
   String? ep2Firmware;
   String? ep2Profile;
+  String? ep2OtaSsid;
+  String? ep2OtaPassword;
+  String? ep2OtaUrl;
   List<UsbSerialDevice> ep2Devices = const [];
   final List<String> ep2Log = <String>[];
 
@@ -1032,6 +1035,23 @@ final class MeshAppController extends ChangeNotifier {
     await ep2.requestStats();
   }
 
+  Future<void> startEp2WifiUpdate() async {
+    final ep2 = _ep2;
+    if (ep2 == null || !ep2Connected) return;
+    ep2OtaSsid = null;
+    ep2OtaPassword = null;
+    ep2OtaUrl = null;
+    _addEp2Log('WIFI_UPDATE requested');
+    notifyListeners();
+    try {
+      await ep2.startWifiUpdate();
+    } catch (error) {
+      ep2Error = '$error';
+      _addEp2Log('WIFI_UPDATE ERROR $error');
+      notifyListeners();
+    }
+  }
+
   void clearEp2Log() {
     ep2Log.clear();
     notifyListeners();
@@ -1071,6 +1091,14 @@ final class MeshAppController extends ChangeNotifier {
       _addEp2Log(
         'INFO node=${event.nodeId} fw=${event.firmware} radio=${event.radioState} profile=${event.profile}',
       );
+      notifyListeners();
+      return;
+    }
+    if (event is Ep2OtaReadyEvent) {
+      ep2OtaSsid = event.ssid;
+      ep2OtaPassword = event.password;
+      ep2OtaUrl = event.url;
+      _addEp2Log('OTA READY ' + event.ssid + ' ' + event.url);
       notifyListeners();
       return;
     }
