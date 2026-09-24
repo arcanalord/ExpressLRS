@@ -10,12 +10,14 @@ final class OfflineMapPackage {
     required this.name,
     required this.bytes,
     required this.active,
+    required this.selected,
   });
 
   final String id;
   final String name;
   final int bytes;
   final bool active;
+  final bool selected;
 
   factory OfflineMapPackage.fromMap(Map<Object?, Object?> raw) =>
       OfflineMapPackage(
@@ -23,6 +25,7 @@ final class OfflineMapPackage {
         name: raw['name'] as String? ?? raw['id'] as String,
         bytes: (raw['bytes'] as num?)?.toInt() ?? 0,
         active: raw['active'] == true,
+        selected: raw['selected'] == true || raw['active'] == true,
       );
 }
 
