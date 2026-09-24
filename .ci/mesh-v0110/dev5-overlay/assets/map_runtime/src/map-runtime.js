@@ -85,50 +85,81 @@ async function createMap(){
     window.maplibregl = maplibregl;
     const protocol = new window.pmtiles.Protocol({metadata:true});
     maplibregl.addProtocol('pmtiles', protocol.tile);
-    let style=emptyStyle(), center=[0,0], zoom=1, packageReady=false, mapMode='grid', mapError='';
-    try {
-      const source=nativePmtilesSource();
-      const archive=new window.pmtiles.PMTiles(source);
-      protocol.add(archive);
-      const sourceUrl='pmtiles://mesh-native-active';
-      const header=await archive.getHeader();
-      center=[header.centerLon||0,header.centerLat||0];
-      zoom=header.centerZoom||Math.max(1,header.minZoom||1);
-      if(header.tileType===window.pmtiles.TileType.Mvt){
-        let layerNames=[];
-        try {
-          const metadata=await archive.getMetadata();
-          layerNames=(metadata?.vector_layers||[]).map(layer=>String(layer?.id||'')).filter(Boolean);
-        } catch (_) {}
-        style=vectorStyle(sourceUrl,layerNames);
-      } else {
-        style={version:8,sources:{basemap:{type:'raster',url:sourceUrl,tileSize:256}},layers:[{id:'basemap',type:'raster',source:'basemap'}]};
-      }
-      packageReady=true;
-      mapMode='pmtiles';
-    } catch (e) {
-      mapError=String(e||'PMTiles error');
+
+    const requestedMode=window.MeshBridge?.sourceMode?.()||'online';
+    let style=emptyStyle(), center=[0,0], zoom=2, mapMode='grid', mapError='';
+
+    if(requestedMode==='online'){
       if(navigator.onLine!==false){
         style=rasterStyle('https://tile.openstreetmap.org/{z}/{x}/{y}.png');
-        center=[0,0];
-        zoom=2;
         mapMode='osm';
+      } else {
+        mapMode='grid';
+      }
+    } else {
+      try {
+        const source=nativePmtilesSource();
+        const archive=new window.pmtiles.PMTiles(source);
+        protocol.add(archive);
+        const sourceUrl='pmtiles://mesh-native-active';
+        const header=await archive.getHeader();
+        center=[header.centerLon||0,header.centerLat||0];
+        zoom=header.centerZoom||Math.max(1,header.minZoom||1);
+        if(header.tileType===window.pmtiles.TileType.Mvt){
+          let layerNames=[];
+          try {
+            const metadata=await archive.getMetadata();
+            layerNames=(metadata?.vector_layers||[])
+              .map(layer=>String(layer?.id||''))
+              .filter(Boolean);
+          } catch (_) {}
+          style=vectorStyle(sourceUrl,layerNames);
+        } else {
+          style={
+            version:8,
+            sources:{basemap:{type:'raster',url:sourceUrl,tileSize:256}},
+            layers:[{id:'basemap',type:'raster',source:'basemap'}]
+          };
+        }
+        mapMode='pmtiles';
+      } catch (e) {
+        mapError=String(e||'PMTiles error');
+        mapMode='grid';
       }
     }
-    map = new maplibregl.Map({container:'map',style,center,zoom,attributionControl:false,fadeDuration:0});
+
+    map = new maplibregl.Map({
+      container:'map',
+      style,
+      center,
+      zoom,
+      attributionControl:false,
+      fadeDuration:0
+    });
     map.addControl(new maplibregl.NavigationControl({showCompass:false}),'bottom-right');
+
     map.on('load',()=>{
       fallbackEl.style.display=mapMode==='grid'?'flex':'none';
+      if(mapMode==='grid'){
+        fallbackEl.textContent=requestedMode==='offline'
+          ? 'Офлайн-карта не открылась. Выберите другой PMTiles или переключитесь в Онлайн.'
+          : 'Нет сети. Точки и координаты продолжают работать.';
+      }
       installPointLayer();
       if(mapMode==='pmtiles') status('Офлайн PMTiles');
-      else if(mapMode==='osm') status('OSM · лёгкая карта');
+      else if(mapMode==='osm') status('Онлайн OSM');
+      else if(requestedMode==='offline') status('Ошибка офлайн-карты');
       else status('Локальная сетка');
       bridgeReady();
     });
+
     map.on('error',event=>{
-      if(mapMode==='pmtiles'){
-        mapError=String(event?.error?.message||event?.error||mapError||'Ошибка PMTiles');
+      const message=String(event?.error?.message||event?.error||mapError||'Ошибка карты');
+      if(requestedMode==='offline'){
         status('Ошибка офлайн-карты');
+        mapError=message;
+      } else {
+        status('Ошибка онлайн-карты');
       }
     });
     map.on('styledata',()=>{pointSourceReady=false;installPointLayer();});
@@ -141,11 +172,13 @@ async function createMap(){
     bridgeReady();
     fallbackEl.addEventListener('click', ev=>{
       const r=fallbackEl.getBoundingClientRect();
-      const nx=(ev.clientX-r.left)/Math.max(1,r.width); const ny=(ev.clientY-r.top)/Math.max(1,r.height);
+      const nx=(ev.clientX-r.left)/Math.max(1,r.width);
+      const ny=(ev.clientY-r.top)/Math.max(1,r.height);
       bridgeTap((0.5-ny)*180,(nx-0.5)*360);
     });
   }
 }
+
 window.MeshMap={
   setPoints(points){pendingPoints=Array.isArray(points)?points:[];installPointLayer();},
   focus(lat,lon,zoom=15){if(map){map.easeTo({center:[Number(lon),Number(lat)],zoom:Number(zoom)||15,duration:250});}},
