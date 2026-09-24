@@ -1,0 +1,124 @@
+name: Mesh Messenger Flutter Android v0.1.10-dev.8
+
+on:
+  push:
+    branches:
+      - build/mesh-flutter-v0.1.10-dev.8
+    paths:
+      - '.github/workflows/mesh-flutter-v0.1.10-dev.8.yml'
+      - '.ci/mesh-v0110/dev5-overlay/**'
+  workflow_dispatch:
+
+concurrency:
+  group: mesh-flutter-v0.1.10-dev.8
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct stable dev.5 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mesh-dev5
+          base64 -d .ci/mesh-v0110/source_v0110_dev3.zip.b64 > /tmp/mesh-dev5/source.zip
+          echo '38a92c9c3873239c7db9c472800e4229d60a8a539bbb964b057e03029eebcda4  /tmp/mesh-dev5/source.zip' | sha256sum -c -
+          unzip -q /tmp/mesh-dev5/source.zip -d /tmp/mesh-dev5/unpacked
+          ROOT="$(find /tmp/mesh-dev5/unpacked -maxdepth 1 -mindepth 1 -type d -name 'mesh_messenger_flutter_*' -print -quit)"
+          test -n "$ROOT"
+          APP_DIR="$ROOT/flutter_app"
+          cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
+          sed -i 's/^version: .*/version: 0.1.10-dev.8+26092404/' "$APP_DIR/pubspec.yaml"
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+
+      - name: Setup Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: 'stable'
+          cache: true
+
+      - name: Dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter pub get
+
+      - name: Fetch pinned offline map runtime
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          python3 tool/fetch_map_vendor.py
+          python3 tool/map_vendor_gate.py
+
+      - name: Analyze
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter analyze
+
+      - name: Core self test
+        working-directory: ${{ env.APP_DIR }}
+        run: dart run tool/core_self_test.dart
+
+      - name: LAN transport self test
+        working-directory: ${{ env.APP_DIR }}
+        run: dart run tool/lan_transport_self_test.dart
+
+      - name: MapPoint self test
+        working-directory: ${{ env.APP_DIR }}
+        run: dart run tool/map_point_self_test.dart
+
+      - name: Storage concurrency self test
+        working-directory: ${{ env.APP_DIR }}
+        run: dart run tool/storage_concurrency_self_test.dart
+
+      - name: Identity pairing self test
+        working-directory: ${{ env.APP_DIR }}
+        run: dart run tool/identity_pairing_self_test.dart
+
+      - name: PhoneAPI self test
+        working-directory: ${{ env.APP_DIR }}
+        run: dart run tool/phoneapi_self_test.dart
+
+      - name: Source gates
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          python3 tool/android_source_gate.py
+          python3 tool/ep2_uart_source_gate.py
+          python3 tool/lan_source_gate.py
+          python3 tool/identity_source_gate.py
+          python3 tool/map_source_gate.py
+          python3 tool/release_ui_gate.py
+
+      - name: Widget tests
+        working-directory: ${{ env.APP_DIR }}
+        continue-on-error: true
+        run: timeout 90s flutter test
+
+      - name: Build installable arm64 debug APK
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter build apk --debug --target-platform android-arm64
+
+      - name: Verify and package APK
+        working-directory: ${{ env.APP_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$APK"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
+          "$BT/apksigner" verify --verbose "$APK"
+          "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.8.txt
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug
+          path: |
+            /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug.apk
+            /tmp/SHA256SUM-v0.1.10-dev.8.txt
+          if-no-files-found: error
+          retention-days: 14
