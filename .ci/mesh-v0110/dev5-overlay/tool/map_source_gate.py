@@ -24,7 +24,7 @@ required = [
     ('offline_label', "'Офлайн'", text['map_page']),
     ('pmtiles_import', 'importPackage', text['offline_sheet']),
     ('pmtiles_delete_ui', 'deletePackage', text['offline_sheet']),
-    ('pmtiles_disable_ui', 'setActive(null)', text['offline_sheet']),
+    ('pmtiles_online_switch_ui', "setSourceMode('online')", text['offline_sheet']),
     ('map_view_recreate', 'ValueKey(widget.reloadToken)', text['bridge']),
     ('map_bridge_dispose', 'setMethodCallHandler(null)', text['bridge']),
     ('range_requests', 'Content-Range', text['native_view']),
