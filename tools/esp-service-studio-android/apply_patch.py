@@ -799,6 +799,22 @@ gradle = replace_once(
     "implementation 'androidx.annotation:annotation:1.8.2'",
     "usb-serial-for-android 3.11.0 with Kotlin-compatible annotation",
 )
+
+# The pinned upstream compiles with Kotlin 1.9.22. A newer transitive AndroidX
+# metadata chain can otherwise upgrade kotlin-stdlib to 2.2.x, which Kotlin
+# 1.9 cannot read. Keep the runtime/compiler line aligned without upgrading the
+# whole Android Gradle toolchain.
+gradle += """
+configurations.configureEach {
+    resolutionStrategy {
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22'
+        force 'androidx.annotation:annotation:1.8.2'
+        force 'androidx.annotation:annotation-jvm:1.8.2'
+    }
+}
+"""
 gradle_path.write_text(gradle, encoding="utf-8")
 
 # CI sanity checks: fail the build rather than silently ship an unpatched APK.

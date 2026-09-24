@@ -51,6 +51,7 @@ jobs:
           grep -q "IMAGE_OUT_OF_FLASH" upstream/app/src/main/assets/flash.html
           grep -q "FLASH_BOUNDS_OK" upstream/app/src/main/assets/flash.html
           grep -q "androidx.annotation:annotation:1.8.2" upstream/app/build.gradle
+          grep -q "kotlin-stdlib:1.9.22" upstream/app/build.gradle
 
       - name: Bundle esptool-js 0.7.0
         shell: bash
@@ -62,6 +63,19 @@ jobs:
           chmod +x scripts/bundle-esptool.sh
           ./scripts/bundle-esptool.sh
           test -s app/src/main/assets/esptool.bundle.js
+
+      - name: Inspect resolved Kotlin dependencies
+        shell: bash
+        working-directory: upstream
+        run: |
+          set -euxo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:dependencyInsight \
+            --dependency kotlin-stdlib \
+            --configuration debugCompileClasspath
+          ./gradlew --no-daemon :app:dependencyInsight \
+            --dependency androidx.annotation \
+            --configuration debugCompileClasspath
 
       - name: Build debug APK
         shell: bash

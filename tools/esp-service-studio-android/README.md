@@ -37,6 +37,7 @@ The v0.5 dependency changes are isolated in one release so hardware behavior can
 - aborts preflight with `IMAGE_OUT_OF_FLASH` / `PREFLIGHT_FAIL` if a selected binary would extend beyond the detected flash;
 - emits `FLASH_BOUNDS_OK` when the full image set fits, and `FLASH_BOUNDS_UNKNOWN` when the chip does not report a usable size.
 - keeps `usb-serial-for-android 3.11.0`, but excludes its `androidx.annotation 1.10.0` transitive dependency and pins `androidx.annotation 1.8.2` so the pinned Kotlin 1.9.22 / AGP 8.2.2 toolchain can compile the APK.
+- forces `kotlin-stdlib`, `kotlin-stdlib-jdk7`, and `kotlin-stdlib-jdk8` to 1.9.22 across configurations; CI prints `dependencyInsight` for Kotlin and AndroidX annotation before assembling so future transitive version drift is visible.
 
 - preset auto-selection uses the ROM target's `BOOTLOADER_FLASH_OFFSET`: `0x0` selects the S3/C2/C3/C6/H2/C61 layout, `0x1000` selects ESP32/ESP32-S2, ESP8266/8285 remains single-image; other offsets are reported but never auto-selected.
 
