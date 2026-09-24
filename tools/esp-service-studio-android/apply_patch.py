@@ -484,7 +484,7 @@ html = replace_once(
 
 # v0.3: when flashing directly through ROM (manual BOOT, no stub), use the
 # chip ROM block size (normally 0x400 = 1024 B). Also do not send FLASH_END
-# after a normal ROM write; esptool-js 0.6.1 only does that for the stub.
+# after a normal ROM write; esptool-js 0.7.0 only does that for the stub.
 html = replace_once(
     html,
     "  const BS = loader.FLASH_WRITE_SIZE;  // 16384 со стабом\n",
@@ -515,8 +515,17 @@ bridge = replace_once(
     "    @JavascriptInterface\n"
     "    fun usbVendorId(): Int = usbManager.currentVendorId()\n\n"
     "    @JavascriptInterface\n"
-    "    fun usbProductId(): Int = usbManager.currentProductId()\n\n",
+    "    fun usbProductId(): Int = usbManager.currentProductId()\n\n"
+    "    @JavascriptInterface\n"
+    "    fun serialError(): String = usbManager.takeIoError()\n\n",
     "USB ID bridge",
+)
+bridge = replace_once(
+    bridge,
+    "    @JavascriptInterface\n    fun write(b64: String) {\n        usbManager.write(Base64.decode(b64, Base64.NO_WRAP))\n    }\n",
+    "    @JavascriptInterface\n"
+    "    fun write(b64: String): String = usbManager.write(Base64.decode(b64, Base64.NO_WRAP))\n",
+    "write result bridge",
 )
 bridge_path.write_text(bridge, encoding="utf-8")
 
@@ -529,7 +538,8 @@ usb = replace_once(
     "    private var readThread: Thread? = null\n"
     "    private var selectedDeviceName: String? = null\n"
     "    private var selectedVendorId: Int = 0\n"
-    "    private var selectedProductId: Int = 0\n",
+    "    private var selectedProductId: Int = 0\n"
+    "    @Volatile private var lastIoError: String? = null\n",
     "selected USB state",
 )
 old_find = """    /** Первое подключённое устройство, для которого есть serial-драйвер. */
@@ -570,6 +580,71 @@ new_find = """    /**
     }
 """
 usb = replace_once(usb, old_find, new_find, "pinned USB device")
+
+old_write = """    fun write(data: ByteArray) {
+        try {
+            val p = port ?: return
+            if (data.size <= WRITE_CHUNK) {
+                p.write(data, 2000)
+                return
+            }
+            var off = 0
+            while (off < data.size) {
+                val n = minOf(WRITE_CHUNK, data.size - off)
+                p.write(data.copyOfRange(off, off + n), 2000)
+                off += n
+                if (WRITE_PACING_MS > 0) Thread.sleep(WRITE_PACING_MS)
+            }
+        } catch (e: Exception) { Log.e(TAG, "write error", e) }
+    }
+"""
+new_write = """    fun write(data: ByteArray): String {
+        return try {
+            val p = port ?: return "error: serial port is not open"
+            if (data.size <= WRITE_CHUNK) {
+                p.write(data, 3000)
+            } else {
+                var off = 0
+                while (off < data.size) {
+                    val n = minOf(WRITE_CHUNK, data.size - off)
+                    p.write(data.copyOfRange(off, off + n), 3000)
+                    off += n
+                    if (WRITE_PACING_MS > 0) Thread.sleep(WRITE_PACING_MS)
+                }
+            }
+            "ok"
+        } catch (e: Exception) {
+            val msg = "serial write: ${e.message ?: e.javaClass.simpleName}"
+            lastIoError = msg
+            Log.e(TAG, msg, e)
+            "error: $msg"
+        }
+    }
+
+    fun takeIoError(): String {
+        val error = lastIoError ?: return ""
+        lastIoError = null
+        return error
+    }
+"""
+usb = replace_once(usb, old_write, new_write, "serial write error propagation")
+
+usb = replace_once(
+    usb,
+    "            } catch (e: Exception) {\n"
+    "                if (running) Log.e(TAG, \"read error\", e)\n"
+    "                break\n"
+    "            }\n",
+    "            } catch (e: Exception) {\n"
+    "                if (running) {\n"
+    "                    lastIoError = \"serial read: ${e.message ?: e.javaClass.simpleName}\"\n"
+    "                    Log.e(TAG, lastIoError, e)\n"
+    "                }\n"
+    "                break\n"
+    "            }\n",
+    "serial read error propagation",
+)
+
 usb_path.write_text(usb, encoding="utf-8")
 
 # CI sanity checks: fail the build rather than silently ship an unpatched APK.
@@ -586,6 +661,10 @@ checks = [
     "async function doProbe()",
     "validateRanges(fileArray)",
     "ESP8266 / ESP8285",
+    "function diagnosticCode(stage, error)",
+    "diag('USB_OK'",
+    "WRITE_TIMEOUT",
+    "Android.serialError",
 ]
 for needle in checks:
     if needle not in patched:
@@ -593,4 +672,4 @@ for needle in checks:
 if "getInfo() { return { usbVendorId: 0x303A" in patched:
     raise SystemExit("hard-coded USB IDs survived patch")
 
-print("ESP Service Studio Android v0.4 patch applied successfully")
+print("ESP Service Studio Android v0.5 patch applied successfully")
