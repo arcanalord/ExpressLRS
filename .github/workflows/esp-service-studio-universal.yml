@@ -1,0 +1,75 @@
+name: ESP Service Studio Universal Flutter
+
+on:
+  push:
+    branches:
+      - esp-service-studio-universal
+    paths:
+      - 'tools/esp-service-studio-universal/**'
+      - '.github/workflows/esp-service-studio-universal.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: esp-service-studio-universal
+  cancel-in-progress: true
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Create Flutter shell
+        run: |
+          flutter create --platforms=android --org com.arcanalord --project-name service_studio /tmp/service_studio
+          cp -a tools/esp-service-studio-universal/source_overlay/. /tmp/service_studio/
+          mkdir -p /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio
+          cp tools/esp-service-studio-universal/source_overlay/android_overlay/MainActivity.kt              /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio/MainActivity.kt
+          cd /tmp/service_studio
+          python3 android_overlay/patch_android.py
+
+      - name: Dependencies
+        working-directory: /tmp/service_studio
+        run: flutter pub get
+
+      - name: Profile self test
+        working-directory: /tmp/service_studio
+        run: dart run tool/profile_self_test.dart
+
+      - name: Analyze
+        working-directory: /tmp/service_studio
+        run: flutter analyze
+
+      - name: Build APK
+        working-directory: /tmp/service_studio
+        run: flutter build apk --debug --target-platform android-arm64
+
+      - name: Verify APK
+        working-directory: /tmp/service_studio
+        run: |
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$APK"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
+          "$BT/apksigner" verify --verbose "$APK"
+          "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
+          cp "$APK" /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.1-arm64.apk
+          sha256sum /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.1-arm64.apk > /tmp/SHA256SUMS.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ESP-Service-Studio-Universal-v0.9.0-alpha.1
+          path: |
+            /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.1-arm64.apk
+            /tmp/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14

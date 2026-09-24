@@ -1,0 +1,106 @@
+[
+  {
+    "id": "ep2_esp8285_sx1280",
+    "name": "EP2 / совместимые — ESP8285 + SX1280",
+    "kind": "receiver",
+    "controller": {
+      "family": "esp8285",
+      "serviceTransport": "esp_rom",
+      "defaultOffsets": ["0x0"],
+      "bootMethod": "boot_pad_gnd"
+    },
+    "radio": {
+      "family": "sx1280",
+      "serviceKind": "register_service",
+      "access": "controller_spi_or_service_bridge",
+      "microcodeUpdate": false
+    },
+    "hostProtocols": ["ep2_link_ascii", "crsf_diagnostics"],
+    "notes": [
+      "Для обычного firmware.bin ESP8285 адрес записи по умолчанию 0x0.",
+      "SX1280 обычно не получает отдельный пользовательский firmware.bin; обслуживается по SPI."
+    ]
+  },
+  {
+    "id": "mesh_esp32s3_lr2021",
+    "name": "Mesh Messenger — ESP32-S3 + LR2021",
+    "kind": "mesh_node",
+    "controller": {
+      "family": "esp32s3",
+      "serviceTransport": "esp_rom_or_native_usb",
+      "defaultOffsets": ["0x0"],
+      "bootMethod": "board_profile"
+    },
+    "radio": {
+      "family": "lr2021",
+      "serviceKind": "capability_driven",
+      "access": "controller_spi_or_service_bridge",
+      "microcodeUpdate": null
+    },
+    "hostProtocols": ["mm_uart_1"],
+    "notes": [
+      "Функции радио определяются через возможности устройства, а не только по имени чипа.",
+      "Отдельное обновление радиочипа разрешается только если профиль и сам модуль это подтверждают."
+    ]
+  },
+  {
+    "id": "mesh_esp32s3_lr1121",
+    "name": "Mesh Messenger — ESP32-S3 + LR1121",
+    "kind": "mesh_node",
+    "controller": {
+      "family": "esp32s3",
+      "serviceTransport": "esp_rom_or_native_usb",
+      "defaultOffsets": ["0x0"],
+      "bootMethod": "board_profile"
+    },
+    "radio": {
+      "family": "lr1121",
+      "serviceKind": "microcode_if_supported",
+      "access": "controller_spi_or_service_bridge",
+      "microcodeUpdate": true
+    },
+    "hostProtocols": ["mm_uart_1"],
+    "notes": [
+      "Контроллер и радиочип рассматриваются как два независимых объекта обслуживания.",
+      "Обновление микрокода радио выполняется только после проверки совместимости."
+    ]
+  },
+  {
+    "id": "universal_esp32s3_sx1280",
+    "name": "Универсальная плата — ESP32-S3 + SX1280/1281",
+    "kind": "universal",
+    "controller": {
+      "family": "esp32s3",
+      "serviceTransport": "esp_rom_or_native_usb",
+      "defaultOffsets": ["0x0"],
+      "bootMethod": "board_profile"
+    },
+    "radio": {
+      "family": "sx1280_family",
+      "serviceKind": "register_service",
+      "access": "controller_spi_or_service_bridge",
+      "microcodeUpdate": false
+    },
+    "hostProtocols": ["mm_uart_1"],
+    "notes": [
+      "Подходит для собственного железа Mesh Messenger и лабораторной отладки SX1280/SX1281."
+    ]
+  },
+  {
+    "id": "bare_radio_service_bridge",
+    "name": "Отдельный радиомодуль через Service Bridge",
+    "kind": "bare_radio",
+    "controller": null,
+    "radio": {
+      "family": "auto",
+      "serviceKind": "probe_first",
+      "access": "service_bridge_spi",
+      "microcodeUpdate": null
+    },
+    "hostProtocols": ["ss_bridge_1"],
+    "notes": [
+      "Телефон подключается к ESP32-S3 Service Bridge, а мост — к радиомодулю по SPI.",
+      "Сначала безопасное определение чипа и возможностей; запись разрешается только после этого."
+    ]
+  }
+]

@@ -1,0 +1,8 @@
+analyzer:
+  exclude:
+    - build/**
+linter:
+  rules:
+    avoid_print: false
+    prefer_const_constructors: true
+    use_super_parameters: true
