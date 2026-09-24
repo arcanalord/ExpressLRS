@@ -41,7 +41,7 @@ jobs:
           git checkout c4036ace9d2f5526e3535d1ac8bfb8ac3bafc23d
           test "$(git rev-parse HEAD)" = "c4036ace9d2f5526e3535d1ac8bfb8ac3bafc23d"
 
-      - name: Apply ESP Service Studio v0.2 patch
+      - name: Apply ESP Service Studio v0.3 patch
         shell: bash
         run: |
           set -euxo pipefail
@@ -69,8 +69,8 @@ jobs:
           ./gradlew --no-daemon clean assembleDebug \
             -PappId=com.arcanalord.espservicestudio \
             -PappLabel='ESP Service Studio' \
-            -PversionName=0.2.0 \
-            -PversionCode=2
+            -PversionName=0.3.0 \
+            -PversionCode=3
 
       - name: Prepare Pixel 7a artifact
         shell: bash
@@ -79,7 +79,7 @@ jobs:
           APK="upstream/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
           mkdir -p artifact
-          cp "$APK" artifact/ESP_Service_Studio_Pixel7a_v0.2.apk
+          cp "$APK" artifact/ESP_Service_Studio_Pixel7a_v0.3.apk
           sha256sum artifact/ESP_Service_Studio_Pixel7a_v0.2.apk | tee artifact/SHA256SUMS.txt
           unzip -t artifact/ESP_Service_Studio_Pixel7a_v0.2.apk
 
@@ -94,7 +94,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ESP-Service-Studio-Pixel7a-v0.2
+          name: ESP-Service-Studio-Pixel7a-v0.3
           path: artifact/
           if-no-files-found: error
           retention-days: 30
