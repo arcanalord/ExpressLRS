@@ -1,0 +1,101 @@
+name: EMMana rev27 Windows gate
+
+on:
+  push:
+    branches: [ emmana-next-alpha20 ]
+    paths:
+      - '.github/workflows/emmana-rev27-windows.yml'
+  workflow_dispatch:
+
+jobs:
+  rev27-windows:
+    runs-on: windows-2025
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch exact rev27 source from Dropbox
+        shell: pwsh
+        run: |
+          $url = 'https://uc8819e1d68c25828af86154fd55.dl.dropboxusercontent.com/cd/0/get/DIwUOqxLmSvV5NMWKNsi3gkKZEzR9Uj3TVxLLw5e1ks4CwaGGkSBaZb348QwtvF-8EswKtUmReV3PGcBl_yPeAIpjvnaWabqbLEKj_N1yhaGSDtodUXrPNLXLhwm6xt15YpQ2_EZhLvNpfnedGnAghXtfgkWmn78vwMVlJbRC5O9Nw/file?c_luid=cfbe8875'
+          Invoke-WebRequest -Uri $url -OutFile rev27.zip -TimeoutSec 120
+          $sha = (Get-FileHash rev27.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sha -ne '6bc453110c666b78aef85c6fe8d96f2510d453e7df1d97118983dd4d79f9ddde') { throw "rev27 source SHA mismatch: $sha" }
+          Expand-Archive rev27.zip -DestinationPath src -Force
+          $v = (Get-Content src/emmana_rev27/VERSION).Trim()
+          if ($v -ne '0.1.0-alpha.20-rev27') { throw "Unexpected VERSION: $v" }
+          Write-Host "REV27_SOURCE_PASS sha=$sha"
+
+      - name: Install C++ dependencies
+        shell: pwsh
+        working-directory: src/emmana_rev27
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-json:x64-windows-static eigen3:x64-windows-static
+
+      - name: Configure and build
+        shell: pwsh
+        working-directory: src/emmana_rev27
+        run: |
+          cmake -S . -B build-win -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static -DEMNEXT_REQUIRE_EIGEN=ON
+          cmake --build build-win --config Release --parallel 2
+
+      - name: Regression and rev27 UI gate
+        shell: pwsh
+        working-directory: src/emmana_rev27
+        run: |
+          ctest --test-dir build-win -C Release --output-on-failure
+          python tests/test_rev27_product_ui.py .
+          python tests/test_primary_actions.py .
+          python tests/test_geometry_editor.py .
+          python tests/test_ui_surface_state.py .
+          python tests/test_help_registry.py .
+          python tests/test_measurement_pipeline.py .
+          python tests/test_product_workflow.py .
+          python tests/test_windows_launcher.py .
+          python tests/test_yagi_rev26.py --root . --emnext build-win/Release/emnext.exe
+
+      - name: Build portable Windows launcher
+        shell: pwsh
+        working-directory: src/emmana_rev27
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller
+          python -m PyInstaller --noconfirm --clean --onefile --name EMMana-Next --hidden-import json --hidden-import hashlib --hidden-import importlib.util --hidden-import math --hidden-import subprocess --hidden-import tempfile --hidden-import urllib.parse --hidden-import http --hidden-import http.server --hidden-import cmath --hidden-import csv --hidden-import io --hidden-import re --hidden-import typing --add-binary "build-win/Release/emnext.exe;EMMana-Next" --add-data "apps;EMMana-Next/apps" --add-data "benchmarks;EMMana-Next/benchmarks" --add-data "schemas;EMMana-Next/schemas" --add-data "VERSION;EMMana-Next" apps/windows_launcher.py
+
+      - name: Portable runtime rev27 UI gate
+        shell: pwsh
+        working-directory: src/emmana_rev27
+        run: |
+          $port=8799
+          $proc=Start-Process -FilePath "dist/EMMana-Next.exe" -ArgumentList "--no-browser","--port","$port" -PassThru -WindowStyle Hidden
+          try {
+            $health=$null
+            for($i=0;$i -lt 60;$i++){Start-Sleep -Seconds 1;try{$health=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2;if($health.ok){break}}catch{}}
+            if(-not $health -or $health.version -ne '0.1.0-alpha.20-rev27'){throw "Portable rev27 health/version failed"}
+            $page=(Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 10).Content
+            foreach($m in @('sweep-cursor','variant-compare','yagi-quick-panel','measurement-demo')){if($page -notmatch [regex]::Escape($m)){throw "Missing UI marker: $m"}}
+            $app=(Invoke-WebRequest -Uri "http://127.0.0.1:$port/app.js" -TimeoutSec 10).Content
+            foreach($m in @('initSweepInteractions','captureVariantSnapshot','renderVariantComparison','ui-rev27')){if($app -notmatch [regex]::Escape($m)){throw "Missing JS marker: $m"}}
+            Write-Host "REV27_PORTABLE_UI_PASS"
+          } finally {
+            if($proc -and -not $proc.HasExited){Stop-Process -Id $proc.Id -Force}
+          }
+
+      - name: Package Windows rev27
+        shell: pwsh
+        working-directory: src/emmana_rev27
+        run: |
+          $version=(Get-Content VERSION).Trim()
+          $pkg="dist/EMMana-Next-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          Copy-Item dist/EMMana-Next.exe $pkg/EMMana-Next.exe
+          Copy-Item build-win/Release/emnext.exe $pkg/emnext-cli.exe
+          Copy-Item VERSION $pkg/
+          @("EMMana-Next Portable Windows","","Запустите EMMana-Next.exe.","rev27: интерактивный Sweep и сравнение вариантов A/B/C.","Расчёты выполняются локально.") | Set-Content -Encoding UTF8 "$pkg/README-WINDOWS.txt"
+          Compress-Archive -Path "$pkg/*" -DestinationPath "$pkg.zip" -Force
+
+      - name: Upload rev27 Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-rev27-windows-x64
+          path: src/emmana_rev27/dist/EMMana-Next-0.1.0-alpha.20-rev27-windows-x64.zip
+          if-no-files-found: error
