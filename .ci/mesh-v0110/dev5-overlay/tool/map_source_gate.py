@@ -25,6 +25,8 @@ required = [
     ('map_view_recreate', 'ValueKey(widget.reloadToken)', text['bridge']),
     ('map_bridge_dispose', 'setMethodCallHandler(null)', text['bridge']),
     ('range_requests', 'Content-Range', text['native_view']),
+    ('native_pmtiles_bytes', 'readPmtiles', text['native_view']),
+    ('native_pmtiles_source', 'nativePmtilesSource()', text['runtime']),
     ('local_origin', 'https://app.local', text['native_view']),
     ('native_ready_bridge', 'onMapReady', text['native_view']),
     ('flutter_ready_handshake', "call.method == 'mapReady'", text['bridge']),
