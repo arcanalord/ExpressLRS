@@ -282,6 +282,27 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         ),
                       ),
                     ),
+                  const SizedBox(height: 8),
+                  Card(
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'UART диагностика',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 6),
+                          Text('Протокол: ${controller.ep2DetectedProtocol}'),
+                          Text('RX: ${controller.ep2RxBytes} байт'),
+                          if (controller.ep2LastHex.isNotEmpty)
+                            SelectableText('HEX: ${controller.ep2LastHex}'),
+                        ],
+                      ),
+                    ),
+                  ),
                   _LogExpansion(
                     title: 'Диагностика радиомодуля',
                     lines: controller.ep2Log,
