@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/models.dart';
 import '../../../platform/android_map_bridge.dart';
 import '../../application/mesh_app_controller.dart';
 
