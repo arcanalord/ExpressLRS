@@ -17,6 +17,9 @@ checks = {
     'firmware INFO': "case 'INFO'",
     'base64url payload': 'base64Url',
     'contact binding': 'ep2NodeId',
+    'wifi ota command': 'startWifiUpdate',
+    'ota ready event': 'Ep2OtaReadyEvent',
+    'raw uart event': 'Ep2RawBytesEvent',
 }
 for label, needle in checks.items():
     assert needle in transport or needle in controller or needle in models, f'missing {label}'
@@ -34,3 +37,7 @@ assert 'cobs' not in transport.lower()
 assert 'mm-uart' not in transport.lower()
 
 print('EP2_UART_SOURCE_GATE_PASS')
+
+assert 'Wi-Fi обновление' in connection
+assert 'UART диагностика' in connection
+assert 'ep2DetectedProtocol' in controller
