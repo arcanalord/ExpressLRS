@@ -18,6 +18,7 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 html = html_path.read_text(encoding="utf-8")
 
 html = html.replace("<title>ESP Flash</title>", "<title>ESP Service Studio</title>")
+html = html.replace('<h1 id="title">ESP Flash</h1>', '<h1 id="title">ESP Service Studio</h1>')
 html = replace_once(
     html,
     "  label.field { display: block; font-size: 12px; color: #888; margin-bottom: 6px; }\n",
@@ -151,7 +152,7 @@ html = replace_once(
     "const t = () => I18N[lang];\n",
     "const t = () => I18N[lang];\n\n"
     "function diag(code, message, type = 'info') {\n"
-    "  log(\`[\${code}] \${message}\`, type);\n"
+    "  log(`[${code}] ${message}`, type);\n"
     "}\n\n"
     "function diagnosticCode(stage, error) {\n"
     "  const msg = String(error?.message || error || '').toLowerCase();\n"
@@ -673,7 +674,7 @@ html = replace_once(
     "    close: 'Close',\n",
     "    logTitle: 'Log',\n"
     "    exportLog: 'Export',\n"
-    "    exportLogFailed: e => \`Log export failed: \${e}\`,\n"
+    "    exportLogFailed: e => `Log export failed: ${e}`,\n"
     "    close: 'Close',\n",
     "english log export i18n",
 )
@@ -683,7 +684,7 @@ html = replace_once(
     "    close: 'Закрыть',\n",
     "    logTitle: 'Лог',\n"
     "    exportLog: 'Экспорт',\n"
-    "    exportLogFailed: e => \`Не удалось экспортировать лог: \${e}\`,\n"
+    "    exportLogFailed: e => `Не удалось экспортировать лог: ${e}`,\n"
     "    close: 'Закрыть',\n",
     "russian log export i18n",
 )
@@ -705,7 +706,7 @@ html = replace_once(
     "  const pid = Number(Android.usbProductId ? Android.usbProductId() : 0);\n"
     "  const profile = USB_PROFILES.find(p => p.vid === vid && (!p.pids || p.pids.includes(pid)));\n"
     "  const label = profile ? profile.label : 'Unknown USB serial';\n"
-    "  return \`\${label} (\${hexUsb(vid)}:\${hexUsb(pid)})\`;\n"
+    "  return `${label} (${hexUsb(vid)}:${hexUsb(pid)})`;\n"
     "}\n\n"
     "function diag(code, message, type = 'info') {\n",
     "USB adapter profiles",
@@ -727,7 +728,7 @@ html = replace_once(
     "  const manual = document.getElementById('manualBoot')?.checked ? 'on' : 'off';\n"
     "  const usb = Android.deviceInfo ? Android.deviceInfo() : '-';\n"
     "  return [\n"
-    "    'ESP Service Studio v0.7 diagnostic log',\n"
+    "    'ESP Service Studio v0.7.1 diagnostic log',\n"
     "    new Date().toISOString(),\n"
     "    'USB: ' + (usb || '-'),\n"
     "    'USB profile: ' + usbProfileText(),\n"
@@ -817,7 +818,7 @@ bridge = replace_once(
     "            \"ok\"\n"
     "        } catch (e: Exception) {\n"
     "            Log.e(TAG, \"shareText failed\", e)\n"
-    "            \"error: \${e.message ?: e.javaClass.simpleName}\"\n"
+    "            \"error: ${e.message ?: e.javaClass.simpleName}\"\n"
     "        }\n"
     "    }\n\n",
     "native diagnostic log share",
@@ -1005,4 +1006,4 @@ for needle in checks:
 if "getInfo() { return { usbVendorId: 0x303A" in patched:
     raise SystemExit("hard-coded USB IDs survived patch")
 
-print("ESP Service Studio Android v0.7 patch applied successfully")
+print("ESP Service Studio Android v0.7.1 patch applied successfully")
