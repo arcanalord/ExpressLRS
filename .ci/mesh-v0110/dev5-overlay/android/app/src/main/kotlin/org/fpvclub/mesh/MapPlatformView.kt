@@ -10,6 +10,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.util.Base64
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.StandardMessageCodec
@@ -18,6 +19,7 @@ import io.flutter.plugin.platform.PlatformViewFactory
 import java.io.FileInputStream
 import java.io.FilterInputStream
 import java.io.InputStream
+import java.io.RandomAccessFile
 
 class MapPlatformViewFactory(
     private val messenger: BinaryMessenger,
@@ -188,6 +190,22 @@ private class MapPlatformView(
     }
 
     inner class JsBridge {
+        @JavascriptInterface
+        fun readPmtiles(offsetText: String, lengthText: String): String {
+            val file = packageStore.activeFile() ?: return ""
+            val offset = offsetText.toLongOrNull() ?: return ""
+            val requested = lengthText.toIntOrNull() ?: return ""
+            if (offset < 0 || requested <= 0 || offset >= file.length()) return ""
+            val length = minOf(requested.toLong(), file.length() - offset).toInt()
+            if (length <= 0) return ""
+            val bytes = ByteArray(length)
+            RandomAccessFile(file, "r").use { input ->
+                input.seek(offset)
+                input.readFully(bytes)
+            }
+            return Base64.encodeToString(bytes, Base64.NO_WRAP)
+        }
+
         @JavascriptInterface
         fun onMapReady() {
             main.post { channel.invokeMethod("mapReady", null) }
