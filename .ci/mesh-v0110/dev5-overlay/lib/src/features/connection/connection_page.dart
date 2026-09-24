@@ -54,7 +54,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
     'ready' => 'Готово',
     'connected' => 'Подключено',
     'connecting' || 'starting' => 'Подключение…',
-    'handshaking' => 'Проверка радиомодуля…',
+    'handshaking' || 'probing' => 'Проверка радиомодуля…',
+    'crsf' => 'ELRS / CRSF',
+    'unknown' => 'Протокол не определён',
     'permission' => 'Нужно разрешение',
     'scanning' => 'Поиск…',
     'error' => 'Ошибка',
@@ -212,12 +214,53 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         ),
                     ],
                   ),
+                  if (controller.ep2Protocol != 'unknown' ||
+                      controller.ep2Baud != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      '${controller.ep2Protocol == 'unknown' ? 'Определение протокола' : controller.ep2Protocol}'
+                      '${controller.ep2Baud == null ? '' : ' · ${controller.ep2Baud} бод'}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
                   if (controller.ep2LocalNode != null ||
                       controller.ep2Firmware != null ||
                       controller.ep2Profile != null) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 6),
                     Text(
                       'Узел ${controller.ep2LocalNode ?? '—'} · ${controller.ep2Firmware ?? '—'} · ${controller.ep2Profile ?? '—'}',
+                    ),
+                  ],
+                  if (controller.ep2Connected) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: controller.pingEp2Neighbor,
+                          icon: const Icon(Icons.network_ping),
+                          label: const Text('PING соседнего узла'),
+                        ),
+                        if (controller.ep2PingResult != null)
+                          Chip(label: Text(controller.ep2PingResult!)),
+                      ],
+                    ),
+                  ],
+                  if (controller.ep2Rssi10 != null ||
+                      controller.ep2Snr10 != null ||
+                      controller.ep2RttMs != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'RSSI ${controller.ep2Rssi10 == null ? '—' : (controller.ep2Rssi10! / 10).toStringAsFixed(1)} dBm'
+                      ' · SNR ${controller.ep2Snr10 == null ? '—' : (controller.ep2Snr10! / 10).toStringAsFixed(1)} dB'
+                      ' · RTT ${controller.ep2RttMs ?? '—'} мс',
+                    ),
+                    Text(
+                      'TX ${controller.ep2TxCount ?? 0} · RX ${controller.ep2RxCount ?? 0} · retry ${controller.ep2RetryCount ?? 0} · loss ${controller.ep2LossCount ?? 0}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                   if (controller.ep2Error?.trim().isNotEmpty == true) ...[
@@ -273,12 +316,16 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         contentPadding: EdgeInsets.zero,
                         leading: const Icon(Icons.usb),
                         title: Text(device.name),
-                        subtitle: const Text('USB-устройство'),
+                        subtitle: Text(
+                          device.permission
+                              ? 'USB-устройство · разрешение есть'
+                              : 'USB-устройство · потребуется разрешение',
+                        ),
                         trailing: FilledButton(
-                          onPressed: controller.busy || controller.ep2Connected
+                          onPressed: controller.busy || ep2Active
                               ? null
                               : () => controller.connectEp2(device.deviceId),
-                          child: const Text('Подключить'),
+                          child: const Text('Авто'),
                         ),
                       ),
                     ),
