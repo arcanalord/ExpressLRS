@@ -1,0 +1,1215 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
+import '../../core/app_storage.dart';
+import '../../core/delivery.dart';
+import '../../core/identity_crypto.dart';
+import '../../core/messenger_core.dart';
+import '../../core/models.dart';
+import '../../platform/android_local_network_bridge.dart';
+import '../../platform/android_secure_identity_bridge.dart';
+import '../../platform/android_meshtastic_bridge.dart';
+import '../../platform/android_usb_serial_bridge.dart';
+import '../../platform/ep2_uart_transport.dart';
+import '../../platform/lan_transport.dart';
+import '../../platform/meshtastic_transport.dart';
+
+final class LanPairingSession {
+  const LanPairingSession({
+    required this.pairingId,
+    required this.peerMmId,
+    required this.peerLabel,
+    required this.fingerprint,
+    required this.identityPublicKey,
+    required this.agreementPublicKey,
+    required this.sas,
+    required this.initiator,
+    this.localConfirmed = false,
+    this.remoteConfirmed = false,
+  });
+
+  final String pairingId;
+  final String peerMmId;
+  final String peerLabel;
+  final String fingerprint;
+  final List<int> identityPublicKey;
+  final List<int> agreementPublicKey;
+  final String sas;
+  final bool initiator;
+  final bool localConfirmed;
+  final bool remoteConfirmed;
+
+  LanPairingSession copyWith({bool? localConfirmed, bool? remoteConfirmed}) =>
+      LanPairingSession(
+        pairingId: pairingId,
+        peerMmId: peerMmId,
+        peerLabel: peerLabel,
+        fingerprint: fingerprint,
+        identityPublicKey: identityPublicKey,
+        agreementPublicKey: agreementPublicKey,
+        sas: sas,
+        initiator: initiator,
+        localConfirmed: localConfirmed ?? this.localConfirmed,
+        remoteConfirmed: remoteConfirmed ?? this.remoteConfirmed,
+      );
+}
+
+final class MeshAppController extends ChangeNotifier {
+  MeshAppController._();
+
+  late final MeshMessengerCore _core;
+  late final LocalCryptoIdentity _identity;
+  LanTransport? _lan;
+  AndroidLocalNetworkBridge? _localNetworkBridge;
+  MeshtasticTransport? _meshtastic;
+  AndroidMeshtasticBridge? _androidBridge;
+  AndroidUsbSerialBridge? _usbBridge;
+  Ep2UartTransport? _ep2;
+  StreamSubscription<DeliveryEnvelope>? _deliverySub;
+  StreamSubscription<LanTransportEvent>? _lanSub;
+  StreamSubscription<MeshtasticTransportEvent>? _meshtasticSub;
+  StreamSubscription<AndroidMeshtasticEvent>? _androidSub;
+  StreamSubscription<Ep2TransportEvent>? _ep2Sub;
+  Timer? _maintenanceTimer;
+  bool _maintenanceBusy = false;
+
+  bool initialized = false;
+  bool busy = false;
+  String? selectedPeerMmId;
+  List<Contact> contacts = const [];
+  List<ConversationMessage> messages = const [];
+  MapPoint? requestedMapFocus;
+  int mapFocusSerial = 0;
+
+  String ownMmId = '';
+  String ownDeviceLabel = '';
+  String ownFingerprint = '';
+  String identitySeedStorage = '';
+  final Map<String, LanPairingSession> lanPairings =
+      <String, LanPairingSession>{};
+  String lanState = 'offline';
+  String? lanError;
+  String? lanNotice;
+  Map<String, dynamic> lanPermission = const {};
+  List<LanPeer> lanPeers = const [];
+  List<String> lanLocalAddresses = const [];
+  final List<String> lanLog = <String>[];
+  final Map<String, int> lanRttMs = <String, int>{};
+  final Set<String> lanProbePending = <String>{};
+
+  String radioState = 'unavailable';
+  String? radioError;
+  String? lastRadioNotice;
+  List<MeshtasticBleDevice> radioDevices = const [];
+  Map<String, dynamic> radioPermissions = const {};
+  Map<String, dynamic> radioDiagnostics = const {};
+  final List<String> radioLog = <String>[];
+
+  String ep2State = 'unavailable';
+  String? ep2Error;
+  int? ep2LocalNode;
+  String? ep2Firmware;
+  String? ep2Profile;
+  List<UsbSerialDevice> ep2Devices = const [];
+  final List<String> ep2Log = <String>[];
+
+  bool get hasLocalNetworkPermissionBridge => _localNetworkBridge != null;
+  bool get lanReady => _lan?.isAvailable ?? false;
+  bool get lanPermissionGranted => lanPermission['granted'] == true;
+  bool get lanPermissionRequired => lanPermission['required'] == true;
+  bool get hasAndroidMeshtastic => _androidBridge != null;
+  bool get radioConnected => _androidBridge?.connected ?? false;
+  bool get hasEp2Uart => _usbBridge != null;
+  bool get ep2Connected => _ep2?.isAvailable ?? false;
+
+  static Future<MeshAppController> create({
+    Directory? storageRoot,
+    bool startRuntime = true,
+  }) async {
+    final controller = MeshAppController._();
+    AndroidLocalNetworkBridge? localNetworkBridge;
+    AndroidMeshtasticBridge? bridge;
+    AndroidUsbSerialBridge? usbBridge;
+    Directory root;
+    if (Platform.isAndroid) {
+      localNetworkBridge = AndroidLocalNetworkBridge();
+      bridge = AndroidMeshtasticBridge();
+      usbBridge = AndroidUsbSerialBridge();
+      root = storageRoot ?? Directory(await bridge.appDataPath());
+    } else {
+      root =
+          storageRoot ??
+          Directory('${Directory.systemTemp.path}/mesh_messenger_flutter_dev');
+    }
+    await controller._init(
+      root,
+      localNetworkBridge,
+      bridge,
+      usbBridge,
+      startRuntime,
+    );
+    return controller;
+  }
+
+  Future<void> _init(
+    Directory root,
+    AndroidLocalNetworkBridge? localNetworkBridge,
+    AndroidMeshtasticBridge? bridge,
+    AndroidUsbSerialBridge? usbBridge,
+    bool startRuntime,
+  ) async {
+    _localNetworkBridge = localNetworkBridge;
+    _androidBridge = bridge;
+    _usbBridge = usbBridge;
+
+    final storage = AppStorage(root);
+    final legacyIdentity = await storage.loadOrCreateIdentity();
+    final seedStore = Platform.isAndroid
+        ? AndroidIdentitySeedStore()
+        : FileIdentitySeedStore(root);
+    final seeds = await seedStore.loadOrCreate();
+    _identity = await LocalCryptoIdentity.fromSeeds(
+      seeds: seeds,
+      label: legacyIdentity.label,
+    );
+    ownMmId = _identity.mmId;
+    ownDeviceLabel = _identity.label;
+    ownFingerprint = _identity.fingerprint;
+    identitySeedStorage = _identity.seedStorage;
+    await storage.savePublicIdentityMetadata(
+      mmId: ownMmId,
+      label: ownDeviceLabel,
+      fingerprint: ownFingerprint,
+      identityPublicKey: _identity.identityPublicKeyB64,
+      agreementPublicKey: _identity.agreementPublicKeyB64,
+      seedStorage: identitySeedStorage,
+    );
+
+    final transports = <MessageTransport>[];
+    final lan = LanTransport(ownMmId: ownMmId, deviceLabel: ownDeviceLabel);
+    _lan = lan;
+    transports.add(lan);
+    _lanSub = lan.events.listen(_onLanEvent);
+
+    if (bridge != null && usbBridge != null) {
+      final ep2 = Ep2UartTransport(
+        bridge: usbBridge,
+        resolvePeerNode: _resolveEp2Node,
+      );
+      _ep2 = ep2;
+      transports.add(ep2);
+      _ep2Sub = ep2.events.listen(_onEp2Event);
+      await refreshEp2Devices();
+
+      radioState = bridge.state;
+      final meshtastic = MeshtasticTransport(
+        isReady: () => bridge.connected,
+        sendToRadio: bridge.sendToRadio,
+        resolveNodeNum: _resolveNodeNum,
+      );
+      _meshtastic = meshtastic;
+      transports.add(meshtastic);
+      _androidSub = bridge.events.listen((event) {
+        if (event is AndroidMeshtasticState) {
+          radioState = event.state;
+          radioError = event.error;
+          _addRadioLog(
+            'STATE ${event.state}${event.error == null ? '' : ' | ${event.error}'}',
+          );
+          notifyListeners();
+        } else if (event is AndroidMeshtasticEnvelope) {
+          _addRadioLog('FROM_RADIO ${event.bytes.length} B');
+          meshtastic.ingestFromRadio(event.bytes);
+        } else if (event is AndroidMeshtasticLog) {
+          _addRadioLog(event.message, atMillis: event.atMillis);
+          notifyListeners();
+        }
+      });
+      _meshtasticSub = meshtastic.events.listen(_onMeshtasticEvent);
+      await refreshRadioDiagnostics();
+    }
+
+    _core = MeshMessengerCore(
+      ownMmId: ownMmId,
+      storage: storage,
+      transports: transports,
+    );
+    await _core.restore();
+    _deliverySub = _core.deliveryChanges.listen((_) {
+      if (initialized) notifyListeners();
+    });
+
+    contacts = await _core.contacts();
+    if (contacts.isEmpty) {
+      await _core.saveContact(
+        const Contact(
+          mmId: 'mm:demo-alexey',
+          displayName: '\u0410\u043b\u0435\u043a\u0441\u0435\u0439',
+        ),
+      );
+      contacts = await _core.contacts();
+    }
+    lan.setAllowedPeers(
+      contacts
+          .where((contact) => contact.verified)
+          .map((contact) => contact.mmId),
+    );
+    selectedPeerMmId = contacts.firstOrNull?.mmId;
+    await _reloadMessages();
+    initialized = true;
+
+    await refreshLanPermission();
+    if (startRuntime) {
+      if (lanPermissionGranted) {
+        await startLan();
+      } else {
+        lanState = 'permission';
+      }
+      _maintenanceTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => unawaited(_runMaintenance()),
+      );
+    }
+    notifyListeners();
+  }
+
+  Contact? get selectedContact {
+    final id = selectedPeerMmId;
+    if (id == null) return null;
+    return contacts.where((c) => c.mmId == id).firstOrNull;
+  }
+
+  List<DeliveryEnvelope> get pendingDeliveries => _core.pending;
+  DeliveryState? deliveryStateFor(String id) => _core.deliveryById(id)?.state;
+
+  List<ConversationMessage> get mapMessages =>
+      messages.where((message) => message.isMapPoint).toList(growable: false);
+
+  void requestMapFocus(MapPoint point) {
+    requestedMapFocus = point;
+    mapFocusSerial++;
+    notifyListeners();
+  }
+
+  Future<void> sendMapPoint({
+    required double latitude,
+    required double longitude,
+    String label = '',
+    String note = '',
+  }) async {
+    final peer = selectedPeerMmId;
+    if (peer == null || busy) return;
+    if (latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      throw const FormatException('Неверные координаты точки');
+    }
+    busy = true;
+    notifyListeners();
+    try {
+      final now = DateTime.now().toUtc();
+      final cleanLabel = label.trim();
+      final cleanNote = note.trim();
+      final point = MapPoint(
+        id: 'p-${now.microsecondsSinceEpoch}',
+        latitude: latitude,
+        longitude: longitude,
+        createdAt: now,
+        label: cleanLabel.length > 64
+            ? cleanLabel.substring(0, 64)
+            : cleanLabel,
+        note: cleanNote.length > 160 ? cleanNote.substring(0, 160) : cleanNote,
+      );
+      await _core.sendMapPoint(peerMmId: peer, point: point);
+      await _reloadMessages();
+      requestMapFocus(point);
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> selectContact(String mmId) async {
+    selectedPeerMmId = mmId;
+    await _reloadMessages();
+    notifyListeners();
+  }
+
+  Future<void> sendText(String text) async {
+    final peer = selectedPeerMmId;
+    if (peer == null || text.trim().isEmpty || busy) return;
+    busy = true;
+    notifyListeners();
+    try {
+      await _core.sendText(peerMmId: peer, text: text);
+      await _reloadMessages();
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> acknowledge(String messageId) async {
+    final peer = selectedPeerMmId;
+    if (peer == null) return;
+    await _core.acknowledge(messageId, peer);
+    notifyListeners();
+  }
+
+  Future<void> addLocalContact({
+    required String mmId,
+    required String displayName,
+    String? meshtasticNode,
+    String? ep2Node,
+  }) async {
+    final cleanId = mmId.trim();
+    final cleanName = displayName.trim();
+    if (cleanId.isEmpty || cleanName.isEmpty) return;
+    final nodeNum = _parseNodeNum(meshtasticNode);
+    final ep2NodeId = _parseEp2Node(ep2Node);
+    await _core.saveContact(
+      Contact(
+        mmId: cleanId,
+        displayName: cleanName,
+        meshtasticNodeNum: nodeNum,
+        ep2NodeId: ep2NodeId,
+      ),
+    );
+    contacts = await _core.contacts();
+    _lan?.setAllowedPeers(
+      contacts
+          .where((contact) => contact.verified)
+          .map((contact) => contact.mmId),
+    );
+    selectedPeerMmId = cleanId;
+    await _reloadMessages();
+    notifyListeners();
+  }
+
+  bool hasContact(String mmId) =>
+      contacts.any((contact) => contact.mmId == mmId);
+
+  LanPairingSession? pairingFor(String mmId) => lanPairings[mmId];
+
+  Future<void> addLanPeerAsContact(LanPeer peer) => startLanPairing(peer);
+
+  Future<void> startLanPairing(LanPeer peer) async {
+    final lan = _lan;
+    if (lan == null || !lanReady) return;
+    final pairingId = IdentityCrypto.randomPairingId();
+    final placeholder = LanPairingSession(
+      pairingId: pairingId,
+      peerMmId: peer.mmId,
+      peerLabel: peer.label,
+      fingerprint: '',
+      identityPublicKey: const [],
+      agreementPublicKey: const [],
+      sas: '',
+      initiator: true,
+    );
+    lanPairings[peer.mmId] = placeholder;
+    lanNotice = 'Запрос проверки отправлен на ${peer.label}';
+    notifyListeners();
+    try {
+      final payload = await _identity.signedPairingPacket(
+        kind: 'pair_offer',
+        pairingId: pairingId,
+        toMmId: peer.mmId,
+      );
+      await lan.sendPairing(
+        mmId: peer.mmId,
+        kind: 'pair_offer',
+        payload: payload,
+      );
+      _addLanLog('PAIR OFFER $pairingId -> ${peer.mmId}');
+    } catch (error) {
+      lanPairings.remove(peer.mmId);
+      lanNotice = 'Не удалось начать проверку ключей';
+      _addLanLog('PAIR OFFER ERROR ${peer.mmId} | $error');
+      notifyListeners();
+    }
+  }
+
+  Future<void> confirmLanPairing(String mmId) async {
+    final session = lanPairings[mmId];
+    final lan = _lan;
+    if (session == null || session.sas.isEmpty || lan == null) return;
+    final updated = session.copyWith(localConfirmed: true);
+    lanPairings[mmId] = updated;
+    final payload = await _identity.signedPairingPacket(
+      kind: 'pair_confirm',
+      pairingId: session.pairingId,
+      toMmId: mmId,
+    );
+    await lan.sendPairing(mmId: mmId, kind: 'pair_confirm', payload: payload);
+    _addLanLog('PAIR CONFIRM ${session.pairingId} -> $mmId');
+    if (updated.remoteConfirmed) {
+      await _finalizeLanPairing(updated);
+    } else {
+      lanNotice = 'Код подтверждён здесь · ждём второй телефон';
+      notifyListeners();
+    }
+  }
+
+  Future<void> cancelLanPairing(String mmId) async {
+    final session = lanPairings.remove(mmId);
+    final lan = _lan;
+    if (session != null && lan != null && lanReady) {
+      try {
+        final payload = await _identity.signedPairingPacket(
+          kind: 'pair_cancel',
+          pairingId: session.pairingId,
+          toMmId: mmId,
+        );
+        await lan.sendPairing(
+          mmId: mmId,
+          kind: 'pair_cancel',
+          payload: payload,
+        );
+      } catch (_) {}
+    }
+    lanNotice = 'Проверка ключей отменена';
+    notifyListeners();
+  }
+
+  Future<void> _finalizeLanPairing(LanPairingSession session) async {
+    final existing = contacts
+        .where((contact) => contact.mmId == session.peerMmId)
+        .firstOrNull;
+    await _core.saveContact(
+      Contact(
+        mmId: session.peerMmId,
+        displayName: existing?.displayName ?? session.peerLabel,
+        verified: true,
+        identityPublicKey: base64UrlEncode(session.identityPublicKey),
+        agreementPublicKey: base64UrlEncode(session.agreementPublicKey),
+        fingerprint: session.fingerprint,
+        verifiedAt: DateTime.now().toUtc(),
+        meshtasticNodeNum: existing?.meshtasticNodeNum,
+        ep2NodeId: existing?.ep2NodeId,
+      ),
+    );
+    contacts = await _core.contacts();
+    _lan?.setAllowedPeers(
+      contacts
+          .where((contact) => contact.verified)
+          .map((contact) => contact.mmId),
+    );
+    lanPairings.remove(session.peerMmId);
+    selectedPeerMmId = session.peerMmId;
+    await _reloadMessages();
+    lanNotice = '${session.peerLabel} · ключи проверены · контакт доверенный';
+    _addLanLog('PAIR VERIFIED ${session.peerMmId} ${session.fingerprint}');
+    notifyListeners();
+  }
+
+  Future<void> refreshLanPermission() async {
+    final bridge = _localNetworkBridge;
+    if (bridge == null) {
+      lanPermission = const {'required': false, 'granted': true, 'missing': []};
+      return;
+    }
+    try {
+      lanPermission = await bridge.permissionStatus();
+      if (lanPermissionGranted && lanState == 'permission')
+        lanState = 'offline';
+    } catch (error) {
+      lanError = '$error';
+      _addLanLog('PERMISSION STATUS ERROR $error');
+    }
+    if (initialized) notifyListeners();
+  }
+
+  Future<void> requestLanPermission() async {
+    final bridge = _localNetworkBridge;
+    if (bridge == null) {
+      lanPermission = const {'required': false, 'granted': true, 'missing': []};
+      await startLan();
+      return;
+    }
+    try {
+      lanPermission = await bridge.requestPermission();
+      if (lanPermissionGranted) {
+        lanError = null;
+        await startLan();
+      } else {
+        lanState = 'permission';
+        lanError = 'Нет разрешения на локальную сеть';
+      }
+    } catch (error) {
+      lanError = '$error';
+      _addLanLog('PERMISSION ERROR $error');
+    }
+    notifyListeners();
+  }
+
+  Future<void> startLan() async {
+    final lan = _lan;
+    if (lan == null) return;
+    if (!lanPermissionGranted) {
+      lanState = 'permission';
+      notifyListeners();
+      return;
+    }
+    try {
+      lanError = null;
+      await lan.start();
+      lanState = lan.state;
+      lanLocalAddresses = lan.localAddresses;
+    } catch (error) {
+      lanState = 'error';
+      lanError = '$error';
+      _addLanLog('START ERROR $error');
+    }
+    notifyListeners();
+  }
+
+  Future<void> restartLan() async {
+    final lan = _lan;
+    if (lan == null || !lanPermissionGranted || busy) return;
+    busy = true;
+    notifyListeners();
+    try {
+      lanError = null;
+      await lan.restart();
+      lanLocalAddresses = lan.localAddresses;
+    } catch (error) {
+      lanState = 'error';
+      lanError = '$error';
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> announceLan() async {
+    final lan = _lan;
+    if (lan == null || !lanReady) return;
+    await lan.announce();
+    lanNotice = 'Поиск устройств отправлен в локальную сеть';
+    notifyListeners();
+  }
+
+  Future<void> probeLanPeer(String mmId) async {
+    final lan = _lan;
+    if (lan == null || !lanReady || lanProbePending.contains(mmId)) return;
+    lanProbePending.add(mmId);
+    lanRttMs.remove(mmId);
+    notifyListeners();
+    try {
+      await lan.probe(mmId);
+    } catch (error) {
+      lanProbePending.remove(mmId);
+      lanError = '$error';
+      _addLanLog('PING ERROR $mmId | $error');
+      notifyListeners();
+    }
+  }
+
+  void clearLanLog() {
+    lanLog.clear();
+    notifyListeners();
+  }
+
+  void _addLanLog(String message) {
+    if (message.trim().isEmpty) return;
+    final time = DateTime.now();
+    final stamp =
+        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
+    lanLog.add('$stamp · $message');
+    if (lanLog.length > 100) {
+      lanLog.removeRange(0, lanLog.length - 100);
+    }
+  }
+
+  Future<void> _runMaintenance() async {
+    if (_maintenanceBusy) return;
+    _maintenanceBusy = true;
+    try {
+      await _core.maintenance();
+    } finally {
+      _maintenanceBusy = false;
+    }
+  }
+
+  Future<void> _onLanEvent(LanTransportEvent event) async {
+    if (event is LanStateEvent) {
+      lanState = event.state;
+      lanError = event.error;
+      lanLocalAddresses = _lan?.localAddresses ?? const [];
+      _addLanLog(
+        'STATE ${event.state}${event.error == null ? '' : ' | ${event.error}'}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is LanPeersEvent) {
+      lanPeers = event.peers;
+      notifyListeners();
+      return;
+    }
+    if (event is LanLogEvent) {
+      _addLanLog(event.message);
+      notifyListeners();
+      return;
+    }
+    if (event is LanDeliveryEvent) {
+      await _core.recipientDeliveryResult(
+        messageId: event.messageId,
+        fromMmId: event.recipientMmId,
+        ok: event.ok,
+        detail: event.detail,
+      );
+      _addLanLog(
+        '${event.ok ? 'ACK' : 'NAK'} ${event.messageId}${event.detail == null ? '' : ' | ${event.detail}'}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is LanProbeEvent) {
+      lanProbePending.remove(event.mmId);
+      if (event.ok && event.rttMillis != null) {
+        lanRttMs[event.mmId] = event.rttMillis!;
+        lanNotice = 'Связь с устройством проверена · ${event.rttMillis} мс';
+      } else {
+        lanRttMs.remove(event.mmId);
+        lanNotice = 'Устройство не ответило на проверку связи';
+      }
+      notifyListeners();
+      return;
+    }
+    if (event is LanPairingEvent) {
+      await _handleLanPairingEvent(event);
+      return;
+    }
+    if (event is LanUntrustedTextEvent) {
+      final peer = lanPeers.where((p) => p.mmId == event.fromMmId).firstOrNull;
+      lanNotice =
+          'Сообщение от ${peer?.label ?? event.fromMmId} отклонено: сначала добавьте контакт';
+      _addLanLog('BLOCK UNKNOWN ${event.messageId} <- ${event.fromMmId}');
+      notifyListeners();
+      return;
+    }
+    if (event is LanIncomingText) {
+      final contact = contacts
+          .where((c) => c.mmId == event.fromMmId)
+          .firstOrNull;
+      if (contact == null) {
+        _addLanLog('DROP UNKNOWN ${event.messageId} <- ${event.fromMmId}');
+        return;
+      }
+      try {
+        await _core.receiveText(
+          messageId: event.messageId,
+          fromMmId: event.fromMmId,
+          text: event.text,
+        );
+        _lan?.acknowledgeIncoming(
+          sourceAddress: event.sourceAddress,
+          messageId: event.messageId,
+          toMmId: event.fromMmId,
+        );
+      } catch (error) {
+        _addLanLog('STORE ERROR ${event.messageId} | $error');
+        return;
+      }
+      if (selectedPeerMmId == event.fromMmId) await _reloadMessages();
+      lanNotice = 'Получено по LAN от ${contact.displayName}';
+      notifyListeners();
+      return;
+    }
+    if (event is LanIncomingData) {
+      final contact = contacts
+          .where((c) => c.mmId == event.fromMmId)
+          .firstOrNull;
+      if (contact == null) {
+        _addLanLog('DROP UNKNOWN DATA ${event.messageId} <- ${event.fromMmId}');
+        return;
+      }
+      if (event.messageClass != 'map_point') {
+        _addLanLog('DROP CLASS ${event.messageClass} ${event.messageId}');
+        return;
+      }
+      try {
+        await _core.receiveMapPoint(
+          messageId: event.messageId,
+          fromMmId: event.fromMmId,
+          payload: event.payload,
+        );
+        _lan?.acknowledgeIncoming(
+          sourceAddress: event.sourceAddress,
+          messageId: event.messageId,
+          toMmId: event.fromMmId,
+        );
+      } catch (error) {
+        _addLanLog('MAP STORE ERROR ${event.messageId} | $error');
+        return;
+      }
+      if (selectedPeerMmId == event.fromMmId) await _reloadMessages();
+      lanNotice = 'Получена точка от ${contact.displayName}';
+      notifyListeners();
+      return;
+    }
+  }
+
+  Future<void> _handleLanPairingEvent(LanPairingEvent event) async {
+    final lan = _lan;
+    if (lan == null) return;
+    try {
+      final packet = await IdentityCrypto.verifyPairingPacket(
+        event.payload,
+        expectedKind: event.kind,
+        expectedFromMmId: event.fromMmId,
+        expectedToMmId: ownMmId,
+      );
+      if (event.kind == 'pair_offer') {
+        final sas = await _identity.deriveSas(
+          pairingId: packet.pairingId,
+          remoteMmId: packet.fromMmId,
+          remoteAgreementPublicKey: packet.agreementPublicKey,
+        );
+        lanPairings[packet.fromMmId] = LanPairingSession(
+          pairingId: packet.pairingId,
+          peerMmId: packet.fromMmId,
+          peerLabel: packet.label,
+          fingerprint: packet.fingerprint,
+          identityPublicKey: packet.identityPublicKey,
+          agreementPublicKey: packet.agreementPublicKey,
+          sas: sas,
+          initiator: false,
+        );
+        final answer = await _identity.signedPairingPacket(
+          kind: 'pair_answer',
+          pairingId: packet.pairingId,
+          toMmId: packet.fromMmId,
+        );
+        await lan.sendPairing(
+          mmId: packet.fromMmId,
+          kind: 'pair_answer',
+          payload: answer,
+        );
+        lanNotice = 'Запрос проверки от ${packet.label} · сравните код';
+        _addLanLog(
+          'PAIR OFFER VERIFIED ${packet.pairingId} <- ${packet.fromMmId}',
+        );
+        notifyListeners();
+        return;
+      }
+      final session = lanPairings[packet.fromMmId];
+      if (session == null || session.pairingId != packet.pairingId) {
+        _addLanLog('PAIR DROP ${event.kind} ${packet.pairingId}');
+        return;
+      }
+      if (event.kind == 'pair_answer') {
+        final sas = await _identity.deriveSas(
+          pairingId: packet.pairingId,
+          remoteMmId: packet.fromMmId,
+          remoteAgreementPublicKey: packet.agreementPublicKey,
+        );
+        lanPairings[packet.fromMmId] = LanPairingSession(
+          pairingId: packet.pairingId,
+          peerMmId: packet.fromMmId,
+          peerLabel: packet.label,
+          fingerprint: packet.fingerprint,
+          identityPublicKey: packet.identityPublicKey,
+          agreementPublicKey: packet.agreementPublicKey,
+          sas: sas,
+          initiator: true,
+          localConfirmed: session.localConfirmed,
+          remoteConfirmed: session.remoteConfirmed,
+        );
+        lanNotice = 'Ключи получены · сравните код на обоих телефонах';
+        _addLanLog(
+          'PAIR ANSWER VERIFIED ${packet.pairingId} <- ${packet.fromMmId}',
+        );
+        notifyListeners();
+        return;
+      }
+      var current = session;
+      if (current.identityPublicKey.isEmpty && event.kind == 'pair_confirm') {
+        final sas = await _identity.deriveSas(
+          pairingId: packet.pairingId,
+          remoteMmId: packet.fromMmId,
+          remoteAgreementPublicKey: packet.agreementPublicKey,
+        );
+        current = LanPairingSession(
+          pairingId: packet.pairingId,
+          peerMmId: packet.fromMmId,
+          peerLabel: packet.label,
+          fingerprint: packet.fingerprint,
+          identityPublicKey: packet.identityPublicKey,
+          agreementPublicKey: packet.agreementPublicKey,
+          sas: sas,
+          initiator: true,
+          localConfirmed: session.localConfirmed,
+          remoteConfirmed: session.remoteConfirmed,
+        );
+        lanPairings[packet.fromMmId] = current;
+      }
+      final sameKeys =
+          base64UrlEncode(current.identityPublicKey) ==
+              base64UrlEncode(packet.identityPublicKey) &&
+          base64UrlEncode(current.agreementPublicKey) ==
+              base64UrlEncode(packet.agreementPublicKey);
+      if (!sameKeys) throw const FormatException('PAIRING_KEY_CHANGED');
+      if (event.kind == 'pair_confirm') {
+        final updated = current.copyWith(remoteConfirmed: true);
+        lanPairings[packet.fromMmId] = updated;
+        _addLanLog(
+          'PAIR REMOTE CONFIRM ${packet.pairingId} <- ${packet.fromMmId}',
+        );
+        if (updated.localConfirmed) {
+          await _finalizeLanPairing(updated);
+        } else {
+          lanNotice =
+              '${packet.label} подтвердил код · подтвердите на этом телефоне';
+          notifyListeners();
+        }
+        return;
+      }
+      if (event.kind == 'pair_cancel') {
+        lanPairings.remove(packet.fromMmId);
+        lanNotice = '${packet.label} отменил проверку ключей';
+        _addLanLog('PAIR CANCEL ${packet.pairingId} <- ${packet.fromMmId}');
+        notifyListeners();
+      }
+    } catch (error) {
+      lanNotice = 'Проверка ключей отклонена';
+      _addLanLog('PAIR REJECT ${event.kind} <- ${event.fromMmId} | $error');
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshRadioDiagnostics() async {
+    final bridge = _androidBridge;
+    if (bridge == null) return;
+    try {
+      radioPermissions = await bridge.permissionStatus();
+      radioDiagnostics = await bridge.diagnostics();
+    } catch (error) {
+      radioError = '$error';
+      _addRadioLog('DIAG ERROR $error');
+    }
+    notifyListeners();
+  }
+
+  void clearRadioLog() {
+    radioLog.clear();
+    notifyListeners();
+  }
+
+  void _addRadioLog(String message, {int? atMillis}) {
+    if (message.trim().isEmpty) return;
+    final time = atMillis != null && atMillis > 0
+        ? DateTime.fromMillisecondsSinceEpoch(atMillis).toLocal()
+        : DateTime.now();
+    final stamp =
+        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
+    radioLog.add('$stamp · $message');
+    if (radioLog.length > 100) {
+      radioLog.removeRange(0, radioLog.length - 100);
+    }
+  }
+
+  Future<void> requestRadioPermissions() async {
+    final bridge = _androidBridge;
+    if (bridge == null) return;
+    final result = await bridge.requestPermissions();
+    radioPermissions = result;
+    final granted = result['granted'] == true;
+    radioError = granted ? null : 'Нет разрешений Bluetooth';
+    _addRadioLog(
+      granted
+          ? 'Bluetooth permissions granted'
+          : 'Bluetooth permissions missing',
+    );
+    await refreshRadioDiagnostics();
+  }
+
+  Future<void> scanMeshtastic() async {
+    final bridge = _androidBridge;
+    if (bridge == null || busy) return;
+    busy = true;
+    radioError = null;
+    notifyListeners();
+    try {
+      final permissions = await bridge.permissionStatus();
+      if (permissions['granted'] != true) {
+        await requestRadioPermissions();
+      }
+      _addRadioLog('SCAN requested');
+      radioDevices = await bridge.scan();
+      _addRadioLog('SCAN result ${radioDevices.length} device(s)');
+      lastRadioNotice = radioDevices.isEmpty
+          ? 'Meshtastic BLE устройства не найдены'
+          : 'Найдено устройств: ${radioDevices.length}';
+    } catch (error) {
+      radioError = '$error';
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> connectMeshtastic(String deviceId) async {
+    final bridge = _androidBridge;
+    if (bridge == null || busy) return;
+    busy = true;
+    radioError = null;
+    notifyListeners();
+    try {
+      _addRadioLog('CONNECT $deviceId');
+      await bridge.connect(deviceId);
+      await refreshRadioDiagnostics();
+    } catch (error) {
+      radioError = '$error';
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> disconnectMeshtastic() async {
+    final bridge = _androidBridge;
+    if (bridge == null) return;
+    _addRadioLog('DISCONNECT requested');
+    await bridge.disconnect();
+    await refreshRadioDiagnostics();
+  }
+
+  Future<void> refreshEp2Devices() async {
+    final bridge = _usbBridge;
+    if (bridge == null) return;
+    try {
+      ep2Devices = await bridge.devices();
+      final status = await bridge.status();
+      final state = status['state'] as String?;
+      if (state != null && state.isNotEmpty && ep2State == 'unavailable') {
+        ep2State = state;
+      }
+      ep2Error = status['error'] as String?;
+    } catch (error) {
+      ep2Error = '$error';
+      _addEp2Log('USB LIST ERROR $error');
+    }
+    notifyListeners();
+  }
+
+  Future<void> connectEp2(int deviceId) async {
+    final ep2 = _ep2;
+    if (ep2 == null || busy) return;
+    busy = true;
+    ep2Error = null;
+    notifyListeners();
+    try {
+      _addEp2Log('CONNECT USB device=$deviceId baud=115200');
+      await ep2.connect(deviceId);
+    } catch (error) {
+      ep2Error = '$error';
+      _addEp2Log('CONNECT ERROR $error');
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> disconnectEp2() async {
+    final ep2 = _ep2;
+    if (ep2 == null) return;
+    _addEp2Log('DISCONNECT requested');
+    await ep2.disconnect();
+    await refreshEp2Devices();
+  }
+
+  Future<void> refreshEp2Info() async {
+    final ep2 = _ep2;
+    if (ep2 == null || !ep2Connected) return;
+    await ep2.requestInfo();
+    await ep2.requestStats();
+  }
+
+  void clearEp2Log() {
+    ep2Log.clear();
+    notifyListeners();
+  }
+
+  void _addEp2Log(String message) {
+    if (message.trim().isEmpty) return;
+    final time = DateTime.now();
+    final stamp =
+        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
+    ep2Log.add('$stamp | $message');
+    if (ep2Log.length > 100) {
+      ep2Log.removeRange(0, ep2Log.length - 100);
+    }
+  }
+
+  int? _resolveEp2Node(String mmId) =>
+      contacts.where((contact) => contact.mmId == mmId).firstOrNull?.ep2NodeId;
+
+  Contact? _contactForEp2Node(int nodeId) =>
+      contacts.where((contact) => contact.ep2NodeId == nodeId).firstOrNull;
+
+  Future<void> _onEp2Event(Ep2TransportEvent event) async {
+    if (event is Ep2StateEvent) {
+      ep2State = event.state;
+      ep2Error = event.error;
+      _addEp2Log(
+        'STATE ${event.state}${event.error == null ? '' : ' | ${event.error}'}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is Ep2InfoEvent) {
+      ep2LocalNode = event.nodeId;
+      ep2Firmware = event.firmware;
+      ep2Profile = event.profile;
+      _addEp2Log(
+        'INFO node=${event.nodeId} fw=${event.firmware} radio=${event.radioState} profile=${event.profile}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is Ep2DeliveryEvent) {
+      _addEp2Log(
+        'RADIO ${event.ok ? 'ACK' : 'NAK'} message=${event.messageId}${event.detail == null ? '' : ' | ${event.detail}'}',
+      );
+      await _core.recipientDeliveryResult(
+        messageId: event.messageId,
+        fromMmId: event.recipientMmId,
+        ok: event.ok,
+        detail: event.detail,
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is Ep2IncomingText) {
+      _addEp2Log('RX_TEXT node=${event.fromNode} seq=${event.sequence}');
+      final contact = _contactForEp2Node(event.fromNode);
+      if (contact == null) {
+        lastRadioNotice =
+            '\u0421\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 EP2 \u043e\u0442 \u0443\u0437\u043b\u0430 ${event.fromNode}: \u0434\u043e\u0431\u0430\u0432\u044c\u0442\u0435 EP2 node \u0432 \u043a\u043e\u043d\u0442\u0430\u043a\u0442';
+        notifyListeners();
+        return;
+      }
+      await _core.receiveText(
+        messageId: 'ep2-${event.fromNode}-${event.sequence}',
+        fromMmId: contact.mmId,
+        text: event.text,
+      );
+      if (selectedPeerMmId == contact.mmId) await _reloadMessages();
+      lastRadioNotice =
+          '\u041f\u043e\u043b\u0443\u0447\u0435\u043d\u043e EP2 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u043e\u0442 ${contact.displayName}';
+      notifyListeners();
+      return;
+    }
+    if (event is Ep2LogEvent) {
+      _addEp2Log(event.line);
+      notifyListeners();
+    }
+  }
+
+  int? _resolveNodeNum(String mmId) => contacts
+      .where((contact) => contact.mmId == mmId)
+      .firstOrNull
+      ?.meshtasticNodeNum;
+
+  Contact? _contactForNode(int nodeNum) => contacts
+      .where((contact) => contact.meshtasticNodeNum == nodeNum)
+      .firstOrNull;
+
+  Future<void> _onMeshtasticEvent(MeshtasticTransportEvent event) async {
+    if (event is MeshtasticDeliveryResult) {
+      _addRadioLog(
+        'ROUTING ${event.ok ? 'ACK' : 'NAK'} message=${event.messageId} reason=${event.errorReason}',
+      );
+      await _core.recipientDeliveryResult(
+        messageId: event.messageId,
+        fromMmId: event.recipientMmId,
+        ok: event.ok,
+        detail: event.ok ? null : 'Meshtastic NAK ${event.errorReason}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is MeshtasticIncomingText) {
+      _addRadioLog(
+        'TEXT from=!${event.fromNode.toRadixString(16).padLeft(8, '0')} packet=${event.packetId}',
+      );
+      final contact = _contactForNode(event.fromNode);
+      if (contact == null) {
+        lastRadioNotice =
+            'Сообщение от неизвестного узла !${event.fromNode.toRadixString(16).padLeft(8, '0')} не добавлено в контакты';
+        notifyListeners();
+        return;
+      }
+      await _core.receiveText(
+        messageId: 'mesh-${event.fromNode}-${event.packetId}',
+        fromMmId: contact.mmId,
+        text: event.text,
+      );
+      if (selectedPeerMmId == contact.mmId) await _reloadMessages();
+      lastRadioNotice = 'Получено сообщение от ${contact.displayName}';
+      notifyListeners();
+    }
+  }
+
+  int? _parseNodeNum(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+    final normalized = text.startsWith('!')
+        ? text.substring(1)
+        : text.toLowerCase().startsWith('0x')
+        ? text.substring(2)
+        : text;
+    final isHex = text.startsWith('!') || text.toLowerCase().startsWith('0x');
+    final parsed = int.tryParse(normalized, radix: isHex ? 16 : 10);
+    if (parsed == null || parsed <= 0 || parsed > 0xffffffff) {
+      throw FormatException('Неверный Meshtastic node ID');
+    }
+    return parsed;
+  }
+
+  int? _parseEp2Node(String? value) {
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+    final parsed = int.tryParse(text);
+    if (parsed == null || parsed < 1 || parsed > 15) {
+      throw FormatException('Номер узла EP2 должен быть от 1 до 15');
+    }
+    return parsed;
+  }
+
+  Future<void> _reloadMessages() async {
+    final peer = selectedPeerMmId;
+    messages = peer == null ? const [] : await _core.messagesFor(peer);
+  }
+
+  @override
+  void dispose() {
+    _maintenanceTimer?.cancel();
+    _deliverySub?.cancel();
+    _lanSub?.cancel();
+    _meshtasticSub?.cancel();
+    _androidSub?.cancel();
+    _ep2Sub?.cancel();
+    _lan?.close();
+    _meshtastic?.close();
+    _ep2?.close();
+    _androidBridge?.close();
+    _usbBridge?.close();
+    _core.close();
+    super.dispose();
+  }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    return iterator.moveNext() ? iterator.current : null;
+  }
+}

@@ -1,0 +1,19 @@
+name: mesh_messenger_flutter
+description: Mesh Messenger Flutter offline messenger with radio, Meshtastic, LAN and lightweight maps.
+version: 0.1.10-dev.4+26092302
+publish_to: none
+environment:
+  sdk: '>=3.13.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  cryptography: ^2.9.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/map_runtime/
+    - assets/map_runtime/src/
+    - assets/map_runtime/vendor/
