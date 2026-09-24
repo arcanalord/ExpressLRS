@@ -41,7 +41,7 @@ jobs:
           git checkout c4036ace9d2f5526e3535d1ac8bfb8ac3bafc23d
           test "$(git rev-parse HEAD)" = "c4036ace9d2f5526e3535d1ac8bfb8ac3bafc23d"
 
-      - name: Apply ESP Service Studio v0.4 patch
+      - name: Apply ESP Service Studio v0.5 patch
         shell: bash
         run: |
           set -euxo pipefail
@@ -49,11 +49,11 @@ jobs:
           grep -q "One-button manual BOOT" upstream/app/src/main/assets/flash.html
           grep -q "Android.usbVendorId()" upstream/app/src/main/assets/flash.html
 
-      - name: Bundle esptool-js 0.6.1
+      - name: Bundle esptool-js 0.7.0
         shell: bash
         working-directory: upstream
         env:
-          ESPTOOL_VERSION: '0.6.1'
+          ESPTOOL_VERSION: '0.7.0'
         run: |
           set -euxo pipefail
           chmod +x scripts/bundle-esptool.sh
@@ -69,8 +69,8 @@ jobs:
           ./gradlew --no-daemon clean assembleDebug \
             -PappId=com.arcanalord.espservicestudio \
             -PappLabel='ESP Service Studio' \
-            -PversionName=0.4.0 \
-            -PversionCode=4
+            -PversionName=0.5.0 \
+            -PversionCode=5
 
       - name: Prepare Pixel 7a artifact
         shell: bash
@@ -79,9 +79,9 @@ jobs:
           APK="upstream/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
           mkdir -p artifact
-          cp "$APK" artifact/ESP_Service_Studio_Pixel7a_v0.4.apk
-          sha256sum artifact/ESP_Service_Studio_Pixel7a_v0.4.apk | tee artifact/SHA256SUMS.txt
-          unzip -t artifact/ESP_Service_Studio_Pixel7a_v0.4.apk
+          cp "$APK" artifact/ESP_Service_Studio_Pixel7a_v0.5.apk
+          sha256sum artifact/ESP_Service_Studio_Pixel7a_v0.5.apk | tee artifact/SHA256SUMS.txt
+          unzip -t artifact/ESP_Service_Studio_Pixel7a_v0.5.apk
 
       - name: Verify Android APK signature
         shell: bash
@@ -89,12 +89,12 @@ jobs:
           set -euxo pipefail
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
           test -x "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs artifact/ESP_Service_Studio_Pixel7a_v0.4.apk | tee artifact/APK_SIGNATURE.txt
+          "$APKSIGNER" verify --verbose --print-certs artifact/ESP_Service_Studio_Pixel7a_v0.5.apk | tee artifact/APK_SIGNATURE.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ESP-Service-Studio-Pixel7a-v0.4
+          name: ESP-Service-Studio-Pixel7a-v0.5
           path: artifact/
           if-no-files-found: error
           retention-days: 30
