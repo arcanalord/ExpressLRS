@@ -40,6 +40,14 @@ html = replace_once(
 
 html = replace_once(
     html,
+    "<button id=\"flashBtn\" disabled></button>\n\n",
+    "<button id=\"flashBtn\" disabled></button>\n"
+    "<button class=\"secondary\" id=\"probeBtn\" disabled></button>\n\n",
+    "probe button",
+)
+
+html = replace_once(
+    html,
     "    instructions: '<b>1.</b> Connect the board to the phone via USB OTG<br>' +\n"
     "                  '<b>2.</b> Hold BOOT, tap RESET, release BOOT<br>' +\n"
     "                  '<b>3.</b> Pick the binaries and tap Flash',\n",
@@ -66,6 +74,21 @@ html = replace_once(
     "    bootHint: 'Hold BOOT, tap RESET, release BOOT and try again.',\n",
     "    bootHint: 'One-button board: disconnect USB, hold BOOT, reconnect USB/power, release BOOT, then try again.',\n",
     "english boot hint",
+)
+html = replace_once(
+    html,
+    "    flash: 'Flash',\n",
+    "    flash: 'Flash',\n"
+    "    probe: 'Check device',\n"
+    "    probeStart: 'Checking USB, ROM bootloader and flash…',\n"
+    "    probeReady: c => `ROM ready: ${c}`,\n"
+    "    probeSuccess: 'Device check passed',\n"
+    "    probeFailed: e => `Device check failed: ${e}`,\n"
+    "    flashId: id => `Flash ID: ${id}`,\n"
+    "    flashSize: s => `Flash size: ${s}`,\n"
+    "    flashSizeUnknown: 'Flash size could not be determined',\n"
+    "    overlap: (a, b) => `Partitions overlap: ${a} and ${b}`,\n",
+    "english diagnostics i18n",
 )
 
 html = replace_once(
@@ -97,6 +120,21 @@ html = replace_once(
     "    bootHint: 'Плата с одной кнопкой: отключите USB, зажмите BOOT, подключите USB/питание, отпустите BOOT и повторите.',\n",
     "russian boot hint",
 )
+html = replace_once(
+    html,
+    "    flash: 'Прошить',\n",
+    "    flash: 'Прошить',\n"
+    "    probe: 'Проверить устройство',\n"
+    "    probeStart: 'Проверяю USB, ROM-загрузчик и флеш-память…',\n"
+    "    probeReady: c => `ROM готов: ${c}`,\n"
+    "    probeSuccess: 'Проверка устройства пройдена',\n"
+    "    probeFailed: e => `Проверка устройства не пройдена: ${e}`,\n"
+    "    flashId: id => `Flash ID: ${id}`,\n"
+    "    flashSize: s => `Размер флеш-памяти: ${s}`,\n"
+    "    flashSizeUnknown: 'Размер флеш-памяти определить не удалось',\n"
+    "    overlap: (a, b) => `Разделы пересекаются: ${a} и ${b}`,\n",
+    "russian diagnostics i18n",
+)
 
 html = replace_once(
     html,
@@ -105,6 +143,19 @@ html = replace_once(
     "    return { usbVendorId: Android.usbVendorId(), usbProductId: Android.usbProductId() };\n"
     "  }\n",
     "real USB VID/PID",
+)
+
+html = replace_once(
+    html,
+    "const PRESETS = [\n"
+    "  { id: 'esp32s3', label: 'ESP32-S3 / S2 / C3 / C6 / H2',\n"
+    "    parts: [{ offset: '0x0' }, { offset: '0x8000' }, { offset: '0x10000' }] },\n",
+    "const PRESETS = [\n"
+    "  { id: 'esp32s3', label: 'ESP32-S3 / S2 / C3 / C6 / H2',\n"
+    "    parts: [{ offset: '0x0' }, { offset: '0x8000' }, { offset: '0x10000' }] },\n"
+    "  { id: 'esp8266', label: 'ESP8266 / ESP8285',\n"
+    "    parts: [{ offset: '0x0' }] },\n",
+    "esp8266 preset",
 )
 
 html = replace_once(
@@ -173,6 +224,68 @@ html = replace_once(
 
 html = replace_once(
     html,
+    "// ─── Прошивка ─────────────────────────────────────────────────────────────────\n"
+    "async function doFlash() {\n",
+    "// ─── Прошивка ─────────────────────────────────────────────────────────────────\n"
+    "function validateRanges(fileArray) {\n"
+    "  const sorted = [...fileArray].sort((a, b) => a.address - b.address);\n"
+    "  for (let i = 1; i < sorted.length; i++) {\n"
+    "    const prev = sorted[i - 1];\n"
+    "    const cur = sorted[i];\n"
+    "    if (prev.address + prev.data.length > cur.address) {\n"
+    "      throw new Error(t().overlap(prev.label, cur.label));\n"
+    "    }\n"
+    "  }\n"
+    "}\n\n"
+    "async function doProbe() {\n"
+    "  const btn = document.getElementById('probeBtn');\n"
+    "  btn.disabled = true;\n"
+    "  openLog();\n"
+    "  let session = null;\n"
+    "  try {\n"
+    "    log(t().probeStart, 'info');\n"
+    "    session = await openChip(false);\n"
+    "    log(t().chip(session.chip), 'ok');\n"
+    "    try {\n"
+    "      const fid = await session.loader.readFlashId();\n"
+    "      const fidText = '0x' + Number(fid).toString(16).padStart(6, '0');\n"
+    "      log(t().flashId(fidText), 'ok');\n"
+    "    } catch (e) {\n"
+    "      log(t().error(e.message), 'err');\n"
+    "    }\n"
+    "    try {\n"
+    "      const size = session.loader.detectFlashSize ? await session.loader.detectFlashSize() : undefined;\n"
+    "      log(size ? t().flashSize(size) : t().flashSizeUnknown, size ? 'ok' : 'info');\n"
+    "    } catch (_) {\n"
+    "      log(t().flashSizeUnknown, 'info');\n"
+    "    }\n"
+    "    document.getElementById('usbStatus').textContent = t().probeReady(session.chip);\n"
+    "    log(t().probeSuccess, 'ok');\n"
+    "  } catch (e) {\n"
+    "    log(t().probeFailed(e.message), 'err');\n"
+    "    log(t().bootHint, 'info');\n"
+    "    console.error(e);\n"
+    "  } finally {\n"
+    "    try { await session?.serialPort.close(); } catch(_) {}\n"
+    "    const connected = document.getElementById('usbDot').className.includes('connected');\n"
+    "    btn.disabled = !connected;\n"
+    "  }\n"
+    "}\n\n"
+    "async function doFlash() {\n",
+    "device probe",
+)
+html = replace_once(
+    html,
+    "    const fileArray = loadParts();\n"
+    "    setProgress(t().flashing, 10);\n",
+    "    const fileArray = loadParts();\n"
+    "    validateRanges(fileArray);\n"
+    "    setProgress(t().flashing, 10);\n",
+    "partition preflight",
+)
+
+html = replace_once(
+    html,
     "async function doErase() {\n  if (!confirm(t().eraseConfirm)) return;\n",
     "async function doErase() {\n"
     "  if (document.getElementById('manualBoot')?.checked) {\n"
@@ -200,7 +313,8 @@ html = replace_once(
     html,
     "  document.getElementById('presetLabel').textContent = T.presetLabel;\n",
     "  document.getElementById('presetLabel').textContent = T.presetLabel;\n"
-    "  document.getElementById('manualBootLabel').textContent = T.manualBootLabel;\n",
+    "  document.getElementById('manualBootLabel').textContent = T.manualBootLabel;\n"
+    "  document.getElementById('probeBtn').textContent = T.probe;\n",
     "manual label language",
 )
 
@@ -208,8 +322,26 @@ html = replace_once(
 html = replace_once(
     html,
     "    flash.disabled = false;\n    erase.disabled = false;\n",
-    "    flash.disabled = false;\n    erase.disabled = document.getElementById('manualBoot')?.checked !== false;\n",
+    "    flash.disabled = false;\n"
+    "    document.getElementById('probeBtn').disabled = false;\n"
+    "    erase.disabled = document.getElementById('manualBoot')?.checked !== false;\n",
     "erase connected state",
+)
+html = replace_once(
+    html,
+    "    flash.disabled = true;\n    erase.disabled = true;\n",
+    "    flash.disabled = true;\n"
+    "    document.getElementById('probeBtn').disabled = true;\n"
+    "    erase.disabled = true;\n",
+    "probe disconnected state",
+)
+
+html = replace_once(
+    html,
+    "document.getElementById('flashBtn').addEventListener('click', doFlash);\n",
+    "document.getElementById('flashBtn').addEventListener('click', doFlash);\n"
+    "document.getElementById('probeBtn').addEventListener('click', doProbe);\n",
+    "probe listener",
 )
 
 html = replace_once(
@@ -323,6 +455,10 @@ checks = [
     "session = await openChip(false)",
     "loader.FLASH_WRITE_SIZE = (loader.chip && loader.chip.FLASH_WRITE_SIZE) || 0x400",
     "if (loader.IS_STUB) await loader.flashFinish(false)",
+    "id=\"probeBtn\"",
+    "async function doProbe()",
+    "validateRanges(fileArray)",
+    "ESP8266 / ESP8285",
 ]
 for needle in checks:
     if needle not in patched:
@@ -330,4 +466,4 @@ for needle in checks:
 if "getInfo() { return { usbVendorId: 0x303A" in patched:
     raise SystemExit("hard-coded USB IDs survived patch")
 
-print("ESP Service Studio Android v0.3 patch applied successfully")
+print("ESP Service Studio Android v0.4 patch applied successfully")
