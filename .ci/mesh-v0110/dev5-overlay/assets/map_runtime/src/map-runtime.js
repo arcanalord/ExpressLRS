@@ -15,6 +15,19 @@ function bridgeReady(){
   readySent = true;
   try { window.MeshBridge?.onMapReady(); } catch (_) {}
 }
+function nativePmtilesSource(){
+  return {
+    getKey(){return 'mesh-native-active';},
+    async getBytes(offset,length){
+      const b64=window.MeshBridge?.readPmtiles(String(offset),String(length))||'';
+      if(!b64) throw new Error('NO_ACTIVE_PMTILES');
+      const binary=atob(b64);
+      const bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+      return {data:bytes.buffer};
+    }
+  };
+}
 function emptyStyle(){
   return {version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#151a20'}}]};
 }
@@ -74,9 +87,10 @@ async function createMap(){
     maplibregl.addProtocol('pmtiles', protocol.tile);
     let style=emptyStyle(), center=[0,0], zoom=1, packageReady=false, mapMode='grid', mapError='';
     try {
-      const url='https://app.local/offline/active.pmtiles';
-      const archive=new window.pmtiles.PMTiles(url);
+      const source=nativePmtilesSource();
+      const archive=new window.pmtiles.PMTiles(source);
       protocol.add(archive);
+      const sourceUrl='pmtiles://mesh-native-active';
       const header=await archive.getHeader();
       center=[header.centerLon||0,header.centerLat||0];
       zoom=header.centerZoom||Math.max(1,header.minZoom||1);
@@ -86,9 +100,9 @@ async function createMap(){
           const metadata=await archive.getMetadata();
           layerNames=(metadata?.vector_layers||[]).map(layer=>String(layer?.id||'')).filter(Boolean);
         } catch (_) {}
-        style=vectorStyle(`pmtiles://${url}`,layerNames);
+        style=vectorStyle(sourceUrl,layerNames);
       } else {
-        style=rasterStyle(`pmtiles://${url}/{z}/{x}/{y}`);
+        style={version:8,sources:{basemap:{type:'raster',url:sourceUrl,tileSize:256}},layers:[{id:'basemap',type:'raster',source:'basemap'}]};
       }
       packageReady=true;
       mapMode='pmtiles';
