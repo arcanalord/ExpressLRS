@@ -91,14 +91,6 @@ class _AndroidMapSurfaceState extends State<AndroidMapSurface> {
         widget.focusPoint != null) {
       _focus(widget.focusPoint!);
     }
-    if (oldWidget.reloadToken != widget.reloadToken) {
-      _reload();
-    }
-  }
-
-  Future<void> _reload() async {
-    _ready = false;
-    await _channel?.invokeMethod<void>('reload');
   }
 
   Future<void> _pushPoints() async {
@@ -133,6 +125,7 @@ class _AndroidMapSurfaceState extends State<AndroidMapSurface> {
       );
     }
     return AndroidView(
+      key: ValueKey(widget.reloadToken),
       viewType: 'org.fpvclub.mesh/mapview',
       onPlatformViewCreated: (id) {
         final channel = MethodChannel('org.fpvclub.mesh/mapview/$id');
@@ -152,4 +145,12 @@ class _AndroidMapSurfaceState extends State<AndroidMapSurface> {
       },
     );
   }
+  @override
+  void dispose() {
+    _channel?.setMethodCallHandler(null);
+    _channel = null;
+    _ready = false;
+    super.dispose();
+  }
+
 }
