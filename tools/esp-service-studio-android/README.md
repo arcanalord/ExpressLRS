@@ -28,3 +28,13 @@ The Google Drive build folder was reviewed for reusable inputs. The PlatformIO/E
 - keeps the v0.3 ROM-mode 0x400 block fix and v0.4 non-destructive device probe.
 
 The v0.5 dependency changes are isolated in one release so hardware behavior can be compared directly against v0.4.
+
+## v0.6
+
+- detects the ESP family after ROM sync and automatically selects the matching layout preset when doing so cannot overwrite picked files or a custom layout;
+- preserves an existing layout/file selection and emits `PRESET_SUGGEST` instead of silently replacing it;
+- normalizes the detected physical flash size and checks every image end address before the first write;
+- aborts preflight with `IMAGE_OUT_OF_FLASH` / `PREFLIGHT_FAIL` if a selected binary would extend beyond the detected flash;
+- emits `FLASH_BOUNDS_OK` when the full image set fits, and `FLASH_BOUNDS_UNKNOWN` when the chip does not report a usable size.
+
+Hardware validation remains required on Pixel 7a with CH340/CH341 and native USB ESP32-C3/S3 before marking PHONE_PASS.

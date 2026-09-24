@@ -88,6 +88,10 @@ html = replace_once(
     "    flashId: id => `Flash ID: ${id}`,\n"
     "    flashSize: s => `Flash size: ${s}`,\n"
     "    flashSizeUnknown: 'Flash size could not be determined',\n"
+    "    presetAuto: p => `Preset selected automatically: ${p}`,\n"
+    "    presetSuggested: p => `Detected chip matches preset ${p}. Existing layout/files were kept.`,\n"
+    "    flashBoundsUnknown: 'Flash size is unknown; physical boundary check was skipped',\n"
+    "    flashOutOfRange: (label, end, size) => `${label} ends at ${end}, beyond flash size ${size}`,\n"
     "    overlap: (a, b) => `Partitions overlap: ${a} and ${b}`,\n",
     "english diagnostics i18n",
 )
@@ -133,6 +137,10 @@ html = replace_once(
     "    flashId: id => `Flash ID: ${id}`,\n"
     "    flashSize: s => `Размер флеш-памяти: ${s}`,\n"
     "    flashSizeUnknown: 'Размер флеш-памяти определить не удалось',\n"
+    "    presetAuto: p => `Пресет выбран автоматически: ${p}`,\n"
+    "    presetSuggested: p => `Обнаруженный чип соответствует пресету ${p}. Текущая раскладка/файлы сохранены.`,\n"
+    "    flashBoundsUnknown: 'Размер флеш-памяти неизвестен; проверка физической границы пропущена',\n"
+    "    flashOutOfRange: (label, end, size) => `${label} заканчивается на ${end}, за пределами флеш-памяти ${size}`,\n"
     "    overlap: (a, b) => `Разделы пересекаются: ${a} и ${b}`,\n",
     "russian diagnostics i18n",
 )
@@ -218,6 +226,16 @@ html = replace_once(
     "esp8266 preset",
 )
 
+# ---- v0.6 chip auto-preset and flash-boundary preflight ---------------------
+html = replace_once(
+    html,
+    "let parts = [];\n"
+    "let embedded = null;      // манифест зашитой прошивки или null\n"
+    "let nextSlot = 0;\n"
+    "let parts = [];\nlet embedded = null;      // манифест зашитой прошивки или null\nlet nextSlot = 0;\nlet detectedFlashSizeBytes = 0;\n",
+    "v0.6 detected flash state",
+)
+
 html = replace_once(
     html,
     "async function connectLoader(mode, attempts) {\n",
@@ -287,8 +305,83 @@ html = replace_once(
     "// ─── Прошивка ─────────────────────────────────────────────────────────────────\n"
     "async function doFlash() {\n",
     "// ─── Прошивка ─────────────────────────────────────────────────────────────────\n"
+    "function formatBytes(bytes) {\n"
+    "  if (!Number.isFinite(bytes) || bytes <= 0) return '?';\n"
+    "  if (bytes >= 1024 * 1024) {\n"
+    "    const mb = bytes / (1024 * 1024);\n"
+    "    return `${Number.isInteger(mb) ? mb : mb.toFixed(1)} MB`;\n"
+    "  }\n"
+    "  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;\n"
+    "  return `${bytes} B`;\n"
+    "}\n"
+    "\n"
+    "function parseFlashSizeBytes(value) {\n"
+    "  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {\n"
+    "    if (value >= 1024 * 1024) return Math.round(value);\n"
+    "    if (value <= 128) return Math.round(value * 1024 * 1024);\n"
+    "  }\n"
+    "  const s = String(value || '').trim().toLowerCase();\n"
+    "  const m = s.match(/([0-9]+(?:\\.[0-9]+)?)\\s*(gib|gb|mib|mb|kib|kb|bytes?|b)?/);\n"
+    "  if (!m) return 0;\n"
+    "  let n = Number(m[1]);\n"
+    "  const unit = m[2] || '';\n"
+    "  if (unit === 'gib' || unit === 'gb') n *= 1024 * 1024 * 1024;\n"
+    "  else if (unit === 'mib' || unit === 'mb') n *= 1024 * 1024;\n"
+    "  else if (unit === 'kib' || unit === 'kb') n *= 1024;\n"
+    "  else if (unit === 'b' || unit.startsWith('byte')) {}\n"
+    "  else if (n <= 128) n *= 1024 * 1024;\n"
+    "  else return 0;\n"
+    "  return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;\n"
+    "}\n"
+    "\n"
+    "function presetForChip(chip) {\n"
+    "  const c = String(chip || '').toUpperCase();\n"
+    "  if (c.includes('ESP8266') || c.includes('ESP8285')) return 'esp8266';\n"
+    "  if (/ESP32[- ]?(S2|S3|C3|C6|H2)/.test(c)) return 'esp32s3';\n"
+    "  if (c.includes('ESP32')) return 'esp32';\n"
+    "  return null;\n"
+    "}\n"
+    "\n"
+    "function maybeAutoSelectPreset(chip) {\n"
+    "  const id = presetForChip(chip);\n"
+    "  if (!id) { diag('PRESET_UNKNOWN', String(chip || ''), 'info'); return; }\n"
+    "  const preset = PRESETS.find(p => p.id === id);\n"
+    "  const select = document.getElementById('preset');\n"
+    "  if (!preset || !select) return;\n"
+    "  const current = PRESETS.find(p => p.id === select.value);\n"
+    "  const hasFiles = parts.some(p => !!p.asset || p.slot !== undefined);\n"
+    "  const layoutIsPreset = !!current && parts.length === current.parts.length &&\n"
+    "    parts.every((p, i) => p.offset === current.parts[i].offset);\n"
+    "  if (!embedded && !hasFiles && layoutIsPreset) {\n"
+    "    if (select.value !== id) {\n"
+    "      select.value = id;\n"
+    "      applyPreset(id);\n"
+    "      saveState();\n"
+    "    }\n"
+    "    log(t().presetAuto(preset.label), 'ok');\n"
+    "    diag('PRESET_AUTO', id, 'ok');\n"
+    "  } else if (select.value === id) {\n"
+    "    diag('PRESET_MATCH', id, 'ok');\n"
+    "  } else {\n"
+    "    log(t().presetSuggested(preset.label), 'info');\n"
+    "    diag('PRESET_SUGGEST', id, 'info');\n"
+    "  }\n"
+    "}\n"
+    "\n"
     "function validateRanges(fileArray) {\n"
     "  const sorted = [...fileArray].sort((a, b) => a.address - b.address);\n"
+    "  let maxEnd = 0;\n"
+    "  for (const cur of sorted) {\n"
+    "    if (!Number.isSafeInteger(cur.address) || cur.address < 0) throw new Error(t().noOffset);\n"
+    "    const end = cur.address + cur.data.length;\n"
+    "    if (!Number.isSafeInteger(end) || end < cur.address) throw new Error(t().noOffset);\n"
+    "    maxEnd = Math.max(maxEnd, end);\n"
+    "    if (detectedFlashSizeBytes > 0 && end > detectedFlashSizeBytes) {\n"
+    "      const message = t().flashOutOfRange(cur.label, '0x' + end.toString(16), formatBytes(detectedFlashSizeBytes));\n"
+    "      diag('IMAGE_OUT_OF_FLASH', message, 'err');\n"
+    "      throw new Error(message);\n"
+    "    }\n"
+    "  }\n"
     "  for (let i = 1; i < sorted.length; i++) {\n"
     "    const prev = sorted[i - 1];\n"
     "    const cur = sorted[i];\n"
@@ -296,7 +389,13 @@ html = replace_once(
     "      throw new Error(t().overlap(prev.label, cur.label));\n"
     "    }\n"
     "  }\n"
-    "}\n\n"
+    "  if (detectedFlashSizeBytes > 0) {\n"
+    "    diag('FLASH_BOUNDS_OK', `${formatBytes(maxEnd)} / ${formatBytes(detectedFlashSizeBytes)}`, 'ok');\n"
+    "  } else {\n"
+    "    diag('FLASH_BOUNDS_UNKNOWN', t().flashBoundsUnknown, 'info');\n"
+    "  }\n"
+    "}\n"
+    "\n"
     "async function doProbe() {\n"
     "  const btn = document.getElementById('probeBtn');\n"
     "  btn.disabled = true;\n"
@@ -309,6 +408,7 @@ html = replace_once(
     "    session = await openChip(false);\n"
     "    diag('ROM_SYNC_OK', session.chip, 'ok');\n"
     "    log(t().chip(session.chip), 'ok');\n"
+    "    maybeAutoSelectPreset(session.chip);\n"
     "    stage = 'FLASH_ID';\n"
     "    const fid = await session.loader.readFlashId();\n"
     "    const fidText = '0x' + Number(fid).toString(16).padStart(6, '0');\n"
@@ -316,9 +416,12 @@ html = replace_once(
     "    diag('FLASH_ID_OK', fidText, 'ok');\n"
     "    try {\n"
     "      const size = session.loader.detectFlashSize ? await session.loader.detectFlashSize() : undefined;\n"
+    "      detectedFlashSizeBytes = parseFlashSizeBytes(size);\n"
     "      log(size ? t().flashSize(size) : t().flashSizeUnknown, size ? 'ok' : 'info');\n"
-    "      if (size) diag('FLASH_SIZE_OK', size, 'ok');\n"
+    "      if (detectedFlashSizeBytes) diag('FLASH_SIZE_OK', formatBytes(detectedFlashSizeBytes), 'ok');\n"
+    "      else if (size) diag('FLASH_SIZE_RAW', String(size), 'info');\n"
     "    } catch (e) {\n"
+    "      detectedFlashSizeBytes = 0;\n"
     "      diag('FLASH_SIZE_UNKNOWN', String(e?.message || e), 'info');\n"
     "      log(t().flashSizeUnknown, 'info');\n"
     "    }\n"
@@ -368,7 +471,18 @@ html = replace_once(
     "    setProgress(t().flashing, 10);\n",
     "    session = await openChip(false);\n"
     "    diag('ROM_SYNC_OK', session.chip, 'ok');\n"
-    "    log(t().chip(session.chip), 'ok');\n\n"
+    "    log(t().chip(session.chip), 'ok');\n"
+    "    maybeAutoSelectPreset(session.chip);\n"
+    "    detectedFlashSizeBytes = 0;\n"
+    "    try {\n"
+    "      const size = session.loader.detectFlashSize ? await session.loader.detectFlashSize() : undefined;\n"
+    "      detectedFlashSizeBytes = parseFlashSizeBytes(size);\n"
+    "      if (detectedFlashSizeBytes) diag('FLASH_SIZE_OK', formatBytes(detectedFlashSizeBytes), 'ok');\n"
+    "      else diag('FLASH_BOUNDS_UNKNOWN', t().flashBoundsUnknown, 'info');\n"
+    "    } catch (e) {\n"
+    "      diag('FLASH_SIZE_UNKNOWN', String(e?.message || e), 'info');\n"
+    "    }\n"
+    "\n"
     "    stage = 'PREFLIGHT';\n"
     "    const fileArray = loadParts();\n"
     "    validateRanges(fileArray);\n"
@@ -676,6 +790,10 @@ checks = [
     "diag('USB_OK'",
     "WRITE_TIMEOUT",
     "Android.serialError",
+    "maybeAutoSelectPreset(session.chip)",
+    "IMAGE_OUT_OF_FLASH",
+    "FLASH_BOUNDS_OK",
+    "detectedFlashSizeBytes",
 ]
 for needle in checks:
     if needle not in patched:
@@ -683,4 +801,4 @@ for needle in checks:
 if "getInfo() { return { usbVendorId: 0x303A" in patched:
     raise SystemExit("hard-coded USB IDs survived patch")
 
-print("ESP Service Studio Android v0.5 patch applied successfully")
+print("ESP Service Studio Android v0.6 patch applied successfully")
