@@ -4,6 +4,7 @@ ROOT = Path("upstream")
 html_path = ROOT / "app/src/main/assets/flash.html"
 bridge_path = ROOT / "app/src/main/java/io/github/drakosha/espflash/JsBridge.kt"
 usb_path = ROOT / "app/src/main/java/io/github/drakosha/espflash/UsbSerialManager.kt"
+gradle_path = ROOT / "app/build.gradle"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -646,6 +647,16 @@ usb = replace_once(
 )
 
 usb_path.write_text(usb, encoding="utf-8")
+
+# ---- Android USB serial library ----------------------------------------------
+gradle = gradle_path.read_text(encoding="utf-8")
+gradle = replace_once(
+    gradle,
+    "implementation 'com.github.mik3y:usb-serial-for-android:3.7.3'",
+    "implementation 'com.github.mik3y:usb-serial-for-android:3.11.0'",
+    "usb-serial-for-android 3.11.0",
+)
+gradle_path.write_text(gradle, encoding="utf-8")
 
 # CI sanity checks: fail the build rather than silently ship an unpatched APK.
 patched = html_path.read_text(encoding="utf-8")
