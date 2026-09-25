@@ -158,6 +158,7 @@ class UsbSerialProbe(private val context: Context) {
             val productName = manifest.getString("productName")
             val platform = manifest.getString("platform")
             val firmwareFamily = manifest.getString("firmware")
+            val hardwareSource = manifest.optString("hardwareSource")
             val region = manifest.getString("regulatoryProfile")
             val offsetText = manifest.getString("writeOffset")
             val fileName = manifest.getString("fileName")
@@ -170,8 +171,11 @@ class UsbSerialProbe(private val context: Context) {
             if (declaredSha != expectedSha256.lowercase()) {
                 error("SHA-256 подготовленной прошивки изменился")
             }
+            if (hardwareSource != "same firmware.zip commit") {
+                error("Прошивка не прошла version-pinned hardware gate")
+            }
             if (platform != "esp8285") {
-                error("ROM-запись alpha.9 разрешена только для ESP8285")
+                error("ROM-запись alpha.10 разрешена только для ESP8285")
             }
             if (!firmwareFamily.startsWith("Unified_ESP8285_")) {
                 error("Неподдерживаемое семейство прошивки: $firmwareFamily")
