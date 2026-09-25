@@ -273,23 +273,28 @@ class OfficialElrsService(private val context: Context) {
             .put("flash-discriminator", discriminator)
             .toString()
 
-        val out = ByteArrayOutputStream(source.size + 3000)
-        out.write(source)
-
-        while (out.size() < end) out.write(0)
-
-        writeFixed(out, productName.toByteArray(Charsets.UTF_8), 128)
-        writeFixed(out, luaName.toByteArray(Charsets.UTF_8), 16)
-        writeFixed(out, defines.toByteArray(Charsets.UTF_8), 512)
-        writeFixed(out, layoutJson.toByteArray(Charsets.UTF_8), 2048)
-
-        if (!priorTargetName.isNullOrBlank()) {
-            out.write(byteArrayOf(0xBE.toByte(), 0xEF.toByte(), 0xCA.toByte(), 0xFE.toByte()))
-            out.write(priorTargetName.uppercase().toByteArray(Charsets.UTF_8))
-            out.write(0)
+        val priorBytes = if (priorTargetName.isNullOrBlank()) {
+            byteArrayOf()
+        } else {
+            byteArrayOf(0xBE.toByte(), 0xEF.toByte(), 0xCA.toByte(), 0xFE.toByte()) +
+                priorTargetName.uppercase().toByteArray(Charsets.UTF_8) +
+                byteArrayOf(0)
         }
 
-        return out.toByteArray()
+        val metadataSize = 128 + 16 + 512 + 2048 + priorBytes.size
+        val configured = source.copyOf(maxOf(source.size, end + metadataSize))
+        var pos = end
+
+        pos = writeFixed(configured, pos, productName.toByteArray(Charsets.UTF_8), 128)
+        pos = writeFixed(configured, pos, luaName.toByteArray(Charsets.UTF_8), 16)
+        pos = writeFixed(configured, pos, defines.toByteArray(Charsets.UTF_8), 512)
+        pos = writeFixed(configured, pos, layoutJson.toByteArray(Charsets.UTF_8), 2048)
+
+        if (priorBytes.isNotEmpty()) {
+            priorBytes.copyInto(configured, destinationOffset = pos)
+        }
+
+        return configured
     }
 
     private fun findFirmwareEnd(bytes: ByteArray): Int {
@@ -332,13 +337,23 @@ class OfficialElrsService(private val context: Context) {
     }
 
     private fun writeFixed(
-        out: ByteArrayOutputStream,
+        out: ByteArray,
+        offset: Int,
         data: ByteArray,
         size: Int,
-    ) {
+    ): Int {
+        if (offset < 0 || offset + size > out.size) {
+            error("Unified metadata outside firmware buffer")
+        }
         val n = minOf(data.size, size)
-        out.write(data, 0, n)
-        repeat(size - n) { out.write(0) }
+        data.copyInto(
+            destination = out,
+            destinationOffset = offset,
+            startIndex = 0,
+            endIndex = n,
+        )
+        out.fill(0, fromIndex = offset + n, toIndex = offset + size)
+        return offset + size
     }
 
     private fun httpGetText(url: String): String {
