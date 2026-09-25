@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/app_storage.dart';
 import '../../core/delivery.dart';
+import '../../core/device_recognition.dart';
 import '../../core/identity_crypto.dart';
 import '../../core/messenger_core.dart';
 import '../../core/models.dart';
@@ -143,6 +144,75 @@ final class MeshAppController extends ChangeNotifier {
   bool get radioConnected => _androidBridge?.connected ?? false;
   bool get hasEp2Uart => _usbBridge != null;
   bool get ep2Connected => _ep2?.isAvailable ?? false;
+
+  DeviceRecognitionSnapshot get radioRecognition {
+    final protocol = switch (ep2Protocol) {
+      'ep2-link' => DeviceHostProtocol.ep2LinkAscii,
+      'crsf' => DeviceHostProtocol.crsf,
+      _ => DeviceHostProtocol.unknown,
+    };
+
+    final recognitionState = switch (ep2State) {
+      'unavailable' || 'offline' || 'disconnected' =>
+        DeviceRecognitionState.detached,
+      'connecting' || 'handshaking' || 'probing' || 'permission' =>
+        DeviceRecognitionState.probing,
+      'ready' || 'crsf' => DeviceRecognitionState.recognized,
+      'unknown' => DeviceRecognitionState.unknown,
+      'error' => DeviceRecognitionState.error,
+      _ => DeviceRecognitionState.attached,
+    };
+
+    final confidence = switch (protocol) {
+      DeviceHostProtocol.ep2LinkAscii =>
+        ep2Firmware != null && ep2Profile != null
+            ? DeviceRecognitionConfidence.confirmed
+            : DeviceRecognitionConfidence.tentative,
+      DeviceHostProtocol.crsf => DeviceRecognitionConfidence.confirmed,
+      _ => ep2Devices.isEmpty
+          ? DeviceRecognitionConfidence.unknown
+          : DeviceRecognitionConfidence.tentative,
+    };
+
+    final evidence = <DeviceRecognitionEvidence>[
+      if (ep2Baud != null)
+        DeviceRecognitionEvidence(
+          source: 'protocol_frame',
+          key: 'baud',
+          value: ep2Baud,
+        ),
+      if (ep2Firmware != null)
+        DeviceRecognitionEvidence(
+          source: 'info',
+          key: 'firmware',
+          value: ep2Firmware,
+        ),
+      if (ep2Profile != null)
+        DeviceRecognitionEvidence(
+          source: 'info',
+          key: 'profile',
+          value: ep2Profile,
+        ),
+      if (ep2LocalNode != null)
+        DeviceRecognitionEvidence(
+          source: 'info',
+          key: 'nodeId',
+          value: ep2LocalNode,
+        ),
+    ];
+
+    return DeviceRecognitionSnapshot(
+      state: recognitionState,
+      confidence: confidence,
+      transportKind: DeviceTransportKind.usbUart,
+      protocol: protocol,
+      baudRate: ep2Baud,
+      profileId: ep2Profile,
+      firmwareVersion: ep2Firmware,
+      nodeId: ep2LocalNode,
+      evidence: evidence,
+    );
+  }
 
   static Future<MeshAppController> create({
     Directory? storageRoot,
