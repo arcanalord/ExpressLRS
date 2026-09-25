@@ -87,6 +87,23 @@ class MainActivity : FlutterActivity() {
                         startEspProbe(deviceName, result)
                     }
 
+                    "fetchOfficialElrsEp2" -> {
+                        Thread {
+                            val response = OfficialElrsService(this).fetchEp2Catalog()
+                            mainHandler.post { result.success(response) }
+                        }.start()
+                    }
+
+                    "prepareOfficialElrsEp2" -> {
+                        val regulatoryProfile =
+                            call.argument<String>("regulatoryProfile") ?: ""
+                        Thread {
+                            val response = OfficialElrsService(this)
+                                .prepareEp2Firmware(regulatoryProfile)
+                            mainHandler.post { result.success(response) }
+                        }.start()
+                    }
+
                     else -> result.notImplemented()
                 }
             }
