@@ -140,6 +140,8 @@ class ElrsTargetInfo {
     required this.stableCompatible,
     required this.supportsUart,
     required this.studioSupported,
+    this.features = const [],
+    this.regulatoryOptions = const [],
     this.luaName,
     this.layoutFile,
     this.minVersion,
@@ -158,6 +160,8 @@ class ElrsTargetInfo {
   final bool stableCompatible;
   final bool supportsUart;
   final bool studioSupported;
+  final List<String> features;
+  final List<String> regulatoryOptions;
   final String? luaName;
   final String? layoutFile;
   final String? minVersion;
@@ -179,6 +183,12 @@ class ElrsTargetInfo {
       stableCompatible: map['stableCompatible'] as bool? ?? false,
       supportsUart: map['supportsUart'] as bool? ?? false,
       studioSupported: map['studioSupported'] as bool? ?? false,
+      features: (map['features'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      regulatoryOptions: (map['regulatoryOptions'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
       luaName: map['luaName'] as String?,
       layoutFile: map['layoutFile'] as String?,
       minVersion: map['minVersion'] as String?,
@@ -197,6 +207,7 @@ class ElrsCatalogIndex {
     this.publishedAt,
     this.commitSha,
     this.source,
+    this.hardwarePinned = false,
   });
 
   final String status;
@@ -207,6 +218,7 @@ class ElrsCatalogIndex {
   final String? publishedAt;
   final String? commitSha;
   final String? source;
+  final bool hardwarePinned;
 
   bool get ok => status == 'ok';
 
@@ -223,6 +235,7 @@ class ElrsCatalogIndex {
       publishedAt: map['publishedAt'] as String?,
       commitSha: map['commitSha'] as String?,
       source: map['source'] as String?,
+      hardwarePinned: map['hardwarePinned'] as bool? ?? false,
     );
   }
 }
@@ -242,6 +255,8 @@ class ElrsCatalogResult {
     this.layoutFile,
     this.minVersion,
     this.uploadMethods = const [],
+    this.features = const [],
+    this.regulatoryOptions = const [],
   });
 
   final String status;
@@ -257,6 +272,8 @@ class ElrsCatalogResult {
   final String? layoutFile;
   final String? minVersion;
   final List<String> uploadMethods;
+  final List<String> features;
+  final List<String> regulatoryOptions;
 
   bool get ok => status == 'ok';
 
@@ -277,6 +294,13 @@ class ElrsCatalogResult {
       uploadMethods: (map['uploadMethods'] as List<dynamic>? ?? const [])
           .whereType<String>()
           .toList(growable: false),
+      features: (map['features'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      regulatoryOptions:
+          (map['regulatoryOptions'] as List<dynamic>? ?? const [])
+              .whereType<String>()
+              .toList(growable: false),
     );
   }
 }
@@ -295,6 +319,7 @@ class ElrsPreparedFirmware {
     this.fileSize,
     this.sha256,
     this.manifestPath,
+    this.hardwarePinned = false,
     this.readyToFlash = false,
   });
 
@@ -310,6 +335,7 @@ class ElrsPreparedFirmware {
   final int? fileSize;
   final String? sha256;
   final String? manifestPath;
+  final bool hardwarePinned;
   final bool readyToFlash;
 
   bool get ok => status == 'prepared' && readyToFlash;
@@ -328,6 +354,7 @@ class ElrsPreparedFirmware {
       fileSize: map['fileSize'] as int?,
       sha256: map['sha256'] as String?,
       manifestPath: map['manifestPath'] as String?,
+      hardwarePinned: map['hardwarePinned'] as bool? ?? false,
       readyToFlash: map['readyToFlash'] as bool? ?? false,
     );
   }
@@ -468,6 +495,12 @@ class NativeUsbService {
     required String expectedPlatform,
     required String expectedFirmware,
     required String regulatoryProfile,
+    String? bindingPhrase,
+    String? wifiSsid,
+    String? wifiPassword,
+    int? autoWifiSeconds,
+    int? rxBaud,
+    bool? lockOnFirstConnection,
   }) async {
     final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
           'prepareOfficialElrsTarget',
@@ -477,6 +510,12 @@ class NativeUsbService {
             'expectedPlatform': expectedPlatform,
             'expectedFirmware': expectedFirmware,
             'regulatoryProfile': regulatoryProfile,
+            'bindingPhrase': bindingPhrase,
+            'wifiSsid': wifiSsid,
+            'wifiPassword': wifiPassword,
+            'autoWifiSeconds': autoWifiSeconds,
+            'rxBaud': rxBaud,
+            'lockOnFirstConnection': lockOnFirstConnection,
           },
         ) ??
         const <dynamic, dynamic>{};
