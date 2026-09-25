@@ -102,12 +102,15 @@ class MainActivity : FlutterActivity() {
                             call.argument<String>("expectedPlatform") ?: ""
                         val expectedFirmware =
                             call.argument<String>("expectedFirmware") ?: ""
+                        val expectedCommitSha =
+                            call.argument<String>("expectedCommitSha") ?: ""
                         Thread {
                             val response = OfficialElrsService(this).fetchCatalog(
                                 targetPath = targetPath,
                                 expectedProductName = expectedProductName,
                                 expectedPlatform = expectedPlatform,
                                 expectedFirmware = expectedFirmware,
+                                expectedCommitSha = expectedCommitSha,
                             )
                             mainHandler.post { result.success(response) }
                         }.start()
@@ -152,6 +155,8 @@ class MainActivity : FlutterActivity() {
                             call.argument<String>("expectedPlatform") ?: ""
                         val expectedFirmware =
                             call.argument<String>("expectedFirmware") ?: ""
+                        val expectedCommitSha =
+                            call.argument<String>("expectedCommitSha") ?: ""
                         val regulatoryDomain =
                             call.argument<String>("regulatoryDomain") ?: ""
                         val bindingPhrase = call.argument<String>("bindingPhrase")
@@ -167,6 +172,7 @@ class MainActivity : FlutterActivity() {
                                 expectedProductName = expectedProductName,
                                 expectedPlatform = expectedPlatform,
                                 expectedFirmware = expectedFirmware,
+                                expectedCommitSha = expectedCommitSha,
                                 regulatoryDomain = regulatoryDomain,
                                 bindingPhrase = bindingPhrase,
                                 wifiSsid = wifiSsid,
