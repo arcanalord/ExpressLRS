@@ -13,6 +13,19 @@ void main() {
   check(attached.protocol == DeviceHostProtocol.unknown,
       'VID/PID must not identify EP2');
 
+  final mmUart = DeviceRecognition.mmUart(
+    baudRate: 115200,
+    firmware: 'M03-0.4.1-dev',
+    boardId: 'ep2',
+    radioFamily: 'SX1280',
+    profileId: 'MM-PHY-24-COMMON-v0',
+    nodeId: 1,
+    capabilities: const <String>{'MMRP/1', 'text', 'map_point'},
+  );
+  check(mmUart.recognized, 'MM-UART handshake must confirm device');
+  check(mmUart.protocol == DeviceHostProtocol.mmUart1, 'MM-UART protocol');
+  check(mmUart.capabilities.contains('MMRP/1'), 'MMRP capability');
+
   final ep2 = DeviceRecognition.ep2Link(
     baudRate: 115200,
     nodeId: 1,
