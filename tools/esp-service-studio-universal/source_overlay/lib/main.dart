@@ -365,7 +365,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 ),
               ),
             if (profile != null) _ProfileCard(profile: profile),
-            if (profile?.elrsTargetPath != null)
+            if (profile != null && profile.elrsTargetPath != null)
               _OfficialElrsSection(
                 expectedProductName: profile.elrsProductName ?? profile.name,
                 targetPath: profile.elrsTargetPath!,
@@ -384,7 +384,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 onPrepare: _prepareElrsFirmware,
               ),
             _Section(
-              title: profile?.elrsTargetPath != null
+              title: profile != null && profile.elrsTargetPath != null
                   ? '4. Действие'
                   : '3. Действие',
               child: Column(
