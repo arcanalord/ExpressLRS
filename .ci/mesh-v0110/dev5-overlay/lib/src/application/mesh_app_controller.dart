@@ -83,6 +83,10 @@ final class MeshAppController extends ChangeNotifier {
   StreamSubscription<ExternalRadioSessionEvent>? _externalSessionSub;
   Timer? _maintenanceTimer;
   bool _maintenanceBusy = false;
+  bool _usbMaintenanceBusy = false;
+  int _usbMaintenanceTick = 0;
+  DateTime? _lastUsbAutoConnectAttempt;
+  int? _lastUsbAutoConnectDeviceId;
 
   bool initialized = false;
   bool busy = false;
@@ -142,6 +146,7 @@ final class MeshAppController extends ChangeNotifier {
   String ep2LastHex = '';
   List<UsbSerialDevice> ep2Devices = const [];
   final List<String> ep2Log = <String>[];
+  int? ep2ConnectedDeviceId;
 
   bool get hasLocalNetworkPermissionBridge => _localNetworkBridge != null;
   bool get lanReady => _lan?.isAvailable ?? false;
@@ -150,8 +155,15 @@ final class MeshAppController extends ChangeNotifier {
   bool get hasAndroidMeshtastic => _androidBridge != null;
   bool get radioConnected => _androidBridge?.connected ?? false;
   bool get hasEp2Uart => _usbBridge != null;
+  bool get mmUartActive => _mmUartActive;
   bool get ep2Connected =>
       (_externalRadio?.isAvailable ?? false) || (_ep2?.isAvailable ?? false);
+  String? get externalRadioFamily =>
+      _externalRadioSession?.snapshot().info?.radioFamily;
+  String? get externalBoardId =>
+      _externalRadioSession?.snapshot().info?.boardId;
+  bool get externalRadioSupportsMmrp =>
+      _externalRadioSession?.supportsMmrp == true;
 
   static Future<MeshAppController> create({
     Directory? storageRoot,
@@ -670,8 +682,77 @@ final class MeshAppController extends ChangeNotifier {
     _maintenanceBusy = true;
     try {
       await _core.maintenance();
+      _usbMaintenanceTick++;
+      if (_usbMaintenanceTick >= 3) {
+        _usbMaintenanceTick = 0;
+        await _runUsbMaintenance();
+      }
     } finally {
       _maintenanceBusy = false;
+    }
+  }
+
+  Future<void> _runUsbMaintenance() async {
+    final bridge = _usbBridge;
+    if (bridge == null || _usbMaintenanceBusy || busy) return;
+    _usbMaintenanceBusy = true;
+    try {
+      final devices = await bridge.devices();
+      final ids = devices.map((device) => device.deviceId).toSet();
+      final changed =
+          devices.length != ep2Devices.length ||
+          devices.any(
+            (device) => !ep2Devices.any(
+              (old) =>
+                  old.deviceId == device.deviceId &&
+                  old.permission == device.permission &&
+                  old.driver == device.driver,
+            ),
+          );
+      if (changed) {
+        ep2Devices = devices;
+        _addEp2Log('USB devices=${devices.length}');
+      }
+
+      final connectedId = ep2ConnectedDeviceId;
+      if (connectedId != null && !ids.contains(connectedId)) {
+        _addEp2Log('USB device=$connectedId detached');
+        ep2ConnectedDeviceId = null;
+        _mmUartActive = false;
+        try {
+          await _externalRadioSession?.disconnect();
+        } catch (_) {}
+        try {
+          await _ep2?.disconnect();
+        } catch (_) {}
+        ep2State = 'disconnected';
+        ep2Protocol = 'unknown';
+        ep2DetectedProtocol = 'unknown';
+        ep2InfoNotice = 'Радиомодуль отключён. Ждём повторного подключения.';
+      }
+
+      if (!ep2Connected && ep2ConnectedDeviceId == null && devices.length == 1) {
+        final device = devices.single;
+        final now = DateTime.now();
+        final last = _lastUsbAutoConnectAttempt;
+        final sameDevice = _lastUsbAutoConnectDeviceId == device.deviceId;
+        final backoffActive =
+            sameDevice &&
+            last != null &&
+            now.difference(last) < const Duration(seconds: 8);
+        if (!backoffActive) {
+          _lastUsbAutoConnectAttempt = now;
+          _lastUsbAutoConnectDeviceId = device.deviceId;
+          _addEp2Log('AUTO hotplug device=${device.deviceId}');
+          unawaited(connectEp2(device.deviceId));
+        }
+      }
+
+      if (changed && initialized) notifyListeners();
+    } catch (error) {
+      _addEp2Log('USB WATCH ERROR $error');
+    } finally {
+      _usbMaintenanceBusy = false;
     }
   }
 
@@ -1074,6 +1155,7 @@ final class MeshAppController extends ChangeNotifier {
     ep2InfoNotice = null;
     notifyListeners();
     try {
+      ep2ConnectedDeviceId = deviceId;
       _addEp2Log('AUTO USB device=$deviceId · MM-UART/1 first');
       if (_mmUartActive) {
         await session.disconnect();
@@ -1129,6 +1211,7 @@ final class MeshAppController extends ChangeNotifier {
     final session = _externalRadioSession;
     if (ep2 == null) return;
     _addEp2Log('DISCONNECT requested');
+    ep2ConnectedDeviceId = null;
     _mmUartActive = false;
     if (session != null) {
       try {
