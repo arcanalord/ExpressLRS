@@ -7,6 +7,9 @@ native = Path(
 probe = Path(
     'android/app/src/main/kotlin/com/arcanalord/service_studio/UsbSerialProbe.kt'
 ).read_text(encoding='utf-8')
+elrs = Path(
+    'android/app/src/main/kotlin/com/arcanalord/service_studio/OfficialElrsService.kt'
+).read_text(encoding='utf-8')
 manifest = Path(
     'android/app/src/main/AndroidManifest.xml'
 ).read_text(encoding='utf-8')
@@ -18,7 +21,7 @@ root_gradle = Path(
 ).read_text(encoding='utf-8')
 
 checks = {
-    'visible alpha5 id': 'v0.9.0-alpha.5 · Pixel 7a' in main,
+    'visible alpha6 id': 'v0.9.0-alpha.6 · Pixel 7a' in main,
     'real probe button': 'probeEspRom' in main,
     'permission request': 'requestPermission' in native,
     'permission result': 'ACTION_USB_PERMISSION' in native,
@@ -33,6 +36,11 @@ checks = {
     'usb serial dependency': 'usb-serial-for-android:3.11.0' in app_gradle,
     'jitpack': 'https://jitpack.io' in root_gradle,
     'USB attach manifest': 'USB_DEVICE_ATTACHED' in manifest,
+    'official ELRS latest release': 'releases/latest' in elrs,
+    'official EP2 target guard': 'HappyModel EP1/EP2 2.4GHz RX' in elrs,
+    'official cache': 'artifactory.expresslrs.org' in elrs,
+    'prepare not flash': 'readyToFlash' in elrs and 'writeOffset' in elrs,
+    'internet permission': 'android.permission.INTERNET' in manifest,
 }
 
 failed = [name for name, ok in checks.items() if not ok]
