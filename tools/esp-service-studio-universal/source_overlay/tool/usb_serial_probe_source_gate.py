@@ -24,7 +24,7 @@ device_profiles = Path(
 ).read_text(encoding='utf-8')
 
 checks = {
-    'visible alpha9 id': 'v0.9.0-alpha.9 · Pixel 7a' in main,
+    'visible alpha10 id': 'v0.9.0-alpha.10 · Pixel 7a' in main,
     'real probe button': 'probeEspRom' in main,
     'permission request': 'requestPermission' in native,
     'permission result': 'ACTION_USB_PERMISSION' in native,
@@ -40,9 +40,16 @@ checks = {
     'jitpack': 'https://jitpack.io' in root_gradle,
     'USB attach manifest': 'USB_DEVICE_ATTACHED' in manifest,
     'official ELRS latest release': 'releases/latest' in elrs,
+    'version pinned bundle': 'ensureBundle(' in elrs and 'firmware/hardware/targets.json' in elrs,
+    'no master hardware': 'Targets/master' not in elrs,
     'dynamic official catalog': 'fetchCatalogIndex()' in elrs and 'collectTargets(' in elrs,
     'generic ELRS target guard': 'fetchCatalog(' in elrs and 'validateTargetPath(' in elrs,
     'official cache': 'artifactory.expresslrs.org' in elrs,
+    'regional 900 support': 'FCC_915' in elrs and 'EU_868' in elrs and 'AU_915' in elrs and 'IN_866' in elrs,
+    'binding phrase support': 'generateUid(' in elrs and 'bindingPhrase' in native,
+    'wifi options': 'wifi-ssid' in elrs and 'wifiPassword' in native,
+    'rx baud option': 'rcvr-uart-baud' in elrs and 'rxBaud' in native,
+    'simple ELRS UI': '3. Настройки и прошивка' in main and 'Записать в контроллер' in main,
     'prepare not flash': 'readyToFlash' in elrs and 'writeOffset' in elrs,
     'internet permission': 'android.permission.INTERNET' in manifest,
     'no hardcoded ELRS profiles': '"elrs"' not in device_profiles,
@@ -68,4 +75,4 @@ if failed:
         'USB serial probe source gate failed: ' + ', '.join(failed)
     )
 
-print('USB serial + dynamic ELRS catalog + guarded ESP8285 flash gate PASS')
+print('USB serial + pinned ELRS bundle + guarded ESP8285 flash gate PASS')
