@@ -94,6 +94,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
       'offline',
       'disconnected',
     }.contains(controller.ep2State);
+    final anyRouteReady =
+        controller.lanReady || controller.ep2Connected || controller.radioConnected;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -109,13 +111,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  'Автоматический маршрут',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                Text(
+                  anyRouteReady ? 'Всё работает' : 'Автоматический маршрут',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Одна очередь сообщений. Канал выбирается автоматически из доступных для этого контакта.',
+                  anyRouteReady
+                      ? 'Есть доступный канал связи. Сообщения пойдут по подходящему маршруту автоматически.'
+                      : 'Одна очередь сообщений. Подключи доступный канал — приложение выберет маршрут само.',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -212,6 +216,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
                           label: const Text('INFO / STATS'),
                         ),
                       if (controller.ep2Connected)
+                        OutlinedButton.icon(
+                          onPressed: controller.runRadioSelfTest,
+                          icon: const Icon(Icons.health_and_safety_outlined),
+                          label: const Text('Самопроверка'),
+                        ),
+                      if (controller.ep2Connected)
                         FilledButton.tonalIcon(
                           onPressed: controller.startEp2WifiUpdate,
                           icon: const Icon(Icons.wifi_tethering_outlined),
@@ -234,6 +244,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ],
+                  if (controller.mmUartActive) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '${controller.externalRadioFamily ?? 'Радио'} · '
+                      '${controller.externalBoardId ?? 'плата не указана'} · '
+                      '${controller.externalRadioSupportsMmrp ? 'MMRP/1' : 'без MMRP/1'}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
                   if (controller.ep2LocalNode != null ||
                       controller.ep2Firmware != null ||
                       controller.ep2Profile != null) ...[
@@ -242,7 +261,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       'Узел ${controller.ep2LocalNode ?? '—'} · ${controller.ep2Firmware ?? '—'} · ${controller.ep2Profile ?? '—'}',
                     ),
                   ],
-                  if (controller.ep2Connected) ...[
+                  if (controller.ep2Connected && !controller.mmUartActive) ...[
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,
@@ -335,7 +354,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   const SizedBox(height: 8),
                   if (controller.ep2Devices.isEmpty)
                     Text(
-                      'USB-UART устройства не найдены.',
+                      'Подключи радиомодуль по USB — поиск и подключение выполняются автоматически.',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -348,8 +367,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         title: Text(device.name),
                         subtitle: Text(
                           device.permission
-                              ? 'USB-устройство · разрешение есть'
-                              : 'USB-устройство · потребуется разрешение',
+                              ? 'USB-устройство · готово к автоподключению'
+                              : 'USB-устройство · Android запросит разрешение',
                         ),
                         trailing: FilledButton(
                           onPressed: controller.busy ||
