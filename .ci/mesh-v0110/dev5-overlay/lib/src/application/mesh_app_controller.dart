@@ -76,6 +76,9 @@ final class MeshAppController extends ChangeNotifier {
   StreamSubscription<Ep2TransportEvent>? _ep2Sub;
   Timer? _maintenanceTimer;
   bool _maintenanceBusy = false;
+  Set<int> _knownEp2DeviceIds = <int>{};
+  int? _ep2ActiveDeviceId;
+  bool _ep2UsbPollBusy = false;
 
   bool initialized = false;
   bool busy = false;
@@ -146,7 +149,7 @@ final class MeshAppController extends ChangeNotifier {
   bool get ep2Connected => _ep2?.isAvailable ?? false;
 
   DeviceRecognitionSnapshot get radioRecognition {
-    final protocol = switch (ep2Protocol) {
+    final protocol = switch (ep2DetectedProtocol) {
       'ep2-link' => DeviceHostProtocol.ep2LinkAscii,
       'crsf' => DeviceHostProtocol.crsf,
       _ => DeviceHostProtocol.unknown,
@@ -210,6 +213,15 @@ final class MeshAppController extends ChangeNotifier {
       profileId: ep2Profile,
       firmwareVersion: ep2Firmware,
       nodeId: ep2LocalNode,
+      capabilities: switch (protocol) {
+        DeviceHostProtocol.ep2LinkAscii => const [
+          'text',
+          'link_stats',
+          'wifi_ota',
+        ],
+        DeviceHostProtocol.crsf => const ['diagnostics'],
+        _ => const [],
+      },
       evidence: evidence,
     );
   }
@@ -720,6 +732,7 @@ final class MeshAppController extends ChangeNotifier {
     _maintenanceBusy = true;
     try {
       await _core.maintenance();
+      await refreshEp2Devices();
     } finally {
       _maintenanceBusy = false;
     }
@@ -1070,25 +1083,67 @@ final class MeshAppController extends ChangeNotifier {
     await refreshRadioDiagnostics();
   }
 
-  Future<void> refreshEp2Devices() async {
+  Future<void> refreshEp2Devices({bool autoProbeNew = true}) async {
     final bridge = _usbBridge;
-    if (bridge == null) return;
+    if (bridge == null || _ep2UsbPollBusy) return;
+    _ep2UsbPollBusy = true;
     try {
-      ep2Devices = await bridge.devices();
-      for (final device in ep2Devices) {
-        _addEp2Log(
-          'USB id=${device.deviceId} vid=${device.vendorId.toRadixString(16).padLeft(4, '0')} pid=${device.productId.toRadixString(16).padLeft(4, '0')} driver=${device.driver} permission=${device.permission}',
-        );
+      final next = await bridge.devices();
+      final nextIds = next.map((d) => d.deviceId).toSet();
+      final added = nextIds.difference(_knownEp2DeviceIds);
+      final removed = _knownEp2DeviceIds.difference(nextIds);
+      final changed = added.isNotEmpty ||
+          removed.isNotEmpty ||
+          next.length != ep2Devices.length;
+
+      ep2Devices = next;
+
+      if (changed) {
+        for (final device in next) {
+          _addEp2Log(
+            'USB id=${device.deviceId} vid=${device.vendorId.toRadixString(16).padLeft(4, '0')} pid=${device.productId.toRadixString(16).padLeft(4, '0')} driver=${device.driver} permission=${device.permission}',
+          );
+        }
+        if (removed.isNotEmpty) {
+          _addEp2Log('USB detached ids=${removed.join(',')}');
+        }
       }
+
+      if (_ep2ActiveDeviceId != null &&
+          !nextIds.contains(_ep2ActiveDeviceId)) {
+        _addEp2Log('ACTIVE USB detached id=$_ep2ActiveDeviceId');
+        _ep2ActiveDeviceId = null;
+        ep2DetectedProtocol = 'unknown';
+        if (_ep2 != null &&
+            !{'unavailable', 'offline', 'disconnected'}.contains(ep2State)) {
+          await _ep2!.disconnect();
+        }
+      }
+
+      _knownEp2DeviceIds = nextIds;
+
       final status = await bridge.status();
       final state = status['state'] as String?;
       if (state != null && state.isNotEmpty && ep2State == 'unavailable') {
         ep2State = state;
       }
       ep2Error = status['error'] as String?;
+
+      if (autoProbeNew &&
+          added.length == 1 &&
+          next.length == 1 &&
+          !busy &&
+          {'unavailable', 'offline', 'disconnected', 'unknown', 'error'}
+              .contains(ep2State)) {
+        final id = added.single;
+        _addEp2Log('USB attached id=$id · auto recognition');
+        unawaited(connectEp2(id));
+      }
     } catch (error) {
       ep2Error = '$error';
       _addEp2Log('USB LIST ERROR $error');
+    } finally {
+      _ep2UsbPollBusy = false;
     }
     notifyListeners();
   }
@@ -1098,7 +1153,8 @@ final class MeshAppController extends ChangeNotifier {
     if (ep2 == null || busy) return;
     busy = true;
     ep2Error = null;
-      ep2DetectedProtocol = 'detecting';
+    _ep2ActiveDeviceId = deviceId;
+    ep2DetectedProtocol = 'detecting';
       ep2RxBytes = 0;
       ep2TxBytes = 0;
       ep2LastHex = '';
@@ -1142,8 +1198,10 @@ final class MeshAppController extends ChangeNotifier {
     final ep2 = _ep2;
     if (ep2 == null) return;
     _addEp2Log('DISCONNECT requested');
+    _ep2ActiveDeviceId = null;
+    ep2DetectedProtocol = 'unknown';
     await ep2.disconnect();
-    await refreshEp2Devices();
+    await refreshEp2Devices(autoProbeNew: false);
   }
 
   Future<void> refreshEp2Info() async {
@@ -1233,6 +1291,7 @@ final class MeshAppController extends ChangeNotifier {
       ep2State = event.state;
       ep2Error = event.error;
       if (event.state == 'disconnected') {
+        ep2DetectedProtocol = 'unknown';
         ep2Protocol = 'unknown';
         ep2Baud = null;
         ep2PingResult = null;
@@ -1254,6 +1313,12 @@ final class MeshAppController extends ChangeNotifier {
       return;
     }
     if (event is Ep2ProbeEvent) {
+      ep2DetectedProtocol = switch (event.protocol) {
+        RadioUartProtocol.ep2Link => 'ep2-link',
+        RadioUartProtocol.crsf => 'crsf',
+        RadioUartProtocol.unknown =>
+          event.detail == 'Протокол не определён' ? 'unknown' : 'detecting',
+      };
       ep2Protocol = switch (event.protocol) {
         RadioUartProtocol.ep2Link => 'EP2 LINK',
         RadioUartProtocol.crsf => 'ELRS / CRSF',
