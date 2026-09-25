@@ -9,6 +9,9 @@ import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.security.MessageDigest
+import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -127,6 +130,244 @@ class UsbSerialProbe(private val context: Context) {
             runCatching { port.close() }
             runCatching { connection.close() }
         }
+    }
+
+
+    fun flashPrepared(
+        device: UsbDevice,
+        manifestPath: String,
+        expectedTargetPath: String,
+        expectedSha256: String,
+    ): Map<String, Any?> {
+        val started = System.currentTimeMillis()
+
+        return try {
+            if (!usbManager.hasPermission(device)) {
+                error("Нет разрешения Android на USB-UART")
+            }
+
+            val manifestFile = File(manifestPath).canonicalFile
+            val filesRoot = context.filesDir.canonicalFile
+            if (!manifestFile.path.startsWith(filesRoot.path + File.separator)) {
+                error("Манифест находится вне внутреннего хранилища приложения")
+            }
+            if (!manifestFile.isFile) error("Манифест прошивки не найден")
+
+            val manifest = JSONObject(manifestFile.readText(Charsets.UTF_8))
+            val targetPath = manifest.getString("targetPath")
+            val productName = manifest.getString("productName")
+            val platform = manifest.getString("platform")
+            val firmwareFamily = manifest.getString("firmware")
+            val region = manifest.getString("regulatoryProfile")
+            val offsetText = manifest.getString("writeOffset")
+            val fileName = manifest.getString("fileName")
+            val declaredSize = manifest.getLong("fileSize")
+            val declaredSha = manifest.getString("sha256").lowercase()
+
+            if (targetPath != expectedTargetPath) {
+                error("Target прошивки не совпадает с выбранной моделью")
+            }
+            if (declaredSha != expectedSha256.lowercase()) {
+                error("SHA-256 подготовленной прошивки изменился")
+            }
+            if (platform != "esp8285") {
+                error("ROM-запись alpha.9 разрешена только для ESP8285")
+            }
+            if (!firmwareFamily.startsWith("Unified_ESP8285_")) {
+                error("Неподдерживаемое семейство прошивки: $firmwareFamily")
+            }
+            if (offsetText != "0x0") {
+                error("Для ESP8285 ожидается адрес записи 0x0")
+            }
+
+            val firmwareFile = File(manifestFile.parentFile, fileName).canonicalFile
+            if (!firmwareFile.path.startsWith(filesRoot.path + File.separator)) {
+                error("Файл прошивки находится вне внутреннего хранилища")
+            }
+            if (!firmwareFile.isFile) error("firmware.bin не найден")
+
+            val firmware = firmwareFile.readBytes()
+            if (firmware.size.toLong() != declaredSize) {
+                error("Размер firmware.bin изменился после подготовки")
+            }
+            val actualSha = sha256(firmware)
+            if (actualSha != declaredSha) {
+                error("SHA-256 firmware.bin не совпадает с манифестом")
+            }
+            validateEspImage(firmware)
+
+            val driver = probeDriver(device)
+                ?: error("Для USB-UART не найден serial-драйвер")
+            val connection = usbManager.openDevice(device)
+                ?: error("Android не смог открыть USB-UART")
+            val port = driver.ports.firstOrNull()
+                ?: run {
+                    connection.close()
+                    error("Serial-порт USB-UART отсутствует")
+                }
+
+            try {
+                port.open(connection)
+                port.setParameters(
+                    115200,
+                    8,
+                    UsbSerialPort.STOPBITS_1,
+                    UsbSerialPort.PARITY_NONE,
+                )
+                drainInput(port)
+                val link = RomLink(port)
+
+                if (!link.sync()) {
+                    error("ESP ROM не ответил. Снова войдите в BOOT mode")
+                }
+
+                val magic = link.readReg(0x40001000L)
+                if (magic != 0xFFF0C101L) {
+                    error("Подключён не ESP8266/ESP8285 ROM")
+                }
+
+                val diag = inspectChip(link)
+                val chipDescription =
+                    diag["chipDescription"]?.toString() ?: "ESP8266 / ESP8285"
+                if (!chipDescription.startsWith("ESP8285")) {
+                    error("Ожидался ESP8285, обнаружен $chipDescription")
+                }
+
+                val flashId = readEsp8266FlashId(link)
+                val flashInfo = decodeFlashId(flashId)
+                val flashSizeText = flashInfo.third
+                    ?: error("Размер flash по JEDEC ID определить не удалось")
+                val flashSizeBytes = parseFlashSizeBytes(flashSizeText)
+                    ?: error("Не удалось разобрать размер flash: $flashSizeText")
+
+                if (firmware.size > flashSizeBytes) {
+                    error(
+                        "firmware.bin ${firmware.size} Б больше flash $flashSizeBytes Б"
+                    )
+                }
+
+                val blockSize = 0x400
+                val blocks = (firmware.size + blockSize - 1) / blockSize
+                val eraseSize = esp8266EraseSize(0, firmware.size)
+                val begin = le32(eraseSize, blocks, blockSize, 0)
+
+                if (link.command(0x02, begin, 12000) == null) {
+                    error("ESP ROM не подтвердил FLASH_BEGIN")
+                }
+
+                for (seq in 0 until blocks) {
+                    val start = seq * blockSize
+                    val end = minOf(start + blockSize, firmware.size)
+                    val data = ByteArray(blockSize) { 0xFF.toByte() }
+                    firmware.copyInto(
+                        destination = data,
+                        destinationOffset = 0,
+                        startIndex = start,
+                        endIndex = end,
+                    )
+                    val payload = le32(blockSize, seq, 0, 0) + data
+                    val checksum = espChecksum(data)
+
+                    var acknowledged = false
+                    repeat(3) {
+                        if (link.command(
+                                op = 0x03,
+                                data = payload,
+                                timeoutMs = 1800,
+                                checksum = checksum,
+                            ) != null
+                        ) {
+                            acknowledged = true
+                            return@repeat
+                        }
+                    }
+                    if (!acknowledged) {
+                        error("ROM не подтвердил блок ${seq + 1} из $blocks")
+                    }
+                }
+
+                mapOf(
+                    "status" to "flash_written",
+                    "message" to "Запись завершена: ROM подтвердил все блоки. Полный readback пока не выполнялся.",
+                    "targetPath" to targetPath,
+                    "productName" to productName,
+                    "version" to manifest.optString("version"),
+                    "regulatoryProfile" to region,
+                    "chipDescription" to chipDescription,
+                    "flashId" to "0x%06X".format(flashId and 0xFFFFFFL),
+                    "flashSize" to flashSizeText,
+                    "fileSize" to firmware.size,
+                    "sha256" to actualSha,
+                    "blocksWritten" to blocks,
+                    "blockSize" to blockSize,
+                    "writeOffset" to "0x0",
+                    "verification" to "rom_block_ack",
+                    "needsPowerCycle" to true,
+                    "elapsedMs" to (System.currentTimeMillis() - started),
+                )
+            } finally {
+                runCatching { port.close() }
+                runCatching { connection.close() }
+            }
+        } catch (e: Exception) {
+            mapOf(
+                "status" to "flash_error",
+                "message" to (e.message ?: e.javaClass.simpleName),
+                "elapsedMs" to (System.currentTimeMillis() - started),
+            )
+        }
+    }
+
+    private fun validateEspImage(bytes: ByteArray) {
+        if (bytes.size < 0x1010) error("firmware.bin слишком маленький")
+        if ((bytes[0].toInt() and 0xFF) != 0xE9) {
+            error("firmware.bin не похож на ESP image")
+        }
+        val segments = bytes[1].toInt() and 0xFF
+        if (segments == 2 && (bytes[0x1000].toInt() and 0xFF) != 0xE9) {
+            error("Некорректный ESP8285 second image header")
+        }
+    }
+
+    private fun esp8266EraseSize(offset: Int, size: Int): Int {
+        val sectorsPerBlock = 16
+        val sectorSize = 0x1000
+        val numSectors = (size + sectorSize - 1) / sectorSize
+        val startSector = offset / sectorSize
+        var headSectors = sectorsPerBlock - (startSector % sectorsPerBlock)
+        if (numSectors < headSectors) headSectors = numSectors
+
+        return if (numSectors < 2 * headSectors) {
+            ((numSectors + 1) / 2) * sectorSize
+        } else {
+            (numSectors - headSectors) * sectorSize
+        }
+    }
+
+    private fun espChecksum(data: ByteArray): Long {
+        var value = 0xEFL
+        for (b in data) {
+            value = value xor (b.toInt() and 0xFF).toLong()
+        }
+        return value and 0xFFFFFFFFL
+    }
+
+    private fun parseFlashSizeBytes(text: String): Int? {
+        val clean = text.trim().uppercase()
+        return when {
+            clean.endsWith("MB") ->
+                clean.removeSuffix("MB").toIntOrNull()?.times(1024 * 1024)
+            clean.endsWith("KB") ->
+                clean.removeSuffix("KB").toIntOrNull()?.times(1024)
+            else -> null
+        }
+    }
+
+    private fun sha256(bytes: ByteArray): String {
+        return MessageDigest
+            .getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
     }
 
     private fun inspectChip(link: RomLink): Map<String, Any?> {
@@ -350,13 +591,18 @@ class UsbSerialProbe(private val context: Context) {
             return command(0x09, data, 600) != null
         }
 
-        fun command(op: Int, data: ByteArray, timeoutMs: Long): RomResponse? {
+        fun command(
+            op: Int,
+            data: ByteArray,
+            timeoutMs: Long,
+            checksum: Long = 0,
+        ): RomResponse? {
             val request = ByteBuffer.allocate(8 + data.size)
                 .order(ByteOrder.LITTLE_ENDIAN)
                 .put(0x00)
                 .put(op.toByte())
                 .putShort(data.size.toShort())
-                .putInt(0)
+                .putInt(checksum.toInt())
                 .put(data)
                 .array()
 
