@@ -87,6 +87,7 @@ final class MeshAppController extends ChangeNotifier {
   int _usbMaintenanceTick = 0;
   DateTime? _lastUsbAutoConnectAttempt;
   int? _lastUsbAutoConnectDeviceId;
+  bool _usbAutoConnectSuppressed = false;
 
   bool initialized = false;
   bool busy = false;
@@ -711,6 +712,7 @@ final class MeshAppController extends ChangeNotifier {
           );
       if (changed) {
         ep2Devices = devices;
+        _usbAutoConnectSuppressed = false;
         _addEp2Log('USB devices=${devices.length}');
       }
 
@@ -731,7 +733,7 @@ final class MeshAppController extends ChangeNotifier {
         ep2InfoNotice = 'Радиомодуль отключён. Ждём повторного подключения.';
       }
 
-      if (!ep2Connected && ep2ConnectedDeviceId == null && devices.length == 1) {
+      if (!ep2Connected && !_usbAutoConnectSuppressed && devices.length == 1) {
         final device = devices.single;
         final now = DateTime.now();
         final last = _lastUsbAutoConnectAttempt;
@@ -1130,6 +1132,7 @@ final class MeshAppController extends ChangeNotifier {
     final bridge = _usbBridge;
     if (ep2 == null || session == null || bridge == null || busy) return;
     busy = true;
+    _usbAutoConnectSuppressed = false;
     ep2Error = null;
     ep2DetectedProtocol = 'detecting';
     ep2RxBytes = 0;
@@ -1224,6 +1227,7 @@ final class MeshAppController extends ChangeNotifier {
     final session = _externalRadioSession;
     if (ep2 == null) return;
     _addEp2Log('DISCONNECT requested');
+    _usbAutoConnectSuppressed = true;
     ep2ConnectedDeviceId = null;
     _mmUartActive = false;
     if (session != null) {
