@@ -1,16 +1,16 @@
-name: Mesh Messenger Flutter Android v0.1.10-dev.8
+name: Mesh Messenger Flutter Android v0.1.10-dev.8-r2
 
 on:
   push:
     branches:
-      - build/mesh-flutter-v0.1.10-dev.8
+      - build/mesh-flutter-v0.1.10-dev.8-r2-r2
     paths:
-      - '.github/workflows/mesh-flutter-v0.1.10-dev.8.yml'
+      - '.github/workflows/mesh-flutter-v0.1.10-dev.8-r2.yml'
       - '.ci/mesh-v0110/dev5-overlay/**'
   workflow_dispatch:
 
 concurrency:
-  group: mesh-flutter-v0.1.10-dev.8
+  group: mesh-flutter-v0.1.10-dev.8-r2
   cancel-in-progress: true
 
 jobs:
@@ -117,15 +117,15 @@ jobs:
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.8.txt
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-r2-r2-arm64-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-r2-r2-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.8-r2.txt
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug
+          name: MeshMessenger-Flutter-v0.1.10-dev.8-r2-r2-arm64-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug.apk
-            /tmp/SHA256SUM-v0.1.10-dev.8.txt
+            /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-r2-r2-arm64-debug.apk
+            /tmp/SHA256SUM-v0.1.10-dev.8-r2.txt
           if-no-files-found: error
           retention-days: 14
