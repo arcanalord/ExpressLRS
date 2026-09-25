@@ -13,7 +13,10 @@ import '../../platform/android_local_network_bridge.dart';
 import '../../platform/android_secure_identity_bridge.dart';
 import '../../platform/android_meshtastic_bridge.dart';
 import '../../platform/android_usb_serial_bridge.dart';
+import '../../platform/android_usb_mm_uart_host_link.dart';
 import '../../platform/ep2_uart_transport.dart';
+import '../../platform/mm_uart_external_radio_session.dart';
+import '../../platform/mm_uart_message_transport.dart';
 import '../../platform/lan_transport.dart';
 import '../../platform/meshtastic_transport.dart';
 
@@ -68,11 +71,17 @@ final class MeshAppController extends ChangeNotifier {
   AndroidMeshtasticBridge? _androidBridge;
   AndroidUsbSerialBridge? _usbBridge;
   Ep2UartTransport? _ep2;
+  MmUartExternalRadioSession? _externalRadioSession;
+  MmUartMessageTransport? _externalRadio;
+  AndroidUsbMmUartHostLink? _externalRadioLink;
+  bool _mmUartActive = false;
   StreamSubscription<DeliveryEnvelope>? _deliverySub;
   StreamSubscription<LanTransportEvent>? _lanSub;
   StreamSubscription<MeshtasticTransportEvent>? _meshtasticSub;
   StreamSubscription<AndroidMeshtasticEvent>? _androidSub;
   StreamSubscription<Ep2TransportEvent>? _ep2Sub;
+  StreamSubscription<MmUartMessageTransportEvent>? _externalRadioSub;
+  StreamSubscription<ExternalRadioSessionEvent>? _externalSessionSub;
   Timer? _maintenanceTimer;
   bool _maintenanceBusy = false;
 
@@ -142,7 +151,8 @@ final class MeshAppController extends ChangeNotifier {
   bool get hasAndroidMeshtastic => _androidBridge != null;
   bool get radioConnected => _androidBridge?.connected ?? false;
   bool get hasEp2Uart => _usbBridge != null;
-  bool get ep2Connected => _ep2?.isAvailable ?? false;
+  bool get ep2Connected =>
+      (_externalRadio?.isAvailable ?? false) || (_ep2?.isAvailable ?? false);
 
   static Future<MeshAppController> create({
     Directory? storageRoot,
@@ -214,6 +224,17 @@ final class MeshAppController extends ChangeNotifier {
     _lanSub = lan.events.listen(_onLanEvent);
 
     if (bridge != null && usbBridge != null) {
+      final externalSession = MmUartExternalRadioSession();
+      final externalRadio = MmUartMessageTransport(
+        session: externalSession,
+        resolveRecipientBinding: _resolveMmUartBinding,
+      );
+      _externalRadioSession = externalSession;
+      _externalRadio = externalRadio;
+      transports.add(externalRadio);
+      _externalRadioSub = externalRadio.events.listen(_onMmUartTransportEvent);
+      _externalSessionSub = externalSession.events.listen(_onMmUartSessionEvent);
+
       final ep2 = Ep2UartTransport(
         bridge: usbBridge,
         resolvePeerNode: _resolveEp2Node,
@@ -1025,13 +1046,15 @@ final class MeshAppController extends ChangeNotifier {
 
   Future<void> connectEp2(int deviceId) async {
     final ep2 = _ep2;
-    if (ep2 == null || busy) return;
+    final session = _externalRadioSession;
+    final bridge = _usbBridge;
+    if (ep2 == null || session == null || bridge == null || busy) return;
     busy = true;
     ep2Error = null;
-      ep2DetectedProtocol = 'detecting';
-      ep2RxBytes = 0;
-      ep2TxBytes = 0;
-      ep2LastHex = '';
+    ep2DetectedProtocol = 'detecting';
+    ep2RxBytes = 0;
+    ep2TxBytes = 0;
+    ep2LastHex = '';
     ep2Protocol = 'unknown';
     ep2Baud = null;
     ep2PingResult = null;
@@ -1052,12 +1075,48 @@ final class MeshAppController extends ChangeNotifier {
     ep2InfoNotice = null;
     notifyListeners();
     try {
-      _addEp2Log('AUTO USB device=$deviceId');
-      if (!{'unavailable', 'offline', 'disconnected'}.contains(ep2State)) {
-        _addEp2Log('AUTO reset previous UART session state=$ep2State');
+      _addEp2Log('AUTO USB device=$deviceId · MM-UART/1 first');
+      if (_mmUartActive) {
+        await session.disconnect();
+        _mmUartActive = false;
+      }
+      if (ep2.isAvailable) {
         await ep2.disconnect();
         await Future<void>.delayed(const Duration(milliseconds: 120));
       }
+
+      final link = AndroidUsbMmUartHostLink(
+        bridge: bridge,
+        deviceId: deviceId,
+        baudRate: 115200,
+      );
+      _externalRadioLink = link;
+      try {
+        final snapshot = await session.connect(link);
+        if (!session.supportsMmrp) {
+          throw StateError('MMRP/1_NOT_ADVERTISED');
+        }
+        _mmUartActive = true;
+        ep2DetectedProtocol = 'mm-uart';
+        ep2Protocol = 'MM-UART/1';
+        ep2Baud = 115200;
+        ep2Firmware = snapshot.info?.firmwareVersion;
+        ep2Profile = snapshot.capabilities?.profileIds.firstOrNull;
+        ep2InfoNotice = 'MM-UART/1 · MMRP/1 готов';
+        _addEp2Log(
+          'MM-UART READY fw=${ep2Firmware ?? '-'} radio=${snapshot.info?.radioFamily ?? '-'}',
+        );
+        return;
+      } catch (error) {
+        _mmUartActive = false;
+        _externalRadioLink = null;
+        _addEp2Log('MM-UART fallback · $error');
+        try {
+          await session.disconnect();
+        } catch (_) {}
+      }
+
+      _addEp2Log('AUTO fallback -> EP2 LINK / CRSF');
       await ep2.connectAuto(deviceId);
     } catch (error) {
       ep2Error = '$error';
@@ -1070,8 +1129,16 @@ final class MeshAppController extends ChangeNotifier {
 
   Future<void> disconnectEp2() async {
     final ep2 = _ep2;
+    final session = _externalRadioSession;
     if (ep2 == null) return;
     _addEp2Log('DISCONNECT requested');
+    _mmUartActive = false;
+    _externalRadioLink = null;
+    if (session != null) {
+      try {
+        await session.disconnect();
+      } catch (_) {}
+    }
     await ep2.disconnect();
     await refreshEp2Devices();
   }
@@ -1152,6 +1219,109 @@ final class MeshAppController extends ChangeNotifier {
     }
   }
 
+  Object? _resolveMmUartBinding(String mmId) => _resolveEp2Node(mmId);
+
+  Contact? _contactForMmUartBinding(Object binding) {
+    final nodeId = binding is num ? binding.toInt() : int.tryParse('$binding');
+    return nodeId == null ? null : _contactForEp2Node(nodeId);
+  }
+
+  Future<void> _onMmUartTransportEvent(MmUartMessageTransportEvent event) async {
+    if (event is MmUartRecipientAck) {
+      final contact = _contactForMmUartBinding(event.sourceBinding);
+      if (contact == null) {
+        _addEp2Log('MM-UART ACK unknown source=${event.sourceBinding}');
+        return;
+      }
+      await _core.recipientDeliveryResult(
+        messageId: event.messageId,
+        fromMmId: contact.mmId,
+        ok: true,
+      );
+      _addEp2Log('MM-UART ACK ${event.messageId} <- ${contact.mmId}');
+      notifyListeners();
+      return;
+    }
+
+    if (event is MmUartIncomingMessage) {
+      final contact = _contactForMmUartBinding(event.sourceBinding);
+      final transport = _externalRadio;
+      if (contact == null || transport == null) {
+        _addEp2Log(
+          'MM-UART DROP unknown source=${event.sourceBinding} id=${event.messageId}',
+        );
+        return;
+      }
+      try {
+        switch (event.messageClass) {
+          case 'text':
+            final payload = event.payload;
+            final text = payload is Map ? '${payload['text'] ?? ''}' : '$payload';
+            if (text.trim().isEmpty) throw const FormatException('TEXT_EMPTY');
+            await _core.receiveText(
+              messageId: event.messageId,
+              fromMmId: contact.mmId,
+              text: text,
+            );
+          case 'map_point':
+            final payload = event.payload;
+            if (payload is! Map) throw const FormatException('MAP_POINT_INVALID');
+            await _core.receiveMapPoint(
+              messageId: event.messageId,
+              fromMmId: contact.mmId,
+              payload: jsonEncode(payload),
+            );
+          default:
+            _addEp2Log(
+              'MM-UART DROP class=${event.messageClass} id=${event.messageId}',
+            );
+            return;
+        }
+        await transport.acknowledgeIncoming(
+          messageId: event.messageId,
+          recipientBinding: event.sourceBinding,
+        );
+      } catch (error) {
+        _addEp2Log('MM-UART STORE ERROR ${event.messageId} | $error');
+        return;
+      }
+      if (selectedPeerMmId == contact.mmId) await _reloadMessages();
+      ep2InfoNotice = event.messageClass == 'map_point'
+          ? 'Получена точка от ${contact.displayName}'
+          : 'Получено сообщение от ${contact.displayName}';
+      notifyListeners();
+    }
+  }
+
+  void _onMmUartSessionEvent(ExternalRadioSessionEvent event) {
+    if (event is ExternalRadioStateEvent) {
+      if (_mmUartActive || event.state == 'connecting' || event.state == 'ready') {
+        ep2State = event.state;
+        if (event.reason != null) ep2Error = event.reason;
+      }
+    } else if (event is ExternalRadioCapabilitiesEvent) {
+      ep2DetectedProtocol = 'mm-uart';
+      ep2Protocol = 'MM-UART/1';
+      ep2Baud = 115200;
+      ep2Firmware = event.info.firmwareVersion;
+      ep2Profile = event.capabilities.profileIds.firstOrNull;
+      ep2InfoNotice = event.capabilities.supportsMmrp
+          ? 'MM-UART/1 · MMRP/1 подтверждён'
+          : 'MM-UART/1 без MMRP/1';
+    } else if (event is ExternalRadioStatsEvent) {
+      final stats = event.stats;
+      ep2TxCount = (stats['tx'] as num?)?.toInt();
+      ep2RxCount = (stats['rx'] as num?)?.toInt();
+      ep2LossCount = (stats['loss'] as num?)?.toInt();
+      ep2RetryCount = (stats['retries'] as num?)?.toInt();
+    } else if (event is ExternalRadioErrorEvent) {
+      _addEp2Log('MM-UART ERROR ${event.error}');
+    } else if (event is ExternalRadioDeviceResetEvent) {
+      _addEp2Log('MM-UART DEVICE RESET');
+    }
+    if (initialized) notifyListeners();
+  }
+
   int? _resolveEp2Node(String mmId) =>
       contacts.where((contact) => contact.mmId == mmId).firstOrNull?.ep2NodeId;
 
@@ -1159,6 +1329,7 @@ final class MeshAppController extends ChangeNotifier {
       contacts.where((contact) => contact.ep2NodeId == nodeId).firstOrNull;
 
   Future<void> _onEp2Event(Ep2TransportEvent event) async {
+    if (_mmUartActive && event is! Ep2LogEvent) return;
     if (event is Ep2StateEvent) {
       ep2State = event.state;
       ep2Error = event.error;
@@ -1369,6 +1540,10 @@ final class MeshAppController extends ChangeNotifier {
     _meshtasticSub?.cancel();
     _androidSub?.cancel();
     _ep2Sub?.cancel();
+    _externalRadioSub?.cancel();
+    _externalSessionSub?.cancel();
+    _externalRadio?.close();
+    _externalRadioSession?.close();
     _lan?.close();
     _meshtastic?.close();
     _ep2?.close();
