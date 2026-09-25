@@ -313,7 +313,7 @@ class ElrsPreparedFirmware {
     this.productName,
     this.platform,
     this.firmware,
-    this.regulatoryProfile,
+    this.regulatoryDomain,
     this.writeOffset,
     this.filePath,
     this.fileSize,
@@ -329,7 +329,7 @@ class ElrsPreparedFirmware {
   final String? productName;
   final String? platform;
   final String? firmware;
-  final String? regulatoryProfile;
+  final String? regulatoryDomain;
   final String? writeOffset;
   final String? filePath;
   final int? fileSize;
@@ -348,7 +348,8 @@ class ElrsPreparedFirmware {
       productName: map['productName'] as String?,
       platform: map['platform'] as String?,
       firmware: map['firmware'] as String?,
-      regulatoryProfile: map['regulatoryProfile'] as String?,
+      regulatoryDomain:
+          (map['regulatoryDomain'] ?? map['regulatoryProfile']) as String?,
       writeOffset: map['writeOffset'] as String?,
       filePath: map['filePath'] as String?,
       fileSize: map['fileSize'] as int?,
@@ -368,7 +369,7 @@ class EspFlashResult {
     this.targetPath,
     this.productName,
     this.version,
-    this.regulatoryProfile,
+    this.regulatoryDomain,
     this.chipDescription,
     this.flashId,
     this.flashSize,
@@ -387,7 +388,7 @@ class EspFlashResult {
   final String? targetPath;
   final String? productName;
   final String? version;
-  final String? regulatoryProfile;
+  final String? regulatoryDomain;
   final String? chipDescription;
   final String? flashId;
   final String? flashSize;
@@ -409,7 +410,7 @@ class EspFlashResult {
       targetPath: map['targetPath'] as String?,
       productName: map['productName'] as String?,
       version: map['version'] as String?,
-      regulatoryProfile: map['regulatoryProfile'] as String?,
+      regulatoryDomain: map['regulatoryDomain'] as String?,
       chipDescription: map['chipDescription'] as String?,
       flashId: map['flashId'] as String?,
       flashSize: map['flashSize'] as String?,
@@ -494,12 +495,12 @@ class NativeUsbService {
     required String expectedProductName,
     required String expectedPlatform,
     required String expectedFirmware,
-    required String regulatoryProfile,
+    required String regulatoryDomain,
     String? bindingPhrase,
     String? wifiSsid,
     String? wifiPassword,
     int? autoWifiSeconds,
-    int? rxBaud,
+    int? rxUartBaud,
     bool? lockOnFirstConnection,
   }) async {
     final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
@@ -509,12 +510,12 @@ class NativeUsbService {
             'expectedProductName': expectedProductName,
             'expectedPlatform': expectedPlatform,
             'expectedFirmware': expectedFirmware,
-            'regulatoryProfile': regulatoryProfile,
+            'regulatoryDomain': regulatoryDomain,
             'bindingPhrase': bindingPhrase,
             'wifiSsid': wifiSsid,
             'wifiPassword': wifiPassword,
             'autoWifiSeconds': autoWifiSeconds,
-            'rxBaud': rxBaud,
+            'rxUartBaud': rxUartBaud,
             'lockOnFirstConnection': lockOnFirstConnection,
           },
         ) ??
