@@ -39,7 +39,7 @@ final class RadioCapabilities {
     this.schemaVersion = 1,
     this.radioFamily,
     this.profileIds = const [],
-    this.networkProtocols = const ['MMRP/1'],
+    this.networkProtocols = const [],
     this.frequencyRanges = const [],
     this.maxPayload,
     this.txPowerRange,
@@ -97,7 +97,7 @@ final class RadioCapabilities {
     return RadioCapabilities(
       radioFamily: _cleanString(raw['radioFamily']) ?? info?.radioFamily,
       profileIds: _uniqueStrings(raw['profileIds']),
-      networkProtocols: protocols.isEmpty ? const ['MMRP/1'] : protocols,
+      networkProtocols: protocols,
       frequencyRanges: _ranges(raw['frequencyRanges']),
       maxPayload: maxPayload,
       txPowerRange: _range(raw['txPowerRange']),
