@@ -127,6 +127,7 @@ final class MeshAppController extends ChangeNotifier {
   String? ep2OtaPassword;
   String? ep2OtaUrl;
   String? ep2OtaNotice;
+  String? ep2InfoNotice;
   String ep2DetectedProtocol = 'unknown';
   int ep2RxBytes = 0;
   int ep2TxBytes = 0;
@@ -1048,6 +1049,7 @@ final class MeshAppController extends ChangeNotifier {
     ep2OtaPassword = null;
     ep2OtaUrl = null;
     ep2OtaNotice = null;
+    ep2InfoNotice = null;
     notifyListeners();
     try {
       _addEp2Log('AUTO USB device=$deviceId');
@@ -1078,6 +1080,7 @@ final class MeshAppController extends ChangeNotifier {
     final ep2 = _ep2;
     if (ep2 == null || !ep2Connected) return;
     ep2Error = null;
+    ep2InfoNotice = 'Запрашиваем INFO / STATS…';
     _addEp2Log('INFO / STATS requested');
     notifyListeners();
     try {
@@ -1198,6 +1201,7 @@ final class MeshAppController extends ChangeNotifier {
       ep2LocalNode = event.nodeId;
       ep2Firmware = event.firmware;
       ep2Profile = event.profile;
+      ep2InfoNotice = 'INFO получено · узел ${event.nodeId}';
       _addEp2Log(
         'INFO node=${event.nodeId} fw=${event.firmware} radio=${event.radioState} profile=${event.profile}',
       );
@@ -1212,6 +1216,9 @@ final class MeshAppController extends ChangeNotifier {
       ep2RxCount = event.rx;
       ep2LossCount = event.loss;
       ep2RetryCount = event.retries;
+      final now = DateTime.now();
+      ep2InfoNotice =
+          'Статистика обновлена · ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
       notifyListeners();
       return;
     }
