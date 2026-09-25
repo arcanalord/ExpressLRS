@@ -6,7 +6,7 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.3 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.4 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
@@ -42,9 +42,14 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   List<DeviceProfile> profiles = const [];
   List<UsbDeviceInfo> usbDevices = const [];
   DeviceProfile? selected;
+
   bool loading = true;
+  bool probing = false;
   bool _usbRefreshInFlight = false;
+
   String? error;
+  EspRomProbeResult? probeResult;
+
   StreamSubscription<UsbSnapshot>? _usbSub;
   Timer? _usbPollTimer;
 
@@ -107,10 +112,13 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       loading = true;
       error = null;
     });
+
     try {
       final p = await _profiles.load();
       final u = await _usb.listDevices();
+
       if (!mounted) return;
+
       setState(() {
         profiles = p;
         usbDevices = u;
@@ -126,6 +134,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   Future<void> _refreshUsbOnly() async {
     if (_usbRefreshInFlight) return;
     _usbRefreshInFlight = true;
+
     try {
       final u = await _usb.listDevices();
       if (!mounted) return;
@@ -143,19 +152,73 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
   void _applyUsbDevices(List<UsbDeviceInfo> next) {
     if (_sameUsbList(usbDevices, next)) return;
-    setState(() => usbDevices = next);
+
+    setState(() {
+      usbDevices = next;
+      if (next.isEmpty) {
+        probeResult = null;
+        probing = false;
+      }
+    });
   }
 
   bool _sameUsbList(List<UsbDeviceInfo> a, List<UsbDeviceInfo> b) {
     if (a.length != b.length) return false;
+
     String key(UsbDeviceInfo d) =>
-        '${d.deviceName}|${d.vendorId}|${d.productId}|${d.interfaceCount}';
+        '${d.deviceName}|${d.vendorId}|${d.productId}|${d.interfaceCount}|${d.hasPermission}';
+
     final aa = a.map(key).toList()..sort();
     final bb = b.map(key).toList()..sort();
+
     for (var i = 0; i < aa.length; i++) {
       if (aa[i] != bb[i]) return false;
     }
+
     return true;
+  }
+
+  Future<void> _probe() async {
+    if (probing) return;
+
+    final device = usbDevices.firstOrNull;
+    if (device == null) {
+      setState(() {
+        probeResult = const EspRomProbeResult(
+          status: 'no_device',
+          message: 'Сначала подключите USB-UART',
+        );
+      });
+      return;
+    }
+
+    setState(() {
+      probing = true;
+      probeResult = null;
+      error = null;
+    });
+
+    try {
+      final r = await _usb.probeEspRom(
+        deviceName: device.deviceName,
+      );
+
+      if (!mounted) return;
+
+      setState(() => probeResult = r);
+
+      await _refreshUsbOnly();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        probeResult = EspRomProbeResult(
+          status: 'probe_error',
+          message: 'Ошибка проверки: $e',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => probing = false);
+    }
   }
 
   @override
@@ -184,17 +247,23 @@ class _ServiceHomePageState extends State<ServiceHomePage>
           children: [
             const Text(
               'Универсальное обслуживание устройств',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 4),
             const Text(
               appBuildLabel,
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 12,
+              ),
             ),
             const SizedBox(height: 8),
             const Text(
               'Контроллер и радиочип обслуживаются независимо. '
-              'Для Mesh Messenger сначала определяется профиль устройства и его возможности.',
+              'Сначала определяем подключение и проверяем устройство.',
             ),
             const SizedBox(height: 18),
             _Section(
@@ -211,13 +280,25 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                               Icons.usb,
                               color: Colors.lightGreenAccent,
                             ),
-                            title: Text('${d.familyLabel}  ${d.vidPid}'),
+                            title: Text(
+                              '${d.familyLabel}  ${d.vidPid}',
+                            ),
                             subtitle: Text(
-                              [d.product, d.manufacturer, d.deviceName]
+                              [
+                                d.product,
+                                d.manufacturer,
+                                d.deviceName,
+                              ]
                                   .whereType<String>()
                                   .where((e) => e.isNotEmpty)
                                   .join(' · '),
                             ),
+                            trailing: d.hasPermission
+                                ? const Icon(
+                                    Icons.lock_open,
+                                    size: 18,
+                                  )
+                                : null,
                           ),
                         ),
                         const Text(
@@ -246,7 +327,10 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                       ),
                     )
                     .toList(),
-                onChanged: (p) => setState(() => selected = p),
+                onChanged: (p) => setState(() {
+                  selected = p;
+                  probeResult = null;
+                }),
                 decoration: const InputDecoration(
                   labelText: 'Профиль устройства',
                   border: OutlineInputBorder(),
@@ -260,24 +344,53 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   FilledButton.icon(
-                    onPressed: () => _notYet('Определение устройства'),
-                    icon: const Icon(Icons.search),
-                    label: const Text('Определить и проверить'),
+                    onPressed:
+                        usbDevices.isEmpty || probing ? null : _probe,
+                    icon: probing
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.search),
+                    label: Text(
+                      probing
+                          ? 'Проверяю USB и ESP ROM…'
+                          : 'Определить и проверить',
+                    ),
                   ),
+                  if (probeResult != null) ...[
+                    const SizedBox(height: 12),
+                    _ProbeResultCard(result: probeResult!),
+                  ],
+                  const SizedBox(height: 8),
                   OutlinedButton.icon(
-                    onPressed: () => _notYet('Обновление пакетом'),
+                    onPressed: () => _notYet(
+                      'Обновление пакетом',
+                    ),
                     icon: const Icon(Icons.system_update_alt),
                     label: const Text('Обновить устройство'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: () => _notYet('Диагностика радиомодуля'),
-                    icon: const Icon(Icons.settings_input_antenna),
+                    onPressed: () => _notYet(
+                      'Диагностика радиомодуля',
+                    ),
+                    icon: const Icon(
+                      Icons.settings_input_antenna,
+                    ),
                     label: const Text('Радиомодуль'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: () => _notYet('Режим восстановления'),
-                    icon: const Icon(Icons.build_circle_outlined),
-                    label: const Text('Восстановление / ручной режим'),
+                    onPressed: () => _notYet(
+                      'Режим восстановления',
+                    ),
+                    icon: const Icon(
+                      Icons.build_circle_outlined,
+                    ),
+                    label: const Text(
+                      'Восстановление / ручной режим',
+                    ),
                   ),
                 ],
               ),
@@ -285,7 +398,9 @@ class _ServiceHomePageState extends State<ServiceHomePage>
             if (error != null)
               Text(
                 error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                ),
               ),
             if (loading) const LinearProgressIndicator(),
           ],
@@ -298,8 +413,72 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '$name: аппаратный транспорт подключается следующим этапом',
+          '$name: будет подключено после проверки USB-Serial',
         ),
+      ),
+    );
+  }
+}
+
+class _ProbeResultCard extends StatelessWidget {
+  const _ProbeResultCard({required this.result});
+
+  final EspRomProbeResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final ok = result.ok;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: ok
+            ? Colors.green.withValues(alpha: 0.12)
+            : Colors.orange.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: ok
+              ? Colors.greenAccent.withValues(alpha: 0.45)
+              : Colors.orangeAccent.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                ok ? Icons.check_circle : Icons.info_outline,
+                color: ok
+                    ? Colors.greenAccent
+                    : Colors.orangeAccent,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  ok ? 'ESP ROM отвечает' : 'Проверка не завершена',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(result.message),
+          if (result.driver != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Драйвер: ${result.driver} · '
+              '${result.baudRate ?? 115200} бод · '
+              'получено ${result.bytesRead ?? 0} Б',
+              style: const TextStyle(
+                color: Colors.white60,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -313,11 +492,15 @@ class _UsbEmpty extends StatelessWidget {
     return const Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.usb_off, color: Colors.white54),
+        Icon(
+          Icons.usb_off,
+          color: Colors.white54,
+        ),
         SizedBox(width: 12),
         Expanded(
           child: Text(
-            'USB-устройство не найдено. Подключите адаптер — список обновится автоматически.',
+            'USB-устройство не найдено. '
+            'Подключите адаптер — список обновится автоматически.',
           ),
         ),
       ],
@@ -414,23 +597,33 @@ class _ProfileCard extends StatelessWidget {
             'Контроллер',
             controller == null
                 ? 'нет'
-                : _controllerLabel(controller['family']?.toString() ?? '-'),
+                : _controllerLabel(
+                    controller['family']?.toString() ?? '-',
+                  ),
           ),
           _Line(
             'Радиочип',
-            _radioLabel(radio['family']?.toString() ?? 'неизвестно'),
+            _radioLabel(
+              radio['family']?.toString() ?? 'неизвестно',
+            ),
           ),
           _Line(
             'Сервис радио',
-            _serviceLabel(radio['serviceKind']?.toString() ?? '-'),
+            _serviceLabel(
+              radio['serviceKind']?.toString() ?? '-',
+            ),
           ),
           _Line(
             'Доступ к радио',
-            _accessLabel(radio['access']?.toString() ?? '-'),
+            _accessLabel(
+              radio['access']?.toString() ?? '-',
+            ),
           ),
           _Line(
             'Протоколы',
-            profile.hostProtocols.map(_protocolLabel).join(', '),
+            profile.hostProtocols
+                .map(_protocolLabel)
+                .join(', '),
           ),
           const SizedBox(height: 10),
           ...profile.notes.map(
@@ -462,7 +655,9 @@ class _Line extends StatelessWidget {
             width: 110,
             child: Text(
               name,
-              style: const TextStyle(color: Colors.white60),
+              style: const TextStyle(
+                color: Colors.white60,
+              ),
             ),
           ),
           Expanded(child: Text(value)),
@@ -473,7 +668,10 @@ class _Line extends StatelessWidget {
 }
 
 class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child});
+  const _Section({
+    required this.title,
+    required this.child,
+  });
 
   final String title;
   final Widget child;
@@ -509,33 +707,39 @@ class _HelpSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+      padding: const EdgeInsets.fromLTRB(
+        20,
+        0,
+        20,
+        28,
+      ),
       children: const [
         Text(
-          'Как устроена программа',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+          'Как проверить EP2',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         SizedBox(height: 12),
         Text(
-          'Обычный режим работает по профилю устройства. Программа сама должна знать, '
-          'какой контроллер, радиочип, способ входа в загрузчик и какие операции допустимы.',
+          '1. TX USB-UART подключите к RX EP2, RX — к TX, GND — к GND.',
+        ),
+        SizedBox(height: 8),
+        Text(
+          '2. Для входа в ROM-загрузчик замкните BOOT pad на GND и подайте питание. '
+          'После включения перемычку можно убрать.',
+        ),
+        SizedBox(height: 8),
+        Text(
+          '3. Нажмите «Определить и проверить». Android при необходимости запросит '
+          'разрешение на USB. Программа откроет UART 115200 и отправит безопасную '
+          'команду ESP ROM SYNC. Флеш-память при этой проверке не изменяется.',
         ),
         SizedBox(height: 12),
         Text(
-          'Контроллер ESP и радиочип SX/LR — разные объекты. '
-          'ESP получает основную прошивку. SX1276/SX1262/SX1280 обычно обслуживаются '
-          'по SPI без отдельного firmware.bin. Для LR-семейств отдельное обновление '
-          'радиочипа разрешается только если это подтверждено его профилем и возможностями.',
-        ),
-        SizedBox(height: 12),
-        Text(
-          'Голый радиомодуль подключается через ESP32-S3 Service Bridge: '
-          'телефон → USB → Service Bridge → SPI → радиомодуль.',
-        ),
-        SizedBox(height: 12),
-        Text(
-          'Для Mesh Messenger целевой host-протокол — MM-UART/1. '
-          'EP2 LINK остаётся совместимым режимом для текущего железа.',
+          'Успех означает, что цепочка Pixel → USB-UART → ESP ROM работает. '
+          'SX1280 при этой операции не прошивается и не изменяется.',
         ),
       ],
     );

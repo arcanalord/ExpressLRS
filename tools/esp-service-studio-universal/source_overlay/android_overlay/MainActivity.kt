@@ -1,9 +1,11 @@
 package com.arcanalord.service_studio
 
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
@@ -15,6 +17,11 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    companion object {
+        private const val ACTION_USB_PERMISSION =
+            "com.arcanalord.service_studio.USB_PERMISSION"
+    }
+
     private val methodChannelName = "service_studio/native"
     private val eventChannelName = "service_studio/usb_events"
 
@@ -22,18 +29,31 @@ class MainActivity : FlutterActivity() {
     private var usbEventSink: EventChannel.EventSink? = null
     private var receiverRegistered = false
 
+    private var pendingProbeResult: MethodChannel.Result? = null
+    private var pendingProbeDeviceName: String? = null
+
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val action = intent?.action ?: return
-            if (action != UsbManager.ACTION_USB_DEVICE_ATTACHED &&
-                action != UsbManager.ACTION_USB_DEVICE_DETACHED
-            ) {
-                return
+
+            when (action) {
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                    emitUsbSnapshot("attached", 80)
+                }
+
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    emitUsbSnapshot("detached", 180)
+                }
+
+                ACTION_USB_PERMISSION -> {
+                    val granted = intent.getBooleanExtra(
+                        UsbManager.EXTRA_PERMISSION_GRANTED,
+                        false,
+                    )
+                    val device = usbDeviceFromIntent(intent)
+                    completePermissionProbe(granted, device)
+                }
             }
-            emitUsbSnapshot(
-                if (action == UsbManager.ACTION_USB_DEVICE_ATTACHED) "attached" else "detached",
-                delayMs = if (action == UsbManager.ACTION_USB_DEVICE_DETACHED) 180 else 80,
-            )
         }
     }
 
@@ -51,13 +71,22 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        registerUsbReceiver()
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, methodChannelName)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "listUsbDevices" -> result.success(listUsbDevices())
+
                     "platformInfo" -> result.success(
                         "${Build.MANUFACTURER} ${Build.MODEL}; Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})"
                     )
+
+                    "probeEspRom" -> {
+                        val deviceName = call.argument<String>("deviceName")
+                        startEspProbe(deviceName, result)
+                    }
+
                     else -> result.notImplemented()
                 }
             }
@@ -66,18 +95,23 @@ class MainActivity : FlutterActivity() {
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     usbEventSink = events
-                    registerUsbReceiver()
                     emitUsbSnapshot("snapshot", 0)
                 }
 
                 override fun onCancel(arguments: Any?) {
                     usbEventSink = null
-                    unregisterUsbReceiver()
                 }
             })
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        pendingProbeResult?.error(
+            "ACTIVITY_DESTROYED",
+            "Проверка USB прервана",
+            null,
+        )
+        pendingProbeResult = null
+        pendingProbeDeviceName = null
         usbEventSink = null
         unregisterUsbReceiver()
         super.cleanUpFlutterEngine(flutterEngine)
@@ -86,6 +120,120 @@ class MainActivity : FlutterActivity() {
     private fun handleUsbIntent(intent: Intent?) {
         if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
             emitUsbSnapshot("attached_intent", 120)
+        }
+    }
+
+    private fun startEspProbe(
+        requestedDeviceName: String?,
+        result: MethodChannel.Result,
+    ) {
+        if (pendingProbeResult != null) {
+            result.error("BUSY", "Проверка USB уже выполняется", null)
+            return
+        }
+
+        val probe = UsbSerialProbe(this)
+        val device = probe.findDevice(requestedDeviceName)
+
+        if (device == null) {
+            result.success(
+                mapOf(
+                    "status" to "no_device",
+                    "message" to "USB-устройство не найдено",
+                )
+            )
+            return
+        }
+
+        if (probe.hasPermission(device)) {
+            runProbeAsync(device, result)
+            return
+        }
+
+        pendingProbeResult = result
+        pendingProbeDeviceName = device.deviceName
+
+        val manager = getSystemService(Context.USB_SERVICE) as UsbManager
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        val permissionIntent = PendingIntent.getBroadcast(
+            this,
+            0,
+            Intent(ACTION_USB_PERMISSION).setPackage(packageName),
+            flags,
+        )
+
+        try {
+            manager.requestPermission(device, permissionIntent)
+        } catch (e: Exception) {
+            pendingProbeResult = null
+            pendingProbeDeviceName = null
+            result.success(
+                mapOf(
+                    "status" to "permission_error",
+                    "message" to "Не удалось запросить доступ к USB: ${e.message ?: e.javaClass.simpleName}",
+                )
+            )
+        }
+    }
+
+    private fun completePermissionProbe(
+        granted: Boolean,
+        deviceFromIntent: UsbDevice?,
+    ) {
+        val result = pendingProbeResult ?: return
+        val requestedName = pendingProbeDeviceName
+
+        pendingProbeResult = null
+        pendingProbeDeviceName = null
+
+        if (!granted) {
+            result.success(
+                mapOf(
+                    "status" to "permission_denied",
+                    "message" to "Доступ Android к USB отклонён",
+                )
+            )
+            return
+        }
+
+        val probe = UsbSerialProbe(this)
+        val device = deviceFromIntent ?: probe.findDevice(requestedName)
+
+        if (device == null) {
+            result.success(
+                mapOf(
+                    "status" to "no_device",
+                    "message" to "USB-устройство отключено до начала проверки",
+                )
+            )
+            return
+        }
+
+        runProbeAsync(device, result)
+    }
+
+    private fun runProbeAsync(
+        device: UsbDevice,
+        result: MethodChannel.Result,
+    ) {
+        Thread {
+            val probeResult = UsbSerialProbe(this).probe(device)
+            mainHandler.post {
+                result.success(probeResult)
+                emitUsbSnapshot("probe_complete", 0)
+            }
+        }.start()
+    }
+
+    private fun usbDeviceFromIntent(intent: Intent): UsbDevice? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(
+                UsbManager.EXTRA_DEVICE,
+                UsbDevice::class.java,
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
         }
     }
 
@@ -106,14 +254,20 @@ class MainActivity : FlutterActivity() {
         val filter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+            addAction(ACTION_USB_PERMISSION)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(
+                usbReceiver,
+                filter,
+                Context.RECEIVER_NOT_EXPORTED,
+            )
         } else {
             @Suppress("DEPRECATION")
             registerReceiver(usbReceiver, filter)
         }
+
         receiverRegistered = true
     }
 
@@ -125,15 +279,26 @@ class MainActivity : FlutterActivity() {
 
     private fun listUsbDevices(): List<Map<String, Any?>> {
         val manager = getSystemService(Context.USB_SERVICE) as UsbManager
+
         return manager.deviceList.values.map { device ->
             mapOf(
                 "vendorId" to device.vendorId,
                 "productId" to device.productId,
                 "deviceName" to device.deviceName,
                 "interfaceCount" to device.interfaceCount,
-                "manufacturer" to runCatching { device.manufacturerName }.getOrNull(),
-                "product" to runCatching { device.productName }.getOrNull(),
+                "manufacturer" to runCatching {
+                    device.manufacturerName
+                }.getOrNull(),
+                "product" to runCatching {
+                    device.productName
+                }.getOrNull(),
+                "hasPermission" to manager.hasPermission(device),
             )
-        }.sortedWith(compareBy({ it["vendorId"] as Int }, { it["productId"] as Int }))
+        }.sortedWith(
+            compareBy(
+                { it["vendorId"] as Int },
+                { it["productId"] as Int },
+            )
+        )
     }
 }

@@ -6,6 +6,7 @@ class UsbDeviceInfo {
     required this.productId,
     required this.deviceName,
     required this.interfaceCount,
+    required this.hasPermission,
     this.manufacturer,
     this.product,
   });
@@ -14,6 +15,7 @@ class UsbDeviceInfo {
   final int productId;
   final String deviceName;
   final int interfaceCount;
+  final bool hasPermission;
   final String? manufacturer;
   final String? product;
 
@@ -34,6 +36,7 @@ class UsbDeviceInfo {
       productId: map['productId'] as int,
       deviceName: map['deviceName'] as String? ?? '-',
       interfaceCount: map['interfaceCount'] as int? ?? 0,
+      hasPermission: map['hasPermission'] as bool? ?? false,
       manufacturer: map['manufacturer'] as String?,
       product: map['product'] as String?,
     );
@@ -60,6 +63,37 @@ class UsbSnapshot {
   }
 }
 
+class EspRomProbeResult {
+  const EspRomProbeResult({
+    required this.status,
+    required this.message,
+    this.driver,
+    this.baudRate,
+    this.bytesRead,
+    this.elapsedMs,
+  });
+
+  final String status;
+  final String message;
+  final String? driver;
+  final int? baudRate;
+  final int? bytesRead;
+  final int? elapsedMs;
+
+  bool get ok => status == 'rom_sync_ok';
+
+  factory EspRomProbeResult.fromMap(Map<Object?, Object?> map) {
+    return EspRomProbeResult(
+      status: map['status'] as String? ?? 'unknown',
+      message: map['message'] as String? ?? 'Нет сообщения',
+      driver: map['driver'] as String?,
+      baudRate: map['baudRate'] as int?,
+      bytesRead: map['bytesRead'] as int?,
+      elapsedMs: map['elapsedMs'] as int?,
+    );
+  }
+}
+
 class NativeUsbService {
   static const MethodChannel _channel = MethodChannel('service_studio/native');
   static const EventChannel _events = EventChannel('service_studio/usb_events');
@@ -67,6 +101,7 @@ class NativeUsbService {
   Future<List<UsbDeviceInfo>> listDevices() async {
     final raw = await _channel.invokeMethod<List<dynamic>>('listUsbDevices') ??
         const <dynamic>[];
+
     return raw
         .map((e) => UsbDeviceInfo.fromMap(e as Map<Object?, Object?>))
         .toList(growable: false);
@@ -74,8 +109,26 @@ class NativeUsbService {
 
   Stream<UsbSnapshot> watchDevices() {
     return _events.receiveBroadcastStream().map(
-          (event) => UsbSnapshot.fromMap(event as Map<Object?, Object?>),
+          (event) => UsbSnapshot.fromMap(
+            event as Map<Object?, Object?>,
+          ),
         );
+  }
+
+  Future<EspRomProbeResult> probeEspRom({
+    required String deviceName,
+  }) async {
+    final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+          'probeEspRom',
+          <String, Object?>{
+            'deviceName': deviceName,
+          },
+        ) ??
+        const <dynamic, dynamic>{};
+
+    return EspRomProbeResult.fromMap(
+      raw.cast<Object?, Object?>(),
+    );
   }
 
   Future<String> platformInfo() async {
