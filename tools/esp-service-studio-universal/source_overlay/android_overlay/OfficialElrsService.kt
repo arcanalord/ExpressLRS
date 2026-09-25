@@ -8,8 +8,6 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.zip.ZipInputStream
@@ -26,11 +24,8 @@ class OfficialElrsService(private val context: Context) {
             "https://raw.githubusercontent.com/ExpressLRS/Targets/master"
         private const val CACHE_BASE =
             "https://artifactory.expresslrs.org/ExpressLRS"
-
-        private const val EP2_TARGET_PATH = "happymodel.rx_2400.ep"
-        private const val EP2_EXPECTED_PRODUCT = "HappyModel EP1/EP2 2.4GHz RX"
-        private const val EP2_EXPECTED_PLATFORM = "esp8285"
-        private const val EP2_EXPECTED_FIRMWARE = "Unified_ESP8285_2400_RX"
+        private const val EXPECTED_FIRMWARE_8285_2400 =
+            "Unified_ESP8285_2400_RX"
     }
 
     data class Catalog(
@@ -38,6 +33,7 @@ class OfficialElrsService(private val context: Context) {
         val releaseName: String,
         val publishedAt: String?,
         val commitSha: String,
+        val targetPath: String,
         val productName: String,
         val luaName: String,
         val platform: String,
@@ -53,7 +49,7 @@ class OfficialElrsService(private val context: Context) {
             "releaseName" to releaseName,
             "publishedAt" to publishedAt,
             "commitSha" to commitSha,
-            "targetPath" to EP2_TARGET_PATH,
+            "targetPath" to targetPath,
             "productName" to productName,
             "luaName" to luaName,
             "platform" to platform,
@@ -65,9 +61,19 @@ class OfficialElrsService(private val context: Context) {
         )
     }
 
-    fun fetchEp2Catalog(): Map<String, Any?> {
+    fun fetchCatalog(
+        targetPath: String,
+        expectedProductName: String,
+        expectedPlatform: String,
+        expectedFirmware: String,
+    ): Map<String, Any?> {
         return try {
-            fetchCatalog().asMap()
+            fetchCatalogInternal(
+                targetPath = targetPath,
+                expectedProductName = expectedProductName,
+                expectedPlatform = expectedPlatform,
+                expectedFirmware = expectedFirmware,
+            ).asMap()
         } catch (e: Exception) {
             mapOf(
                 "status" to "error",
@@ -76,25 +82,41 @@ class OfficialElrsService(private val context: Context) {
         }
     }
 
-    fun prepareEp2Firmware(regulatoryProfile: String): Map<String, Any?> {
+    fun prepareFirmware(
+        targetPath: String,
+        expectedProductName: String,
+        expectedPlatform: String,
+        expectedFirmware: String,
+        regulatoryProfile: String,
+    ): Map<String, Any?> {
         return try {
             if (regulatoryProfile != "FCC" && regulatoryProfile != "LBT") {
                 error("Не выбран радиорегион FCC или LBT")
             }
 
-            val catalog = fetchCatalog()
+            val catalog = fetchCatalogInternal(
+                targetPath = targetPath,
+                expectedProductName = expectedProductName,
+                expectedPlatform = expectedPlatform,
+                expectedFirmware = expectedFirmware,
+            )
+            val target = fetchTarget(targetPath)
+
             val generic = downloadCachedFirmware(
                 commitSha = catalog.commitSha,
                 regulatoryProfile = regulatoryProfile,
                 firmwareTarget = catalog.firmware,
             )
 
+            val hwDir = if (targetPath.split('.').getOrNull(1)?.startsWith("tx_") == true) {
+                "TX"
+            } else {
+                "RX"
+            }
             val layoutUrl =
-                "$TARGETS_RAW_BASE/RX/${urlPath(catalog.layoutFile)}"
-            val layoutJson = httpGetText(layoutUrl)
-            val layout = JSONObject(layoutJson)
+                "$TARGETS_RAW_BASE/$hwDir/${urlPath(catalog.layoutFile)}"
+            val layout = JSONObject(httpGetText(layoutUrl))
 
-            val target = fetchEp2Target()
             val overlay = target.optJSONObject("overlay")
             if (overlay != null) {
                 val keys = overlay.keys()
@@ -112,9 +134,12 @@ class OfficialElrsService(private val context: Context) {
                 priorTargetName = catalog.priorTargetName,
             )
 
+            val targetSlug = targetPath
+                .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                .replace('.', '-')
             val dir = File(
                 context.filesDir,
-                "firmware/elrs/${catalog.version}/happymodel-ep/$regulatoryProfile",
+                "firmware/elrs/${catalog.version}/$targetSlug/$regulatoryProfile",
             )
             if (!dir.exists() && !dir.mkdirs()) {
                 error("Не удалось создать каталог прошивки")
@@ -123,14 +148,13 @@ class OfficialElrsService(private val context: Context) {
             val out = File(dir, "firmware.bin")
             out.writeBytes(configured)
 
-            val sha256 = sha256(configured)
             mapOf(
                 "status" to "prepared",
-                "message" to "Официальная прошивка ExpressLRS скачана и подготовлена для EP1/EP2",
+                "message" to "Официальная прошивка ExpressLRS скачана и подготовлена для ${catalog.productName}",
                 "version" to catalog.version,
                 "releaseName" to catalog.releaseName,
                 "commitSha" to catalog.commitSha,
-                "targetPath" to EP2_TARGET_PATH,
+                "targetPath" to catalog.targetPath,
                 "productName" to catalog.productName,
                 "platform" to catalog.platform,
                 "firmware" to catalog.firmware,
@@ -138,7 +162,7 @@ class OfficialElrsService(private val context: Context) {
                 "writeOffset" to "0x0",
                 "filePath" to out.absolutePath,
                 "fileSize" to out.length(),
-                "sha256" to sha256,
+                "sha256" to sha256(configured),
                 "readyToFlash" to true,
             )
         } catch (e: Exception) {
@@ -149,7 +173,19 @@ class OfficialElrsService(private val context: Context) {
         }
     }
 
-    private fun fetchCatalog(): Catalog {
+    private fun fetchCatalogInternal(
+        targetPath: String,
+        expectedProductName: String,
+        expectedPlatform: String,
+        expectedFirmware: String,
+    ): Catalog {
+        validateSpec(
+            targetPath = targetPath,
+            expectedProductName = expectedProductName,
+            expectedPlatform = expectedPlatform,
+            expectedFirmware = expectedFirmware,
+        )
+
         val release = JSONObject(httpGetText(RELEASES_LATEST))
         val tag = release.getString("tag_name")
         val releaseName = release.optString("name", tag)
@@ -159,28 +195,27 @@ class OfficialElrsService(private val context: Context) {
             httpGetText(COMMITS_API + URLEncoder.encode(tag, "UTF-8"))
         )
         val sha = commit.getString("sha")
-
-        val target = fetchEp2Target()
+        val target = fetchTarget(targetPath)
 
         val product = target.getString("product_name")
         val platform = target.getString("platform")
         val firmware = target.getString("firmware")
 
-        if (product != EP2_EXPECTED_PRODUCT) {
-            error("Официальный target EP2 изменился: $product")
+        if (product != expectedProductName) {
+            error("Официальный target изменился: ожидался «$expectedProductName», получен «$product»")
         }
-        if (platform != EP2_EXPECTED_PLATFORM) {
-            error("Официальная платформа EP2 изменилась: $platform")
+        if (platform != expectedPlatform) {
+            error("Официальная платформа изменилась: ожидалась $expectedPlatform, получена $platform")
         }
-        if (firmware != EP2_EXPECTED_FIRMWARE) {
-            error("Официальное семейство прошивки EP2 изменилось: $firmware")
+        if (firmware != expectedFirmware) {
+            error("Официальное семейство прошивки изменилось: ожидалось $expectedFirmware, получено $firmware")
         }
 
         val methods = mutableListOf<String>()
         val arr = target.getJSONArray("upload_methods")
         for (i in 0 until arr.length()) methods += arr.getString(i)
         if (!methods.contains("uart")) {
-            error("Официальный target EP2 больше не разрешает UART")
+            error("Официальный target больше не разрешает UART")
         }
 
         return Catalog(
@@ -188,8 +223,9 @@ class OfficialElrsService(private val context: Context) {
             releaseName = releaseName,
             publishedAt = publishedAt,
             commitSha = sha,
+            targetPath = targetPath,
             productName = product,
-            luaName = target.optString("lua_name", "HM EP 2400"),
+            luaName = target.optString("lua_name", product.take(16)),
             platform = platform,
             firmware = firmware,
             layoutFile = target.getString("layout_file"),
@@ -199,12 +235,31 @@ class OfficialElrsService(private val context: Context) {
         )
     }
 
-    private fun fetchEp2Target(): JSONObject {
-        val root = JSONObject(httpGetText(TARGETS_URL))
-        return root
-            .getJSONObject("happymodel")
-            .getJSONObject("rx_2400")
-            .getJSONObject("ep")
+    private fun validateSpec(
+        targetPath: String,
+        expectedProductName: String,
+        expectedPlatform: String,
+        expectedFirmware: String,
+    ) {
+        val parts = targetPath.split('.')
+        if (parts.size != 3 || parts.any { !it.matches(Regex("[A-Za-z0-9_-]+")) }) {
+            error("Некорректный путь target: $targetPath")
+        }
+        if (expectedProductName.isBlank()) error("Не задано имя target")
+        if (expectedPlatform != "esp8285") {
+            error("В alpha.7 официальный автоподбор разрешён только для ESP8285")
+        }
+        if (expectedFirmware != EXPECTED_FIRMWARE_8285_2400) {
+            error("В alpha.7 разрешено только семейство $EXPECTED_FIRMWARE_8285_2400")
+        }
+    }
+
+    private fun fetchTarget(targetPath: String): JSONObject {
+        var node = JSONObject(httpGetText(TARGETS_URL))
+        for (part in targetPath.split('.')) {
+            node = node.getJSONObject(part)
+        }
+        return node
     }
 
     private fun downloadCachedFirmware(
@@ -314,7 +369,9 @@ class OfficialElrsService(private val context: Context) {
         var is8285 = false
 
         if (segments == 2) {
-            if (u8(0x1000) != 0xE9) error("ESP8285 second image header not found")
+            if (u8(0x1000) != 0xE9) {
+                error("ESP8285 second image header not found")
+            }
             segments = u8(0x1001)
             pos = 0x1000 + 8
             is8285 = true
@@ -360,14 +417,18 @@ class OfficialElrsService(private val context: Context) {
         val conn = open(url)
         conn.connectTimeout = 12000
         conn.readTimeout = 20000
-        conn.setRequestProperty("Accept", "application/vnd.github+json, application/json, text/plain")
+        conn.setRequestProperty(
+            "Accept",
+            "application/vnd.github+json, application/json, text/plain",
+        )
         conn.connect()
 
         try {
             if (conn.responseCode !in 200..299) {
                 error("HTTP ${conn.responseCode} для $url")
             }
-            return conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            return conn.inputStream.bufferedReader(Charsets.UTF_8)
+                .use { it.readText() }
         } finally {
             conn.disconnect()
         }
