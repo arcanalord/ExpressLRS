@@ -3,6 +3,13 @@ from pathlib import Path
 manifest = Path('android/app/src/main/AndroidManifest.xml')
 text = manifest.read_text(encoding='utf-8')
 
+if 'android.permission.INTERNET' not in text:
+    text = text.replace(
+        '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+        '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n'
+        '    <uses-permission android:name="android.permission.INTERNET" />',
+    )
+
 if 'android.hardware.usb.host' not in text:
     text = text.replace(
         '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
@@ -66,6 +73,7 @@ app_gradle.write_text(app_text, encoding='utf-8')
 
 final = manifest.read_text(encoding='utf-8')
 for needle in [
+    'android.permission.INTERNET',
     'android.hardware.usb.action.USB_DEVICE_ATTACHED',
     '@xml/device_filter',
     'ESP Service Studio',
