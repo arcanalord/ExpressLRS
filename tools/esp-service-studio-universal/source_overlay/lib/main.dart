@@ -326,6 +326,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
             _Section(
               title: '2. Что обслуживаем',
               child: DropdownButtonFormField<DeviceProfile>(
+                key: ValueKey(profile?.id ?? 'no-device-profile'),
                 initialValue: profile,
                 isExpanded: true,
                 items: profiles
@@ -367,7 +368,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
             if (profile?.elrsTargetPath != null)
               _OfficialElrsSection(
                 expectedProductName: profile!.elrsProductName ?? profile.name,
-                targetPath: profile.elrsTargetPath!,
+                targetPath: profile!.elrsTargetPath!,
                 catalog: elrsCatalog,
                 prepared: preparedElrs,
                 loading: loadingElrs,
