@@ -44,7 +44,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   final _wifiSsid = TextEditingController();
   final _wifiPassword = TextEditingController();
   final _autoWifiSeconds = TextEditingController();
-  final _rxBaud = TextEditingController();
+  final _rxUartBaud = TextEditingController();
 
   List<DeviceProfile> profiles = const [];
   List<UsbDeviceInfo> usbDevices = const [];
@@ -59,7 +59,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   bool _usbRefreshInFlight = false;
 
   String? error;
-  String? regulatoryProfile;
+  String? regulatoryDomain;
   String lockMode = 'default';
   EspRomProbeResult? probeResult;
   ElrsCatalogIndex? elrsIndex;
@@ -103,7 +103,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     _wifiSsid.dispose();
     _wifiPassword.dispose();
     _autoWifiSeconds.dispose();
-    _rxBaud.dispose();
+    _rxUartBaud.dispose();
     super.dispose();
   }
 
@@ -180,7 +180,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         elrsCatalog = null;
         preparedElrs = null;
         flashResult = null;
-        regulatoryProfile = null;
+        regulatoryDomain = null;
         lockMode = 'default';
       }
     });
@@ -219,7 +219,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       elrsCatalog = null;
       preparedElrs = null;
       flashResult = null;
-      regulatoryProfile = null;
+      regulatoryDomain = null;
     });
 
     try {
@@ -295,13 +295,13 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       selectedElrsTarget = target;
       elrsCatalog = null;
       preparedElrs = null;
-      regulatoryProfile = null;
+      regulatoryDomain = null;
       lockMode = 'default';
       _bindingPhrase.clear();
       _wifiSsid.clear();
       _wifiPassword.clear();
       _autoWifiSeconds.clear();
-      _rxBaud.clear();
+      _rxUartBaud.clear();
     });
     if (target == null) return;
     await _fetchElrsTarget(target);
@@ -333,7 +333,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   }
 
   Future<void> _prepareElrsFirmware() async {
-    final region = regulatoryProfile;
+    final region = regulatoryDomain;
     final target = selectedElrsTarget;
     if (region == null || target == null || preparingElrs) return;
 
@@ -348,7 +348,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         expectedProductName: target.productName,
         expectedPlatform: target.platform,
         expectedFirmware: target.firmware,
-        regulatoryProfile: region,
+        regulatoryDomain: region,
         bindingPhrase: _bindingPhrase.text.trim().isEmpty
             ? null
             : _bindingPhrase.text.trim(),
@@ -357,7 +357,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         wifiPassword:
             _wifiPassword.text.isEmpty ? null : _wifiPassword.text,
         autoWifiSeconds: int.tryParse(_autoWifiSeconds.text.trim()),
-        rxBaud: int.tryParse(_rxBaud.text.trim()),
+        rxUartBaud: int.tryParse(_rxUartBaud.text.trim()),
         lockOnFirstConnection: switch (lockMode) {
           'on' => true,
           'off' => false,
@@ -414,7 +414,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
           'Модель: ${target.productName}\n'
           'Target: ${target.targetPath}\n'
           'Версия: ${prepared.version ?? '-'}\n'
-          'Регион: ${prepared.regulatoryProfile ?? '-'}\n'
+          'Регион: ${prepared.regulatoryDomain ?? '-'}\n'
           'Адрес: ${prepared.writeOffset ?? '0x0'}\n'
           'Размер: ${prepared.fileSize ?? 0} Б\n\n'
           'Во время записи не отключайте питание и USB. '
@@ -634,10 +634,10 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 prepared: preparedElrs,
                 loading: loadingElrsTarget,
                 preparing: preparingElrs,
-                regulatoryProfile: regulatoryProfile,
+                regulatoryDomain: regulatoryDomain,
                 onRegulatoryChanged: (value) {
                   setState(() {
-                    regulatoryProfile = value;
+                    regulatoryDomain = value;
                     preparedElrs = null;
                   });
                 },
@@ -646,7 +646,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 wifiSsid: _wifiSsid,
                 wifiPassword: _wifiPassword,
                 autoWifiSeconds: _autoWifiSeconds,
-                rxBaud: _rxBaud,
+                rxUartBaud: _rxUartBaud,
                 lockMode: lockMode,
                 onLockModeChanged: (value) {
                   setState(() {
@@ -712,14 +712,14 @@ class _DynamicElrsTargetSection extends StatelessWidget {
     required this.prepared,
     required this.loading,
     required this.preparing,
-    required this.regulatoryProfile,
+    required this.regulatoryDomain,
     required this.onRegulatoryChanged,
     required this.onPrepare,
     required this.bindingPhrase,
     required this.wifiSsid,
     required this.wifiPassword,
     required this.autoWifiSeconds,
-    required this.rxBaud,
+    required this.rxUartBaud,
     required this.lockMode,
     required this.onLockModeChanged,
     required this.onOptionsChanged,
@@ -733,14 +733,14 @@ class _DynamicElrsTargetSection extends StatelessWidget {
   final ElrsPreparedFirmware? prepared;
   final bool loading;
   final bool preparing;
-  final String? regulatoryProfile;
+  final String? regulatoryDomain;
   final ValueChanged<String?> onRegulatoryChanged;
   final Future<void> Function() onPrepare;
   final TextEditingController bindingPhrase;
   final TextEditingController wifiSsid;
   final TextEditingController wifiPassword;
   final TextEditingController autoWifiSeconds;
-  final TextEditingController rxBaud;
+  final TextEditingController rxUartBaud;
   final String lockMode;
   final ValueChanged<String> onLockModeChanged;
   final VoidCallback onOptionsChanged;
@@ -797,9 +797,9 @@ class _DynamicElrsTargetSection extends StatelessWidget {
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               key: ValueKey(
-                'region-${target.targetPath}-${regulatoryProfile ?? 'none'}',
+                'region-${target.targetPath}-${regulatoryDomain ?? 'none'}',
               ),
-              initialValue: regulatoryProfile,
+              initialValue: regulatoryDomain,
               decoration: const InputDecoration(
                 labelText: 'Радиорегион',
                 border: OutlineInputBorder(),
@@ -865,7 +865,7 @@ class _DynamicElrsTargetSection extends StatelessWidget {
                 ],
                 const SizedBox(height: 8),
                 TextField(
-                  controller: rxBaud,
+                  controller: rxUartBaud,
                   keyboardType: TextInputType.number,
                   onChanged: (_) => onOptionsChanged(),
                   decoration: const InputDecoration(
@@ -909,7 +909,7 @@ class _DynamicElrsTargetSection extends StatelessWidget {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed:
-                  regulatoryProfile == null || preparing ? null : onPrepare,
+                  regulatoryDomain == null || preparing ? null : onPrepare,
               icon: preparing
                   ? const SizedBox.square(
                       dimension: 16,
@@ -932,7 +932,7 @@ class _DynamicElrsTargetSection extends StatelessWidget {
               ),
               _DiagLine('Версия', prepared!.version ?? '-'),
               _DiagLine('Регион', _regionLabel(
-                prepared!.regulatoryProfile ?? '-',
+                prepared!.regulatoryDomain ?? '-',
               )),
               _DiagLine('Адрес', prepared!.writeOffset ?? '-'),
               _DiagLine('Размер', '${prepared!.fileSize ?? 0} Б'),
@@ -1008,9 +1008,9 @@ class _DynamicElrsTargetSection extends StatelessWidget {
 
 String _regionLabel(String id) {
   switch (id) {
-    case 'FCC':
-      return '2.4 ГГц — обычный профиль';
-    case 'LBT':
+    case 'ISM_2400':
+      return '2.4 ГГц — ISM';
+    case 'EU_CE_2400':
       return '2.4 ГГц — EU CE / LBT';
     case 'FCC_915':
       return '915 МГц — FCC';
