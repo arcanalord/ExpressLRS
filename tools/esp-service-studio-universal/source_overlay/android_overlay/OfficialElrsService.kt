@@ -143,7 +143,7 @@ class OfficialElrsService(private val context: Context) {
         wifiSsid: String?,
         wifiPassword: String?,
         autoWifiSeconds: Int?,
-        lockOnFirstConnection: Boolean,
+        lockOnFirstConnection: Boolean?,
         rxUartBaud: Int?,
     ): Map<String, Any?> {
         return try {
@@ -558,7 +558,7 @@ class OfficialElrsService(private val context: Context) {
         wifiSsid: String?,
         wifiPassword: String?,
         autoWifiSeconds: Int?,
-        lockOnFirstConnection: Boolean,
+        lockOnFirstConnection: Boolean?,
         rxUartBaud: Int?,
     ): JSONObject {
         val options = JSONObject()
@@ -568,26 +568,34 @@ class OfficialElrsService(private val context: Context) {
         }
 
         if (!wifiSsid.isNullOrBlank()) {
+            if (wifiSsid.length > 32) {
+                error("Wi-Fi SSID длиннее 32 символов")
+            }
             options.put("wifi-ssid", wifiSsid)
             if (!wifiPassword.isNullOrEmpty()) {
+                if (wifiPassword.length > 64) {
+                    error("Пароль Wi-Fi длиннее 64 символов")
+                }
                 options.put("wifi-password", wifiPassword)
             }
+        } else if (!wifiPassword.isNullOrEmpty()) {
+            error("Пароль Wi-Fi задан без SSID")
         }
 
         if (autoWifiSeconds != null) {
-            if (autoWifiSeconds !in 10..3600) {
-                error("Auto Wi-Fi должен быть от 10 до 3600 секунд")
+            if (autoWifiSeconds <= 0) {
+                error("Интервал Auto Wi-Fi должен быть больше 0 секунд")
             }
             options.put("wifi-on-interval", autoWifiSeconds)
         }
 
-        if (lockOnFirstConnection) {
-            options.put("lock-on-first-connection", true)
+        if (lockOnFirstConnection != null) {
+            options.put("lock-on-first-connection", lockOnFirstConnection)
         }
 
         if (rxUartBaud != null) {
-            if (rxUartBaud !in 1200..5000000) {
-                error("Некорректный RX UART baud")
+            if (rxUartBaud <= 0) {
+                error("UART baud должен быть больше 0")
             }
             options.put("rcvr-uart-baud", rxUartBaud)
         }
