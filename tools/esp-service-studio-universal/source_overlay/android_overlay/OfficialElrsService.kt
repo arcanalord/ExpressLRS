@@ -46,6 +46,7 @@ class OfficialElrsService(private val context: Context) {
         val uploadMethods: List<String>,
         val priorTargetName: String?,
         val features: List<String>,
+        val regulatoryOptions: List<String>,
     ) {
         fun asMap(): Map<String, Any?> = mapOf(
             "status" to "ok",
@@ -64,7 +65,7 @@ class OfficialElrsService(private val context: Context) {
             "uploadMethods" to uploadMethods,
             "priorTargetName" to priorTargetName,
             "features" to features,
-            "regulatoryOptions" to regulatoryOptions(category),
+            "regulatoryOptions" to regulatoryOptions,
         )
     }
 
@@ -430,6 +431,7 @@ class OfficialElrsService(private val context: Context) {
             uploadMethods = methods,
             priorTargetName = target.optString("prior_target_name").ifBlank { null },
             features = jsonStringList(target.optJSONArray("features")),
+            regulatoryOptions = regulatoryOptions(category),
         )
     }
 
