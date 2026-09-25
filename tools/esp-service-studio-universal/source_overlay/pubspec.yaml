@@ -1,5 +1,5 @@
 name: service_studio
-version: 0.9.0-alpha.6+26092506
+version: 0.9.0-alpha.7+26092507
 publish_to: none
 description: Universal service studio for ESP controllers, radio modules and Mesh Messenger hardware.
 environment:
