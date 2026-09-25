@@ -233,6 +233,8 @@ class OfficialElrsService(private val context: Context) {
                 .put("targetsSha256", catalog.targetsSha256)
                 .put("layoutSha256", sha256(layoutBytes))
                 .put("artifactBucket", artifactBucket)
+                .put("hardwareSource", "same firmware.zip commit")
+                .put("hardwarePinned", true)
             val manifestFile = File(dir, "manifest.json")
             manifestFile.writeText(manifest.toString(2), Charsets.UTF_8)
 
@@ -254,6 +256,7 @@ class OfficialElrsService(private val context: Context) {
                 "manifestPath" to manifestFile.absolutePath,
                 "targetsSha256" to catalog.targetsSha256,
                 "layoutSha256" to sha256(layoutBytes),
+                "hardwareSource" to "same firmware.zip commit",
                 "hardwarePinned" to true,
                 "readyToFlash" to true,
             )
