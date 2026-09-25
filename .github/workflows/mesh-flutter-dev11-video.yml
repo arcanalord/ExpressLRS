@@ -84,12 +84,18 @@ jobs:
           "$BIN" >/tmp/mesh-ui.log 2>&1 &
           APP_PID=$!
 
+          WIN=""
+          BEST_AREA=0
           for i in $(seq 1 40); do
-            WIN="$(xdotool search --pid "$APP_PID" 2>/dev/null | head -n1 || true)"
-            if [ -z "$WIN" ]; then
-              WIN="$(xdotool search --name 'mesh_messenger_flutter|Mesh Messenger' 2>/dev/null | head -n1 || true)"
-            fi
-            [ -n "$WIN" ] && break
+            for CANDIDATE in $(xdotool search --pid "$APP_PID" 2>/dev/null || true); do
+              eval "$(xdotool getwindowgeometry --shell "$CANDIDATE" 2>/dev/null || true)"
+              AREA=$((${WIDTH:-0}*${HEIGHT:-0}))
+              if [ "$AREA" -gt "$BEST_AREA" ]; then
+                BEST_AREA="$AREA"
+                WIN="$CANDIDATE"
+              fi
+            done
+            [ "$BEST_AREA" -gt 10000 ] && break
             sleep 0.5
           done
           cp /tmp/mesh-ui.log /tmp/MESH_UI_LOG.txt || true
@@ -99,7 +105,7 @@ jobs:
             exit 1
           fi
           eval "$(xdotool getwindowgeometry --shell "$WIN")"
-          echo "WINDOW_ID=$WIN WIDTH=$WIDTH HEIGHT=$HEIGHT X=$X Y=$Y" | tee /tmp/WINDOW_INFO.txt
+          echo "WINDOW_ID=$WIN WIDTH=$WIDTH HEIGHT=$HEIGHT X=$X Y=$Y AREA=$BEST_AREA" | tee /tmp/WINDOW_INFO.txt
 
           xdotool windowactivate "$WIN" || true
           sleep 3
