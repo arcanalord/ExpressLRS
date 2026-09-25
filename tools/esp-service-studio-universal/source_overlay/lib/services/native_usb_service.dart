@@ -124,6 +124,110 @@ class EspRomProbeResult {
   }
 }
 
+
+class ElrsCatalogResult {
+  const ElrsCatalogResult({
+    required this.status,
+    this.message,
+    this.version,
+    this.releaseName,
+    this.publishedAt,
+    this.commitSha,
+    this.targetPath,
+    this.productName,
+    this.platform,
+    this.firmware,
+    this.layoutFile,
+    this.minVersion,
+    this.uploadMethods = const [],
+  });
+
+  final String status;
+  final String? message;
+  final String? version;
+  final String? releaseName;
+  final String? publishedAt;
+  final String? commitSha;
+  final String? targetPath;
+  final String? productName;
+  final String? platform;
+  final String? firmware;
+  final String? layoutFile;
+  final String? minVersion;
+  final List<String> uploadMethods;
+
+  bool get ok => status == 'ok';
+
+  factory ElrsCatalogResult.fromMap(Map<Object?, Object?> map) {
+    return ElrsCatalogResult(
+      status: map['status'] as String? ?? 'error',
+      message: map['message'] as String?,
+      version: map['version'] as String?,
+      releaseName: map['releaseName'] as String?,
+      publishedAt: map['publishedAt'] as String?,
+      commitSha: map['commitSha'] as String?,
+      targetPath: map['targetPath'] as String?,
+      productName: map['productName'] as String?,
+      platform: map['platform'] as String?,
+      firmware: map['firmware'] as String?,
+      layoutFile: map['layoutFile'] as String?,
+      minVersion: map['minVersion'] as String?,
+      uploadMethods: (map['uploadMethods'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+    );
+  }
+}
+
+class ElrsPreparedFirmware {
+  const ElrsPreparedFirmware({
+    required this.status,
+    this.message,
+    this.version,
+    this.productName,
+    this.platform,
+    this.firmware,
+    this.regulatoryProfile,
+    this.writeOffset,
+    this.filePath,
+    this.fileSize,
+    this.sha256,
+    this.readyToFlash = false,
+  });
+
+  final String status;
+  final String? message;
+  final String? version;
+  final String? productName;
+  final String? platform;
+  final String? firmware;
+  final String? regulatoryProfile;
+  final String? writeOffset;
+  final String? filePath;
+  final int? fileSize;
+  final String? sha256;
+  final bool readyToFlash;
+
+  bool get ok => status == 'prepared' && readyToFlash;
+
+  factory ElrsPreparedFirmware.fromMap(Map<Object?, Object?> map) {
+    return ElrsPreparedFirmware(
+      status: map['status'] as String? ?? 'error',
+      message: map['message'] as String?,
+      version: map['version'] as String?,
+      productName: map['productName'] as String?,
+      platform: map['platform'] as String?,
+      firmware: map['firmware'] as String?,
+      regulatoryProfile: map['regulatoryProfile'] as String?,
+      writeOffset: map['writeOffset'] as String?,
+      filePath: map['filePath'] as String?,
+      fileSize: map['fileSize'] as int?,
+      sha256: map['sha256'] as String?,
+      readyToFlash: map['readyToFlash'] as bool? ?? false,
+    );
+  }
+}
+
 class NativeUsbService {
   static const MethodChannel _channel = MethodChannel('service_studio/native');
   static const EventChannel _events = EventChannel('service_studio/usb_events');
@@ -159,6 +263,25 @@ class NativeUsbService {
     return EspRomProbeResult.fromMap(
       raw.cast<Object?, Object?>(),
     );
+  }
+
+  Future<ElrsCatalogResult> fetchOfficialElrsEp2() async {
+    final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+          'fetchOfficialElrsEp2',
+        ) ??
+        const <dynamic, dynamic>{};
+    return ElrsCatalogResult.fromMap(raw.cast<Object?, Object?>());
+  }
+
+  Future<ElrsPreparedFirmware> prepareOfficialElrsEp2({
+    required String regulatoryProfile,
+  }) async {
+    final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+          'prepareOfficialElrsEp2',
+          <String, Object?>{'regulatoryProfile': regulatoryProfile},
+        ) ??
+        const <dynamic, dynamic>{};
+    return ElrsPreparedFirmware.fromMap(raw.cast<Object?, Object?>());
   }
 
   Future<String> platformInfo() async {
