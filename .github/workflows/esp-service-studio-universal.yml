@@ -48,6 +48,16 @@ jobs:
         working-directory: /tmp/service_studio
         run: flutter pub get
 
+      - name: Toolchain VM gate
+        working-directory: /tmp/service_studio
+        run: |
+          set -euo pipefail
+          flutter --version
+          flutter doctor -v
+          cd android
+          ./gradlew --version
+          "$ANDROID_HOME/platform-tools/adb" version
+
       - name: Profile self test
         working-directory: /tmp/service_studio
         run: dart run tool/profile_self_test.dart
