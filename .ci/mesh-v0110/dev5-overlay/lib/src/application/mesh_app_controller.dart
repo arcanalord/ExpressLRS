@@ -73,7 +73,6 @@ final class MeshAppController extends ChangeNotifier {
   Ep2UartTransport? _ep2;
   MmUartExternalRadioSession? _externalRadioSession;
   MmUartMessageTransport? _externalRadio;
-  AndroidUsbMmUartHostLink? _externalRadioLink;
   bool _mmUartActive = false;
   StreamSubscription<DeliveryEnvelope>? _deliverySub;
   StreamSubscription<LanTransportEvent>? _lanSub;
@@ -1090,7 +1089,6 @@ final class MeshAppController extends ChangeNotifier {
         deviceId: deviceId,
         baudRate: 115200,
       );
-      _externalRadioLink = link;
       try {
         final snapshot = await session.connect(link);
         if (!session.supportsMmrp) {
@@ -1109,7 +1107,6 @@ final class MeshAppController extends ChangeNotifier {
         return;
       } catch (error) {
         _mmUartActive = false;
-        _externalRadioLink = null;
         _addEp2Log('MM-UART fallback · $error');
         try {
           await session.disconnect();
@@ -1133,7 +1130,6 @@ final class MeshAppController extends ChangeNotifier {
     if (ep2 == null) return;
     _addEp2Log('DISCONNECT requested');
     _mmUartActive = false;
-    _externalRadioLink = null;
     if (session != null) {
       try {
         await session.disconnect();
