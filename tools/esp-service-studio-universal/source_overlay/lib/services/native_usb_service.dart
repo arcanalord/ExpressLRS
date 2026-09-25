@@ -71,6 +71,16 @@ class EspRomProbeResult {
     this.baudRate,
     this.bytesRead,
     this.elapsedMs,
+    this.chipFamily,
+    this.chipDescription,
+    this.chipMagic,
+    this.chipId,
+    this.mac,
+    this.flashId,
+    this.flashVendorId,
+    this.flashDeviceId,
+    this.flashSize,
+    this.flashEmbedded,
   });
 
   final String status;
@@ -79,8 +89,18 @@ class EspRomProbeResult {
   final int? baudRate;
   final int? bytesRead;
   final int? elapsedMs;
+  final String? chipFamily;
+  final String? chipDescription;
+  final String? chipMagic;
+  final String? chipId;
+  final String? mac;
+  final String? flashId;
+  final int? flashVendorId;
+  final String? flashDeviceId;
+  final String? flashSize;
+  final bool? flashEmbedded;
 
-  bool get ok => status == 'rom_sync_ok';
+  bool get ok => status == 'rom_ready';
 
   factory EspRomProbeResult.fromMap(Map<Object?, Object?> map) {
     return EspRomProbeResult(
@@ -90,6 +110,16 @@ class EspRomProbeResult {
       baudRate: map['baudRate'] as int?,
       bytesRead: map['bytesRead'] as int?,
       elapsedMs: map['elapsedMs'] as int?,
+      chipFamily: map['chipFamily'] as String?,
+      chipDescription: map['chipDescription'] as String?,
+      chipMagic: map['chipMagic'] as String?,
+      chipId: map['chipId'] as String?,
+      mac: map['mac'] as String?,
+      flashId: map['flashId'] as String?,
+      flashVendorId: map['flashVendorId'] as int?,
+      flashDeviceId: map['flashDeviceId'] as String?,
+      flashSize: map['flashSize'] as String?,
+      flashEmbedded: map['flashEmbedded'] as bool?,
     );
   }
 }
