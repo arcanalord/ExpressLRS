@@ -117,15 +117,15 @@ jobs:
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.8.txt
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-r2-arm64-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-r2-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.8.txt
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug
+          name: MeshMessenger-Flutter-v0.1.10-dev.8-r2-arm64-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-arm64-debug.apk
+            /tmp/MeshMessenger-Flutter-v0.1.10-dev.8-r2-arm64-debug.apk
             /tmp/SHA256SUM-v0.1.10-dev.8.txt
           if-no-files-found: error
           retention-days: 14
