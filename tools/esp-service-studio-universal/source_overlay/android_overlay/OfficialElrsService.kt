@@ -301,7 +301,13 @@ class OfficialElrsService(private val context: Context) {
 
         val bundle = File(dir, "firmware.zip")
         if (bundle.isFile && bundle.length() > 1024 * 1024) {
-            return bundle
+            val valid = runCatching {
+                readZipBytes(bundle, TARGETS_ENTRY)
+            }.isSuccess
+            if (valid) {
+                return bundle
+            }
+            bundle.delete()
         }
 
         val tmp = File(dir, "firmware.zip.part")
@@ -617,10 +623,10 @@ class OfficialElrsService(private val context: Context) {
             options.put("domain", subGhzDomainNumber(regulatoryDomain))
         }
 
-        options.put(
-            "flash-discriminator",
-            SecureRandom().nextInt().toLong() and 0xFFFFFFFFL,
-        )
+        var discriminator =
+            SecureRandom().nextInt().toLong() and 0xFFFFFFFFL
+        if (discriminator == 0L) discriminator = 1L
+        options.put("flash-discriminator", discriminator)
         return options
     }
 
