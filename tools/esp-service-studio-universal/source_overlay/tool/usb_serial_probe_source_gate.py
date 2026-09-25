@@ -49,6 +49,7 @@ checks = {
     'regulatory domain channel': 'regulatoryDomain' in native and 'regulatoryProfile' not in native,
     'pinned hardware manifest proof': 'hardwareSource' in elrs and 'same firmware.zip commit' in elrs,
     'pinned hardware flash gate': 'hardwareSource' in probe and 'version-pinned hardware gate' in probe,
+    'session commit pin': 'expectedCommitSha' in native and 'expectedCommitSha' in main and 'expectedCommitSha' in elrs,
     'binding phrase support': 'generateUid(' in elrs and 'bindingPhrase' in native,
     'wifi options': 'wifi-ssid' in elrs and 'wifiPassword' in native,
     'rx baud option': 'rcvr-uart-baud' in elrs and 'rxUartBaud' in native,
