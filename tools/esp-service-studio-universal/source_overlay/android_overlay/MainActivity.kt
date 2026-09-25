@@ -152,28 +152,28 @@ class MainActivity : FlutterActivity() {
                             call.argument<String>("expectedPlatform") ?: ""
                         val expectedFirmware =
                             call.argument<String>("expectedFirmware") ?: ""
-                        val regulatoryProfile =
-                            call.argument<String>("regulatoryProfile") ?: ""
+                        val regulatoryDomain =
+                            call.argument<String>("regulatoryDomain") ?: ""
                         val bindingPhrase = call.argument<String>("bindingPhrase")
                         val wifiSsid = call.argument<String>("wifiSsid")
                         val wifiPassword = call.argument<String>("wifiPassword")
                         val autoWifiSeconds = call.argument<Int>("autoWifiSeconds")
-                        val rxBaud = call.argument<Int>("rxBaud")
+                        val rxUartBaud = call.argument<Int>("rxUartBaud")
                         val lockOnFirstConnection =
-                            call.argument<Boolean>("lockOnFirstConnection")
+                            call.argument<Boolean>("lockOnFirstConnection") ?: false
                         Thread {
                             val response = OfficialElrsService(this).prepareFirmware(
                                 targetPath = targetPath,
                                 expectedProductName = expectedProductName,
                                 expectedPlatform = expectedPlatform,
                                 expectedFirmware = expectedFirmware,
-                                regulatoryProfile = regulatoryProfile,
+                                regulatoryDomain = regulatoryDomain,
                                 bindingPhrase = bindingPhrase,
                                 wifiSsid = wifiSsid,
                                 wifiPassword = wifiPassword,
                                 autoWifiSeconds = autoWifiSeconds,
-                                rxBaud = rxBaud,
                                 lockOnFirstConnection = lockOnFirstConnection,
+                                rxUartBaud = rxUartBaud,
                             )
                             mainHandler.post { result.success(response) }
                         }.start()
