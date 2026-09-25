@@ -98,7 +98,7 @@ jobs:
       - name: Source gates
         working-directory: ${{ env.APP_DIR }}
         run: |
-          dart format --output=none --set-exit-if-changed lib/platform/mm_uart_external_radio_session.dart lib/src/application/mesh_app_controller.dart lib/src/features/connection/connection_page.dart
+          dart format lib/platform/mm_uart_external_radio_session.dart lib/src/application/mesh_app_controller.dart lib/src/features/connection/connection_page.dart
           python3 tool/android_source_gate.py
           python3 tool/ep2_uart_source_gate.py
           python3 tool/uart_diagnostics_source_gate.py
