@@ -98,30 +98,37 @@ jobs:
             cat /tmp/mesh-ui.log >&2 || true
             exit 1
           fi
-          echo "WINDOW_ID=$WIN" | tee /tmp/WINDOW_INFO.txt
+          eval "$(xdotool getwindowgeometry --shell "$WIN")"
+          echo "WINDOW_ID=$WIN WIDTH=$WIDTH HEIGHT=$HEIGHT X=$X Y=$Y" | tee /tmp/WINDOW_INFO.txt
 
           xdotool windowactivate "$WIN" || true
-          xdotool windowmove "$WIN" 90 120 || true
-          xdotool windowsize "$WIN" 540 960 || true
           sleep 3
+
+          NAV_Y=$((HEIGHT-45))
+          CHAT_X=$((WIDTH/8))
+          MAP_X=$((WIDTH*3/8))
+          CONNECTION_X=$((WIDTH*5/8))
+          SETTINGS_X=$((WIDTH*7/8))
+          HELP_X=$((WIDTH-70))
+          HELP_Y=45
 
           ffmpeg -nostdin -y -f x11grab -draw_mouse 0 -framerate 15 -video_size 720x1280 -i :99.0             -t 34 -c:v mpeg4 -q:v 5 -pix_fmt yuv420p /tmp/MeshMessenger-dev11-visual-QA.mp4             >/tmp/ffmpeg.log 2>&1 &
           FFMPEG_PID=$!
 
           sleep 4
           # Map
-          xdotool mousemove 292 1040 click 1 || true
+          xdotool mousemove --window "$WIN" "$MAP_X" "$NAV_Y" click 1 || true
           sleep 5
           # Connection
-          xdotool mousemove 428 1040 click 1 || true
+          xdotool mousemove --window "$WIN" "$CONNECTION_X" "$NAV_Y" click 1 || true
           sleep 7
           # Help
-          xdotool mousemove 548 155 click 1 || true
+          xdotool mousemove --window "$WIN" "$HELP_X" "$HELP_Y" click 1 || true
           sleep 6
           xdotool key Escape || true
           sleep 2
           # Settings
-          xdotool mousemove 563 1040 click 1 || true
+          xdotool mousemove --window "$WIN" "$SETTINGS_X" "$NAV_Y" click 1 || true
           sleep 4
 
           wait "$FFMPEG_PID" || true
