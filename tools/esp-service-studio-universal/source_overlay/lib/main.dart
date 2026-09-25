@@ -6,7 +6,7 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.5 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.6 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
@@ -45,10 +45,15 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
   bool loading = true;
   bool probing = false;
+  bool loadingElrs = false;
+  bool preparingElrs = false;
   bool _usbRefreshInFlight = false;
 
   String? error;
+  String? regulatoryProfile;
   EspRomProbeResult? probeResult;
+  ElrsCatalogResult? elrsCatalog;
+  ElrsPreparedFirmware? preparedElrs;
 
   StreamSubscription<UsbSnapshot>? _usbSub;
   Timer? _usbPollTimer;
@@ -330,6 +335,9 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 onChanged: (p) => setState(() {
                   selected = p;
                   probeResult = null;
+                  elrsCatalog = null;
+                  preparedElrs = null;
+                  regulatoryProfile = null;
                 }),
                 decoration: const InputDecoration(
                   labelText: 'Профиль устройства',
@@ -338,8 +346,26 @@ class _ServiceHomePageState extends State<ServiceHomePage>
               ),
             ),
             if (profile != null) _ProfileCard(profile: profile),
+            if (profile?.id == 'ep2_esp8285_sx1280')
+              _OfficialElrsSection(
+                catalog: elrsCatalog,
+                prepared: preparedElrs,
+                loading: loadingElrs,
+                preparing: preparingElrs,
+                regulatoryProfile: regulatoryProfile,
+                onRefresh: _fetchElrsCatalog,
+                onRegulatoryChanged: (value) {
+                  setState(() {
+                    regulatoryProfile = value;
+                    preparedElrs = null;
+                  });
+                },
+                onPrepare: _prepareElrsFirmware,
+              ),
             _Section(
-              title: '3. Действие',
+              title: profile?.id == 'ep2_esp8285_sx1280'
+                  ? '4. Действие'
+                  : '3. Действие',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -409,12 +435,175 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     );
   }
 
+  Future<void> _fetchElrsCatalog() async {
+    if (loadingElrs) return;
+    setState(() {
+      loadingElrs = true;
+      preparedElrs = null;
+    });
+    try {
+      final result = await _usb.fetchOfficialElrsEp2();
+      if (!mounted) return;
+      setState(() => elrsCatalog = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        elrsCatalog = ElrsCatalogResult(
+          status: 'error',
+          message: 'Ошибка запроса ExpressLRS: $e',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => loadingElrs = false);
+    }
+  }
+
+  Future<void> _prepareElrsFirmware() async {
+    final region = regulatoryProfile;
+    if (region == null || preparingElrs) return;
+
+    setState(() {
+      preparingElrs = true;
+      preparedElrs = null;
+    });
+    try {
+      final result = await _usb.prepareOfficialElrsEp2(
+        regulatoryProfile: region,
+      );
+      if (!mounted) return;
+      setState(() => preparedElrs = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        preparedElrs = ElrsPreparedFirmware(
+          status: 'error',
+          message: 'Ошибка подготовки прошивки: $e',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => preparingElrs = false);
+    }
+  }
+
   void _notYet(String name) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           '$name: будет подключено после проверки USB-Serial',
         ),
+      ),
+    );
+  }
+}
+
+class _OfficialElrsSection extends StatelessWidget {
+  const _OfficialElrsSection({
+    required this.catalog,
+    required this.prepared,
+    required this.loading,
+    required this.preparing,
+    required this.regulatoryProfile,
+    required this.onRefresh,
+    required this.onRegulatoryChanged,
+    required this.onPrepare,
+  });
+
+  final ElrsCatalogResult? catalog;
+  final ElrsPreparedFirmware? prepared;
+  final bool loading;
+  final bool preparing;
+  final String? regulatoryProfile;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<String?> onRegulatoryChanged;
+  final Future<void> Function() onPrepare;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Section(
+      title: '3. Официальная ExpressLRS',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Источник: официальный каталог ExpressLRS. '
+            'Программа проверяет, что target остался HappyModel EP1/EP2, '
+            'платформа ESP8285 и семейство Unified_ESP8285_2400_RX.',
+          ),
+          const SizedBox(height: 10),
+          FilledButton.tonalIcon(
+            onPressed: loading ? null : onRefresh,
+            icon: loading
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cloud_download_outlined),
+            label: Text(
+              loading ? 'Проверяю официальный каталог…' : 'Получить актуальную версию',
+            ),
+          ),
+          if (catalog != null) ...[
+            const SizedBox(height: 10),
+            if (catalog!.ok) ...[
+              _DiagLine('Версия', catalog!.version ?? '-'),
+              _DiagLine('Target', catalog!.productName ?? '-'),
+              _DiagLine('Платформа', catalog!.platform ?? '-'),
+              _DiagLine('Прошивка', catalog!.firmware ?? '-'),
+              _DiagLine('Методы', catalog!.uploadMethods.join(', ')),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: regulatoryProfile,
+                decoration: const InputDecoration(
+                  labelText: 'Радиорегион прошивки',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'FCC',
+                    child: Text('FCC / обычный 2.4 ГГц профиль'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'LBT',
+                    child: Text('LBT / профиль Listen Before Talk'),
+                  ),
+                ],
+                onChanged: onRegulatoryChanged,
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: regulatoryProfile == null || preparing
+                    ? null
+                    : onPrepare,
+                icon: preparing
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.inventory_2_outlined),
+                label: Text(
+                  preparing ? 'Готовлю firmware.bin…' : 'Подготовить firmware.bin',
+                ),
+              ),
+            ] else
+              Text(catalog!.message ?? 'Ошибка каталога'),
+          ],
+          if (prepared != null) ...[
+            const SizedBox(height: 10),
+            if (prepared!.ok) ...[
+              const Text(
+                'Прошивка подготовлена, но ещё НЕ записана.',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              _DiagLine('Версия', prepared!.version ?? '-'),
+              _DiagLine('Регион', prepared!.regulatoryProfile ?? '-'),
+              _DiagLine('Адрес', prepared!.writeOffset ?? '-'),
+              _DiagLine('Размер', '${prepared!.fileSize ?? 0} Б'),
+              _DiagLine('SHA-256', prepared!.sha256 ?? '-'),
+            ] else
+              Text(prepared!.message ?? 'Ошибка подготовки'),
+          ],
+        ],
       ),
     );
   }
