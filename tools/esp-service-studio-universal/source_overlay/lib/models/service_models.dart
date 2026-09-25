@@ -10,6 +10,7 @@ class DeviceProfile {
     required this.kind,
     required this.controller,
     required this.radio,
+    required this.elrs,
     required this.hostProtocols,
     required this.notes,
   });
@@ -19,6 +20,7 @@ class DeviceProfile {
   final String kind;
   final Map<String, dynamic>? controller;
   final Map<String, dynamic> radio;
+  final Map<String, dynamic>? elrs;
   final List<String> hostProtocols;
   final List<String> notes;
 
@@ -29,11 +31,15 @@ class DeviceProfile {
       kind: json['kind'] as String,
       controller: (json['controller'] as Map?)?.cast<String, dynamic>(),
       radio: (json['radio'] as Map).cast<String, dynamic>(),
+      elrs: (json['elrs'] as Map?)?.cast<String, dynamic>(),
       hostProtocols: (json['hostProtocols'] as List<dynamic>? ?? const [])
           .cast<String>(),
       notes: (json['notes'] as List<dynamic>? ?? const []).cast<String>(),
     );
   }
+
+  String? get elrsTargetPath => elrs?['targetPath']?.toString();
+  String? get elrsProductName => elrs?['productName']?.toString();
 }
 
 List<DeviceProfile> parseProfiles(String raw) {
