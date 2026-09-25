@@ -152,6 +152,7 @@ final class Ep2UartTransport implements MessageTransport {
   int _nextSequence = 1;
   Timer? _handshakeTimer;
   Timer? _probeTimer;
+  Timer? _ep2InfoRetryTimer;
   int? _probeDeviceId;
   String _probeStage = 'none';
 
@@ -197,6 +198,7 @@ final class Ep2UartTransport implements MessageTransport {
     required bool allowCrsfFallback,
   }) async {
     _cancelProbeTimers();
+    _clearRuntimeSnapshot();
     _probeDeviceId = deviceId;
     _probeStage = allowCrsfFallback ? 'ep2-auto' : 'ep2-direct';
     protocol = RadioUartProtocol.unknown;
@@ -248,6 +250,9 @@ final class Ep2UartTransport implements MessageTransport {
     await _bridge.disconnect();
     _pending.clear();
     _failPings(StateError('USB radio disconnected'));
+    _buffer = '';
+    _binaryBuffer.clear();
+    _clearRuntimeSnapshot();
     state = 'disconnected';
     protocol = RadioUartProtocol.unknown;
     currentBaud = null;
@@ -386,8 +391,9 @@ final class Ep2UartTransport implements MessageTransport {
           state = 'handshaking';
           _events.add(const Ep2StateEvent('handshaking'));
           _handshakeTimer?.cancel();
+          _ep2InfoRetryTimer?.cancel();
           final autoFallback = _probeStage == 'ep2-auto';
-          _handshakeTimer = Timer(const Duration(milliseconds: 1800), () {
+          _handshakeTimer = Timer(const Duration(milliseconds: 4200), () {
             if (state != 'handshaking') return;
             if (autoFallback) {
               unawaited(_switchToCrsfProbe());
@@ -398,6 +404,21 @@ final class Ep2UartTransport implements MessageTransport {
             }
           });
           unawaited(requestInfo());
+          var retries = 0;
+          _ep2InfoRetryTimer = Timer.periodic(
+            const Duration(milliseconds: 900),
+            (timer) {
+              if (state != 'handshaking' ||
+                  !(_probeStage == 'ep2-auto' ||
+                      _probeStage == 'ep2-direct')) {
+                timer.cancel();
+                return;
+              }
+              retries++;
+              unawaited(requestInfo());
+              if (retries >= 3) timer.cancel();
+            },
+          );
         }
       } else if (next == 'permission') {
         state = 'permission';
@@ -485,6 +506,8 @@ final class Ep2UartTransport implements MessageTransport {
         if (parts.length >= 8) {
           _handshakeTimer?.cancel();
           _handshakeTimer = null;
+          _ep2InfoRetryTimer?.cancel();
+          _ep2InfoRetryTimer = null;
           _probeTimer?.cancel();
           _probeTimer = null;
           _probeStage = 'done';
@@ -676,11 +699,30 @@ final class Ep2UartTransport implements MessageTransport {
     }
   }
 
+  void _clearRuntimeSnapshot() {
+    localNodeId = null;
+    firmwareVersion = null;
+    radioState = null;
+    profileId = null;
+    rssi10 = null;
+    snr10 = null;
+    rttMs = null;
+    txCount = null;
+    rxCount = null;
+    lossCount = null;
+    crcErrors = null;
+    txErrors = null;
+    retryCount = null;
+    duplicateCount = null;
+  }
+
   void _cancelProbeTimers() {
     _handshakeTimer?.cancel();
     _handshakeTimer = null;
     _probeTimer?.cancel();
     _probeTimer = null;
+    _ep2InfoRetryTimer?.cancel();
+    _ep2InfoRetryTimer = null;
   }
 
   Future<void> close() async {
