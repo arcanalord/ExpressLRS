@@ -33,7 +33,7 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          sed -i 's/^version: .*/version: 0.1.10-dev.8+26092404/' "$APP_DIR/pubspec.yaml"
+          sed -i 's/^version: .*/version: 0.1.10-dev.8-r2+26092501/' "$APP_DIR/pubspec.yaml"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
