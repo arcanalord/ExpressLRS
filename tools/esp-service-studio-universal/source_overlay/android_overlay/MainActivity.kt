@@ -6,6 +6,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -15,6 +18,7 @@ class MainActivity : FlutterActivity() {
     private val methodChannelName = "service_studio/native"
     private val eventChannelName = "service_studio/usb_events"
 
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var usbEventSink: EventChannel.EventSink? = null
     private var receiverRegistered = false
 
@@ -26,14 +30,22 @@ class MainActivity : FlutterActivity() {
             ) {
                 return
             }
-
-            usbEventSink?.success(
-                mapOf(
-                    "event" to if (action == UsbManager.ACTION_USB_DEVICE_ATTACHED) "attached" else "detached",
-                    "devices" to listUsbDevices(),
-                )
+            emitUsbSnapshot(
+                if (action == UsbManager.ACTION_USB_DEVICE_ATTACHED) "attached" else "detached",
+                delayMs = if (action == UsbManager.ACTION_USB_DEVICE_DETACHED) 180 else 80,
             )
         }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleUsbIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleUsbIntent(intent)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -55,12 +67,7 @@ class MainActivity : FlutterActivity() {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     usbEventSink = events
                     registerUsbReceiver()
-                    events?.success(
-                        mapOf(
-                            "event" to "snapshot",
-                            "devices" to listUsbDevices(),
-                        )
-                    )
+                    emitUsbSnapshot("snapshot", 0)
                 }
 
                 override fun onCancel(arguments: Any?) {
@@ -74,6 +81,23 @@ class MainActivity : FlutterActivity() {
         usbEventSink = null
         unregisterUsbReceiver()
         super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    private fun handleUsbIntent(intent: Intent?) {
+        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
+            emitUsbSnapshot("attached_intent", 120)
+        }
+    }
+
+    private fun emitUsbSnapshot(event: String, delayMs: Long) {
+        mainHandler.postDelayed({
+            usbEventSink?.success(
+                mapOf(
+                    "event" to event,
+                    "devices" to listUsbDevices(),
+                )
+            )
+        }, delayMs)
     }
 
     private fun registerUsbReceiver() {

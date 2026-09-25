@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/services.dart';
 
 class UsbDeviceInfo {
@@ -43,13 +41,16 @@ class UsbDeviceInfo {
 }
 
 class UsbSnapshot {
-  const UsbSnapshot({required this.event, required this.devices});
+  const UsbSnapshot({
+    required this.event,
+    required this.devices,
+  });
 
   final String event;
   final List<UsbDeviceInfo> devices;
 
   factory UsbSnapshot.fromMap(Map<Object?, Object?> map) {
-    final raw = (map['devices'] as List<dynamic>? ?? const <dynamic>[]);
+    final raw = map['devices'] as List<dynamic>? ?? const <dynamic>[];
     return UsbSnapshot(
       event: map['event'] as String? ?? 'snapshot',
       devices: raw
