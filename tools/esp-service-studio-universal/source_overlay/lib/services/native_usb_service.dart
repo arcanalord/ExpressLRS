@@ -294,6 +294,7 @@ class ElrsPreparedFirmware {
     this.filePath,
     this.fileSize,
     this.sha256,
+    this.manifestPath,
     this.readyToFlash = false,
   });
 
@@ -308,6 +309,7 @@ class ElrsPreparedFirmware {
   final String? filePath;
   final int? fileSize;
   final String? sha256;
+  final String? manifestPath;
   final bool readyToFlash;
 
   bool get ok => status == 'prepared' && readyToFlash;
@@ -325,7 +327,73 @@ class ElrsPreparedFirmware {
       filePath: map['filePath'] as String?,
       fileSize: map['fileSize'] as int?,
       sha256: map['sha256'] as String?,
+      manifestPath: map['manifestPath'] as String?,
       readyToFlash: map['readyToFlash'] as bool? ?? false,
+    );
+  }
+}
+
+
+class EspFlashResult {
+  const EspFlashResult({
+    required this.status,
+    required this.message,
+    this.targetPath,
+    this.productName,
+    this.version,
+    this.regulatoryProfile,
+    this.chipDescription,
+    this.flashId,
+    this.flashSize,
+    this.fileSize,
+    this.sha256,
+    this.blocksWritten,
+    this.blockSize,
+    this.writeOffset,
+    this.verification,
+    this.needsPowerCycle = false,
+    this.elapsedMs,
+  });
+
+  final String status;
+  final String message;
+  final String? targetPath;
+  final String? productName;
+  final String? version;
+  final String? regulatoryProfile;
+  final String? chipDescription;
+  final String? flashId;
+  final String? flashSize;
+  final int? fileSize;
+  final String? sha256;
+  final int? blocksWritten;
+  final int? blockSize;
+  final String? writeOffset;
+  final String? verification;
+  final bool needsPowerCycle;
+  final int? elapsedMs;
+
+  bool get ok => status == 'flash_written';
+
+  factory EspFlashResult.fromMap(Map<Object?, Object?> map) {
+    return EspFlashResult(
+      status: map['status'] as String? ?? 'flash_error',
+      message: map['message'] as String? ?? 'Нет сообщения',
+      targetPath: map['targetPath'] as String?,
+      productName: map['productName'] as String?,
+      version: map['version'] as String?,
+      regulatoryProfile: map['regulatoryProfile'] as String?,
+      chipDescription: map['chipDescription'] as String?,
+      flashId: map['flashId'] as String?,
+      flashSize: map['flashSize'] as String?,
+      fileSize: map['fileSize'] as int?,
+      sha256: map['sha256'] as String?,
+      blocksWritten: map['blocksWritten'] as int?,
+      blockSize: map['blockSize'] as int?,
+      writeOffset: map['writeOffset'] as String?,
+      verification: map['verification'] as String?,
+      needsPowerCycle: map['needsPowerCycle'] as bool? ?? false,
+      elapsedMs: map['elapsedMs'] as int?,
     );
   }
 }
@@ -413,6 +481,25 @@ class NativeUsbService {
         ) ??
         const <dynamic, dynamic>{};
     return ElrsPreparedFirmware.fromMap(raw.cast<Object?, Object?>());
+  }
+
+  Future<EspFlashResult> flashPreparedEsp8285({
+    required String deviceName,
+    required String manifestPath,
+    required String expectedTargetPath,
+    required String expectedSha256,
+  }) async {
+    final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+          'flashPreparedEsp8285',
+          <String, Object?>{
+            'deviceName': deviceName,
+            'manifestPath': manifestPath,
+            'expectedTargetPath': expectedTargetPath,
+            'expectedSha256': expectedSha256,
+          },
+        ) ??
+        const <dynamic, dynamic>{};
+    return EspFlashResult.fromMap(raw.cast<Object?, Object?>());
   }
 
   Future<String> platformInfo() async {
