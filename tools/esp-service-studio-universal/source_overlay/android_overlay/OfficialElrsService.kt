@@ -117,6 +117,7 @@ class OfficialElrsService(private val context: Context) {
         expectedProductName: String,
         expectedPlatform: String,
         expectedFirmware: String,
+        expectedCommitSha: String,
     ): Map<String, Any?> {
         return try {
             fetchCatalogInternal(
@@ -124,6 +125,7 @@ class OfficialElrsService(private val context: Context) {
                 expectedProductName = expectedProductName,
                 expectedPlatform = expectedPlatform,
                 expectedFirmware = expectedFirmware,
+                expectedCommitSha = expectedCommitSha,
             ).asMap()
         } catch (e: Exception) {
             mapOf(
@@ -138,6 +140,7 @@ class OfficialElrsService(private val context: Context) {
         expectedProductName: String,
         expectedPlatform: String,
         expectedFirmware: String,
+        expectedCommitSha: String,
         regulatoryDomain: String,
         bindingPhrase: String?,
         wifiSsid: String?,
@@ -152,6 +155,7 @@ class OfficialElrsService(private val context: Context) {
                 expectedProductName = expectedProductName,
                 expectedPlatform = expectedPlatform,
                 expectedFirmware = expectedFirmware,
+                expectedCommitSha = expectedCommitSha,
             )
             validateStudioPreparation(catalog)
             validateRegulatoryDomain(catalog.category, regulatoryDomain)
@@ -424,9 +428,18 @@ class OfficialElrsService(private val context: Context) {
         expectedProductName: String,
         expectedPlatform: String,
         expectedFirmware: String,
+        expectedCommitSha: String,
     ): Catalog {
         validateTargetPath(targetPath)
         val release = fetchReleaseInfo()
+        if (expectedCommitSha.isNotBlank() &&
+            !release.commitSha.equals(expectedCommitSha, ignoreCase = true)
+        ) {
+            error(
+                "Stable ExpressLRS обновилась после загрузки каталога. " +
+                    "Обновите список устройств и повторите подготовку."
+            )
+        }
         val bundle = ensureBundle(release.commitSha)
         val targetsBytes = readZipBytes(bundle, TARGETS_ENTRY)
         val root = JSONObject(targetsBytes.toString(Charsets.UTF_8))
