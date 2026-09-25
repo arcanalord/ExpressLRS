@@ -367,8 +367,8 @@ class _ServiceHomePageState extends State<ServiceHomePage>
             if (profile != null) _ProfileCard(profile: profile),
             if (profile?.elrsTargetPath != null)
               _OfficialElrsSection(
-                expectedProductName: profile!.elrsProductName ?? profile.name,
-                targetPath: profile!.elrsTargetPath!,
+                expectedProductName: profile.elrsProductName ?? profile.name,
+                targetPath: profile.elrsTargetPath!,
                 catalog: elrsCatalog,
                 prepared: preparedElrs,
                 loading: loadingElrs,
