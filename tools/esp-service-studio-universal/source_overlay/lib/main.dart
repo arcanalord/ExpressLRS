@@ -6,7 +6,7 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.9 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.10 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
@@ -40,6 +40,11 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   final _profiles = ProfileRepository();
   final _usb = NativeUsbService();
   final _search = TextEditingController();
+  final _bindingPhrase = TextEditingController();
+  final _wifiSsid = TextEditingController();
+  final _wifiPassword = TextEditingController();
+  final _autoWifiSeconds = TextEditingController();
+  final _rxBaud = TextEditingController();
 
   List<DeviceProfile> profiles = const [];
   List<UsbDeviceInfo> usbDevices = const [];
@@ -55,6 +60,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
   String? error;
   String? regulatoryProfile;
+  String lockMode = 'default';
   EspRomProbeResult? probeResult;
   ElrsCatalogIndex? elrsIndex;
   ElrsTargetInfo? selectedElrsTarget;
@@ -93,6 +99,11 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     _usbPollTimer?.cancel();
     _usbSub?.cancel();
     _search.dispose();
+    _bindingPhrase.dispose();
+    _wifiSsid.dispose();
+    _wifiPassword.dispose();
+    _autoWifiSeconds.dispose();
+    _rxBaud.dispose();
     super.dispose();
   }
 
@@ -170,6 +181,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         preparedElrs = null;
         flashResult = null;
         regulatoryProfile = null;
+        lockMode = 'default';
       }
     });
   }
@@ -284,6 +296,12 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       elrsCatalog = null;
       preparedElrs = null;
       regulatoryProfile = null;
+      lockMode = 'default';
+      _bindingPhrase.clear();
+      _wifiSsid.clear();
+      _wifiPassword.clear();
+      _autoWifiSeconds.clear();
+      _rxBaud.clear();
     });
     if (target == null) return;
     await _fetchElrsTarget(target);
@@ -331,6 +349,20 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         expectedPlatform: target.platform,
         expectedFirmware: target.firmware,
         regulatoryProfile: region,
+        bindingPhrase: _bindingPhrase.text.trim().isEmpty
+            ? null
+            : _bindingPhrase.text.trim(),
+        wifiSsid:
+            _wifiSsid.text.trim().isEmpty ? null : _wifiSsid.text.trim(),
+        wifiPassword:
+            _wifiPassword.text.isEmpty ? null : _wifiPassword.text,
+        autoWifiSeconds: int.tryParse(_autoWifiSeconds.text.trim()),
+        rxBaud: int.tryParse(_rxBaud.text.trim()),
+        lockOnFirstConnection: switch (lockMode) {
+          'on' => true,
+          'off' => false,
+          _ => null,
+        },
       );
       if (!mounted) return;
       setState(() => preparedElrs = result);
@@ -385,7 +417,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
           'Адрес: ${prepared.writeOffset ?? '0x0'}\n'
           'Размер: ${prepared.fileSize ?? 0} Б\n\n'
           'Во время записи не отключайте питание и USB. '
-          'Проверка alpha.9 подтверждает каждый блок ROM, '
+          'Проверка alpha.10 подтверждает каждый блок ROM, '
           'но полный readback содержимого пока не выполняется.',
         ),
         actions: [
@@ -609,6 +641,18 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                   });
                 },
                 onPrepare: _prepareElrsFirmware,
+                bindingPhrase: _bindingPhrase,
+                wifiSsid: _wifiSsid,
+                wifiPassword: _wifiPassword,
+                autoWifiSeconds: _autoWifiSeconds,
+                rxBaud: _rxBaud,
+                lockMode: lockMode,
+                onLockModeChanged: (value) {
+                  setState(() {
+                    lockMode = value;
+                    preparedElrs = null;
+                  });
+                },
                 flashing: flashingEsp,
                 flashResult: flashResult,
                 onFlash: _flashPreparedEsp8285,
