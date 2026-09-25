@@ -22,6 +22,26 @@ class OfficialElrsService(private val context: Context) {
             "Unified_ESP8285_"
         private const val TARGETS_ENTRY =
             "firmware/hardware/targets.json"
+
+        private fun regulatoryOptionsFor(category: String): List<String> {
+            return when (category) {
+                "rx_2400", "tx_2400" -> listOf(
+                    "ISM_2400",
+                    "EU_CE_2400",
+                )
+                "rx_900", "tx_900" -> listOf(
+                    "FCC_915",
+                    "AU_915",
+                    "EU_868",
+                    "IN_866",
+                    "AU_433",
+                    "EU_433",
+                    "US_433",
+                    "US_433_WIDE",
+                )
+                else -> emptyList()
+            }
+        }
     }
 
     data class ReleaseInfo(
@@ -66,7 +86,7 @@ class OfficialElrsService(private val context: Context) {
             "uploadMethods" to uploadMethods,
             "priorTargetName" to priorTargetName,
             "features" to features,
-            "regulatoryOptions" to regulatoryOptions(category),
+            "regulatoryOptions" to regulatoryOptionsFor(category),
             "targetsSha256" to targetsSha256,
             "hardwarePinned" to true,
         )
@@ -375,7 +395,7 @@ class OfficialElrsService(private val context: Context) {
             val stableCompatible =
                 minVersion == null || versionAtLeast(stableVersion, minVersion)
             val supportsUart = methods.contains("uart")
-            val domainOptions = regulatoryOptions(category)
+            val domainOptions = regulatoryOptionsFor(category)
             val studioSupported =
                 platform == "esp8285" &&
                     firmware.startsWith(EXPECTED_FIRMWARE_8285_PREFIX) &&
@@ -530,28 +550,8 @@ class OfficialElrsService(private val context: Context) {
         }
     }
 
-    private fun regulatoryOptions(category: String): List<String> {
-        return when (category) {
-            "rx_2400", "tx_2400" -> listOf(
-                "ISM_2400",
-                "EU_CE_2400",
-            )
-            "rx_900", "tx_900" -> listOf(
-                "FCC_915",
-                "AU_915",
-                "EU_868",
-                "IN_866",
-                "AU_433",
-                "EU_433",
-                "US_433",
-                "US_433_WIDE",
-            )
-            else -> emptyList()
-        }
-    }
-
     private fun validateRegulatoryDomain(category: String, domain: String) {
-        if (!regulatoryOptions(category).contains(domain)) {
+        if (!regulatoryOptionsFor(category).contains(domain)) {
             error("Регион $domain не подходит для $category")
         }
     }
