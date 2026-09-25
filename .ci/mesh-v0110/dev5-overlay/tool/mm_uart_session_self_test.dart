@@ -68,6 +68,16 @@ final class FakeFirmware {
           'crcReject': true,
           'result': 'PASS',
         });
+      case MmUartFrameType.enterOta:
+        _response(frame.sequence, {
+          'ssid': 'MM-OTA-TEST',
+          'password': '12345678',
+          'url': 'http://10.0.0.1',
+        });
+      case MmUartFrameType.exitOta:
+        _response(frame.sequence, {'ok': true});
+      case MmUartFrameType.reboot:
+        _response(frame.sequence, {'accepted': true});
       case MmUartFrameType.send:
         tx++;
         emit(
@@ -134,6 +144,14 @@ Future<void> main() async {
   }
   final compat = await session.compatSelftest();
   if (compat['result'] != 'PASS') throw StateError('compat selftest failed');
+  final refreshed = await session.refreshInfoAndCapabilities();
+  if (refreshed.info?.radioFamily != 'SX1280' ||
+      refreshed.capabilities?.supportsMmrp != true) {
+    throw StateError('refresh info/caps failed');
+  }
+  final ota = await session.enterOta();
+  if (ota['ssid'] != 'MM-OTA-TEST') throw StateError('ENTER_OTA failed');
+  await session.exitOta();
 
   final send = await session.send(
     messageId: 'm-1',
