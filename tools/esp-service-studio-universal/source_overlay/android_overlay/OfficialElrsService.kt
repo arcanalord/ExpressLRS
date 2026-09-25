@@ -68,6 +68,7 @@ class OfficialElrsService(private val context: Context) {
             "features" to features,
             "regulatoryOptions" to regulatoryOptions(category),
             "targetsSha256" to targetsSha256,
+            "hardwarePinned" to true,
         )
     }
 
@@ -99,6 +100,7 @@ class OfficialElrsService(private val context: Context) {
                 "source" to "ExpressLRS firmware.zip / hardware",
                 "targetCount" to targets.size,
                 "targetsSha256" to sha256(targetsBytes),
+                "hardwarePinned" to true,
                 "targets" to targets,
             )
         } catch (e: Exception) {
@@ -252,6 +254,7 @@ class OfficialElrsService(private val context: Context) {
                 "manifestPath" to manifestFile.absolutePath,
                 "targetsSha256" to catalog.targetsSha256,
                 "layoutSha256" to sha256(layoutBytes),
+                "hardwarePinned" to true,
                 "readyToFlash" to true,
             )
         } catch (e: Exception) {
