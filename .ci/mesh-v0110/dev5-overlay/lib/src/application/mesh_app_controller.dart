@@ -126,6 +126,7 @@ final class MeshAppController extends ChangeNotifier {
   String? ep2OtaSsid;
   String? ep2OtaPassword;
   String? ep2OtaUrl;
+  String? ep2OtaNotice;
   String ep2DetectedProtocol = 'unknown';
   int ep2RxBytes = 0;
   int ep2TxBytes = 0;
@@ -1033,6 +1034,20 @@ final class MeshAppController extends ChangeNotifier {
     ep2Protocol = 'unknown';
     ep2Baud = null;
     ep2PingResult = null;
+    ep2LocalNode = null;
+    ep2Firmware = null;
+    ep2Profile = null;
+    ep2Rssi10 = null;
+    ep2Snr10 = null;
+    ep2RttMs = null;
+    ep2TxCount = null;
+    ep2RxCount = null;
+    ep2LossCount = null;
+    ep2RetryCount = null;
+    ep2OtaSsid = null;
+    ep2OtaPassword = null;
+    ep2OtaUrl = null;
+    ep2OtaNotice = null;
     notifyListeners();
     try {
       _addEp2Log('AUTO USB device=$deviceId');
@@ -1057,8 +1072,18 @@ final class MeshAppController extends ChangeNotifier {
   Future<void> refreshEp2Info() async {
     final ep2 = _ep2;
     if (ep2 == null || !ep2Connected) return;
-    await ep2.requestInfo();
-    await ep2.requestStats();
+    ep2Error = null;
+    _addEp2Log('INFO / STATS requested');
+    notifyListeners();
+    try {
+      await ep2.requestInfo();
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await ep2.requestStats();
+    } catch (error) {
+      ep2Error = '$error';
+      _addEp2Log('INFO / STATS ERROR $error');
+      notifyListeners();
+    }
   }
 
   Future<void> pingEp2Neighbor() async {
@@ -1087,11 +1112,16 @@ final class MeshAppController extends ChangeNotifier {
     ep2OtaSsid = null;
     ep2OtaPassword = null;
     ep2OtaUrl = null;
+    ep2OtaNotice = 'Команда отправляется…';
     _addEp2Log('WIFI_UPDATE requested');
     notifyListeners();
     try {
       await ep2.startWifiUpdate();
+      ep2OtaNotice =
+          'Команда отправлена. Подождите 2–3 с и проверьте Wi‑Fi сеть EP2-OTA-N${ep2LocalNode ?? 'X'}-….';
+      notifyListeners();
     } catch (error) {
+      ep2OtaNotice = null;
       ep2Error = '$error';
       _addEp2Log('WIFI_UPDATE ERROR $error');
       notifyListeners();
@@ -1128,6 +1158,16 @@ final class MeshAppController extends ChangeNotifier {
         ep2Protocol = 'unknown';
         ep2Baud = null;
         ep2PingResult = null;
+        ep2LocalNode = null;
+        ep2Firmware = null;
+        ep2Profile = null;
+        ep2Rssi10 = null;
+        ep2Snr10 = null;
+        ep2RttMs = null;
+        ep2TxCount = null;
+        ep2RxCount = null;
+        ep2LossCount = null;
+        ep2RetryCount = null;
       }
       _addEp2Log(
         'STATE ${event.state}${event.error == null ? '' : ' | ${event.error}'}',
@@ -1189,6 +1229,7 @@ final class MeshAppController extends ChangeNotifier {
       ep2OtaSsid = event.ssid;
       ep2OtaPassword = event.password;
       ep2OtaUrl = event.url;
+      ep2OtaNotice = 'Wi‑Fi обновление запущено.';
       _addEp2Log('OTA READY ' + event.ssid + ' ' + event.url);
       notifyListeners();
       return;
