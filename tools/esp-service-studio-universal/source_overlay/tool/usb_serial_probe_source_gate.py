@@ -24,7 +24,7 @@ device_profiles = Path(
 ).read_text(encoding='utf-8')
 
 checks = {
-    'visible alpha7 id': 'v0.9.0-alpha.7 · Pixel 7a' in main,
+    'visible alpha8 id': 'v0.9.0-alpha.8 · Pixel 7a' in main,
     'real probe button': 'probeEspRom' in main,
     'permission request': 'requestPermission' in native,
     'permission result': 'ACTION_USB_PERMISSION' in native,
@@ -40,15 +40,17 @@ checks = {
     'jitpack': 'https://jitpack.io' in root_gradle,
     'USB attach manifest': 'USB_DEVICE_ATTACHED' in manifest,
     'official ELRS latest release': 'releases/latest' in elrs,
-    'generic ELRS target guard': 'fetchCatalog(' in elrs and 'validateSpec(' in elrs,
+    'dynamic official catalog': 'fetchCatalogIndex()' in elrs and 'collectTargets(' in elrs,
+    'generic ELRS target guard': 'fetchCatalog(' in elrs and 'validateTargetPath(' in elrs,
     'official cache': 'artifactory.expresslrs.org' in elrs,
     'prepare not flash': 'readyToFlash' in elrs and 'writeOffset' in elrs,
     'internet permission': 'android.permission.INTERNET' in manifest,
-    'BETAFPV Nano profile': 'BETAFPV 2.4GHz Nano RX' in device_profiles,
-    'BETAFPV official target path': 'betafpv.rx_2400.nano' in device_profiles,
-    'EP2 official target path': 'happymodel.rx_2400.ep' in device_profiles,
+    'no hardcoded ELRS profiles': '"elrs"' not in device_profiles,
+    'dynamic target UI': 'Официальные ExpressLRS приёмники' in main,
+    'dynamic search UI': 'Поиск модели' in main,
+    'MCU filtering': '_detectedPlatform' in main and '_filteredTargets' in main,
+    'catalog method channel': 'fetchOfficialElrsCatalogIndex' in native,
     'no forced EP2 default': 'selected ??= p.isEmpty ? null : p.first' not in main,
-    'manual target warning': 'ROM ESP8285 сам по себе' in main,
 }
 
 failed = [name for name, ok in checks.items() if not ok]
@@ -57,4 +59,4 @@ if failed:
         'USB serial probe source gate failed: ' + ', '.join(failed)
     )
 
-print('USB serial + ESP8285 + ELRS multi-target source gate PASS')
+print('USB serial + dynamic ELRS catalog source gate PASS')
