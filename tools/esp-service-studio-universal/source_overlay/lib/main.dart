@@ -14,89 +14,6 @@ class ServiceStudioApp extends StatelessWidget {
   const ServiceStudioApp({super.key});
 
 
-  Future<void> _flashPreparedEsp8285() async {
-    final device = usbDevices.firstOrNull;
-    final target = selectedElrsTarget;
-    final prepared = preparedElrs;
-
-    if (device == null ||
-        target == null ||
-        prepared == null ||
-        !prepared.ok ||
-        prepared.manifestPath == null ||
-        prepared.sha256 == null ||
-        flashingEsp) {
-      return;
-    }
-
-    final chip = probeResult?.chipDescription ?? '';
-    if (!chip.startsWith('ESP8285')) {
-      setState(() {
-        flashResult = const EspFlashResult(
-          status: 'flash_error',
-          message: 'Перед записью нужно определить ESP8285 через ROM.',
-        );
-      });
-      return;
-    }
-
-    final approved = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Записать прошивку?'),
-        content: Text(
-          'Модель: ${target.productName}\n'
-          'Target: ${target.targetPath}\n'
-          'Версия: ${prepared.version ?? '-'}\n'
-          'Регион: ${prepared.regulatoryProfile ?? '-'}\n'
-          'Адрес: ${prepared.writeOffset ?? '0x0'}\n'
-          'Размер: ${prepared.fileSize ?? 0} Б\n\n'
-          'Во время записи не отключайте питание и USB. '
-          'Проверка alpha.9 подтверждает каждый блок ROM, '
-          'но полный readback содержимого пока не выполняется.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Записать'),
-          ),
-        ],
-      ),
-    );
-
-    if (approved != true || !mounted) return;
-
-    setState(() {
-      flashingEsp = true;
-      flashResult = null;
-    });
-
-    try {
-      final result = await _usb.flashPreparedEsp8285(
-        deviceName: device.deviceName,
-        manifestPath: prepared.manifestPath!,
-        expectedTargetPath: target.targetPath,
-        expectedSha256: prepared.sha256!,
-      );
-      if (!mounted) return;
-      setState(() => flashResult = result);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        flashResult = EspFlashResult(
-          status: 'flash_error',
-          message: 'Ошибка записи: $e',
-        );
-      });
-    } finally {
-      if (mounted) setState(() => flashingEsp = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -427,6 +344,89 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       });
     } finally {
       if (mounted) setState(() => preparingElrs = false);
+    }
+  }
+
+  Future<void> _flashPreparedEsp8285() async {
+    final device = usbDevices.firstOrNull;
+    final target = selectedElrsTarget;
+    final prepared = preparedElrs;
+
+    if (device == null ||
+        target == null ||
+        prepared == null ||
+        !prepared.ok ||
+        prepared.manifestPath == null ||
+        prepared.sha256 == null ||
+        flashingEsp) {
+      return;
+    }
+
+    final chip = probeResult?.chipDescription ?? '';
+    if (!chip.startsWith('ESP8285')) {
+      setState(() {
+        flashResult = const EspFlashResult(
+          status: 'flash_error',
+          message: 'Перед записью нужно определить ESP8285 через ROM.',
+        );
+      });
+      return;
+    }
+
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Записать прошивку?'),
+        content: Text(
+          'Модель: ${target.productName}\n'
+          'Target: ${target.targetPath}\n'
+          'Версия: ${prepared.version ?? '-'}\n'
+          'Регион: ${prepared.regulatoryProfile ?? '-'}\n'
+          'Адрес: ${prepared.writeOffset ?? '0x0'}\n'
+          'Размер: ${prepared.fileSize ?? 0} Б\n\n'
+          'Во время записи не отключайте питание и USB. '
+          'Проверка alpha.9 подтверждает каждый блок ROM, '
+          'но полный readback содержимого пока не выполняется.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Записать'),
+          ),
+        ],
+      ),
+    );
+
+    if (approved != true || !mounted) return;
+
+    setState(() {
+      flashingEsp = true;
+      flashResult = null;
+    });
+
+    try {
+      final result = await _usb.flashPreparedEsp8285(
+        deviceName: device.deviceName,
+        manifestPath: prepared.manifestPath!,
+        expectedTargetPath: target.targetPath,
+        expectedSha256: prepared.sha256!,
+      );
+      if (!mounted) return;
+      setState(() => flashResult = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        flashResult = EspFlashResult(
+          status: 'flash_error',
+          message: 'Ошибка записи: $e',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => flashingEsp = false);
     }
   }
 
