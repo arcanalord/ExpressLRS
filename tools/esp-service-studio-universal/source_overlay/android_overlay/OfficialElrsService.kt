@@ -1,16 +1,14 @@
 package com.arcanalord.service_studio
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.zip.ZipInputStream
+import java.util.zip.ZipFile
 
 class OfficialElrsService(private val context: Context) {
     companion object {
@@ -18,15 +16,18 @@ class OfficialElrsService(private val context: Context) {
             "https://api.github.com/repos/ExpressLRS/ExpressLRS/releases/latest"
         private const val COMMITS_API =
             "https://api.github.com/repos/ExpressLRS/ExpressLRS/commits/"
-        private const val TARGETS_URL =
-            "https://raw.githubusercontent.com/ExpressLRS/Targets/master/targets.json"
-        private const val TARGETS_RAW_BASE =
-            "https://raw.githubusercontent.com/ExpressLRS/Targets/master"
         private const val CACHE_BASE =
             "https://artifactory.expresslrs.org/ExpressLRS"
         private const val EXPECTED_FIRMWARE_8285_PREFIX =
             "Unified_ESP8285_"
     }
+
+    data class ReleaseInfo(
+        val version: String,
+        val releaseName: String,
+        val publishedAt: String?,
+        val commitSha: String,
+    )
 
     data class Catalog(
         val version: String,
@@ -34,6 +35,7 @@ class OfficialElrsService(private val context: Context) {
         val publishedAt: String?,
         val commitSha: String,
         val targetPath: String,
+        val category: String,
         val productName: String,
         val luaName: String,
         val platform: String,
@@ -42,6 +44,7 @@ class OfficialElrsService(private val context: Context) {
         val minVersion: String?,
         val uploadMethods: List<String>,
         val priorTargetName: String?,
+        val features: List<String>,
     ) {
         fun asMap(): Map<String, Any?> = mapOf(
             "status" to "ok",
@@ -50,6 +53,7 @@ class OfficialElrsService(private val context: Context) {
             "publishedAt" to publishedAt,
             "commitSha" to commitSha,
             "targetPath" to targetPath,
+            "category" to category,
             "productName" to productName,
             "luaName" to luaName,
             "platform" to platform,
@@ -58,6 +62,8 @@ class OfficialElrsService(private val context: Context) {
             "minVersion" to minVersion,
             "uploadMethods" to uploadMethods,
             "priorTargetName" to priorTargetName,
+            "features" to features,
+            "regulatoryOptions" to regulatoryOptions(category),
         )
     }
 
