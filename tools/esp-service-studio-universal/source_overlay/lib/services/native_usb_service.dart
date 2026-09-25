@@ -480,6 +480,7 @@ class NativeUsbService {
     required String expectedProductName,
     required String expectedPlatform,
     required String expectedFirmware,
+    required String expectedCommitSha,
   }) async {
     final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
           'fetchOfficialElrsTarget',
@@ -488,6 +489,7 @@ class NativeUsbService {
             'expectedProductName': expectedProductName,
             'expectedPlatform': expectedPlatform,
             'expectedFirmware': expectedFirmware,
+            'expectedCommitSha': expectedCommitSha,
           },
         ) ??
         const <dynamic, dynamic>{};
@@ -499,6 +501,7 @@ class NativeUsbService {
     required String expectedProductName,
     required String expectedPlatform,
     required String expectedFirmware,
+    required String expectedCommitSha,
     required String regulatoryDomain,
     String? bindingPhrase,
     String? wifiSsid,
@@ -514,6 +517,7 @@ class NativeUsbService {
             'expectedProductName': expectedProductName,
             'expectedPlatform': expectedPlatform,
             'expectedFirmware': expectedFirmware,
+            'expectedCommitSha': expectedCommitSha,
             'regulatoryDomain': regulatoryDomain,
             'bindingPhrase': bindingPhrase,
             'wifiSsid': wifiSsid,
