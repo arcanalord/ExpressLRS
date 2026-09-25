@@ -651,6 +651,13 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                   setState(() {
                     lockMode = value;
                     preparedElrs = null;
+                    flashResult = null;
+                  });
+                },
+                onOptionsChanged: () {
+                  setState(() {
+                    preparedElrs = null;
+                    flashResult = null;
                   });
                 },
                 flashing: flashingEsp,
@@ -707,6 +714,14 @@ class _DynamicElrsTargetSection extends StatelessWidget {
     required this.regulatoryProfile,
     required this.onRegulatoryChanged,
     required this.onPrepare,
+    required this.bindingPhrase,
+    required this.wifiSsid,
+    required this.wifiPassword,
+    required this.autoWifiSeconds,
+    required this.rxBaud,
+    required this.lockMode,
+    required this.onLockModeChanged,
+    required this.onOptionsChanged,
     required this.flashing,
     required this.flashResult,
     required this.onFlash,
@@ -720,29 +735,51 @@ class _DynamicElrsTargetSection extends StatelessWidget {
   final String? regulatoryProfile;
   final ValueChanged<String?> onRegulatoryChanged;
   final Future<void> Function() onPrepare;
+  final TextEditingController bindingPhrase;
+  final TextEditingController wifiSsid;
+  final TextEditingController wifiPassword;
+  final TextEditingController autoWifiSeconds;
+  final TextEditingController rxBaud;
+  final String lockMode;
+  final ValueChanged<String> onLockModeChanged;
+  final VoidCallback onOptionsChanged;
   final bool flashing;
   final EspFlashResult? flashResult;
   final Future<void> Function() onFlash;
 
   @override
   Widget build(BuildContext context) {
+    final regions = catalog?.regulatoryOptions.isNotEmpty == true
+        ? catalog!.regulatoryOptions
+        : target.regulatoryOptions;
+    final hasWifi = target.uploadMethods.contains('wifi');
+    final pinned = catalog?.commitSha != null;
+
     return _Section(
-      title: 'Выбранный ELRS target',
+      title: '3. Настройки и прошивка',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _DiagLine('Модель', target.productName),
-          _DiagLine('Target', target.targetPath),
           _DiagLine('Платформа', target.platform),
           _DiagLine('Диапазон', target.band),
-          _DiagLine('Прошивка', target.firmware),
+          _DiagLine('Версия', catalog?.version ?? '-'),
           _DiagLine('Методы', target.uploadMethods.join(', ')),
+          if (pinned)
+            const Padding(
+              padding: EdgeInsets.only(top: 4, bottom: 8),
+              child: Text(
+                'Прошивка, target и layout взяты из одного version-pinned '
+                'официального пакета ExpressLRS.',
+                style: TextStyle(color: Colors.greenAccent),
+              ),
+            ),
           if (!target.studioSupported)
             const Padding(
               padding: EdgeInsets.only(top: 8),
               child: Text(
-                'Target есть в официальном каталоге, но автоматическая подготовка '
-                'для этого семейства контроллера пока не включена.',
+                'Эта модель есть в официальном каталоге, но автоматическая '
+                'запись для её контроллера пока не включена.',
                 style: TextStyle(color: Colors.orangeAccent),
               ),
             ),
@@ -753,27 +790,120 @@ class _DynamicElrsTargetSection extends StatelessWidget {
           if (catalog != null && !catalog!.ok)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(catalog!.message ?? 'Ошибка проверки target'),
+              child: Text(catalog!.message ?? 'Ошибка проверки модели'),
             ),
           if (catalog?.ok == true && target.studioSupported) ...[
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
+              key: ValueKey(
+                'region-${target.targetPath}-${regulatoryProfile ?? 'none'}',
+              ),
               initialValue: regulatoryProfile,
               decoration: const InputDecoration(
-                labelText: 'Радиорегион прошивки',
+                labelText: 'Радиорегион',
                 border: OutlineInputBorder(),
               ),
-              items: const [
-                DropdownMenuItem(
-                  value: 'FCC',
-                  child: Text('FCC / обычный профиль'),
+              items: regions
+                  .map(
+                    (id) => DropdownMenuItem(
+                      value: id,
+                      child: Text(_regionLabel(id)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: onRegulatoryChanged,
+            ),
+            const SizedBox(height: 8),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 8),
+              title: const Text('Дополнительные настройки'),
+              subtitle: const Text(
+                'Необязательно. Оставьте пустым, если менять не нужно.',
+                style: TextStyle(fontSize: 12),
+              ),
+              children: [
+                TextField(
+                  controller: bindingPhrase,
+                  onChanged: (_) => onOptionsChanged(),
+                  decoration: const InputDecoration(
+                    labelText: 'Binding phrase',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-                DropdownMenuItem(
-                  value: 'LBT',
-                  child: Text('LBT / Listen Before Talk'),
+                if (hasWifi) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: wifiSsid,
+                    onChanged: (_) => onOptionsChanged(),
+                    decoration: const InputDecoration(
+                      labelText: 'Wi-Fi SSID',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: wifiPassword,
+                    obscureText: true,
+                    onChanged: (_) => onOptionsChanged(),
+                    decoration: const InputDecoration(
+                      labelText: 'Пароль Wi-Fi',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: autoWifiSeconds,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => onOptionsChanged(),
+                    decoration: const InputDecoration(
+                      labelText: 'Запуск Wi-Fi через, секунд',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                TextField(
+                  controller: rxBaud,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => onOptionsChanged(),
+                  decoration: const InputDecoration(
+                    labelText: 'UART приёмника, бод',
+                    hintText: 'Например 420000',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: lockMode,
+                  decoration: const InputDecoration(
+                    labelText: 'Фиксация режима после первого соединения',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'default',
+                      child: Text('Не менять'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'on',
+                      child: Text('Включить'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'off',
+                      child: Text('Выключить'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) onLockModeChanged(value);
+                  },
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Binding phrase и пароль Wi-Fi не выводятся в журнал.',
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
                 ),
               ],
-              onChanged: onRegulatoryChanged,
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -788,7 +918,7 @@ class _DynamicElrsTargetSection extends StatelessWidget {
               label: Text(
                 preparing
                     ? 'Готовлю firmware.bin…'
-                    : 'Подготовить firmware.bin',
+                    : 'Подготовить прошивку',
               ),
             ),
           ],
@@ -800,10 +930,14 @@ class _DynamicElrsTargetSection extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               _DiagLine('Версия', prepared!.version ?? '-'),
-              _DiagLine('Регион', prepared!.regulatoryProfile ?? '-'),
+              _DiagLine('Регион', _regionLabel(
+                prepared!.regulatoryProfile ?? '-',
+              )),
               _DiagLine('Адрес', prepared!.writeOffset ?? '-'),
               _DiagLine('Размер', '${prepared!.fileSize ?? 0} Б'),
               _DiagLine('SHA-256', prepared!.sha256 ?? '-'),
+              if (prepared!.hardwarePinned)
+                const _DiagLine('Пакет', 'firmware + hardware одной версии'),
               const SizedBox(height: 8),
               FilledButton.icon(
                 onPressed: flashing ? null : onFlash,
@@ -814,9 +948,7 @@ class _DynamicElrsTargetSection extends StatelessWidget {
                       )
                     : const Icon(Icons.memory),
                 label: Text(
-                  flashing
-                      ? 'Записываю в ESP8285…'
-                      : 'Записать в ESP8285',
+                  flashing ? 'Записываю…' : 'Записать в контроллер',
                 ),
               ),
             ] else
@@ -857,7 +989,8 @@ class _DynamicElrsTargetSection extends StatelessWidget {
                     ),
                     if (flashResult!.needsPowerCycle)
                       const Text(
-                        'Теперь отключите питание, уберите BOOT→GND и включите приёмник обычно.',
+                        'Отключите питание, уберите BOOT→GND и включите '
+                        'приёмник обычным способом.',
                         style: TextStyle(color: Colors.greenAccent),
                       ),
                   ],
@@ -868,6 +1001,33 @@ class _DynamicElrsTargetSection extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+String _regionLabel(String id) {
+  switch (id) {
+    case 'FCC':
+      return '2.4 ГГц — обычный профиль';
+    case 'LBT':
+      return '2.4 ГГц — EU CE / LBT';
+    case 'FCC_915':
+      return '915 МГц — FCC';
+    case 'AU_915':
+      return '915 МГц — Австралия';
+    case 'EU_868':
+      return '868 МГц — Европа';
+    case 'IN_866':
+      return '866 МГц — Индия';
+    case 'US_433':
+      return '433 МГц — США';
+    case 'US_433_WIDE':
+      return '433 МГц — США, wide';
+    case 'EU_433':
+      return '433 МГц — Европа';
+    case 'AU_433':
+      return '433 МГц — Австралия';
+    default:
+      return id;
   }
 }
 
