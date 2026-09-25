@@ -30,6 +30,7 @@ void main() {
     profileId: 'EP2-LORA-LAB-01',
     firmwareVersion: 'EP2-LINK-0.2.0',
     nodeId: 1,
+    capabilities: ['text', 'link_stats', 'wifi_ota'],
     evidence: [
       DeviceRecognitionEvidence(
         source: 'info',
@@ -43,6 +44,7 @@ void main() {
     confirmed.protocol == DeviceHostProtocol.ep2LinkAscii,
     'protocol mapping',
   );
+  expect(confirmed.capabilities.contains('wifi_ota'), 'capabilities mapping');
 
   print('DEVICE_RECOGNITION_SELF_TEST_PASS');
 }
