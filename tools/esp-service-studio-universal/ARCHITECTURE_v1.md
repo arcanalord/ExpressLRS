@@ -70,3 +70,9 @@ Before any write:
 ## 9. Storage
 Dropbox = user-facing source of truth for releases, architecture, handoffs.
 GitHub = build/CI workspace.
+
+## 10. Current platform scope
+Current test builds are Android arm64 only, targeted at the user's Pixel 7a.
+Do not spend work on Windows/Linux/Web packaging yet. Cross-platform support stays an architectural goal for later.
+
+USB device state must update live on attach/detach and refresh when the app returns to foreground.
