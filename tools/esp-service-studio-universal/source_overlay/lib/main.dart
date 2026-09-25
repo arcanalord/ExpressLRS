@@ -230,45 +230,47 @@ class _ServiceHomePageState extends State<ServiceHomePage> with WidgetsBindingOb
     );
   }
 
-  String _serviceLabel(String raw) {
-    switch (raw) {
-      case 'register_service':
-        return 'настройка и диагностика по SPI';
-      case 'microcode_if_supported':
-        return 'обновление микрокода, если поддерживается';
-      case 'capability_driven':
-        return 'по возможностям устройства';
-      case 'probe_first':
-        return 'сначала безопасное определение';
-      default:
-        return raw;
-    }
-  }
 
-  String _accessLabel(String raw) {
-    switch (raw) {
-      case 'controller_spi_or_service_bridge':
-        return 'через контроллер или Service Bridge';
-      case 'service_bridge_spi':
-        return 'через ESP32-S3 Service Bridge';
-      default:
-        return raw;
-    }
-  }
+}
 
-  String _protocolLabel(String raw) {
-    switch (raw) {
-      case 'ep2_link_ascii':
-        return 'EP2 LINK';
-      case 'crsf_diagnostics':
-        return 'CRSF (диагностика)';
-      case 'mm_uart_1':
-        return 'MM-UART/1';
-      case 'ss_bridge_1':
-        return 'SS-BRIDGE/1';
-      default:
-        return raw;
-    }
+String _serviceLabel(String raw) {
+  switch (raw) {
+    case 'register_service':
+      return 'настройка и диагностика по SPI';
+    case 'microcode_if_supported':
+      return 'обновление микрокода, если поддерживается';
+    case 'capability_driven':
+      return 'по возможностям устройства';
+    case 'probe_first':
+      return 'сначала безопасное определение';
+    default:
+      return raw;
+  }
+}
+
+String _accessLabel(String raw) {
+  switch (raw) {
+    case 'controller_spi_or_service_bridge':
+      return 'через контроллер или Service Bridge';
+    case 'service_bridge_spi':
+      return 'через ESP32-S3 Service Bridge';
+    default:
+      return raw;
+  }
+}
+
+String _protocolLabel(String raw) {
+  switch (raw) {
+    case 'ep2_link_ascii':
+      return 'EP2 LINK';
+    case 'crsf_diagnostics':
+      return 'CRSF (диагностика)';
+    case 'mm_uart_1':
+      return 'MM-UART/1';
+    case 'ss_bridge_1':
+      return 'SS-BRIDGE/1';
+    default:
+      return raw;
   }
 }
 
