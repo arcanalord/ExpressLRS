@@ -159,7 +159,11 @@ class UsbSerialProbe(private val context: Context) {
             val platform = manifest.getString("platform")
             val firmwareFamily = manifest.getString("firmware")
             val hardwareSource = manifest.optString("hardwareSource")
-            val region = manifest.getString("regulatoryProfile")
+            val region = if (manifest.has("regulatoryDomain")) {
+                manifest.getString("regulatoryDomain")
+            } else {
+                manifest.optString("regulatoryProfile")
+            }
             val offsetText = manifest.getString("writeOffset")
             val fileName = manifest.getString("fileName")
             val declaredSize = manifest.getLong("fileSize")
@@ -296,7 +300,7 @@ class UsbSerialProbe(private val context: Context) {
                     "targetPath" to targetPath,
                     "productName" to productName,
                     "version" to manifest.optString("version"),
-                    "regulatoryProfile" to region,
+                    "regulatoryDomain" to region,
                     "chipDescription" to chipDescription,
                     "flashId" to "0x%06X".format(flashId and 0xFFFFFFL),
                     "flashSize" to flashSizeText,
