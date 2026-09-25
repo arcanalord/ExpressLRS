@@ -33,7 +33,7 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          sed -i 's/^version: .*/version: 0.1.10-dev.8-r2+26092501/' "$APP_DIR/pubspec.yaml"
+          sed -i 's/^version: .*/version: 0.1.10-dev.10-r1+26092503/' "$APP_DIR/pubspec.yaml"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
@@ -125,15 +125,15 @@ jobs:
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.10-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.10-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.10.txt
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.10-r1-arm64-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.10-r1-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.10-r1.txt
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.10-dev.10-arm64-debug
+          name: MeshMessenger-Flutter-v0.1.10-dev.10-r1-arm64-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.10-dev.10-arm64-debug.apk
-            /tmp/SHA256SUM-v0.1.10-dev.10.txt
+            /tmp/MeshMessenger-Flutter-v0.1.10-dev.10-r1-arm64-debug.apk
+            /tmp/SHA256SUM-v0.1.10-dev.10-r1.txt
           if-no-files-found: error
           retention-days: 14
