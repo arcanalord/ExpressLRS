@@ -265,20 +265,41 @@ class NativeUsbService {
     );
   }
 
-  Future<ElrsCatalogResult> fetchOfficialElrsEp2() async {
+  Future<ElrsCatalogResult> fetchOfficialElrsTarget({
+    required String targetPath,
+    required String expectedProductName,
+    required String expectedPlatform,
+    required String expectedFirmware,
+  }) async {
     final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
-          'fetchOfficialElrsEp2',
+          'fetchOfficialElrsTarget',
+          <String, Object?>{
+            'targetPath': targetPath,
+            'expectedProductName': expectedProductName,
+            'expectedPlatform': expectedPlatform,
+            'expectedFirmware': expectedFirmware,
+          },
         ) ??
         const <dynamic, dynamic>{};
     return ElrsCatalogResult.fromMap(raw.cast<Object?, Object?>());
   }
 
-  Future<ElrsPreparedFirmware> prepareOfficialElrsEp2({
+  Future<ElrsPreparedFirmware> prepareOfficialElrsTarget({
+    required String targetPath,
+    required String expectedProductName,
+    required String expectedPlatform,
+    required String expectedFirmware,
     required String regulatoryProfile,
   }) async {
     final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
-          'prepareOfficialElrsEp2',
-          <String, Object?>{'regulatoryProfile': regulatoryProfile},
+          'prepareOfficialElrsTarget',
+          <String, Object?>{
+            'targetPath': targetPath,
+            'expectedProductName': expectedProductName,
+            'expectedPlatform': expectedPlatform,
+            'expectedFirmware': expectedFirmware,
+            'regulatoryProfile': regulatoryProfile,
+          },
         ) ??
         const <dynamic, dynamic>{};
     return ElrsPreparedFirmware.fromMap(raw.cast<Object?, Object?>());
