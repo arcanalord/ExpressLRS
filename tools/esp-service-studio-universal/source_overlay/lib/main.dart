@@ -6,7 +6,7 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.6 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.7 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
@@ -127,7 +127,10 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       setState(() {
         profiles = p;
         usbDevices = u;
-        selected ??= p.isEmpty ? null : p.first;
+        final selectedId = selected?.id;
+        selected = selectedId == null
+            ? null
+            : p.where((item) => item.id == selectedId).firstOrNull;
       });
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
@@ -163,6 +166,10 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       if (next.isEmpty) {
         probeResult = null;
         probing = false;
+        selected = null;
+        elrsCatalog = null;
+        preparedElrs = null;
+        regulatoryProfile = null;
       }
     });
   }
@@ -340,14 +347,27 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                   regulatoryProfile = null;
                 }),
                 decoration: const InputDecoration(
-                  labelText: 'Профиль устройства',
+                  labelText: 'Модель / профиль устройства',
+                  hintText: 'Выберите плату после определения контроллера',
                   border: OutlineInputBorder(),
                 ),
               ),
             ),
+            if (profile == null)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 14),
+                child: Text(
+                  'ESP ROM определяет контроллер, но не всегда модель приёмника. '
+                  'Например, HappyModel EP1/EP2 и BETAFPV Nano используют ESP8285, '
+                  'поэтому для пустой платы модель выбирается отдельно.',
+                  style: TextStyle(color: Colors.white60),
+                ),
+              ),
             if (profile != null) _ProfileCard(profile: profile),
-            if (profile?.id == 'ep2_esp8285_sx1280')
+            if (profile?.elrsTargetPath != null)
               _OfficialElrsSection(
+                expectedProductName: profile!.elrsProductName ?? profile.name,
+                targetPath: profile.elrsTargetPath!,
                 catalog: elrsCatalog,
                 prepared: preparedElrs,
                 loading: loadingElrs,
@@ -363,7 +383,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 onPrepare: _prepareElrsFirmware,
               ),
             _Section(
-              title: profile?.id == 'ep2_esp8285_sx1280'
+              title: profile?.elrsTargetPath != null
                   ? '4. Действие'
                   : '3. Действие',
               child: Column(
@@ -437,12 +457,38 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
   Future<void> _fetchElrsCatalog() async {
     if (loadingElrs) return;
+
+    final profile = selected;
+    final elrs = profile?.elrs;
+    final targetPath = profile?.elrsTargetPath;
+    final productName = profile?.elrsProductName;
+    final platform = elrs?['platform']?.toString();
+    final firmware = elrs?['firmware']?.toString();
+
+    if (targetPath == null ||
+        productName == null ||
+        platform == null ||
+        firmware == null) {
+      setState(() {
+        elrsCatalog = const ElrsCatalogResult(
+          status: 'error',
+          message: 'Для выбранного профиля не задан официальный target ExpressLRS.',
+        );
+      });
+      return;
+    }
+
     setState(() {
       loadingElrs = true;
       preparedElrs = null;
     });
     try {
-      final result = await _usb.fetchOfficialElrsEp2();
+      final result = await _usb.fetchOfficialElrsTarget(
+        targetPath: targetPath,
+        expectedProductName: productName,
+        expectedPlatform: platform,
+        expectedFirmware: firmware,
+      );
       if (!mounted) return;
       setState(() => elrsCatalog = result);
     } catch (e) {
@@ -460,14 +506,32 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
   Future<void> _prepareElrsFirmware() async {
     final region = regulatoryProfile;
-    if (region == null || preparingElrs) return;
+    final profile = selected;
+    final elrs = profile?.elrs;
+    final targetPath = profile?.elrsTargetPath;
+    final productName = profile?.elrsProductName;
+    final platform = elrs?['platform']?.toString();
+    final firmware = elrs?['firmware']?.toString();
+
+    if (region == null ||
+        preparingElrs ||
+        targetPath == null ||
+        productName == null ||
+        platform == null ||
+        firmware == null) {
+      return;
+    }
 
     setState(() {
       preparingElrs = true;
       preparedElrs = null;
     });
     try {
-      final result = await _usb.prepareOfficialElrsEp2(
+      final result = await _usb.prepareOfficialElrsTarget(
+        targetPath: targetPath,
+        expectedProductName: productName,
+        expectedPlatform: platform,
+        expectedFirmware: firmware,
         regulatoryProfile: region,
       );
       if (!mounted) return;
@@ -498,6 +562,8 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
 class _OfficialElrsSection extends StatelessWidget {
   const _OfficialElrsSection({
+    required this.expectedProductName,
+    required this.targetPath,
     required this.catalog,
     required this.prepared,
     required this.loading,
@@ -508,6 +574,8 @@ class _OfficialElrsSection extends StatelessWidget {
     required this.onPrepare,
   });
 
+  final String expectedProductName;
+  final String targetPath;
   final ElrsCatalogResult? catalog;
   final ElrsPreparedFirmware? prepared;
   final bool loading;
@@ -524,10 +592,17 @@ class _OfficialElrsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text(
+            'Выбран профиль: $expectedProductName. '
+            'Официальный target: $targetPath. '
+            'Перед подготовкой программа сверит название платы, платформу и семейство прошивки '
+            'с текущим каталогом ExpressLRS.',
+          ),
+          const SizedBox(height: 8),
           const Text(
-            'Источник: официальный каталог ExpressLRS. '
-            'Программа проверяет, что target остался HappyModel EP1/EP2, '
-            'платформа ESP8285 и семейство Unified_ESP8285_2400_RX.',
+            'Важно: выбор модели платы сейчас ручной. ROM ESP8285 сам по себе '
+            'не отличает EP1/EP2 от BETAFPV Nano.',
+            style: TextStyle(color: Colors.white60),
           ),
           const SizedBox(height: 10),
           FilledButton.tonalIcon(
@@ -547,6 +622,7 @@ class _OfficialElrsSection extends StatelessWidget {
             if (catalog!.ok) ...[
               _DiagLine('Версия', catalog!.version ?? '-'),
               _DiagLine('Target', catalog!.productName ?? '-'),
+              _DiagLine('Путь', catalog!.targetPath ?? '-'),
               _DiagLine('Платформа', catalog!.platform ?? '-'),
               _DiagLine('Прошивка', catalog!.firmware ?? '-'),
               _DiagLine('Методы', catalog!.uploadMethods.join(', ')),
@@ -595,6 +671,7 @@ class _OfficialElrsSection extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 6),
+              _DiagLine('Плата', prepared!.productName ?? '-'),
               _DiagLine('Версия', prepared!.version ?? '-'),
               _DiagLine('Регион', prepared!.regulatoryProfile ?? '-'),
               _DiagLine('Адрес', prepared!.writeOffset ?? '-'),
@@ -857,6 +934,8 @@ class _ProfileCard extends StatelessWidget {
               radio['access']?.toString() ?? '-',
             ),
           ),
+          if (profile.elrsTargetPath != null)
+            _Line('ELRS target', profile.elrsTargetPath!),
           _Line(
             'Протоколы',
             profile.hostProtocols
