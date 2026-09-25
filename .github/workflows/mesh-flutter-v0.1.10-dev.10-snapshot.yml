@@ -1,0 +1,53 @@
+name: Mesh Messenger Flutter dev.10 snapshot
+
+on:
+  push:
+    branches:
+      - build/mesh-flutter-v0.1.10-dev.10
+    paths:
+      - '.github/workflows/mesh-flutter-v0.1.10-dev.10-snapshot.yml'
+      - '.ci/mesh-v0110/dev5-overlay/**'
+  workflow_dispatch:
+
+concurrency:
+  group: mesh-flutter-v0.1.10-dev.10-snapshot
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct exact current Flutter source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mesh-dev10
+          base64 -d .ci/mesh-v0110/source_v0110_dev3.zip.b64 > /tmp/mesh-dev10/source.zip
+          echo '38a92c9c3873239c7db9c472800e4229d60a8a539bbb964b057e03029eebcda4  /tmp/mesh-dev10/source.zip' | sha256sum -c -
+          unzip -q /tmp/mesh-dev10/source.zip -d /tmp/mesh-dev10/unpacked
+          ROOT="$(find /tmp/mesh-dev10/unpacked -maxdepth 1 -mindepth 1 -type d -name 'mesh_messenger_flutter_*' -print -quit)"
+          test -n "$ROOT"
+          APP_DIR="$ROOT/flutter_app"
+          cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
+          sed -i 's/^version: .*/version: 0.1.10-dev.10+26092502/' "$APP_DIR/pubspec.yaml"
+          test -s "$APP_DIR/lib/core/device_recognition.dart"
+          test -s "$APP_DIR/lib/platform/ep2_uart_transport.dart"
+          grep -q 'DeviceRecognitionSnapshot' "$APP_DIR/lib/core/device_recognition.dart"
+          grep -q 'connectAuto' "$APP_DIR/lib/platform/ep2_uart_transport.dart"
+          cd "$ROOT"
+          zip -qr /tmp/MeshMessenger-Flutter-v0.1.10-dev.10-current-source.zip .
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.10-current-source.zip > /tmp/SHA256SUM-dev10-source.txt
+
+      - name: Upload exact source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshMessenger-Flutter-v0.1.10-dev.10-current-source
+          path: |
+            /tmp/MeshMessenger-Flutter-v0.1.10-dev.10-current-source.zip
+            /tmp/SHA256SUM-dev10-source.txt
+          if-no-files-found: error
+          retention-days: 14
