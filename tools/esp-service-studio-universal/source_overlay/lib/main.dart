@@ -675,28 +675,40 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 onFlash: _flashPreparedEsp8285,
               ),
             _Section(
-              title: '3. Собственное / сервисное железо',
-              child: DropdownButtonFormField<DeviceProfile>(
-                key: ValueKey(selectedCustom?.id ?? 'custom-profile-empty'),
-                initialValue: selectedCustom,
-                isExpanded: true,
-                items: profiles
-                    .map(
-                      (p) => DropdownMenuItem(
-                        value: p,
-                        child: Text(
-                          p.name,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (p) => setState(() => selectedCustom = p),
-                decoration: const InputDecoration(
-                  labelText: 'Профиль Mesh / Service Bridge',
-                  hintText: 'Не нужен для обычного ELRS-приёмника',
-                  border: OutlineInputBorder(),
+              title: 'Расширенный сервис',
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(bottom: 8),
+                title: const Text('Mesh / Service Bridge / радиомодуль'),
+                subtitle: const Text(
+                  'Не нужен для обычной прошивки ExpressLRS.',
+                  style: TextStyle(fontSize: 12),
                 ),
+                children: [
+                  DropdownButtonFormField<DeviceProfile>(
+                    key: ValueKey(
+                      selectedCustom?.id ?? 'custom-profile-empty',
+                    ),
+                    initialValue: selectedCustom,
+                    isExpanded: true,
+                    items: profiles
+                        .map(
+                          (p) => DropdownMenuItem(
+                            value: p,
+                            child: Text(
+                              p.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (p) => setState(() => selectedCustom = p),
+                    decoration: const InputDecoration(
+                      labelText: 'Сервисный профиль',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ),
             ),
             if (selectedCustom != null)
