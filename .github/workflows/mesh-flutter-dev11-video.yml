@@ -85,11 +85,20 @@ jobs:
           APP_PID=$!
 
           for i in $(seq 1 40); do
-            WIN="$(xdotool search --name 'Mesh Messenger' 2>/dev/null | head -n1 || true)"
+            WIN="$(xdotool search --pid "$APP_PID" 2>/dev/null | head -n1 || true)"
+            if [ -z "$WIN" ]; then
+              WIN="$(xdotool search --name 'mesh_messenger_flutter|Mesh Messenger' 2>/dev/null | head -n1 || true)"
+            fi
             [ -n "$WIN" ] && break
             sleep 0.5
           done
-          test -n "${WIN:-}"
+          cp /tmp/mesh-ui.log /tmp/MESH_UI_LOG.txt || true
+          if [ -z "${WIN:-}" ]; then
+            echo "UI_WINDOW_NOT_FOUND" >&2
+            cat /tmp/mesh-ui.log >&2 || true
+            exit 1
+          fi
+          echo "WINDOW_ID=$WIN" | tee /tmp/WINDOW_INFO.txt
 
           xdotool windowactivate "$WIN" || true
           xdotool windowmove "$WIN" 90 120 || true
@@ -160,5 +169,6 @@ jobs:
             /tmp/QA_VIDEO_REPORT.txt
             /tmp/MESH_UI_LOG.txt
             /tmp/FFMPEG_LOG.txt
+            /tmp/WINDOW_INFO.txt
           if-no-files-found: error
           retention-days: 14
