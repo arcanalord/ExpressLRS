@@ -25,7 +25,7 @@ for needle in ['crc8DvbS2', 'length < 2 || length > 62']:
 for needle in ['pingEp2Neighbor', "ep2Protocol = switch", 'ep2Rssi10']:
     assert needle in controller, needle
 
-for needle in ['PING соседнего узла', "child: const Text('Авто')", 'ELRS / CRSF']:
+for needle in ['PING соседнего узла', "'Повторить'", "'Авто'", 'ELRS / CRSF']:
     assert needle in page, needle
 
 # Keep engineering details out of the normal device list.
