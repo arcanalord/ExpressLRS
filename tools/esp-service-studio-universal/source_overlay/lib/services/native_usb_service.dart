@@ -125,6 +125,108 @@ class EspRomProbeResult {
 }
 
 
+
+class ElrsTargetInfo {
+  const ElrsTargetInfo({
+    required this.targetPath,
+    required this.vendor,
+    required this.category,
+    required this.role,
+    required this.band,
+    required this.productName,
+    required this.platform,
+    required this.firmware,
+    required this.uploadMethods,
+    required this.stableCompatible,
+    required this.supportsUart,
+    required this.studioSupported,
+    this.luaName,
+    this.layoutFile,
+    this.minVersion,
+    this.priorTargetName,
+  });
+
+  final String targetPath;
+  final String vendor;
+  final String category;
+  final String role;
+  final String band;
+  final String productName;
+  final String platform;
+  final String firmware;
+  final List<String> uploadMethods;
+  final bool stableCompatible;
+  final bool supportsUart;
+  final bool studioSupported;
+  final String? luaName;
+  final String? layoutFile;
+  final String? minVersion;
+  final String? priorTargetName;
+
+  factory ElrsTargetInfo.fromMap(Map<Object?, Object?> map) {
+    return ElrsTargetInfo(
+      targetPath: map['targetPath'] as String? ?? '',
+      vendor: map['vendor'] as String? ?? '',
+      category: map['category'] as String? ?? '',
+      role: map['role'] as String? ?? '',
+      band: map['band'] as String? ?? '',
+      productName: map['productName'] as String? ?? '',
+      platform: map['platform'] as String? ?? '',
+      firmware: map['firmware'] as String? ?? '',
+      uploadMethods: (map['uploadMethods'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      stableCompatible: map['stableCompatible'] as bool? ?? false,
+      supportsUart: map['supportsUart'] as bool? ?? false,
+      studioSupported: map['studioSupported'] as bool? ?? false,
+      luaName: map['luaName'] as String?,
+      layoutFile: map['layoutFile'] as String?,
+      minVersion: map['minVersion'] as String?,
+      priorTargetName: map['priorTargetName'] as String?,
+    );
+  }
+}
+
+class ElrsCatalogIndex {
+  const ElrsCatalogIndex({
+    required this.status,
+    required this.targets,
+    this.message,
+    this.version,
+    this.releaseName,
+    this.publishedAt,
+    this.commitSha,
+    this.source,
+  });
+
+  final String status;
+  final List<ElrsTargetInfo> targets;
+  final String? message;
+  final String? version;
+  final String? releaseName;
+  final String? publishedAt;
+  final String? commitSha;
+  final String? source;
+
+  bool get ok => status == 'ok';
+
+  factory ElrsCatalogIndex.fromMap(Map<Object?, Object?> map) {
+    final raw = map['targets'] as List<dynamic>? ?? const <dynamic>[];
+    return ElrsCatalogIndex(
+      status: map['status'] as String? ?? 'error',
+      targets: raw
+          .map((e) => ElrsTargetInfo.fromMap(e as Map<Object?, Object?>))
+          .toList(growable: false),
+      message: map['message'] as String?,
+      version: map['version'] as String?,
+      releaseName: map['releaseName'] as String?,
+      publishedAt: map['publishedAt'] as String?,
+      commitSha: map['commitSha'] as String?,
+      source: map['source'] as String?,
+    );
+  }
+}
+
 class ElrsCatalogResult {
   const ElrsCatalogResult({
     required this.status,
@@ -263,6 +365,14 @@ class NativeUsbService {
     return EspRomProbeResult.fromMap(
       raw.cast<Object?, Object?>(),
     );
+  }
+
+  Future<ElrsCatalogIndex> fetchOfficialElrsCatalogIndex() async {
+    final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+          'fetchOfficialElrsCatalogIndex',
+        ) ??
+        const <dynamic, dynamic>{};
+    return ElrsCatalogIndex.fromMap(raw.cast<Object?, Object?>());
   }
 
   Future<ElrsCatalogResult> fetchOfficialElrsTarget({
