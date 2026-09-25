@@ -321,6 +321,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         expectedProductName: target.productName,
         expectedPlatform: target.platform,
         expectedFirmware: target.firmware,
+        expectedCommitSha: elrsIndex?.commitSha ?? '',
       );
       if (!mounted) return;
       setState(() => elrsCatalog = result);
@@ -353,6 +354,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         expectedProductName: target.productName,
         expectedPlatform: target.platform,
         expectedFirmware: target.firmware,
+        expectedCommitSha: elrsIndex?.commitSha ?? '',
         regulatoryDomain: region,
         bindingPhrase: _bindingPhrase.text.trim().isEmpty
             ? null
