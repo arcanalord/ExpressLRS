@@ -24,8 +24,8 @@ class OfficialElrsService(private val context: Context) {
             "https://raw.githubusercontent.com/ExpressLRS/Targets/master"
         private const val CACHE_BASE =
             "https://artifactory.expresslrs.org/ExpressLRS"
-        private const val EXPECTED_FIRMWARE_8285_2400 =
-            "Unified_ESP8285_2400_RX"
+        private const val EXPECTED_FIRMWARE_8285_PREFIX =
+            "Unified_ESP8285_"
     }
 
     data class Catalog(
@@ -243,7 +243,8 @@ class OfficialElrsService(private val context: Context) {
             val supportsUart = methods.contains("uart")
             val studioSupported =
                 platform == "esp8285" &&
-                    firmware == EXPECTED_FIRMWARE_8285_2400 &&
+                    firmware.startsWith(EXPECTED_FIRMWARE_8285_PREFIX) &&
+                    category.startsWith("rx_") &&
                     supportsUart &&
                     stableCompatible
 
@@ -363,7 +364,7 @@ class OfficialElrsService(private val context: Context) {
         if (catalog.platform != "esp8285") {
             error("Подготовка прошивки для ${catalog.platform} пока не включена")
         }
-        if (catalog.firmware != EXPECTED_FIRMWARE_8285_2400) {
+        if (!catalog.firmware.startsWith(EXPECTED_FIRMWARE_8285_PREFIX)) {
             error("Семейство ${catalog.firmware} пока не включено для автоматической подготовки")
         }
     }
