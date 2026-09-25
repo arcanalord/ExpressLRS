@@ -160,7 +160,7 @@ class MainActivity : FlutterActivity() {
                         val autoWifiSeconds = call.argument<Int>("autoWifiSeconds")
                         val rxUartBaud = call.argument<Int>("rxUartBaud")
                         val lockOnFirstConnection =
-                            call.argument<Boolean>("lockOnFirstConnection") ?: false
+                            call.argument<Boolean>("lockOnFirstConnection")
                         Thread {
                             val response = OfficialElrsService(this).prepareFirmware(
                                 targetPath = targetPath,
