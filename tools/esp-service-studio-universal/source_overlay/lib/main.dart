@@ -6,7 +6,7 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.7 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.8 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
@@ -38,20 +38,24 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     with WidgetsBindingObserver {
   final _profiles = ProfileRepository();
   final _usb = NativeUsbService();
+  final _search = TextEditingController();
 
   List<DeviceProfile> profiles = const [];
   List<UsbDeviceInfo> usbDevices = const [];
-  DeviceProfile? selected;
+  DeviceProfile? selectedCustom;
 
   bool loading = true;
   bool probing = false;
-  bool loadingElrs = false;
+  bool loadingElrsIndex = false;
+  bool loadingElrsTarget = false;
   bool preparingElrs = false;
   bool _usbRefreshInFlight = false;
 
   String? error;
   String? regulatoryProfile;
   EspRomProbeResult? probeResult;
+  ElrsCatalogIndex? elrsIndex;
+  ElrsTargetInfo? selectedElrsTarget;
   ElrsCatalogResult? elrsCatalog;
   ElrsPreparedFirmware? preparedElrs;
 
@@ -62,7 +66,6 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
     _usbSub = _usb.watchDevices().listen(
       (snapshot) {
         if (!mounted) return;
@@ -77,7 +80,6 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         setState(() => error = 'USB: $e');
       },
     );
-
     _startUsbPolling();
     _refresh();
   }
@@ -87,6 +89,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     WidgetsBinding.instance.removeObserver(this);
     _usbPollTimer?.cancel();
     _usbSub?.cancel();
+    _search.dispose();
     super.dispose();
   }
 
@@ -121,14 +124,12 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     try {
       final p = await _profiles.load();
       final u = await _usb.listDevices();
-
       if (!mounted) return;
-
       setState(() {
         profiles = p;
         usbDevices = u;
-        final selectedId = selected?.id;
-        selected = selectedId == null
+        final selectedId = selectedCustom?.id;
+        selectedCustom = selectedId == null
             ? null
             : p.where((item) => item.id == selectedId).firstOrNull;
       });
@@ -142,14 +143,10 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   Future<void> _refreshUsbOnly() async {
     if (_usbRefreshInFlight) return;
     _usbRefreshInFlight = true;
-
     try {
       final u = await _usb.listDevices();
       if (!mounted) return;
       _applyUsbDevices(u);
-      if (error?.startsWith('USB:') ?? false) {
-        setState(() => error = null);
-      }
     } catch (e) {
       if (!mounted) return;
       setState(() => error = 'USB: $e');
@@ -160,13 +157,12 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
   void _applyUsbDevices(List<UsbDeviceInfo> next) {
     if (_sameUsbList(usbDevices, next)) return;
-
     setState(() {
       usbDevices = next;
       if (next.isEmpty) {
         probeResult = null;
         probing = false;
-        selected = null;
+        selectedElrsTarget = null;
         elrsCatalog = null;
         preparedElrs = null;
         regulatoryProfile = null;
@@ -176,23 +172,18 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
   bool _sameUsbList(List<UsbDeviceInfo> a, List<UsbDeviceInfo> b) {
     if (a.length != b.length) return false;
-
     String key(UsbDeviceInfo d) =>
         '${d.deviceName}|${d.vendorId}|${d.productId}|${d.interfaceCount}|${d.hasPermission}';
-
     final aa = a.map(key).toList()..sort();
     final bb = b.map(key).toList()..sort();
-
     for (var i = 0; i < aa.length; i++) {
       if (aa[i] != bb[i]) return false;
     }
-
     return true;
   }
 
   Future<void> _probe() async {
     if (probing) return;
-
     final device = usbDevices.firstOrNull;
     if (device == null) {
       setState(() {
@@ -208,18 +199,19 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       probing = true;
       probeResult = null;
       error = null;
+      selectedElrsTarget = null;
+      elrsCatalog = null;
+      preparedElrs = null;
+      regulatoryProfile = null;
     });
 
     try {
-      final r = await _usb.probeEspRom(
-        deviceName: device.deviceName,
-      );
-
+      final r = await _usb.probeEspRom(deviceName: device.deviceName);
       if (!mounted) return;
-
       setState(() => probeResult = r);
-
-      await _refreshUsbOnly();
+      if (r.ok) {
+        await _fetchElrsIndex();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -233,9 +225,126 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     }
   }
 
+  String? get _detectedPlatform {
+    final d = probeResult?.chipDescription?.toLowerCase() ?? '';
+    if (d.contains('8285') || d.contains('8266')) return 'esp8285';
+    if (d.contains('esp32-s2')) return 'esp32s2';
+    if (d.contains('esp32')) return 'esp32';
+    return null;
+  }
+
+  List<ElrsTargetInfo> get _filteredTargets {
+    final index = elrsIndex;
+    if (index == null || !index.ok) return const [];
+    final platform = _detectedPlatform;
+    final q = _search.text.trim().toLowerCase();
+
+    final targets = index.targets.where((t) {
+      if (t.role != 'RX') return false;
+      if (!t.supportsUart || !t.stableCompatible) return false;
+      if (platform != null && t.platform != platform) return false;
+      if (q.isEmpty) return true;
+      final haystack =
+          '${t.productName} ${t.vendor} ${t.band} ${t.targetPath}'.toLowerCase();
+      return haystack.contains(q);
+    }).toList()
+      ..sort((a, b) => a.productName.compareTo(b.productName));
+    return targets;
+  }
+
+  Future<void> _fetchElrsIndex() async {
+    if (loadingElrsIndex) return;
+    setState(() => loadingElrsIndex = true);
+    try {
+      final result = await _usb.fetchOfficialElrsCatalogIndex();
+      if (!mounted) return;
+      setState(() => elrsIndex = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        elrsIndex = ElrsCatalogIndex(
+          status: 'error',
+          message: 'Ошибка каталога ExpressLRS: $e',
+          targets: const [],
+        );
+      });
+    } finally {
+      if (mounted) setState(() => loadingElrsIndex = false);
+    }
+  }
+
+  Future<void> _selectElrsTarget(ElrsTargetInfo? target) async {
+    setState(() {
+      selectedElrsTarget = target;
+      elrsCatalog = null;
+      preparedElrs = null;
+      regulatoryProfile = null;
+    });
+    if (target == null) return;
+    await _fetchElrsTarget(target);
+  }
+
+  Future<void> _fetchElrsTarget(ElrsTargetInfo target) async {
+    if (loadingElrsTarget) return;
+    setState(() => loadingElrsTarget = true);
+    try {
+      final result = await _usb.fetchOfficialElrsTarget(
+        targetPath: target.targetPath,
+        expectedProductName: target.productName,
+        expectedPlatform: target.platform,
+        expectedFirmware: target.firmware,
+      );
+      if (!mounted) return;
+      setState(() => elrsCatalog = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        elrsCatalog = ElrsCatalogResult(
+          status: 'error',
+          message: 'Ошибка проверки target: $e',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => loadingElrsTarget = false);
+    }
+  }
+
+  Future<void> _prepareElrsFirmware() async {
+    final region = regulatoryProfile;
+    final target = selectedElrsTarget;
+    if (region == null || target == null || preparingElrs) return;
+
+    setState(() {
+      preparingElrs = true;
+      preparedElrs = null;
+    });
+    try {
+      final result = await _usb.prepareOfficialElrsTarget(
+        targetPath: target.targetPath,
+        expectedProductName: target.productName,
+        expectedPlatform: target.platform,
+        expectedFirmware: target.firmware,
+        regulatoryProfile: region,
+      );
+      if (!mounted) return;
+      setState(() => preparedElrs = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        preparedElrs = ElrsPreparedFirmware(
+          status: 'error',
+          message: 'Ошибка подготовки прошивки: $e',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => preparingElrs = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final profile = selected;
+    final targets = _filteredTargets;
+    final detectedPlatform = _detectedPlatform;
 
     return Scaffold(
       appBar: AppBar(
@@ -259,25 +368,14 @@ class _ServiceHomePageState extends State<ServiceHomePage>
           children: [
             const Text(
               'Универсальное обслуживание устройств',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 4),
             const Text(
               appBuildLabel,
-              style: TextStyle(
-                color: Colors.white54,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Контроллер и радиочип обслуживаются независимо. '
-              'Сначала определяем подключение и проверяем устройство.',
-            ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             _Section(
               title: '1. Подключение',
               child: usbDevices.isEmpty
@@ -292,42 +390,142 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                               Icons.usb,
                               color: Colors.lightGreenAccent,
                             ),
-                            title: Text(
-                              '${d.familyLabel}  ${d.vidPid}',
-                            ),
+                            title: Text('${d.familyLabel}  ${d.vidPid}'),
                             subtitle: Text(
-                              [
-                                d.product,
-                                d.manufacturer,
-                                d.deviceName,
-                              ]
+                              [d.product, d.manufacturer, d.deviceName]
                                   .whereType<String>()
                                   .where((e) => e.isNotEmpty)
                                   .join(' · '),
                             ),
-                            trailing: d.hasPermission
-                                ? const Icon(
-                                    Icons.lock_open,
-                                    size: 18,
-                                  )
-                                : null,
                           ),
                         ),
-                        const Text(
-                          'Состояние USB обновляется автоматически.',
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
+                        FilledButton.icon(
+                          onPressed:
+                              usbDevices.isEmpty || probing ? null : _probe,
+                          icon: probing
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.search),
+                          label: Text(
+                            probing
+                                ? 'Определяю контроллер…'
+                                : 'Определить и проверить',
                           ),
                         ),
+                        if (probeResult != null) ...[
+                          const SizedBox(height: 12),
+                          _ProbeResultCard(result: probeResult!),
+                        ],
                       ],
                     ),
             ),
             _Section(
-              title: '2. Что обслуживаем',
+              title: '2. Официальные ExpressLRS приёмники',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    detectedPlatform == null
+                        ? 'Сначала определите контроллер. Затем каталог отфильтруется автоматически.'
+                        : 'Определено: $detectedPlatform. Показываются совместимые RX targets из официального ExpressLRS/Targets.',
+                  ),
+                  const SizedBox(height: 10),
+                  FilledButton.tonalIcon(
+                    onPressed: loadingElrsIndex ? null : _fetchElrsIndex,
+                    icon: loadingElrsIndex
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.sync),
+                    label: Text(
+                      loadingElrsIndex
+                          ? 'Обновляю каталог…'
+                          : 'Обновить официальный каталог',
+                    ),
+                  ),
+                  if (elrsIndex?.ok == true) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Stable: ${elrsIndex!.version ?? '-'} · '
+                      'в каталоге ${elrsIndex!.targets.length} targets · '
+                      'подходит по фильтру ${targets.length}',
+                      style: const TextStyle(color: Colors.white60),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _search,
+                      onChanged: (_) => setState(() {
+                        if (selectedElrsTarget != null &&
+                            !targets.contains(selectedElrsTarget)) {
+                          selectedElrsTarget = null;
+                          elrsCatalog = null;
+                          preparedElrs = null;
+                        }
+                      }),
+                      decoration: const InputDecoration(
+                        labelText: 'Поиск модели',
+                        hintText: 'BETAFPV, HappyModel, RadioMaster…',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<ElrsTargetInfo>(
+                      key: ValueKey(
+                        selectedElrsTarget?.targetPath ??
+                            'dynamic-elrs-target-empty',
+                      ),
+                      initialValue: selectedElrsTarget,
+                      isExpanded: true,
+                      items: targets
+                          .map(
+                            (t) => DropdownMenuItem(
+                              value: t,
+                              child: Text(
+                                '${t.productName} · ${t.band}',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _selectElrsTarget,
+                      decoration: const InputDecoration(
+                        labelText: 'Модель ELRS приёмника',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ] else if (elrsIndex != null && !elrsIndex!.ok)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(elrsIndex!.message ?? 'Ошибка каталога'),
+                    ),
+                ],
+              ),
+            ),
+            if (selectedElrsTarget != null)
+              _DynamicElrsTargetSection(
+                target: selectedElrsTarget!,
+                catalog: elrsCatalog,
+                prepared: preparedElrs,
+                loading: loadingElrsTarget,
+                preparing: preparingElrs,
+                regulatoryProfile: regulatoryProfile,
+                onRegulatoryChanged: (value) {
+                  setState(() {
+                    regulatoryProfile = value;
+                    preparedElrs = null;
+                  });
+                },
+                onPrepare: _prepareElrsFirmware,
+              ),
+            _Section(
+              title: '3. Собственное / сервисное железо',
               child: DropdownButtonFormField<DeviceProfile>(
-                key: ValueKey(profile?.id ?? 'no-device-profile'),
-                initialValue: profile,
+                key: ValueKey(selectedCustom?.id ?? 'custom-profile-empty'),
+                initialValue: selectedCustom,
                 isExpanded: true,
                 items: profiles
                     .map(
@@ -340,114 +538,20 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                       ),
                     )
                     .toList(),
-                onChanged: (p) => setState(() {
-                  selected = p;
-                  probeResult = null;
-                  elrsCatalog = null;
-                  preparedElrs = null;
-                  regulatoryProfile = null;
-                }),
+                onChanged: (p) => setState(() => selectedCustom = p),
                 decoration: const InputDecoration(
-                  labelText: 'Модель / профиль устройства',
-                  hintText: 'Выберите плату после определения контроллера',
+                  labelText: 'Профиль Mesh / Service Bridge',
+                  hintText: 'Не нужен для обычного ELRS-приёмника',
                   border: OutlineInputBorder(),
                 ),
               ),
             ),
-            if (profile == null)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 14),
-                child: Text(
-                  'ESP ROM определяет контроллер, но не всегда модель приёмника. '
-                  'Например, HappyModel EP1/EP2 и BETAFPV Nano используют ESP8285, '
-                  'поэтому для пустой платы модель выбирается отдельно.',
-                  style: TextStyle(color: Colors.white60),
-                ),
-              ),
-            if (profile != null) _ProfileCard(profile: profile),
-            if (profile != null && profile.elrsTargetPath != null)
-              _OfficialElrsSection(
-                expectedProductName: profile.elrsProductName ?? profile.name,
-                targetPath: profile.elrsTargetPath!,
-                catalog: elrsCatalog,
-                prepared: preparedElrs,
-                loading: loadingElrs,
-                preparing: preparingElrs,
-                regulatoryProfile: regulatoryProfile,
-                onRefresh: _fetchElrsCatalog,
-                onRegulatoryChanged: (value) {
-                  setState(() {
-                    regulatoryProfile = value;
-                    preparedElrs = null;
-                  });
-                },
-                onPrepare: _prepareElrsFirmware,
-              ),
-            _Section(
-              title: profile != null && profile.elrsTargetPath != null
-                  ? '4. Действие'
-                  : '3. Действие',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  FilledButton.icon(
-                    onPressed:
-                        usbDevices.isEmpty || probing ? null : _probe,
-                    icon: probing
-                        ? const SizedBox.square(
-                            dimension: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(Icons.search),
-                    label: Text(
-                      probing
-                          ? 'Проверяю USB и ESP ROM…'
-                          : 'Определить и проверить',
-                    ),
-                  ),
-                  if (probeResult != null) ...[
-                    const SizedBox(height: 12),
-                    _ProbeResultCard(result: probeResult!),
-                  ],
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () => _notYet(
-                      'Обновление пакетом',
-                    ),
-                    icon: const Icon(Icons.system_update_alt),
-                    label: const Text('Обновить устройство'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => _notYet(
-                      'Диагностика радиомодуля',
-                    ),
-                    icon: const Icon(
-                      Icons.settings_input_antenna,
-                    ),
-                    label: const Text('Радиомодуль'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => _notYet(
-                      'Режим восстановления',
-                    ),
-                    icon: const Icon(
-                      Icons.build_circle_outlined,
-                    ),
-                    label: const Text(
-                      'Восстановление / ручной режим',
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            if (selectedCustom != null)
+              _ProfileCard(profile: selectedCustom!),
             if (error != null)
               Text(
                 error!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                ),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             if (loading) const LinearProgressIndicator(),
           ],
@@ -455,214 +559,96 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       ),
     );
   }
-
-  Future<void> _fetchElrsCatalog() async {
-    if (loadingElrs) return;
-
-    final profile = selected;
-    final elrs = profile?.elrs;
-    final targetPath = profile?.elrsTargetPath;
-    final productName = profile?.elrsProductName;
-    final platform = elrs?['platform']?.toString();
-    final firmware = elrs?['firmware']?.toString();
-
-    if (targetPath == null ||
-        productName == null ||
-        platform == null ||
-        firmware == null) {
-      setState(() {
-        elrsCatalog = const ElrsCatalogResult(
-          status: 'error',
-          message: 'Для выбранного профиля не задан официальный target ExpressLRS.',
-        );
-      });
-      return;
-    }
-
-    setState(() {
-      loadingElrs = true;
-      preparedElrs = null;
-    });
-    try {
-      final result = await _usb.fetchOfficialElrsTarget(
-        targetPath: targetPath,
-        expectedProductName: productName,
-        expectedPlatform: platform,
-        expectedFirmware: firmware,
-      );
-      if (!mounted) return;
-      setState(() => elrsCatalog = result);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        elrsCatalog = ElrsCatalogResult(
-          status: 'error',
-          message: 'Ошибка запроса ExpressLRS: $e',
-        );
-      });
-    } finally {
-      if (mounted) setState(() => loadingElrs = false);
-    }
-  }
-
-  Future<void> _prepareElrsFirmware() async {
-    final region = regulatoryProfile;
-    final profile = selected;
-    final elrs = profile?.elrs;
-    final targetPath = profile?.elrsTargetPath;
-    final productName = profile?.elrsProductName;
-    final platform = elrs?['platform']?.toString();
-    final firmware = elrs?['firmware']?.toString();
-
-    if (region == null ||
-        preparingElrs ||
-        targetPath == null ||
-        productName == null ||
-        platform == null ||
-        firmware == null) {
-      return;
-    }
-
-    setState(() {
-      preparingElrs = true;
-      preparedElrs = null;
-    });
-    try {
-      final result = await _usb.prepareOfficialElrsTarget(
-        targetPath: targetPath,
-        expectedProductName: productName,
-        expectedPlatform: platform,
-        expectedFirmware: firmware,
-        regulatoryProfile: region,
-      );
-      if (!mounted) return;
-      setState(() => preparedElrs = result);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        preparedElrs = ElrsPreparedFirmware(
-          status: 'error',
-          message: 'Ошибка подготовки прошивки: $e',
-        );
-      });
-    } finally {
-      if (mounted) setState(() => preparingElrs = false);
-    }
-  }
-
-  void _notYet(String name) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '$name: будет подключено после проверки USB-Serial',
-        ),
-      ),
-    );
-  }
 }
 
-class _OfficialElrsSection extends StatelessWidget {
-  const _OfficialElrsSection({
-    required this.expectedProductName,
-    required this.targetPath,
+class _DynamicElrsTargetSection extends StatelessWidget {
+  const _DynamicElrsTargetSection({
+    required this.target,
     required this.catalog,
     required this.prepared,
     required this.loading,
     required this.preparing,
     required this.regulatoryProfile,
-    required this.onRefresh,
     required this.onRegulatoryChanged,
     required this.onPrepare,
   });
 
-  final String expectedProductName;
-  final String targetPath;
+  final ElrsTargetInfo target;
   final ElrsCatalogResult? catalog;
   final ElrsPreparedFirmware? prepared;
   final bool loading;
   final bool preparing;
   final String? regulatoryProfile;
-  final Future<void> Function() onRefresh;
   final ValueChanged<String?> onRegulatoryChanged;
   final Future<void> Function() onPrepare;
 
   @override
   Widget build(BuildContext context) {
     return _Section(
-      title: '3. Официальная ExpressLRS',
+      title: 'Выбранный ELRS target',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Выбран профиль: $expectedProductName. '
-            'Официальный target: $targetPath. '
-            'Перед подготовкой программа сверит название платы, платформу и семейство прошивки '
-            'с текущим каталогом ExpressLRS.',
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Важно: выбор модели платы сейчас ручной. ROM ESP8285 сам по себе '
-            'не отличает EP1/EP2 от BETAFPV Nano.',
-            style: TextStyle(color: Colors.white60),
-          ),
-          const SizedBox(height: 10),
-          FilledButton.tonalIcon(
-            onPressed: loading ? null : onRefresh,
-            icon: loading
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.cloud_download_outlined),
-            label: Text(
-              loading ? 'Проверяю официальный каталог…' : 'Получить актуальную версию',
+          _DiagLine('Модель', target.productName),
+          _DiagLine('Target', target.targetPath),
+          _DiagLine('Платформа', target.platform),
+          _DiagLine('Диапазон', target.band),
+          _DiagLine('Прошивка', target.firmware),
+          _DiagLine('Методы', target.uploadMethods.join(', ')),
+          if (!target.studioSupported)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Target есть в официальном каталоге, но автоматическая подготовка '
+                'для этого семейства контроллера пока не включена.',
+                style: TextStyle(color: Colors.orangeAccent),
+              ),
             ),
-          ),
-          if (catalog != null) ...[
+          if (loading) ...[
+            const SizedBox(height: 8),
+            const LinearProgressIndicator(),
+          ],
+          if (catalog != null && !catalog!.ok)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(catalog!.message ?? 'Ошибка проверки target'),
+            ),
+          if (catalog?.ok == true && target.studioSupported) ...[
             const SizedBox(height: 10),
-            if (catalog!.ok) ...[
-              _DiagLine('Версия', catalog!.version ?? '-'),
-              _DiagLine('Target', catalog!.productName ?? '-'),
-              _DiagLine('Путь', catalog!.targetPath ?? '-'),
-              _DiagLine('Платформа', catalog!.platform ?? '-'),
-              _DiagLine('Прошивка', catalog!.firmware ?? '-'),
-              _DiagLine('Методы', catalog!.uploadMethods.join(', ')),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: regulatoryProfile,
-                decoration: const InputDecoration(
-                  labelText: 'Радиорегион прошивки',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'FCC',
-                    child: Text('FCC / обычный 2.4 ГГц профиль'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'LBT',
-                    child: Text('LBT / профиль Listen Before Talk'),
-                  ),
-                ],
-                onChanged: onRegulatoryChanged,
+            DropdownButtonFormField<String>(
+              initialValue: regulatoryProfile,
+              decoration: const InputDecoration(
+                labelText: 'Радиорегион прошивки',
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: regulatoryProfile == null || preparing
-                    ? null
-                    : onPrepare,
-                icon: preparing
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.inventory_2_outlined),
-                label: Text(
-                  preparing ? 'Готовлю firmware.bin…' : 'Подготовить firmware.bin',
+              items: const [
+                DropdownMenuItem(
+                  value: 'FCC',
+                  child: Text('FCC / обычный профиль'),
                 ),
+                DropdownMenuItem(
+                  value: 'LBT',
+                  child: Text('LBT / Listen Before Talk'),
+                ),
+              ],
+              onChanged: onRegulatoryChanged,
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed:
+                  regulatoryProfile == null || preparing ? null : onPrepare,
+              icon: preparing
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.inventory_2_outlined),
+              label: Text(
+                preparing
+                    ? 'Готовлю firmware.bin…'
+                    : 'Подготовить firmware.bin',
               ),
-            ] else
-              Text(catalog!.message ?? 'Ошибка каталога'),
+            ),
           ],
           if (prepared != null) ...[
             const SizedBox(height: 10),
@@ -671,8 +657,6 @@ class _OfficialElrsSection extends StatelessWidget {
                 'Прошивка подготовлена, но ещё НЕ записана.',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 6),
-              _DiagLine('Плата', prepared!.productName ?? '-'),
               _DiagLine('Версия', prepared!.version ?? '-'),
               _DiagLine('Регион', prepared!.regulatoryProfile ?? '-'),
               _DiagLine('Адрес', prepared!.writeOffset ?? '-'),
@@ -1033,7 +1017,7 @@ class _HelpSheet extends StatelessWidget {
       ),
       children: const [
         Text(
-          'Как проверить EP2',
+          'Как пользоваться',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -1041,12 +1025,12 @@ class _HelpSheet extends StatelessWidget {
         ),
         SizedBox(height: 12),
         Text(
-          '1. TX USB-UART подключите к RX EP2, RX — к TX, GND — к GND.',
+          '1. Подключите USB-UART к UART приёмника: TX → RX, RX → TX, GND → GND.',
         ),
         SizedBox(height: 8),
         Text(
-          '2. Для входа в ROM-загрузчик замкните BOOT pad на GND и подайте питание. '
-          'После включения перемычку можно убрать.',
+          '2. Введите ESP-приёмник в ROM-загрузчик его штатным способом. '
+          'Для многих ESP8285 это BOOT pad → GND при подаче питания.',
         ),
         SizedBox(height: 8),
         Text(
@@ -1056,8 +1040,9 @@ class _HelpSheet extends StatelessWidget {
         ),
         SizedBox(height: 12),
         Text(
-          'Успех означает, что цепочка Pixel → USB-UART → ESP ROM работает. '
-          'SX1280 при этой операции не прошивается и не изменяется.',
+          'После определения контроллера программа загружает официальный каталог '
+          'ExpressLRS Targets и оставляет совместимые приёмники. '
+          'Для пустой платы конкретную модель всё равно нужно выбрать вручную.',
         ),
       ],
     );
