@@ -171,8 +171,18 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         ),
                       ),
                     ),
-                    Text(_transportState(controller.ep2State)),
                   ],
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _transportState(controller.ep2State),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Text(
