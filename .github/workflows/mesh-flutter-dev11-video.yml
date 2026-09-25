@@ -45,7 +45,7 @@ jobs:
       - name: Linux desktop dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb ffmpeg xdotool wmctrl libgtk-3-dev ninja-build pkg-config
+          sudo apt-get install -y xvfb ffmpeg xdotool wmctrl openbox libgtk-3-dev ninja-build pkg-config
 
       - name: Prepare source
         working-directory: ${{ env.APP_DIR }}
@@ -75,6 +75,9 @@ jobs:
           Xvfb :99 -screen 0 720x1280x24 -ac +extension RANDR >/tmp/xvfb.log 2>&1 &
           XVFB_PID=$!
           sleep 2
+          openbox >/tmp/openbox.log 2>&1 &
+          OPENBOX_PID=$!
+          sleep 1
 
           BIN="build/linux/x64/debug/bundle/mesh_messenger_flutter"
           test -x "$BIN"
@@ -88,9 +91,9 @@ jobs:
           done
           test -n "${WIN:-}"
 
-          xdotool windowactivate "$WIN"
-          xdotool windowmove "$WIN" 90 120
-          xdotool windowsize "$WIN" 540 960
+          xdotool windowactivate "$WIN" || true
+          xdotool windowmove "$WIN" 90 120 || true
+          xdotool windowsize "$WIN" 540 960 || true
           sleep 3
 
           ffmpeg -y -f x11grab -framerate 24 -video_size 720x1280 -i :99.0             -c:v libx264 -preset veryfast -pix_fmt yuv420p /tmp/MeshMessenger-dev11-visual-QA.mp4             >/tmp/ffmpeg.log 2>&1 &
@@ -98,23 +101,24 @@ jobs:
 
           sleep 4
           # Map
-          xdotool mousemove 292 1040 click 1
+          xdotool mousemove 292 1040 click 1 || true
           sleep 5
           # Connection
-          xdotool mousemove 428 1040 click 1
+          xdotool mousemove 428 1040 click 1 || true
           sleep 7
           # Help
-          xdotool mousemove 548 155 click 1
+          xdotool mousemove 548 155 click 1 || true
           sleep 6
-          xdotool key Escape
+          xdotool key Escape || true
           sleep 2
           # Settings
-          xdotool mousemove 563 1040 click 1
+          xdotool mousemove 563 1040 click 1 || true
           sleep 4
 
           kill -INT "$FFMPEG_PID" || true
           wait "$FFMPEG_PID" || true
           kill "$APP_PID" || true
+          kill "$OPENBOX_PID" || true
           kill "$XVFB_PID" || true
 
           test -s /tmp/MeshMessenger-dev11-visual-QA.mp4
@@ -122,6 +126,7 @@ jobs:
           cp /tmp/mesh-ui.log /tmp/MESH_UI_LOG.txt
 
       - name: QA summary
+        if: always()
         shell: bash
         run: |
           {
@@ -138,6 +143,7 @@ jobs:
           } > /tmp/QA_VIDEO_REPORT.txt
 
       - name: Upload video QA artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: MeshMessenger-dev11-visual-QA
