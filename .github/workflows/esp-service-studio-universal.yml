@@ -39,6 +39,7 @@ jobs:
           mkdir -p /tmp/service_studio/android/app/src/main/res/xml
           cp tools/esp-service-studio-universal/source_overlay/android_overlay/MainActivity.kt              /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio/MainActivity.kt
           cp tools/esp-service-studio-universal/source_overlay/android_overlay/UsbSerialProbe.kt              /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio/UsbSerialProbe.kt
+          cp tools/esp-service-studio-universal/source_overlay/android_overlay/OfficialElrsService.kt              /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio/OfficialElrsService.kt
           cp tools/esp-service-studio-universal/source_overlay/android_overlay/device_filter.xml              /tmp/service_studio/android/app/src/main/res/xml/device_filter.xml
           cd /tmp/service_studio
           python3 android_overlay/patch_android.py
@@ -72,30 +73,30 @@ jobs:
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
-          cp "$APK" /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.5-Pixel7a.apk
-          sha256sum /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.5-Pixel7a.apk > /tmp/SHA256SUMS.txt
+          cp "$APK" /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.6-Pixel7a.apk
+          sha256sum /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.6-Pixel7a.apk > /tmp/SHA256SUMS.txt
 
       - name: Package Dropbox release
         run: |
           set -euo pipefail
           mkdir -p /tmp/service-studio-release
-          cp /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.5-Pixel7a.apk /tmp/service-studio-release/
+          cp /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.6-Pixel7a.apk /tmp/service-studio-release/
           cp /tmp/SHA256SUMS.txt /tmp/service-studio-release/
           cp tools/esp-service-studio-universal/README.md /tmp/service-studio-release/
           cp tools/esp-service-studio-universal/ARCHITECTURE_v1.md /tmp/service-studio-release/
           cp tools/esp-service-studio-universal/source_overlay/assets/device_profiles.json /tmp/service-studio-release/
           cd tools/esp-service-studio-universal
-          zip -qr /tmp/service-studio-release/ESP-Service-Studio-Universal-source-v0.9.0-alpha.5.zip source_overlay
+          zip -qr /tmp/service-studio-release/ESP-Service-Studio-Universal-source-v0.9.0-alpha.6.zip source_overlay
           cd /tmp/service-studio-release
-          zip -qr /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.5-release.zip .
+          zip -qr /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.6-release.zip .
 
       - name: Upload release package
         uses: actions/upload-artifact@v4
         with:
-          name: ESP-Service-Studio-Universal-v0.9.0-alpha.5
+          name: ESP-Service-Studio-Universal-v0.9.0-alpha.6
           path: |
-            /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.5-release.zip
-            /tmp/service-studio-release/ESP-Service-Studio-Universal-v0.9.0-alpha.5-Pixel7a.apk
+            /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.6-release.zip
+            /tmp/service-studio-release/ESP-Service-Studio-Universal-v0.9.0-alpha.6-Pixel7a.apk
             /tmp/service-studio-release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
