@@ -248,6 +248,16 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ],
                     ),
                   ],
+                  if (controller.ep2InfoNotice?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      controller.ep2InfoNotice!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                   if (controller.ep2Rssi10 != null ||
                       controller.ep2Snr10 != null ||
                       controller.ep2RttMs != null) ...[
