@@ -154,6 +154,13 @@ class MainActivity : FlutterActivity() {
                             call.argument<String>("expectedFirmware") ?: ""
                         val regulatoryProfile =
                             call.argument<String>("regulatoryProfile") ?: ""
+                        val bindingPhrase = call.argument<String>("bindingPhrase")
+                        val wifiSsid = call.argument<String>("wifiSsid")
+                        val wifiPassword = call.argument<String>("wifiPassword")
+                        val autoWifiSeconds = call.argument<Int>("autoWifiSeconds")
+                        val rxBaud = call.argument<Int>("rxBaud")
+                        val lockOnFirstConnection =
+                            call.argument<Boolean>("lockOnFirstConnection")
                         Thread {
                             val response = OfficialElrsService(this).prepareFirmware(
                                 targetPath = targetPath,
@@ -161,6 +168,12 @@ class MainActivity : FlutterActivity() {
                                 expectedPlatform = expectedPlatform,
                                 expectedFirmware = expectedFirmware,
                                 regulatoryProfile = regulatoryProfile,
+                                bindingPhrase = bindingPhrase,
+                                wifiSsid = wifiSsid,
+                                wifiPassword = wifiPassword,
+                                autoWifiSeconds = autoWifiSeconds,
+                                rxBaud = rxBaud,
+                                lockOnFirstConnection = lockOnFirstConnection,
                             )
                             mainHandler.post { result.success(response) }
                         }.start()
