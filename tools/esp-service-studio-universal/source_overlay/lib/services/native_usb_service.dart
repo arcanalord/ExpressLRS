@@ -257,6 +257,7 @@ class ElrsCatalogResult {
     this.uploadMethods = const [],
     this.features = const [],
     this.regulatoryOptions = const [],
+    this.hardwarePinned = false,
   });
 
   final String status;
@@ -274,6 +275,7 @@ class ElrsCatalogResult {
   final List<String> uploadMethods;
   final List<String> features;
   final List<String> regulatoryOptions;
+  final bool hardwarePinned;
 
   bool get ok => status == 'ok';
 
@@ -301,6 +303,7 @@ class ElrsCatalogResult {
           (map['regulatoryOptions'] as List<dynamic>? ?? const [])
               .whereType<String>()
               .toList(growable: false),
+      hardwarePinned: map['hardwarePinned'] as bool? ?? false,
     );
   }
 }
@@ -410,7 +413,8 @@ class EspFlashResult {
       targetPath: map['targetPath'] as String?,
       productName: map['productName'] as String?,
       version: map['version'] as String?,
-      regulatoryDomain: map['regulatoryDomain'] as String?,
+      regulatoryDomain:
+          (map['regulatoryDomain'] ?? map['regulatoryProfile']) as String?,
       chipDescription: map['chipDescription'] as String?,
       flashId: map['flashId'] as String?,
       flashSize: map['flashSize'] as String?,
