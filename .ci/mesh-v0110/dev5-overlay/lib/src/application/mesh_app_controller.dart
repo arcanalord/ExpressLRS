@@ -1051,6 +1051,11 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
     try {
       _addEp2Log('AUTO USB device=$deviceId');
+      if (!{'unavailable', 'offline', 'disconnected'}.contains(ep2State)) {
+        _addEp2Log('AUTO reset previous UART session state=$ep2State');
+        await ep2.disconnect();
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+      }
       await ep2.connectAuto(deviceId);
     } catch (error) {
       ep2Error = '$error';
