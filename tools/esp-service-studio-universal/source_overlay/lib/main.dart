@@ -182,6 +182,11 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         flashResult = null;
         regulatoryDomain = null;
         lockMode = 'default';
+        _bindingPhrase.clear();
+        _wifiSsid.clear();
+        _wifiPassword.clear();
+        _autoWifiSeconds.clear();
+        _rxUartBaud.clear();
       }
     });
   }
@@ -754,7 +759,7 @@ class _DynamicElrsTargetSection extends StatelessWidget {
         ? catalog!.regulatoryOptions
         : target.regulatoryOptions;
     final hasWifi = target.uploadMethods.contains('wifi');
-    final pinned = catalog?.commitSha != null;
+    final pinned = catalog?.hardwarePinned == true;
 
     return _Section(
       title: '3. Настройки и прошивка',
