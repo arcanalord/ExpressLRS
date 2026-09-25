@@ -159,6 +159,48 @@ abstract final class DeviceRecognition {
     );
   }
 
+  static DeviceRecognitionSnapshot mmUart({
+    required int baudRate,
+    required String firmware,
+    required String boardId,
+    required String radioFamily,
+    required Set<String> capabilities,
+    String? profileId,
+    Object? nodeId,
+  }) =>
+      DeviceRecognitionSnapshot(
+        state: DeviceRecognitionState.recognized,
+        confidence: DeviceRecognitionConfidence.confirmed,
+        transport: DeviceTransportIdentity(
+          kind: 'usb_uart',
+          baudRate: baudRate,
+        ),
+        protocol: DeviceHostProtocol.mmUart1,
+        profileId: profileId,
+        controllerFamily: boardId,
+        radioFamily: radioFamily,
+        firmwareVersion: firmware,
+        nodeId: nodeId,
+        capabilities: capabilities,
+        evidence: <RecognitionEvidence>[
+          const RecognitionEvidence(
+            source: 'protocol_frame',
+            key: 'protocol',
+            value: 'MM-UART/1',
+          ),
+          const RecognitionEvidence(
+            source: 'get_caps',
+            key: 'network_protocol',
+            value: 'MMRP/1',
+          ),
+          RecognitionEvidence(
+            source: 'get_info',
+            key: 'board_id',
+            value: boardId,
+          ),
+        ],
+      );
+
   static DeviceRecognitionSnapshot ep2Link({
     required int baudRate,
     required int nodeId,
