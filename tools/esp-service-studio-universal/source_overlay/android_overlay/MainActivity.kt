@@ -113,6 +113,37 @@ class MainActivity : FlutterActivity() {
                         }.start()
                     }
 
+                    "flashPreparedEsp8285" -> {
+                        val deviceName = call.argument<String>("deviceName")
+                        val manifestPath = call.argument<String>("manifestPath") ?: ""
+                        val expectedTargetPath =
+                            call.argument<String>("expectedTargetPath") ?: ""
+                        val expectedSha256 =
+                            call.argument<String>("expectedSha256") ?: ""
+
+                        Thread {
+                            val probe = UsbSerialProbe(this)
+                            val device = probe.findDevice(deviceName)
+                            val response = if (device == null) {
+                                mapOf(
+                                    "status" to "flash_error",
+                                    "message" to "USB-UART не найден",
+                                )
+                            } else {
+                                probe.flashPrepared(
+                                    device = device,
+                                    manifestPath = manifestPath,
+                                    expectedTargetPath = expectedTargetPath,
+                                    expectedSha256 = expectedSha256,
+                                )
+                            }
+                            mainHandler.post {
+                                result.success(response)
+                                emitUsbSnapshot("flash_complete", 0)
+                            }
+                        }.start()
+                    }
+
                     "prepareOfficialElrsTarget" -> {
                         val targetPath = call.argument<String>("targetPath") ?: ""
                         val expectedProductName =
