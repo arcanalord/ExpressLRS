@@ -87,6 +87,13 @@ class MainActivity : FlutterActivity() {
                         startEspProbe(deviceName, result)
                     }
 
+                    "fetchOfficialElrsCatalogIndex" -> {
+                        Thread {
+                            val response = OfficialElrsService(this).fetchCatalogIndex()
+                            mainHandler.post { result.success(response) }
+                        }.start()
+                    }
+
                     "fetchOfficialElrsTarget" -> {
                         val targetPath = call.argument<String>("targetPath") ?: ""
                         val expectedProductName =
