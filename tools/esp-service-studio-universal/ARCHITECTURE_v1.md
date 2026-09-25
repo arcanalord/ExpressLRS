@@ -1,78 +1,157 @@
-# ESP Service Studio Universal — Architecture v1
+# ESP Service Studio Universal — Architecture v2
 
 Date: 2026-09-25
 Status: CURRENT WORKING TARGET
 
-## 1. Product shape
-One operator-facing app. Internally four service targets:
-- whole device;
-- controller/MCU;
-- radio;
-- bare radio through Service Bridge.
+## 1. Product rule
+One operator-facing app, but two clearly separated workflows.
 
-## 2. Device profile
-A profile describes:
-- board/device family;
-- controller family and boot/update transport;
-- radio family;
-- safe radio service kind;
-- board pins/boot method (later);
-- supported host protocols;
-- update-package compatibility.
+### Normal ELRS workflow
+Connect -> detect MCU -> choose/confirm receiver model -> choose firmware options -> prepare -> flash controller -> boot check.
 
-The profile is data, not UI code.
+The operator does not choose SX1280/SX1276/SX1262 and does not choose a radio chip as a flash destination.
+For normal ESP-based ELRS receivers, the firmware image is written to the ESP controller.
+The selected official target describes the radio/layout/overlay internally.
 
-## 3. Capability-first radio service
-For custom Mesh Messenger nodes, host capabilities are negotiated.
-MM-UART/1 remains the canonical future app-to-radio host protocol.
+### Advanced radio service
+A separate section for:
+- SPI probe;
+- register diagnostics;
+- RSSI/SNR;
+- RX/TX tests;
+- ranging where supported;
+- radio reset/busy/dio checks;
+- radio microcode only where the radio family explicitly supports it.
 
-Chip name is metadata. It must not be the sole authority for destructive operations.
+Advanced radio service must not complicate the normal ELRS workflow.
 
-## 4. Update package
-Planned package format:
-- manifest.json;
-- controller image(s) + offsets;
-- optional radio microcode;
-- hardware profile id / compatible ids;
-- hashes;
-- package version;
-- optional migration metadata.
+## 2. Official ELRS data
+Do not hardcode common receiver models one by one.
 
-Default UI does not expose raw offsets.
+The app loads the official ExpressLRS firmware bundle for one exact release commit.
+From the same bundle it reads:
+- hardware/targets.json;
+- target layout files;
+- target overlays;
+- cached firmware binaries.
 
-## 5. Radio families
-- SX127x/SX126x/SX128x: probe/config/register/test path; no generic user firmware image assumption.
-- LR1121: permit microcode update only through an explicit supported profile.
-- LR2021: capability-driven service; do not assume update semantics until driver/profile confirms them.
-- unknown/bare radio: probe-only until identified.
+Firmware + target + layout must always come from the same pinned bundle/commit.
+Never combine stable firmware with hardware data from Targets/master.
 
-## 6. Service Bridge
-ESP32-S3 Service Bridge is the universal adapter for a bare SPI radio:
-phone USB <-> ESP32-S3 <-> SPI <-> radio.
+## 3. ELRS target filtering
+After ROM detection:
+- filter by detected MCU/platform;
+- show RX targets only in the normal receiver workflow;
+- respect min_version;
+- respect upload_methods;
+- use target firmware family/layout/overlay as data.
 
-Planned bridge protocol: SS-BRIDGE/1, binary/versioned/capability-driven.
-It must support safe probe before write operations.
+For an empty ESP8285 receiver, the exact physical model cannot be proven from ROM ID alone, so the user selects it from the filtered official list.
 
-## 7. Recovery
-Current Android/WebView v0.8 remains available as recovery for direct ESP ROM flashing.
-Do not remove it until Flutter has physical HIL parity.
+For an already-running receiver, later add CRSF Device Info / Unified metadata detection to reduce manual selection.
 
-## 8. Safety gates
-Before any write:
-- identify target;
-- check profile/package compatibility;
-- verify hashes;
-- check flash bounds;
-- show exactly which component will be written;
-- preserve recovery path;
-- verify after write.
+## 4. Regulatory profiles
+Regulatory choices depend on target band.
 
-## 9. Storage
-Dropbox = user-facing source of truth for releases, architecture, handoffs.
+2.4 GHz:
+- normal ISM/FCC build;
+- EU CE / LBT build.
+
+900 MHz:
+- FCC 915;
+- AU 915;
+- EU 868;
+- IN 866.
+
+433 MHz:
+- US 433;
+- US 433 wide;
+- EU 433;
+- AU 433.
+
+Do not show FCC/LBT as a universal choice for every band.
+
+## 5. Target-specific firmware options
+Normal UI may expose only options supported by the selected target:
+- binding phrase;
+- Wi-Fi SSID/password when Wi-Fi is supported;
+- auto Wi-Fi interval;
+- receiver UART baud;
+- lock on first connection;
+- later: RX-as-TX, buzzer features, unlock higher power and other target features.
+
+Sensitive values such as binding phrase and Wi-Fi password must not be written to ordinary logs.
+
+## 6. Flash methods
+Only advertise methods present in upload_methods:
+- UART;
+- Wi-Fi;
+- Betaflight passthrough;
+- EdgeTX passthrough;
+- DFU;
+- STLink;
+- stock bootloader;
+- ZIP/passthrough where applicable.
+
+If ESP Service Studio has not implemented a method yet, show it as unavailable rather than pretending support.
+
+## 7. Safe flashing
+Before any destructive write:
+- identify MCU;
+- validate target;
+- validate pinned release commit;
+- validate firmware family;
+- validate image sanity;
+- validate SHA-256;
+- validate write offset and flash bounds;
+- validate flash capacity;
+- require explicit confirmation.
+
+ESP8285 ROM-only path may use per-block ROM ACK.
+Do not label this as full readback verification.
+Full readback/stub verification is a separate capability after physical HIL proves it reliable.
+
+## 8. Custom hardware
+Local profiles remain only for project-specific hardware:
+- Mesh Messenger nodes;
+- ESP32-S3 Service Bridge;
+- experimental controller/radio combinations.
+
+These profiles are separate from the dynamic official ELRS catalog.
+
+## 9. Radio families
+SX127x/SX126x/SX128x:
+- service/diagnostics only;
+- no generic user firmware image assumption.
+
+LR1121:
+- microcode update only through an explicit supported profile.
+
+LR2021:
+- capability-driven service;
+- do not invent update semantics.
+
+Unknown/bare radio:
+- probe-only until identified.
+
+## 10. Service Bridge
+For a bare radio module:
+
+Pixel / Android
+  <-> USB
+ESP32-S3 Service Bridge
+  <-> SPI
+SX / LR radio
+
+Planned protocol: SS-BRIDGE/1.
+It must be versioned, capability-driven and probe-before-write.
+
+## 11. Recovery
+Android/WebView v0.8 remains the recovery path until Flutter physical HIL parity is proven.
+
+## 12. Storage and platform scope
+Dropbox = user-facing source of truth for releases, architecture and handoffs.
 GitHub = build/CI workspace.
 
-## 10. Current platform scope
-Current test builds are Android arm64 only, targeted at the user's Pixel 7a.
-Do not spend work on Windows/Linux/Web packaging yet. Cross-platform support stays an architectural goal for later.
-
-USB device state must update live on attach/detach and refresh when the app returns to foreground.
+Current build target: Android arm64 / Pixel 7a.
+Windows/Linux/Web packaging is postponed.
