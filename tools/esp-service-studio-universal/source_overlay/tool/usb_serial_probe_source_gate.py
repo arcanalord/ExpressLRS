@@ -60,6 +60,7 @@ checks = {
     'dynamic target UI': 'Официальные ExpressLRS приёмники' in main,
     'dynamic search UI': 'Поиск модели' in main,
     'MCU filtering': '_detectedPlatform' in main and '_filteredTargets' in main,
+    'ESP8266 not aliased': "d.startsWith('esp8285')" in main and "d == 'esp8266ex'" in main,
     'catalog method channel': 'fetchOfficialElrsCatalogIndex' in native,
     'guarded flash method channel': 'flashPreparedEsp8285' in native and 'flashPrepared(' in probe,
     'prepared manifest': 'manifest.json' in elrs and 'manifestPath' in elrs,
