@@ -269,7 +269,7 @@ class UsbSerialProbe(private val context: Context) {
                     val checksum = espChecksum(data)
 
                     var acknowledged = false
-                    repeat(3) {
+                    for (attempt in 0 until 3) {
                         if (link.command(
                                 op = 0x03,
                                 data = payload,
@@ -278,7 +278,7 @@ class UsbSerialProbe(private val context: Context) {
                             ) != null
                         ) {
                             acknowledged = true
-                            return@repeat
+                            break
                         }
                     }
                     if (!acknowledged) {
