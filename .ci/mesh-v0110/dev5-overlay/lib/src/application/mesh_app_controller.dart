@@ -1230,16 +1230,61 @@ final class MeshAppController extends ChangeNotifier {
     _addEp2Log('INFO / STATS requested');
     notifyListeners();
     try {
-      await ep2.requestInfo();
-      await Future<void>.delayed(const Duration(milliseconds: 80));
-      await ep2.requestStats();
+      if (_mmUartActive) {
+        final session = _externalRadioSession;
+        if (session == null) throw StateError('MM_UART_SESSION_MISSING');
+        await session.refreshInfoAndCapabilities();
+        final stats = await session.refreshStats();
+        _applyMmUartStats(stats);
+        ep2InfoNotice = 'MM-UART INFO / STATS обновлены';
+      } else {
+        await ep2.requestInfo();
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        await ep2.requestStats();
+      }
     } catch (error) {
       ep2Error = '$error';
       _addEp2Log('INFO / STATS ERROR $error');
-      notifyListeners();
     }
+    notifyListeners();
   }
 
+  Future<void> runRadioSelfTest() async {
+    if (!ep2Connected) return;
+    ep2Error = null;
+    ep2InfoNotice = 'Проверяем радиомодуль…';
+    notifyListeners();
+    try {
+      if (_mmUartActive) {
+        final session = _externalRadioSession;
+        if (session == null) throw StateError('MM_UART_SESSION_MISSING');
+        final result = await session.compatSelftest();
+        final ok = result['ok'] != false;
+        ep2InfoNotice = ok
+            ? 'Самопроверка MM-UART пройдена'
+            : 'Самопроверка вернула ошибку';
+        _addEp2Log('COMPAT_SELFTEST $result');
+      } else {
+        await refreshEp2Info();
+        ep2InfoNotice = ep2Error == null ? 'Радиомодуль отвечает' : ep2InfoNotice;
+      }
+    } catch (error) {
+      ep2Error = '$error';
+      ep2InfoNotice = 'Самопроверка не пройдена';
+      _addEp2Log('SELFTEST ERROR $error');
+    }
+    notifyListeners();
+  }
+
+  void _applyMmUartStats(Map<String, dynamic> stats) {
+    ep2Rssi10 = (stats['rssi10'] as num?)?.toInt();
+    ep2Snr10 = (stats['snr10'] as num?)?.toInt();
+    ep2RttMs = (stats['rttMs'] as num?)?.toInt();
+    ep2TxCount = (stats['tx'] as num?)?.toInt();
+    ep2RxCount = (stats['rx'] as num?)?.toInt();
+    ep2LossCount = (stats['loss'] as num?)?.toInt();
+    ep2RetryCount = (stats['retries'] as num?)?.toInt();
+  }
   Future<void> pingEp2Neighbor() async {
     final ep2 = _ep2;
     final local = ep2LocalNode;
@@ -1267,21 +1312,38 @@ final class MeshAppController extends ChangeNotifier {
     ep2OtaPassword = null;
     ep2OtaUrl = null;
     ep2OtaNotice = 'Команда отправляется…';
-    _addEp2Log('WIFI_UPDATE requested');
+    _addEp2Log('OTA requested');
     notifyListeners();
     try {
-      await ep2.startWifiUpdate();
-      ep2OtaNotice =
-          'Команда отправлена. Подождите 2–3 с и проверьте Wi‑Fi сеть EP2-OTA-N${ep2LocalNode ?? 'X'}-….';
-      notifyListeners();
+      if (_mmUartActive) {
+        final session = _externalRadioSession;
+        if (session == null) throw StateError('MM_UART_SESSION_MISSING');
+        final result = await session.enterOta();
+        ep2OtaSsid = _cleanOptionalString(result['ssid']);
+        ep2OtaPassword = _cleanOptionalString(result['password']);
+        ep2OtaUrl = _cleanOptionalString(result['url']);
+        ep2OtaNotice = ep2OtaSsid == null
+            ? 'Режим обновления включён'
+            : 'Wi-Fi обновление готово';
+        _addEp2Log('ENTER_OTA $result');
+      } else {
+        await ep2.startWifiUpdate();
+        ep2OtaNotice =
+            'Команда отправлена. Подождите 2–3 с и проверьте Wi-Fi сеть EP2-OTA-N${ep2LocalNode ?? 'X'}-….';
+      }
     } catch (error) {
       ep2OtaNotice = null;
       ep2Error = '$error';
-      _addEp2Log('WIFI_UPDATE ERROR $error');
-      notifyListeners();
+      _addEp2Log('OTA ERROR $error');
     }
+    notifyListeners();
   }
 
+  String? _cleanOptionalString(Object? value) {
+    if (value == null) return null;
+    final clean = '$value'.trim();
+    return clean.isEmpty ? null : clean;
+  }
   void clearEp2Log() {
     ep2Log.clear();
     notifyListeners();
@@ -1388,11 +1450,7 @@ final class MeshAppController extends ChangeNotifier {
           ? 'MM-UART/1 · MMRP/1 подтверждён'
           : 'MM-UART/1 без MMRP/1';
     } else if (event is ExternalRadioStatsEvent) {
-      final stats = event.stats;
-      ep2TxCount = (stats['tx'] as num?)?.toInt();
-      ep2RxCount = (stats['rx'] as num?)?.toInt();
-      ep2LossCount = (stats['loss'] as num?)?.toInt();
-      ep2RetryCount = (stats['retries'] as num?)?.toInt();
+      _applyMmUartStats(event.stats);
     } else if (event is ExternalRadioErrorEvent) {
       _addEp2Log('MM-UART ERROR ${event.error}');
     } else if (event is ExternalRadioDeviceResetEvent) {
@@ -1413,6 +1471,7 @@ final class MeshAppController extends ChangeNotifier {
       ep2State = event.state;
       ep2Error = event.error;
       if (event.state == 'disconnected') {
+        ep2ConnectedDeviceId = null;
         ep2Protocol = 'unknown';
         ep2Baud = null;
         ep2PingResult = null;
