@@ -6,12 +6,96 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.8 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.9 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
 class ServiceStudioApp extends StatelessWidget {
   const ServiceStudioApp({super.key});
+
+
+  Future<void> _flashPreparedEsp8285() async {
+    final device = usbDevices.firstOrNull;
+    final target = selectedElrsTarget;
+    final prepared = preparedElrs;
+
+    if (device == null ||
+        target == null ||
+        prepared == null ||
+        !prepared.ok ||
+        prepared.manifestPath == null ||
+        prepared.sha256 == null ||
+        flashingEsp) {
+      return;
+    }
+
+    final chip = probeResult?.chipDescription ?? '';
+    if (!chip.startsWith('ESP8285')) {
+      setState(() {
+        flashResult = const EspFlashResult(
+          status: 'flash_error',
+          message: 'Перед записью нужно определить ESP8285 через ROM.',
+        );
+      });
+      return;
+    }
+
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Записать прошивку?'),
+        content: Text(
+          'Модель: ${target.productName}\n'
+          'Target: ${target.targetPath}\n'
+          'Версия: ${prepared.version ?? '-'}\n'
+          'Регион: ${prepared.regulatoryProfile ?? '-'}\n'
+          'Адрес: ${prepared.writeOffset ?? '0x0'}\n'
+          'Размер: ${prepared.fileSize ?? 0} Б\n\n'
+          'Во время записи не отключайте питание и USB. '
+          'Проверка alpha.9 подтверждает каждый блок ROM, '
+          'но полный readback содержимого пока не выполняется.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Записать'),
+          ),
+        ],
+      ),
+    );
+
+    if (approved != true || !mounted) return;
+
+    setState(() {
+      flashingEsp = true;
+      flashResult = null;
+    });
+
+    try {
+      final result = await _usb.flashPreparedEsp8285(
+        deviceName: device.deviceName,
+        manifestPath: prepared.manifestPath!,
+        expectedTargetPath: target.targetPath,
+        expectedSha256: prepared.sha256!,
+      );
+      if (!mounted) return;
+      setState(() => flashResult = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        flashResult = EspFlashResult(
+          status: 'flash_error',
+          message: 'Ошибка записи: $e',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => flashingEsp = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +133,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   bool loadingElrsIndex = false;
   bool loadingElrsTarget = false;
   bool preparingElrs = false;
+  bool flashingEsp = false;
   bool _usbRefreshInFlight = false;
 
   String? error;
@@ -58,6 +143,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   ElrsTargetInfo? selectedElrsTarget;
   ElrsCatalogResult? elrsCatalog;
   ElrsPreparedFirmware? preparedElrs;
+  EspFlashResult? flashResult;
 
   StreamSubscription<UsbSnapshot>? _usbSub;
   Timer? _usbPollTimer;
@@ -165,6 +251,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         selectedElrsTarget = null;
         elrsCatalog = null;
         preparedElrs = null;
+        flashResult = null;
         regulatoryProfile = null;
       }
     });
@@ -202,6 +289,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       selectedElrsTarget = null;
       elrsCatalog = null;
       preparedElrs = null;
+      flashResult = null;
       regulatoryProfile = null;
     });
 
@@ -317,6 +405,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     setState(() {
       preparingElrs = true;
       preparedElrs = null;
+      flashResult = null;
     });
     try {
       final result = await _usb.prepareOfficialElrsTarget(
@@ -520,6 +609,9 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                   });
                 },
                 onPrepare: _prepareElrsFirmware,
+                flashing: flashingEsp,
+                flashResult: flashResult,
+                onFlash: _flashPreparedEsp8285,
               ),
             _Section(
               title: '3. Собственное / сервисное железо',
@@ -571,6 +663,9 @@ class _DynamicElrsTargetSection extends StatelessWidget {
     required this.regulatoryProfile,
     required this.onRegulatoryChanged,
     required this.onPrepare,
+    required this.flashing,
+    required this.flashResult,
+    required this.onFlash,
   });
 
   final ElrsTargetInfo target;
@@ -581,6 +676,9 @@ class _DynamicElrsTargetSection extends StatelessWidget {
   final String? regulatoryProfile;
   final ValueChanged<String?> onRegulatoryChanged;
   final Future<void> Function() onPrepare;
+  final bool flashing;
+  final EspFlashResult? flashResult;
+  final Future<void> Function() onFlash;
 
   @override
   Widget build(BuildContext context) {
@@ -654,7 +752,7 @@ class _DynamicElrsTargetSection extends StatelessWidget {
             const SizedBox(height: 10),
             if (prepared!.ok) ...[
               const Text(
-                'Прошивка подготовлена, но ещё НЕ записана.',
+                'Прошивка подготовлена.',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               _DiagLine('Версия', prepared!.version ?? '-'),
@@ -662,8 +760,66 @@ class _DynamicElrsTargetSection extends StatelessWidget {
               _DiagLine('Адрес', prepared!.writeOffset ?? '-'),
               _DiagLine('Размер', '${prepared!.fileSize ?? 0} Б'),
               _DiagLine('SHA-256', prepared!.sha256 ?? '-'),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: flashing ? null : onFlash,
+                icon: flashing
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.memory),
+                label: Text(
+                  flashing
+                      ? 'Записываю в ESP8285…'
+                      : 'Записать в ESP8285',
+                ),
+              ),
             ] else
               Text(prepared!.message ?? 'Ошибка подготовки'),
+          ],
+          if (flashResult != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: flashResult!.ok
+                      ? Colors.greenAccent.withValues(alpha: 0.45)
+                      : Colors.redAccent.withValues(alpha: 0.45),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    flashResult!.ok ? 'Запись завершена' : 'Ошибка записи',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(flashResult!.message),
+                  if (flashResult!.ok) ...[
+                    const SizedBox(height: 8),
+                    _DiagLine(
+                      'Блоки',
+                      '${flashResult!.blocksWritten ?? 0}',
+                    ),
+                    _DiagLine(
+                      'Проверка',
+                      flashResult!.verification == 'rom_block_ack'
+                          ? 'подтверждение каждого блока ROM'
+                          : (flashResult!.verification ?? '-'),
+                    ),
+                    if (flashResult!.needsPowerCycle)
+                      const Text(
+                        'Теперь отключите питание, уберите BOOT→GND и включите приёмник обычно.',
+                        style: TextStyle(color: Colors.greenAccent),
+                      ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ],
       ),
