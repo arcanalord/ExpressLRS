@@ -61,6 +61,50 @@ class OfficialElrsService(private val context: Context) {
         )
     }
 
+    fun fetchCatalogIndex(): Map<String, Any?> {
+        return try {
+            val release = JSONObject(httpGetText(RELEASES_LATEST))
+            val tag = release.getString("tag_name")
+            val releaseName = release.optString("name", tag)
+            val publishedAt = release.optString("published_at").ifBlank { null }
+
+            val commit = JSONObject(
+                httpGetText(COMMITS_API + URLEncoder.encode(tag, "UTF-8"))
+            )
+            val sha = commit.getString("sha")
+
+            val root = JSONObject(httpGetText(TARGETS_URL))
+            val targets = mutableListOf<Map<String, Any?>>()
+            collectTargets(
+                node = root,
+                path = mutableListOf(),
+                stableVersion = tag,
+                out = targets,
+            )
+            targets.sortBy {
+                (it["productName"]?.toString() ?: it["targetPath"]?.toString() ?: "")
+                    .lowercase()
+            }
+
+            mapOf(
+                "status" to "ok",
+                "version" to tag,
+                "releaseName" to releaseName,
+                "publishedAt" to publishedAt,
+                "commitSha" to sha,
+                "source" to "ExpressLRS/Targets",
+                "targetCount" to targets.size,
+                "targets" to targets,
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "status" to "error",
+                "message" to "Не удалось загрузить официальный каталог ExpressLRS: ${e.message ?: e.javaClass.simpleName}",
+                "targets" to emptyList<Map<String, Any?>>(),
+            )
+        }
+    }
+
     fun fetchCatalog(
         targetPath: String,
         expectedProductName: String,
@@ -77,7 +121,7 @@ class OfficialElrsService(private val context: Context) {
         } catch (e: Exception) {
             mapOf(
                 "status" to "error",
-                "message" to "Не удалось получить официальный каталог ExpressLRS: ${e.message ?: e.javaClass.simpleName}",
+                "message" to "Не удалось получить официальный target ExpressLRS: ${e.message ?: e.javaClass.simpleName}",
             )
         }
     }
@@ -100,19 +144,17 @@ class OfficialElrsService(private val context: Context) {
                 expectedPlatform = expectedPlatform,
                 expectedFirmware = expectedFirmware,
             )
-            val target = fetchTarget(targetPath)
+            validateStudioPreparation(catalog)
 
+            val target = fetchTarget(targetPath)
             val generic = downloadCachedFirmware(
                 commitSha = catalog.commitSha,
                 regulatoryProfile = regulatoryProfile,
                 firmwareTarget = catalog.firmware,
             )
 
-            val hwDir = if (targetPath.split('.').getOrNull(1)?.startsWith("tx_") == true) {
-                "TX"
-            } else {
-                "RX"
-            }
+            val category = targetPath.split('.').getOrNull(1).orEmpty()
+            val hwDir = if (category.startsWith("tx_")) "TX" else "RX"
             val layoutUrl =
                 "$TARGETS_RAW_BASE/$hwDir/${urlPath(catalog.layoutFile)}"
             val layout = JSONObject(httpGetText(layoutUrl))
@@ -173,18 +215,86 @@ class OfficialElrsService(private val context: Context) {
         }
     }
 
+    private fun collectTargets(
+        node: JSONObject,
+        path: MutableList<String>,
+        stableVersion: String,
+        out: MutableList<Map<String, Any?>>,
+    ) {
+        if (node.has("product_name") &&
+            node.has("platform") &&
+            node.has("firmware")
+        ) {
+            val targetPath = path.joinToString(".")
+            val methods = mutableListOf<String>()
+            val methodsArray = node.optJSONArray("upload_methods")
+            if (methodsArray != null) {
+                for (i in 0 until methodsArray.length()) {
+                    methods += methodsArray.optString(i)
+                }
+            }
+
+            val category = path.getOrNull(1).orEmpty()
+            val platform = node.optString("platform")
+            val firmware = node.optString("firmware")
+            val minVersion = node.optString("min_version").ifBlank { null }
+            val stableCompatible =
+                minVersion == null || versionAtLeast(stableVersion, minVersion)
+            val supportsUart = methods.contains("uart")
+            val studioSupported =
+                platform == "esp8285" &&
+                    firmware == EXPECTED_FIRMWARE_8285_2400 &&
+                    supportsUart &&
+                    stableCompatible
+
+            out += mapOf(
+                "targetPath" to targetPath,
+                "vendor" to (path.firstOrNull() ?: ""),
+                "category" to category,
+                "role" to when {
+                    category.startsWith("rx_") -> "RX"
+                    category.startsWith("tx_") -> "TX"
+                    else -> ""
+                },
+                "band" to when {
+                    category.contains("2400") -> "2.4 ГГц"
+                    category.contains("900") -> "900 МГц"
+                    else -> ""
+                },
+                "productName" to node.optString("product_name", targetPath),
+                "luaName" to node.optString("lua_name").ifBlank { null },
+                "platform" to platform,
+                "firmware" to firmware,
+                "layoutFile" to node.optString("layout_file").ifBlank { null },
+                "minVersion" to minVersion,
+                "uploadMethods" to methods,
+                "priorTargetName" to node.optString("prior_target_name").ifBlank { null },
+                "stableCompatible" to stableCompatible,
+                "supportsUart" to supportsUart,
+                "studioSupported" to studioSupported,
+            )
+            return
+        }
+
+        val keys = node.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val child = node.opt(key)
+            if (child is JSONObject) {
+                path.add(key)
+                collectTargets(child, path, stableVersion, out)
+                path.removeAt(path.lastIndex)
+            }
+        }
+    }
+
     private fun fetchCatalogInternal(
         targetPath: String,
         expectedProductName: String,
         expectedPlatform: String,
         expectedFirmware: String,
     ): Catalog {
-        validateSpec(
-            targetPath = targetPath,
-            expectedProductName = expectedProductName,
-            expectedPlatform = expectedPlatform,
-            expectedFirmware = expectedFirmware,
-        )
+        validateTargetPath(targetPath)
 
         val release = JSONObject(httpGetText(RELEASES_LATEST))
         val tag = release.getString("tag_name")
@@ -212,10 +322,17 @@ class OfficialElrsService(private val context: Context) {
         }
 
         val methods = mutableListOf<String>()
-        val arr = target.getJSONArray("upload_methods")
-        for (i in 0 until arr.length()) methods += arr.getString(i)
+        val arr = target.optJSONArray("upload_methods")
+        if (arr != null) {
+            for (i in 0 until arr.length()) methods += arr.optString(i)
+        }
         if (!methods.contains("uart")) {
-            error("Официальный target больше не разрешает UART")
+            error("Официальный target не разрешает UART")
+        }
+
+        val minVersion = target.optString("min_version").ifBlank { null }
+        if (minVersion != null && !versionAtLeast(tag, minVersion)) {
+            error("Target требует ExpressLRS $minVersion или новее, stable сейчас $tag")
         }
 
         return Catalog(
@@ -229,29 +346,45 @@ class OfficialElrsService(private val context: Context) {
             platform = platform,
             firmware = firmware,
             layoutFile = target.getString("layout_file"),
-            minVersion = target.optString("min_version").ifBlank { null },
+            minVersion = minVersion,
             uploadMethods = methods,
             priorTargetName = target.optString("prior_target_name").ifBlank { null },
         )
     }
 
-    private fun validateSpec(
-        targetPath: String,
-        expectedProductName: String,
-        expectedPlatform: String,
-        expectedFirmware: String,
-    ) {
+    private fun validateTargetPath(targetPath: String) {
         val parts = targetPath.split('.')
-        if (parts.size != 3 || parts.any { !it.matches(Regex("[A-Za-z0-9_-]+")) }) {
+        if (parts.size < 3 || parts.any { !it.matches(Regex("[A-Za-z0-9_-]+")) }) {
             error("Некорректный путь target: $targetPath")
         }
-        if (expectedProductName.isBlank()) error("Не задано имя target")
-        if (expectedPlatform != "esp8285") {
-            error("В alpha.7 официальный автоподбор разрешён только для ESP8285")
+    }
+
+    private fun validateStudioPreparation(catalog: Catalog) {
+        if (catalog.platform != "esp8285") {
+            error("Подготовка прошивки для ${catalog.platform} пока не включена")
         }
-        if (expectedFirmware != EXPECTED_FIRMWARE_8285_2400) {
-            error("В alpha.7 разрешено только семейство $EXPECTED_FIRMWARE_8285_2400")
+        if (catalog.firmware != EXPECTED_FIRMWARE_8285_2400) {
+            error("Семейство ${catalog.firmware} пока не включено для автоматической подготовки")
         }
+    }
+
+    private fun versionAtLeast(current: String, required: String): Boolean {
+        fun parse(v: String): List<Int> {
+            val clean = v.trim().removePrefix("v")
+            return clean.split('.').take(3).map { part ->
+                Regex("""\d+""").find(part)?.value?.toIntOrNull() ?: 0
+            }.let { parts ->
+                parts + List(maxOf(0, 3 - parts.size)) { 0 }
+            }
+        }
+
+        val a = parse(current)
+        val b = parse(required)
+        for (i in 0 until 3) {
+            if (a[i] > b[i]) return true
+            if (a[i] < b[i]) return false
+        }
+        return true
     }
 
     private fun fetchTarget(targetPath: String): JSONObject {
