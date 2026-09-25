@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 
 class UsbDeviceInfo {
@@ -40,8 +42,26 @@ class UsbDeviceInfo {
   }
 }
 
+class UsbSnapshot {
+  const UsbSnapshot({required this.event, required this.devices});
+
+  final String event;
+  final List<UsbDeviceInfo> devices;
+
+  factory UsbSnapshot.fromMap(Map<Object?, Object?> map) {
+    final raw = (map['devices'] as List<dynamic>? ?? const <dynamic>[]);
+    return UsbSnapshot(
+      event: map['event'] as String? ?? 'snapshot',
+      devices: raw
+          .map((e) => UsbDeviceInfo.fromMap(e as Map<Object?, Object?>))
+          .toList(growable: false),
+    );
+  }
+}
+
 class NativeUsbService {
   static const MethodChannel _channel = MethodChannel('service_studio/native');
+  static const EventChannel _events = EventChannel('service_studio/usb_events');
 
   Future<List<UsbDeviceInfo>> listDevices() async {
     final raw = await _channel.invokeMethod<List<dynamic>>('listUsbDevices') ??
@@ -49,6 +69,12 @@ class NativeUsbService {
     return raw
         .map((e) => UsbDeviceInfo.fromMap(e as Map<Object?, Object?>))
         .toList(growable: false);
+  }
+
+  Stream<UsbSnapshot> watchDevices() {
+    return _events.receiveBroadcastStream().map(
+          (event) => UsbSnapshot.fromMap(event as Map<Object?, Object?>),
+        );
   }
 
   Future<String> platformInfo() async {
