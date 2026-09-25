@@ -388,6 +388,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         target == null ||
         prepared == null ||
         !prepared.ok ||
+        !prepared.hardwarePinned ||
         prepared.manifestPath == null ||
         prepared.sha256 == null ||
         flashingEsp) {
@@ -940,7 +941,8 @@ class _DynamicElrsTargetSection extends StatelessWidget {
                 const _DiagLine('Пакет', 'firmware + hardware одной версии'),
               const SizedBox(height: 8),
               FilledButton.icon(
-                onPressed: flashing ? null : onFlash,
+                onPressed:
+                    flashing || !prepared!.hardwarePinned ? null : onFlash,
                 icon: flashing
                     ? const SizedBox.square(
                         dimension: 16,
