@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'data/profile_repository.dart';
@@ -30,7 +32,7 @@ class ServiceHomePage extends StatefulWidget {
   State<ServiceHomePage> createState() => _ServiceHomePageState();
 }
 
-class _ServiceHomePageState extends State<ServiceHomePage> {
+class _ServiceHomePageState extends State<ServiceHomePage> with WidgetsBindingObserver {
   final _profiles = ProfileRepository();
   final _usb = NativeUsbService();
 
@@ -39,11 +41,54 @@ class _ServiceHomePageState extends State<ServiceHomePage> {
   DeviceProfile? selected;
   bool loading = true;
   String? error;
+  StreamSubscription<UsbSnapshot>? _usbSub;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _usbSub = _usb.watchDevices().listen(
+      (snapshot) {
+        if (!mounted) return;
+        setState(() {
+          usbDevices = snapshot.devices;
+          error = null;
+        });
+      },
+      onError: (Object e) {
+        if (!mounted) return;
+        setState(() => error = 'USB: $e');
+      },
+    );
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _usbSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshUsbOnly();
+    }
+  }
+
+  Future<void> _refreshUsbOnly() async {
+    try {
+      final u = await _usb.listDevices();
+      if (!mounted) return;
+      setState(() {
+        usbDevices = u;
+        error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => error = 'USB: $e');
+    }
   }
 
   Future<void> _refresh() async {
@@ -184,6 +229,47 @@ class _ServiceHomePageState extends State<ServiceHomePage> {
       SnackBar(content: Text('$name: каркас готов, аппаратный адаптер подключается следующим этапом')),
     );
   }
+
+  String _serviceLabel(String raw) {
+    switch (raw) {
+      case 'register_service':
+        return 'настройка и диагностика по SPI';
+      case 'microcode_if_supported':
+        return 'обновление микрокода, если поддерживается';
+      case 'capability_driven':
+        return 'по возможностям устройства';
+      case 'probe_first':
+        return 'сначала безопасное определение';
+      default:
+        return raw;
+    }
+  }
+
+  String _accessLabel(String raw) {
+    switch (raw) {
+      case 'controller_spi_or_service_bridge':
+        return 'через контроллер или Service Bridge';
+      case 'service_bridge_spi':
+        return 'через ESP32-S3 Service Bridge';
+      default:
+        return raw;
+    }
+  }
+
+  String _protocolLabel(String raw) {
+    switch (raw) {
+      case 'ep2_link_ascii':
+        return 'EP2 LINK';
+      case 'crsf_diagnostics':
+        return 'CRSF (диагностика)';
+      case 'mm_uart_1':
+        return 'MM-UART/1';
+      case 'ss_bridge_1':
+        return 'SS-BRIDGE/1';
+      default:
+        return raw;
+    }
+  }
 }
 
 class _ProfileCard extends StatelessWidget {
@@ -203,9 +289,9 @@ class _ProfileCard extends StatelessWidget {
           _Line('Устройство', profile.name),
           _Line('Контроллер', controller?['family']?.toString() ?? 'нет'),
           _Line('Радиочип', radio['family']?.toString() ?? 'неизвестно'),
-          _Line('Сервис радио', radio['serviceKind']?.toString() ?? '-'),
-          _Line('Доступ к радио', radio['access']?.toString() ?? '-'),
-          _Line('Протоколы', profile.hostProtocols.join(', ')),
+          _Line('Сервис радио', _serviceLabel(radio['serviceKind']?.toString() ?? '-')),
+          _Line('Доступ к радио', _accessLabel(radio['access']?.toString() ?? '-')),
+          _Line('Протоколы', profile.hostProtocols.map(_protocolLabel).join(', ')),
           const SizedBox(height: 10),
           ...profile.notes.map((n) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
