@@ -1186,6 +1186,19 @@ final class MeshAppController extends ChangeNotifier {
         _addEp2Log(
           'MM-UART READY fw=${ep2Firmware ?? '-'} radio=${snapshot.info?.radioFamily ?? '-'}',
         );
+        try {
+          final selftest = await session.compatSelftest();
+          final passed = selftest['result'] == 'PASS' || selftest['ok'] == true;
+          if (passed) ep2InfoNotice = 'MM-UART/1 · MMRP/1 · самопроверка PASS';
+          _addEp2Log('AUTO SELFTEST $selftest');
+        } catch (error) {
+          _addEp2Log('AUTO SELFTEST skipped | $error');
+        }
+        try {
+          _applyMmUartStats(await session.refreshStats());
+        } catch (error) {
+          _addEp2Log('AUTO STATS skipped | $error');
+        }
         return;
       } catch (error) {
         _mmUartActive = false;
