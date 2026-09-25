@@ -20,7 +20,7 @@ env:
   VERSION_NAME: "0.3.0-dev.10"
   VERSION_CODE: "34"
   GRADLE_VERSION: "8.10.2"
-  BASE_PROJECT_URL: "https://uc3f7fa9b3873a3b6304144457ab.dl.dropboxusercontent.com/cd/0/get/DIzYrvpg_Q_tWhejRxnbhlChKgpMpFOQGPXFOk9isFhPBRYVUweTivSFRt8vgddNBYJ42QmNsN7oZ5yOfJ78FOwecx7a3VwGF01ugnkuTfTvO3-sZtCnJt4IZXfQYOhuIzDyhcRKyWVGC-IXFc21EE9MTNHK9c83WVUbdycQrmM9HA/file?c_luid=cfbe8875"
+  BASE_PROJECT_URL: "https://uc6a968e4740374aec0d0decfd11.dl.dropboxusercontent.com/cd/0/get/DIwm1di0S9VpTswddnlepeDtxZ8D8_zL1-cqWLWc1gn0vSc9GnZcGCwLYqVkHP5CudROkGO2hRIdaq-2yLttge11gkyLEFIeczmBjQnQKP4WdbMB2MYDnQUiYhM5IogfGvNrdnL34ibfbrHtUgF0iFXLQje588ElSeWp4Sdnwg4p_w/file?c_luid=cfbe8875"
 
 jobs:
   build:
@@ -101,8 +101,8 @@ jobs:
           if p.exists():
               s = p.read_text(encoding='utf-8')
               s = s.replace('0.3.0-dev.5','0.3.0-dev.10')
-              s = s.replace(r'0\.3\.0-dev\.5', r'0\.3\.0-dev\.9').replace(r'0\.3\.0-dev\.7', r'0\.3\.0-dev\.9').replace(r'0\.3\.0-dev\.8', r'0\.3\.0-dev\.9')
-              s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.9/').replace(r'/runtime v0\.3\.0-dev\.7/', r'/runtime v0\.3\.0-dev\.9/').replace(r'/runtime v0\.3\.0-dev\.8/', r'/runtime v0\.3\.0-dev\.9/')
+              s = s.replace(r'0\.3\.0-dev\.5', r'0\.3\.0-dev\.10').replace(r'0\.3\.0-dev\.7', r'0\.3\.0-dev\.10').replace(r'0\.3\.0-dev\.8', r'0\.3\.0-dev\.10')
+              s = s.replace(r'/runtime v0\.3\.0-dev\.5/', r'/runtime v0\.3\.0-dev\.10/').replace(r'/runtime v0\.3\.0-dev\.7/', r'/runtime v0\.3\.0-dev\.10/').replace(r'/runtime v0\.3\.0-dev\.8/', r'/runtime v0\.3\.0-dev\.10/')
               p.write_text(s, encoding='utf-8')
           PY
           node "$RECOVERY_DIR/tools/verify-packaged-web.mjs" "$ANDROID_DIR/app/src/main/assets/web"
