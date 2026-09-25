@@ -87,19 +87,43 @@ class MainActivity : FlutterActivity() {
                         startEspProbe(deviceName, result)
                     }
 
-                    "fetchOfficialElrsEp2" -> {
+                    "fetchOfficialElrsTarget" -> {
+                        val targetPath = call.argument<String>("targetPath") ?: ""
+                        val expectedProductName =
+                            call.argument<String>("expectedProductName") ?: ""
+                        val expectedPlatform =
+                            call.argument<String>("expectedPlatform") ?: ""
+                        val expectedFirmware =
+                            call.argument<String>("expectedFirmware") ?: ""
                         Thread {
-                            val response = OfficialElrsService(this).fetchEp2Catalog()
+                            val response = OfficialElrsService(this).fetchCatalog(
+                                targetPath = targetPath,
+                                expectedProductName = expectedProductName,
+                                expectedPlatform = expectedPlatform,
+                                expectedFirmware = expectedFirmware,
+                            )
                             mainHandler.post { result.success(response) }
                         }.start()
                     }
 
-                    "prepareOfficialElrsEp2" -> {
+                    "prepareOfficialElrsTarget" -> {
+                        val targetPath = call.argument<String>("targetPath") ?: ""
+                        val expectedProductName =
+                            call.argument<String>("expectedProductName") ?: ""
+                        val expectedPlatform =
+                            call.argument<String>("expectedPlatform") ?: ""
+                        val expectedFirmware =
+                            call.argument<String>("expectedFirmware") ?: ""
                         val regulatoryProfile =
                             call.argument<String>("regulatoryProfile") ?: ""
                         Thread {
-                            val response = OfficialElrsService(this)
-                                .prepareEp2Firmware(regulatoryProfile)
+                            val response = OfficialElrsService(this).prepareFirmware(
+                                targetPath = targetPath,
+                                expectedProductName = expectedProductName,
+                                expectedPlatform = expectedPlatform,
+                                expectedFirmware = expectedFirmware,
+                                regulatoryProfile = regulatoryProfile,
+                            )
                             mainHandler.post { result.success(response) }
                         }.start()
                     }
