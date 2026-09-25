@@ -6,6 +6,7 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.zip.ZipFile
@@ -69,22 +70,15 @@ class OfficialElrsService(private val context: Context) {
 
     fun fetchCatalogIndex(): Map<String, Any?> {
         return try {
-            val release = JSONObject(httpGetText(RELEASES_LATEST))
-            val tag = release.getString("tag_name")
-            val releaseName = release.optString("name", tag)
-            val publishedAt = release.optString("published_at").ifBlank { null }
+            val release = fetchReleaseInfo()
+            val bundle = ensureBundle(release.commitSha)
+            val root = JSONObject(readZipText(bundle, "firmware/hardware/targets.json"))
 
-            val commit = JSONObject(
-                httpGetText(COMMITS_API + URLEncoder.encode(tag, "UTF-8"))
-            )
-            val sha = commit.getString("sha")
-
-            val root = JSONObject(httpGetText(TARGETS_URL))
             val targets = mutableListOf<Map<String, Any?>>()
             collectTargets(
                 node = root,
                 path = mutableListOf(),
-                stableVersion = tag,
+                stableVersion = release.version,
                 out = targets,
             )
             targets.sortBy {
@@ -94,18 +88,19 @@ class OfficialElrsService(private val context: Context) {
 
             mapOf(
                 "status" to "ok",
-                "version" to tag,
-                "releaseName" to releaseName,
-                "publishedAt" to publishedAt,
-                "commitSha" to sha,
-                "source" to "ExpressLRS/Targets",
+                "version" to release.version,
+                "releaseName" to release.releaseName,
+                "publishedAt" to release.publishedAt,
+                "commitSha" to release.commitSha,
+                "source" to "ExpressLRS pinned firmware bundle",
+                "hardwarePinned" to true,
                 "targetCount" to targets.size,
                 "targets" to targets,
             )
         } catch (e: Exception) {
             mapOf(
                 "status" to "error",
-                "message" to "Не удалось загрузить официальный каталог ExpressLRS: ${e.message ?: e.javaClass.simpleName}",
+                "message" to "Не удалось загрузить version-pinned каталог ExpressLRS: ${e.message ?: e.javaClass.simpleName}",
                 "targets" to emptyList<Map<String, Any?>>(),
             )
         }
@@ -127,7 +122,7 @@ class OfficialElrsService(private val context: Context) {
         } catch (e: Exception) {
             mapOf(
                 "status" to "error",
-                "message" to "Не удалось получить официальный target ExpressLRS: ${e.message ?: e.javaClass.simpleName}",
+                "message" to "Не удалось проверить version-pinned target ExpressLRS: ${e.message ?: e.javaClass.simpleName}",
             )
         }
     }
@@ -138,12 +133,14 @@ class OfficialElrsService(private val context: Context) {
         expectedPlatform: String,
         expectedFirmware: String,
         regulatoryProfile: String,
+        bindingPhrase: String?,
+        wifiSsid: String?,
+        wifiPassword: String?,
+        autoWifiSeconds: Int?,
+        rxBaud: Int?,
+        lockOnFirstConnection: Boolean?,
     ): Map<String, Any?> {
         return try {
-            if (regulatoryProfile != "FCC" && regulatoryProfile != "LBT") {
-                error("Не выбран радиорегион FCC или LBT")
-            }
-
             val catalog = fetchCatalogInternal(
                 targetPath = targetPath,
                 expectedProductName = expectedProductName,
@@ -152,18 +149,34 @@ class OfficialElrsService(private val context: Context) {
             )
             validateStudioPreparation(catalog)
 
-            val target = fetchTarget(targetPath)
-            val generic = downloadCachedFirmware(
-                commitSha = catalog.commitSha,
-                regulatoryProfile = regulatoryProfile,
-                firmwareTarget = catalog.firmware,
+            val allowedRegions = regulatoryOptions(catalog.category)
+            if (!allowedRegions.contains(regulatoryProfile)) {
+                error("Радиорегион $regulatoryProfile не подходит для ${catalog.category}")
+            }
+            if ((!wifiSsid.isNullOrBlank() || !wifiPassword.isNullOrBlank() || autoWifiSeconds != null) &&
+                !catalog.uploadMethods.contains("wifi")
+            ) {
+                error("Этот target не заявляет поддержку Wi-Fi")
+            }
+            if (!wifiPassword.isNullOrBlank() && wifiSsid.isNullOrBlank()) {
+                error("Пароль Wi-Fi задан без SSID")
+            }
+
+            val bundle = ensureBundle(catalog.commitSha)
+            val target = fetchTargetFromBundle(bundle, targetPath)
+            val cacheProfile = cacheFolderFor(catalog.category, regulatoryProfile)
+            val generic = readZipBytes(
+                bundle,
+                "firmware/$cacheProfile/${catalog.firmware}/firmware.bin",
             )
 
-            val category = targetPath.split('.').getOrNull(1).orEmpty()
-            val hwDir = if (category.startsWith("tx_")) "TX" else "RX"
-            val layoutUrl =
-                "$TARGETS_RAW_BASE/$hwDir/${urlPath(catalog.layoutFile)}"
-            val layout = JSONObject(httpGetText(layoutUrl))
+            val hwDir = if (catalog.category.startsWith("tx_")) "TX" else "RX"
+            val layout = JSONObject(
+                readZipText(
+                    bundle,
+                    "firmware/hardware/$hwDir/${catalog.layoutFile}",
+                )
+            )
 
             val overlay = target.optJSONObject("overlay")
             if (overlay != null) {
@@ -174,12 +187,24 @@ class OfficialElrsService(private val context: Context) {
                 }
             }
 
+            val options = buildUnifiedOptions(
+                category = catalog.category,
+                regulatoryProfile = regulatoryProfile,
+                bindingPhrase = bindingPhrase,
+                wifiSsid = wifiSsid,
+                wifiPassword = wifiPassword,
+                autoWifiSeconds = autoWifiSeconds,
+                rxBaud = rxBaud,
+                lockOnFirstConnection = lockOnFirstConnection,
+            )
+
             val configured = configureUnifiedEspFirmware(
                 source = generic,
                 productName = catalog.productName,
                 luaName = catalog.luaName,
                 layoutJson = layout.toString(),
                 priorTargetName = catalog.priorTargetName,
+                optionsJson = options.toString(),
             )
 
             val targetSlug = targetPath
@@ -200,6 +225,7 @@ class OfficialElrsService(private val context: Context) {
             val manifest = JSONObject()
                 .put("version", catalog.version)
                 .put("commitSha", catalog.commitSha)
+                .put("hardwareSource", "same firmware.zip commit")
                 .put("targetPath", catalog.targetPath)
                 .put("productName", catalog.productName)
                 .put("platform", catalog.platform)
@@ -209,12 +235,16 @@ class OfficialElrsService(private val context: Context) {
                 .put("fileName", out.name)
                 .put("fileSize", out.length())
                 .put("sha256", firmwareSha256)
+                .put("bindingPhraseSet", !bindingPhrase.isNullOrBlank())
+                .put("wifiConfigured", !wifiSsid.isNullOrBlank())
+                .put("rxBaud", rxBaud ?: JSONObject.NULL)
+                .put("lockOnFirstConnection", lockOnFirstConnection ?: JSONObject.NULL)
             val manifestFile = File(dir, "manifest.json")
             manifestFile.writeText(manifest.toString(2), Charsets.UTF_8)
 
             mapOf(
                 "status" to "prepared",
-                "message" to "Официальная прошивка ExpressLRS скачана и подготовлена для ${catalog.productName}",
+                "message" to "Version-pinned прошивка ExpressLRS подготовлена для ${catalog.productName}",
                 "version" to catalog.version,
                 "releaseName" to catalog.releaseName,
                 "commitSha" to catalog.commitSha,
@@ -228,6 +258,7 @@ class OfficialElrsService(private val context: Context) {
                 "fileSize" to out.length(),
                 "sha256" to firmwareSha256,
                 "manifestPath" to manifestFile.absolutePath,
+                "hardwarePinned" to true,
                 "readyToFlash" to true,
             )
         } catch (e: Exception) {
@@ -238,26 +269,68 @@ class OfficialElrsService(private val context: Context) {
         }
     }
 
+    private fun fetchReleaseInfo(): ReleaseInfo {
+        val release = JSONObject(httpGetText(RELEASES_LATEST))
+        val tag = release.getString("tag_name")
+        val releaseName = release.optString("name", tag)
+        val publishedAt = release.optString("published_at").ifBlank { null }
+        val commit = JSONObject(
+            httpGetText(COMMITS_API + URLEncoder.encode(tag, "UTF-8"))
+        )
+        return ReleaseInfo(
+            version = tag,
+            releaseName = releaseName,
+            publishedAt = publishedAt,
+            commitSha = commit.getString("sha"),
+        )
+    }
+
+    private fun ensureBundle(commitSha: String): File {
+        val dir = File(context.cacheDir, "elrs-bundles")
+        if (!dir.exists() && !dir.mkdirs()) error("Не удалось создать cache каталога")
+        val file = File(dir, "$commitSha-firmware.zip")
+        if (file.isFile && file.length() > 1024 * 1024) return file
+
+        val tmp = File(dir, "$commitSha-firmware.zip.part")
+        if (tmp.exists()) tmp.delete()
+
+        val conn = open("$CACHE_BASE/$commitSha/firmware.zip")
+        conn.connectTimeout = 15000
+        conn.readTimeout = 90000
+        conn.connect()
+        try {
+            if (conn.responseCode !in 200..299) {
+                error("официальный firmware bundle HTTP ${conn.responseCode}")
+            }
+            conn.inputStream.use { input ->
+                tmp.outputStream().use { output -> input.copyTo(output) }
+            }
+        } finally {
+            conn.disconnect()
+        }
+
+        if (tmp.length() < 1024 * 1024) {
+            tmp.delete()
+            error("получен слишком маленький firmware bundle")
+        }
+        if (!tmp.renameTo(file)) {
+            tmp.copyTo(file, overwrite = true)
+            tmp.delete()
+        }
+        return file
+    }
+
     private fun collectTargets(
         node: JSONObject,
         path: MutableList<String>,
         stableVersion: String,
         out: MutableList<Map<String, Any?>>,
     ) {
-        if (node.has("product_name") &&
-            node.has("platform") &&
-            node.has("firmware")
-        ) {
+        if (node.has("product_name") && node.has("platform") && node.has("firmware")) {
             val targetPath = path.joinToString(".")
-            val methods = mutableListOf<String>()
-            val methodsArray = node.optJSONArray("upload_methods")
-            if (methodsArray != null) {
-                for (i in 0 until methodsArray.length()) {
-                    methods += methodsArray.optString(i)
-                }
-            }
-
             val category = path.getOrNull(1).orEmpty()
+            val methods = jsonStringList(node.optJSONArray("upload_methods"))
+            val features = jsonStringList(node.optJSONArray("features"))
             val platform = node.optString("platform")
             val firmware = node.optString("firmware")
             val minVersion = node.optString("min_version").ifBlank { null }
@@ -269,22 +342,15 @@ class OfficialElrsService(private val context: Context) {
                     firmware.startsWith(EXPECTED_FIRMWARE_8285_PREFIX) &&
                     category.startsWith("rx_") &&
                     supportsUart &&
-                    stableCompatible
+                    stableCompatible &&
+                    regulatoryOptions(category).isNotEmpty()
 
             out += mapOf(
                 "targetPath" to targetPath,
                 "vendor" to (path.firstOrNull() ?: ""),
                 "category" to category,
-                "role" to when {
-                    category.startsWith("rx_") -> "RX"
-                    category.startsWith("tx_") -> "TX"
-                    else -> ""
-                },
-                "band" to when {
-                    category.contains("2400") -> "2.4 ГГц"
-                    category.contains("900") -> "900 МГц"
-                    else -> ""
-                },
+                "role" to if (category.startsWith("rx_")) "RX" else if (category.startsWith("tx_")) "TX" else "",
+                "band" to bandLabel(category),
                 "productName" to node.optString("product_name", targetPath),
                 "luaName" to node.optString("lua_name").ifBlank { null },
                 "platform" to platform,
@@ -293,6 +359,8 @@ class OfficialElrsService(private val context: Context) {
                 "minVersion" to minVersion,
                 "uploadMethods" to methods,
                 "priorTargetName" to node.optString("prior_target_name").ifBlank { null },
+                "features" to features,
+                "regulatoryOptions" to regulatoryOptions(category),
                 "stableCompatible" to stableCompatible,
                 "supportsUart" to supportsUart,
                 "studioSupported" to studioSupported,
@@ -319,52 +387,40 @@ class OfficialElrsService(private val context: Context) {
         expectedFirmware: String,
     ): Catalog {
         validateTargetPath(targetPath)
-
-        val release = JSONObject(httpGetText(RELEASES_LATEST))
-        val tag = release.getString("tag_name")
-        val releaseName = release.optString("name", tag)
-        val publishedAt = release.optString("published_at").ifBlank { null }
-
-        val commit = JSONObject(
-            httpGetText(COMMITS_API + URLEncoder.encode(tag, "UTF-8"))
-        )
-        val sha = commit.getString("sha")
-        val target = fetchTarget(targetPath)
+        val release = fetchReleaseInfo()
+        val bundle = ensureBundle(release.commitSha)
+        val target = fetchTargetFromBundle(bundle, targetPath)
+        val category = targetPath.split('.').getOrNull(1).orEmpty()
 
         val product = target.getString("product_name")
         val platform = target.getString("platform")
         val firmware = target.getString("firmware")
 
         if (product != expectedProductName) {
-            error("Официальный target изменился: ожидался «$expectedProductName», получен «$product»")
+            error("Target изменился: ожидался «$expectedProductName», получен «$product»")
         }
         if (platform != expectedPlatform) {
-            error("Официальная платформа изменилась: ожидалась $expectedPlatform, получена $platform")
+            error("Платформа изменилась: ожидалась $expectedPlatform, получена $platform")
         }
         if (firmware != expectedFirmware) {
-            error("Официальное семейство прошивки изменилось: ожидалось $expectedFirmware, получено $firmware")
+            error("Семейство прошивки изменилось: ожидалось $expectedFirmware, получено $firmware")
         }
 
-        val methods = mutableListOf<String>()
-        val arr = target.optJSONArray("upload_methods")
-        if (arr != null) {
-            for (i in 0 until arr.length()) methods += arr.optString(i)
-        }
-        if (!methods.contains("uart")) {
-            error("Официальный target не разрешает UART")
-        }
+        val methods = jsonStringList(target.optJSONArray("upload_methods"))
+        if (!methods.contains("uart")) error("Target не разрешает UART")
 
         val minVersion = target.optString("min_version").ifBlank { null }
-        if (minVersion != null && !versionAtLeast(tag, minVersion)) {
-            error("Target требует ExpressLRS $minVersion или новее, stable сейчас $tag")
+        if (minVersion != null && !versionAtLeast(release.version, minVersion)) {
+            error("Target требует ExpressLRS $minVersion или новее")
         }
 
         return Catalog(
-            version = tag,
-            releaseName = releaseName,
-            publishedAt = publishedAt,
-            commitSha = sha,
+            version = release.version,
+            releaseName = release.releaseName,
+            publishedAt = release.publishedAt,
+            commitSha = release.commitSha,
             targetPath = targetPath,
+            category = category,
             productName = product,
             luaName = target.optString("lua_name", product.take(16)),
             platform = platform,
@@ -373,7 +429,29 @@ class OfficialElrsService(private val context: Context) {
             minVersion = minVersion,
             uploadMethods = methods,
             priorTargetName = target.optString("prior_target_name").ifBlank { null },
+            features = jsonStringList(target.optJSONArray("features")),
         )
+    }
+
+    private fun fetchTargetFromBundle(bundle: File, targetPath: String): JSONObject {
+        var node = JSONObject(readZipText(bundle, "firmware/hardware/targets.json"))
+        for (part in targetPath.split('.')) node = node.getJSONObject(part)
+        return node
+    }
+
+    private fun readZipText(bundle: File, path: String): String =
+        String(readZipBytes(bundle, path), Charsets.UTF_8)
+
+    private fun readZipBytes(bundle: File, path: String): ByteArray {
+        ZipFile(bundle).use { zip ->
+            val normalized = path.removePrefix("./")
+            val entry = zip.getEntry(normalized)
+                ?: zip.entries().asSequence().firstOrNull {
+                    it.name.removePrefix("./") == normalized
+                }
+                ?: error("В version-pinned bundle не найден $normalized")
+            return zip.getInputStream(entry).use { it.readBytes() }
+        }
     }
 
     private fun validateTargetPath(targetPath: String) {
@@ -385,23 +463,110 @@ class OfficialElrsService(private val context: Context) {
 
     private fun validateStudioPreparation(catalog: Catalog) {
         if (catalog.platform != "esp8285") {
-            error("Подготовка прошивки для ${catalog.platform} пока не включена")
+            error("Подготовка для ${catalog.platform} пока не включена")
         }
         if (!catalog.firmware.startsWith(EXPECTED_FIRMWARE_8285_PREFIX)) {
-            error("Семейство ${catalog.firmware} пока не включено для автоматической подготовки")
+            error("Семейство ${catalog.firmware} пока не включено")
         }
+        if (!catalog.category.startsWith("rx_")) {
+            error("alpha.10 автоматически готовит только RX")
+        }
+    }
+
+    private fun bandLabel(category: String): String = when {
+        category.contains("2400") -> "2.4 ГГц"
+        category.contains("900") -> "900 МГц"
+        category.contains("433") -> "433 МГц"
+        category.contains("dual") -> "Dual Band"
+        else -> ""
+    }
+
+    private fun regulatoryOptions(category: String): List<String> = when {
+        category.contains("2400") -> listOf("FCC", "LBT")
+        category.contains("900") -> listOf("FCC_915", "EU_868", "AU_915", "IN_866")
+        category.contains("433") -> listOf("US_433", "US_433_WIDE", "EU_433", "AU_433")
+        else -> emptyList()
+    }
+
+    private fun cacheFolderFor(category: String, regulatoryProfile: String): String {
+        return if (category.contains("2400") && regulatoryProfile == "LBT") {
+            "LBT"
+        } else {
+            "FCC"
+        }
+    }
+
+    private fun buildUnifiedOptions(
+        category: String,
+        regulatoryProfile: String,
+        bindingPhrase: String?,
+        wifiSsid: String?,
+        wifiPassword: String?,
+        autoWifiSeconds: Int?,
+        rxBaud: Int?,
+        lockOnFirstConnection: Boolean?,
+    ): JSONObject {
+        val flags = JSONObject()
+        if (!bindingPhrase.isNullOrBlank()) {
+            flags.put("uid", JSONArray(generateUid(bindingPhrase).map { it.toInt() and 0xFF }))
+        }
+        if (!wifiSsid.isNullOrBlank()) flags.put("wifi-ssid", wifiSsid)
+        if (!wifiPassword.isNullOrBlank() && !wifiSsid.isNullOrBlank()) {
+            flags.put("wifi-password", wifiPassword)
+        }
+        if (autoWifiSeconds != null) flags.put("wifi-on-interval", autoWifiSeconds)
+        if (rxBaud != null) flags.put("rcvr-uart-baud", rxBaud)
+        if (lockOnFirstConnection != null) {
+            flags.put("lock-on-first-connection", lockOnFirstConnection)
+        }
+
+        domainNumber(regulatoryProfile)?.let { flags.put("domain", it) }
+        flags.put(
+            "flash-discriminator",
+            SecureRandom().nextInt().toLong() and 0xFFFFFFFFL,
+        )
+        return flags
+    }
+
+    private fun generateUid(phrase: String): ByteArray {
+        val csv = phrase.split(',').mapNotNull { it.trim().toIntOrNull() }
+        if (csv.size in 4..6 && csv.all { it in 0..255 } &&
+            phrase.split(',').size == csv.size
+        ) {
+            val out = ByteArray(6)
+            val start = 6 - csv.size
+            csv.forEachIndexed { index, value -> out[start + index] = value.toByte() }
+            return out
+        }
+        return MessageDigest.getInstance("MD5")
+            .digest("-DMY_BINDING_PHRASE=\"$phrase\"".toByteArray(Charsets.UTF_8))
+            .copyOfRange(0, 6)
+    }
+
+    private fun domainNumber(profile: String): Int? = when (profile) {
+        "AU_915" -> 0
+        "FCC_915" -> 1
+        "EU_868" -> 2
+        "IN_866" -> 3
+        "AU_433" -> 4
+        "EU_433" -> 5
+        "US_433" -> 6
+        "US_433_WIDE" -> 7
+        else -> null
+    }
+
+    private fun jsonStringList(array: JSONArray?): List<String> {
+        if (array == null) return emptyList()
+        return List(array.length()) { i -> array.optString(i) }.filter { it.isNotBlank() }
     }
 
     private fun versionAtLeast(current: String, required: String): Boolean {
         fun parse(v: String): List<Int> {
-            val clean = v.trim().removePrefix("v")
-            return clean.split('.').take(3).map { part ->
+            val parts = v.trim().removePrefix("v").split('.').take(3).map { part ->
                 Regex("""\d+""").find(part)?.value?.toIntOrNull() ?: 0
-            }.let { parts ->
-                parts + List(maxOf(0, 3 - parts.size)) { 0 }
             }
+            return parts + List(maxOf(0, 3 - parts.size)) { 0 }
         }
-
         val a = parse(current)
         val b = parse(required)
         for (i in 0 until 3) {
@@ -411,79 +576,18 @@ class OfficialElrsService(private val context: Context) {
         return true
     }
 
-    private fun fetchTarget(targetPath: String): JSONObject {
-        var node = JSONObject(httpGetText(TARGETS_URL))
-        for (part in targetPath.split('.')) {
-            node = node.getJSONObject(part)
-        }
-        return node
-    }
-
-    private fun downloadCachedFirmware(
-        commitSha: String,
-        regulatoryProfile: String,
-        firmwareTarget: String,
-    ): ByteArray {
-        val url = "$CACHE_BASE/$commitSha/firmware.zip"
-        val expectedEntry =
-            "$regulatoryProfile/$firmwareTarget/firmware.bin"
-
-        val conn = open(url)
-        conn.connectTimeout = 15000
-        conn.readTimeout = 60000
-        conn.connect()
-
-        if (conn.responseCode !in 200..299) {
-            val code = conn.responseCode
-            conn.disconnect()
-            error("официальный cache ExpressLRS HTTP $code")
-        }
-
-        try {
-            ZipInputStream(BufferedInputStream(conn.inputStream)).use { zip ->
-                while (true) {
-                    val entry = zip.nextEntry ?: break
-                    val name = entry.name.replace('\\', '/')
-                    if (!entry.isDirectory && name.endsWith(expectedEntry)) {
-                        val out = ByteArrayOutputStream()
-                        val buf = ByteArray(64 * 1024)
-                        while (true) {
-                            val n = zip.read(buf)
-                            if (n <= 0) break
-                            out.write(buf, 0, n)
-                        }
-                        val bytes = out.toByteArray()
-                        if (bytes.size < 64 * 1024) {
-                            error("получен слишком маленький firmware.bin")
-                        }
-                        return bytes
-                    }
-                    zip.closeEntry()
-                }
-            }
-        } finally {
-            conn.disconnect()
-        }
-
-        error("В официальном cache не найден $expectedEntry")
-    }
-
     private fun configureUnifiedEspFirmware(
         source: ByteArray,
         productName: String,
         luaName: String,
         layoutJson: String,
         priorTargetName: String?,
+        optionsJson: String,
     ): ByteArray {
         val end = findFirmwareEnd(source)
         if (end <= 0 || end > source.size) {
             error("не удалось определить конец ESP firmware image")
         }
-
-        val discriminator = SecureRandom().nextInt().toLong() and 0xFFFFFFFFL
-        val defines = JSONObject()
-            .put("flash-discriminator", discriminator)
-            .toString()
 
         val priorBytes = if (priorTargetName.isNullOrBlank()) {
             byteArrayOf()
@@ -499,23 +603,19 @@ class OfficialElrsService(private val context: Context) {
 
         pos = writeFixed(configured, pos, productName.toByteArray(Charsets.UTF_8), 128)
         pos = writeFixed(configured, pos, luaName.toByteArray(Charsets.UTF_8), 16)
-        pos = writeFixed(configured, pos, defines.toByteArray(Charsets.UTF_8), 512)
+        pos = writeFixed(configured, pos, optionsJson.toByteArray(Charsets.UTF_8), 512)
         pos = writeFixed(configured, pos, layoutJson.toByteArray(Charsets.UTF_8), 2048)
 
         if (priorBytes.isNotEmpty()) {
             priorBytes.copyInto(configured, destinationOffset = pos)
         }
-
         return configured
     }
 
     private fun findFirmwareEnd(bytes: ByteArray): Int {
         fun u8(i: Int) = bytes[i].toInt() and 0xFF
         fun le32(i: Int): Int =
-            (u8(i)) or
-                (u8(i + 1) shl 8) or
-                (u8(i + 2) shl 16) or
-                (u8(i + 3) shl 24)
+            u8(i) or (u8(i + 1) shl 8) or (u8(i + 2) shl 16) or (u8(i + 3) shl 24)
 
         if (bytes.size < 0x1010 || u8(0) != 0xE9) {
             error("firmware.bin не похож на ESP image")
@@ -524,11 +624,8 @@ class OfficialElrsService(private val context: Context) {
         var segments = u8(1)
         var pos: Int
         var is8285 = false
-
         if (segments == 2) {
-            if (u8(0x1000) != 0xE9) {
-                error("ESP8285 second image header not found")
-            }
+            if (u8(0x1000) != 0xE9) error("ESP8285 second image header not found")
             segments = u8(0x1001)
             pos = 0x1000 + 8
             is8285 = true
@@ -539,9 +636,7 @@ class OfficialElrsService(private val context: Context) {
         repeat(segments) {
             if (pos + 8 > bytes.size) error("ESP segment header outside image")
             val size = le32(pos + 4)
-            if (size < 0 || pos + 8 + size > bytes.size) {
-                error("ESP segment outside image")
-            }
+            if (size < 0 || pos + 8 + size > bytes.size) error("ESP segment outside image")
             pos += 8 + size
         }
 
@@ -560,13 +655,8 @@ class OfficialElrsService(private val context: Context) {
             error("Unified metadata outside firmware buffer")
         }
         val n = minOf(data.size, size)
-        data.copyInto(
-            destination = out,
-            destinationOffset = offset,
-            startIndex = 0,
-            endIndex = n,
-        )
-        out.fill(0, fromIndex = offset + n, toIndex = offset + size)
+        data.copyInto(out, offset, 0, n)
+        out.fill(0, offset + n, offset + size)
         return offset + size
     }
 
@@ -574,18 +664,10 @@ class OfficialElrsService(private val context: Context) {
         val conn = open(url)
         conn.connectTimeout = 12000
         conn.readTimeout = 20000
-        conn.setRequestProperty(
-            "Accept",
-            "application/vnd.github+json, application/json, text/plain",
-        )
         conn.connect()
-
         try {
-            if (conn.responseCode !in 200..299) {
-                error("HTTP ${conn.responseCode} для $url")
-            }
-            return conn.inputStream.bufferedReader(Charsets.UTF_8)
-                .use { it.readText() }
+            if (conn.responseCode !in 200..299) error("HTTP ${conn.responseCode}")
+            return conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
             conn.disconnect()
         }
@@ -594,22 +676,13 @@ class OfficialElrsService(private val context: Context) {
     private fun open(url: String): HttpURLConnection {
         return (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            setRequestProperty("User-Agent", "ESP-Service-Studio/0.9")
+            setRequestProperty("User-Agent", "ESP-Service-Studio/0.10")
             setRequestProperty("Accept-Encoding", "identity")
             instanceFollowRedirects = true
         }
     }
 
-    private fun urlPath(name: String): String {
-        return name.split('/').joinToString("/") {
-            URLEncoder.encode(it, "UTF-8").replace("+", "%20")
-        }
-    }
-
-    private fun sha256(bytes: ByteArray): String {
-        return MessageDigest
-            .getInstance("SHA-256")
-            .digest(bytes)
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it) }
-    }
 }
