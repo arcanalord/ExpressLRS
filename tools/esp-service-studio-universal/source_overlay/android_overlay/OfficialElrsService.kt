@@ -190,6 +190,22 @@ class OfficialElrsService(private val context: Context) {
             val out = File(dir, "firmware.bin")
             out.writeBytes(configured)
 
+            val firmwareSha256 = sha256(configured)
+            val manifest = JSONObject()
+                .put("version", catalog.version)
+                .put("commitSha", catalog.commitSha)
+                .put("targetPath", catalog.targetPath)
+                .put("productName", catalog.productName)
+                .put("platform", catalog.platform)
+                .put("firmware", catalog.firmware)
+                .put("regulatoryProfile", regulatoryProfile)
+                .put("writeOffset", "0x0")
+                .put("fileName", out.name)
+                .put("fileSize", out.length())
+                .put("sha256", firmwareSha256)
+            val manifestFile = File(dir, "manifest.json")
+            manifestFile.writeText(manifest.toString(2), Charsets.UTF_8)
+
             mapOf(
                 "status" to "prepared",
                 "message" to "Официальная прошивка ExpressLRS скачана и подготовлена для ${catalog.productName}",
@@ -204,7 +220,8 @@ class OfficialElrsService(private val context: Context) {
                 "writeOffset" to "0x0",
                 "filePath" to out.absolutePath,
                 "fileSize" to out.length(),
-                "sha256" to sha256(configured),
+                "sha256" to firmwareSha256,
+                "manifestPath" to manifestFile.absolutePath,
                 "readyToFlash" to true,
             )
         } catch (e: Exception) {
