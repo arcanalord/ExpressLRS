@@ -96,7 +96,7 @@ jobs:
           xdotool windowsize "$WIN" 540 960 || true
           sleep 3
 
-          ffmpeg -y -f x11grab -framerate 24 -video_size 720x1280 -i :99.0             -c:v libx264 -preset veryfast -pix_fmt yuv420p /tmp/MeshMessenger-dev11-visual-QA.mp4             >/tmp/ffmpeg.log 2>&1 &
+          ffmpeg -nostdin -y -f x11grab -draw_mouse 0 -framerate 15 -video_size 720x1280 -i :99.0             -t 34 -c:v mpeg4 -q:v 5 -pix_fmt yuv420p /tmp/MeshMessenger-dev11-visual-QA.mp4             >/tmp/ffmpeg.log 2>&1 &
           FFMPEG_PID=$!
 
           sleep 4
@@ -115,15 +115,19 @@ jobs:
           xdotool mousemove 563 1040 click 1 || true
           sleep 4
 
-          kill -INT "$FFMPEG_PID" || true
           wait "$FFMPEG_PID" || true
+          cp /tmp/ffmpeg.log /tmp/FFMPEG_LOG.txt || true
+          cp /tmp/mesh-ui.log /tmp/MESH_UI_LOG.txt || true
           kill "$APP_PID" || true
           kill "$OPENBOX_PID" || true
           kill "$XVFB_PID" || true
 
-          test -s /tmp/MeshMessenger-dev11-visual-QA.mp4
+          if [ ! -s /tmp/MeshMessenger-dev11-visual-QA.mp4 ]; then
+            echo "VIDEO_CAPTURE_FAILED" >&2
+            cat /tmp/ffmpeg.log >&2 || true
+            exit 1
+          fi
           ffprobe -v error -show_entries format=duration,size -of default=nw=1 /tmp/MeshMessenger-dev11-visual-QA.mp4             | tee /tmp/VIDEO_INFO.txt
-          cp /tmp/mesh-ui.log /tmp/MESH_UI_LOG.txt
 
       - name: QA summary
         if: always()
@@ -136,10 +140,13 @@ jobs:
             cat /tmp/MM_UART_TWO_NODE_TEST.txt
             echo
             echo "Video:"
-            cat /tmp/VIDEO_INFO.txt
+            cat /tmp/VIDEO_INFO.txt 2>/dev/null || echo "VIDEO_INFO unavailable"
             echo
             echo "Linux UI process log:"
-            tail -n 100 /tmp/MESH_UI_LOG.txt
+            tail -n 100 /tmp/MESH_UI_LOG.txt 2>/dev/null || true
+            echo
+            echo "FFmpeg log:"
+            tail -n 100 /tmp/FFMPEG_LOG.txt 2>/dev/null || true
           } > /tmp/QA_VIDEO_REPORT.txt
 
       - name: Upload video QA artifact
@@ -152,5 +159,6 @@ jobs:
             /tmp/MM_UART_TWO_NODE_TEST.txt
             /tmp/QA_VIDEO_REPORT.txt
             /tmp/MESH_UI_LOG.txt
+            /tmp/FFMPEG_LOG.txt
           if-no-files-found: error
           retention-days: 14
