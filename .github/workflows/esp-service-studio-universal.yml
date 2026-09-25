@@ -52,7 +52,7 @@ jobs:
         working-directory: /tmp/service_studio
         run: dart run tool/profile_self_test.dart
 
-      - name: USB serial + dynamic ELRS catalog source gate
+      - name: USB serial + dynamic ELRS catalog + guarded ESP8285 flash gate
         working-directory: /tmp/service_studio
         run: python3 tool/usb_serial_probe_source_gate.py
 
@@ -73,30 +73,30 @@ jobs:
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
-          cp "$APK" /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.8-Pixel7a.apk
-          sha256sum /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.8-Pixel7a.apk > /tmp/SHA256SUMS.txt
+          cp "$APK" /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.9-Pixel7a.apk
+          sha256sum /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.9-Pixel7a.apk > /tmp/SHA256SUMS.txt
 
       - name: Package Dropbox release
         run: |
           set -euo pipefail
           mkdir -p /tmp/service-studio-release
-          cp /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.8-Pixel7a.apk /tmp/service-studio-release/
+          cp /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.9-Pixel7a.apk /tmp/service-studio-release/
           cp /tmp/SHA256SUMS.txt /tmp/service-studio-release/
           cp tools/esp-service-studio-universal/README.md /tmp/service-studio-release/
           cp tools/esp-service-studio-universal/ARCHITECTURE_v1.md /tmp/service-studio-release/
           cp tools/esp-service-studio-universal/source_overlay/assets/device_profiles.json /tmp/service-studio-release/
           cd tools/esp-service-studio-universal
-          zip -qr /tmp/service-studio-release/ESP-Service-Studio-Universal-source-v0.9.0-alpha.8.zip source_overlay
+          zip -qr /tmp/service-studio-release/ESP-Service-Studio-Universal-source-v0.9.0-alpha.9.zip source_overlay
           cd /tmp/service-studio-release
-          zip -qr /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.8-release.zip .
+          zip -qr /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.9-release.zip .
 
       - name: Upload release package
         uses: actions/upload-artifact@v4
         with:
-          name: ESP-Service-Studio-Universal-v0.9.0-alpha.8
+          name: ESP-Service-Studio-Universal-v0.9.0-alpha.9
           path: |
-            /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.8-release.zip
-            /tmp/service-studio-release/ESP-Service-Studio-Universal-v0.9.0-alpha.8-Pixel7a.apk
+            /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.9-release.zip
+            /tmp/service-studio-release/ESP-Service-Studio-Universal-v0.9.0-alpha.9-Pixel7a.apk
             /tmp/service-studio-release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
