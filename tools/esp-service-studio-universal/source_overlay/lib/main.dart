@@ -249,7 +249,9 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
   String? get _detectedPlatform {
     final d = probeResult?.chipDescription?.toLowerCase() ?? '';
-    if (d.contains('8285') || d.contains('8266')) return 'esp8285';
+    if (d.startsWith('esp8285')) return 'esp8285';
+    if (d == 'esp8266ex') return 'esp8266';
+    if (d.contains('esp8266 / esp8285')) return null;
     if (d.contains('esp32-s2')) return 'esp32s2';
     if (d.contains('esp32')) return 'esp32';
     return null;
