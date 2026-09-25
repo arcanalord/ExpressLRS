@@ -25,7 +25,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.2'
+          flutter-version: '3.47.5'
           channel: stable
           cache: true
 
@@ -55,6 +55,10 @@ jobs:
       - name: USB serial + pinned ELRS bundle + guarded ESP8285 flash gate
         working-directory: /tmp/service_studio
         run: python3 tool/usb_serial_probe_source_gate.py
+
+      - name: Pinned ExpressLRS bundle contract
+        working-directory: /tmp/service_studio
+        run: python3 tool/elrs_pinned_bundle_contract_test.py
 
       - name: Analyze
         working-directory: /tmp/service_studio
