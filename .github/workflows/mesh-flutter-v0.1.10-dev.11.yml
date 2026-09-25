@@ -89,6 +89,7 @@ jobs:
           dart run tool/mm_uart_codec_self_test.dart
           dart run tool/radio_capability_self_test.dart
           dart run tool/mm_uart_session_self_test.dart
+          dart run tool/mm_uart_two_node_self_test.dart
           dart run tool/device_recognition_self_test.dart
           python3 tool/mm_uart_common_radio_source_gate.py
           grep -q "implements MmUartHostLink" lib/platform/android_usb_mm_uart_host_link.dart
