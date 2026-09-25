@@ -18,12 +18,15 @@ root_gradle = Path(
 ).read_text(encoding='utf-8')
 
 checks = {
-    'visible alpha4 id': 'v0.9.0-alpha.4 · Pixel 7a' in main,
+    'visible alpha5 id': 'v0.9.0-alpha.5 · Pixel 7a' in main,
     'real probe button': 'probeEspRom' in main,
     'permission request': 'requestPermission' in native,
     'permission result': 'ACTION_USB_PERMISSION' in native,
     'native probe': 'UsbSerialProbe(this).probe' in native,
     'ROM sync command': 'out.write(0x08)' in probe,
+    'ESP8285 detect': 'ESP8285' in probe and '0xFFF0C101L' in probe,
+    'chip read reg': '0x40001000L' in probe,
+    'flash RDID': '0x9FL' in probe and 'Flash ID' in main,
     'manual EP2 safe DTR RTS': 'Не дёргаем DTR/RTS' in probe,
     'WCH 55d3 fallback': '0x55D3' in probe,
     'CH34x driver': 'Ch34xSerialDriver' in probe,
@@ -38,4 +41,4 @@ if failed:
         'USB serial probe source gate failed: ' + ', '.join(failed)
     )
 
-print('USB serial + ESP ROM probe source gate PASS')
+print('USB serial + ESP8285 diagnostics source gate PASS')
