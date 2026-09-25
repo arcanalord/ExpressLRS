@@ -177,6 +177,11 @@ final class MmUartExternalRadioSession {
       }),
     );
     bootId = _stringOrNull(hello?['bootId']);
+    await refreshInfoAndCapabilities();
+  }
+
+  Future<ExternalRadioSessionSnapshot> refreshInfoAndCapabilities() async {
+    if (_link == null) throw StateError('NO_HOST_LINK');
 
     final rawInfo = _asMap(await request(MmUartFrameType.getInfo)) ?? const {};
     info = RadioInfo.fromJson(rawInfo, bootId: bootId);
@@ -191,6 +196,7 @@ final class MmUartExternalRadioSession {
     _setState(
       ready ? 'ready' : (_stringOrNull(rawState['state']) ?? 'connected'),
     );
+    return snapshot();
   }
 
   Future<void> disconnect() async {
@@ -285,6 +291,20 @@ final class MmUartExternalRadioSession {
   Future<Map<String, dynamic>> compatSelftest() async {
     return _asMap(await request(MmUartFrameType.compatSelftest)) ??
         <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> enterOta() async {
+    return _asMap(await request(MmUartFrameType.enterOta)) ??
+        <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> exitOta() async {
+    return _asMap(await request(MmUartFrameType.exitOta)) ??
+        <String, dynamic>{};
+  }
+
+  Future<void> reboot() async {
+    await request(MmUartFrameType.reboot);
   }
 
   Future<void> _recoverAfterReset(int generation) async {
