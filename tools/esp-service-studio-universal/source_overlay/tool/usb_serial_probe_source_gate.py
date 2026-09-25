@@ -24,7 +24,7 @@ device_profiles = Path(
 ).read_text(encoding='utf-8')
 
 checks = {
-    'visible alpha8 id': 'v0.9.0-alpha.8 · Pixel 7a' in main,
+    'visible alpha9 id': 'v0.9.0-alpha.9 · Pixel 7a' in main,
     'real probe button': 'probeEspRom' in main,
     'permission request': 'requestPermission' in native,
     'permission result': 'ACTION_USB_PERMISSION' in native,
@@ -50,6 +50,15 @@ checks = {
     'dynamic search UI': 'Поиск модели' in main,
     'MCU filtering': '_detectedPlatform' in main and '_filteredTargets' in main,
     'catalog method channel': 'fetchOfficialElrsCatalogIndex' in native,
+    'guarded flash method channel': 'flashPreparedEsp8285' in native and 'flashPrepared(' in probe,
+    'prepared manifest': 'manifest.json' in elrs and 'manifestPath' in elrs,
+    'ROM flash begin': 'FLASH_BEGIN' in probe and '0x02' in probe,
+    'ROM flash data': '0x03' in probe and 'espChecksum' in probe,
+    'ESP checksum seed': '0xEFL' in probe,
+    'ESP8266 erase workaround': 'esp8266EraseSize' in probe,
+    'flash target guard': 'expectedTargetPath' in probe and 'Unified_ESP8285_' in probe,
+    'flash hash guard': 'SHA-256 firmware.bin' in probe and 'expectedSha256' in probe,
+    'block ack disclaimer': 'Полный readback пока не выполнялся' in probe and 'полный readback содержимого пока не выполняется' in main,
     'no forced EP2 default': 'selected ??= p.isEmpty ? null : p.first' not in main,
 }
 
@@ -59,4 +68,4 @@ if failed:
         'USB serial probe source gate failed: ' + ', '.join(failed)
     )
 
-print('USB serial + dynamic ELRS catalog source gate PASS')
+print('USB serial + dynamic ELRS catalog + guarded ESP8285 flash gate PASS')
