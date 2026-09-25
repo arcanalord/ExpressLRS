@@ -110,12 +110,14 @@ jobs:
           xdotool windowactivate "$WIN" || true
           sleep 3
 
-          NAV_Y=$((HEIGHT-45))
-          CHAT_X=$((WIDTH/8))
-          MAP_X=$((WIDTH*3/8))
-          CONNECTION_X=$((WIDTH*5/8))
-          SETTINGS_X=$((WIDTH*7/8))
-          HELP_X=$((WIDTH-70))
+          VIEW_W=720
+          VIEW_H=720
+          NAV_Y=$((VIEW_H-45))
+          CHAT_X=$((VIEW_W/8))
+          MAP_X=$((VIEW_W*3/8))
+          CONNECTION_X=$((VIEW_W*5/8))
+          SETTINGS_X=$((VIEW_W*7/8))
+          HELP_X=$((VIEW_W-70))
           HELP_Y=45
 
           ffmpeg -nostdin -y -f x11grab -draw_mouse 0 -framerate 15 -video_size 720x1280 -i :99.0             -t 34 -c:v mpeg4 -q:v 5 -pix_fmt yuv420p /tmp/MeshMessenger-dev11-visual-QA.mp4             >/tmp/ffmpeg.log 2>&1 &
