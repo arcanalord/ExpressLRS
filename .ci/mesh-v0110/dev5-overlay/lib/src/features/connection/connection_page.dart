@@ -186,6 +186,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       OutlinedButton.icon(
                         onPressed: controller.busy
@@ -272,6 +273,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ),
                     ),
                   ],
+                  if (controller.ep2OtaNotice?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      controller.ep2OtaNotice!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   if (controller.ep2OtaSsid != null) ...[
                     const SizedBox(height: 10),
                     Card(
@@ -322,10 +332,17 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               : 'USB-устройство · потребуется разрешение',
                         ),
                         trailing: FilledButton(
-                          onPressed: controller.busy || ep2Active
+                          onPressed: controller.busy ||
+                                  {'connecting', 'handshaking', 'probing', 'permission'}
+                                      .contains(controller.ep2State) ||
+                                  controller.ep2Connected
                               ? null
                               : () => controller.connectEp2(device.deviceId),
-                          child: const Text('Авто'),
+                          child: Text(
+                            {'unknown', 'error'}.contains(controller.ep2State)
+                                ? 'Повторить'
+                                : 'Авто',
+                          ),
                         ),
                       ),
                     ),
