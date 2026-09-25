@@ -6,7 +6,7 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.4 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.5 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
@@ -466,10 +466,27 @@ class _ProbeResultCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(result.message),
+          if (result.ok) ...[
+            const SizedBox(height: 10),
+            if (result.chipDescription != null)
+              _DiagLine('Контроллер', result.chipDescription!),
+            if (result.chipMagic != null)
+              _DiagLine('ROM magic', result.chipMagic!),
+            if (result.chipId != null)
+              _DiagLine('Chip ID', result.chipId!),
+            if (result.mac != null)
+              _DiagLine('MAC', result.mac!),
+            if (result.flashId != null)
+              _DiagLine('Flash ID', result.flashId!),
+            if (result.flashSize != null)
+              _DiagLine('Flash', result.flashSize!),
+            if (result.flashEmbedded == true)
+              const _DiagLine('Flash', 'встроена в ESP8285'),
+          ],
           if (result.driver != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
-              'Драйвер: ${result.driver} · '
+              'USB: ${result.driver} · '
               '${result.baudRate ?? 115200} бод · '
               'получено ${result.bytesRead ?? 0} Б',
               style: const TextStyle(
@@ -478,6 +495,38 @@ class _ProbeResultCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DiagLine extends StatelessWidget {
+  const _DiagLine(this.name, this.value);
+
+  final String name;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(
+              name,
+              style: const TextStyle(color: Colors.white54),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
         ],
       ),
     );
