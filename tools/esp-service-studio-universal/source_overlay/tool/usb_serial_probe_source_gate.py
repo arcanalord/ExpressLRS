@@ -79,6 +79,8 @@ checks = {
     'Mesh MM-UART detect': 'probeMeshService' in probe and 'mesh_ready' in probe,
     'Mesh OTA commands': '0x16' in probe and '0x17' in probe and 'meshServiceCommand' in native,
     'Mesh release pin': 'mesh-release-pinned' in probe and '6358bdaf6d6dd5edee3ef3e3f1f648bcec445ce80599017a172e2acfd97adadb' in probe,
+    'Mesh candidate pin': 'mesh-candidate-pinned' in probe and 'c59351a70d06fd6db8c1a8b16d6c2e93325225bbd3f64c3725f5dbcfeafbe50b' in probe,
+    'Mesh first-flash target gate': 'Unified_ESP8285_2400_RX' in main_activity and 'wifiFirstFlashCompatible' in main_activity,
     'Mesh picker': 'pickKnownMeshFirmware' in native and 'pickKnownMeshFirmware' in main,
     'Mesh recovery UI': 'Записать Mesh через USB' in main and 'Mesh Messenger' in main,
     'Mesh post-flash verify': '_startMeshPostFlashVerification' in main and 'Проверка после прошивки: PASS' in main and 'meshFirmwareVersion' in main and 'meshBoardId' in main,
