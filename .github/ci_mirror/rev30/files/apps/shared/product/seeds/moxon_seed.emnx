@@ -1,0 +1,105 @@
+{
+  "schema_version": "0.5",
+  "name": "Moxon experimental template seed",
+  "frequency_hz": 299792458.0,
+  "wires": [
+    {
+      "id": "DRV",
+      "start_m": [
+        0,
+        0,
+        -0.18
+      ],
+      "end_m": [
+        0,
+        0,
+        0.18
+      ],
+      "radius_m": 0.001,
+      "segments": 21
+    },
+    {
+      "id": "DTOP",
+      "start_m": [
+        0,
+        0,
+        0.18
+      ],
+      "end_m": [
+        0.055,
+        0,
+        0.18
+      ],
+      "radius_m": 0.001,
+      "segments": 7
+    },
+    {
+      "id": "DBOT",
+      "start_m": [
+        0,
+        0,
+        -0.18
+      ],
+      "end_m": [
+        0.055,
+        0,
+        -0.18
+      ],
+      "radius_m": 0.001,
+      "segments": 7
+    },
+    {
+      "id": "REF",
+      "start_m": [
+        0.14,
+        0,
+        -0.18
+      ],
+      "end_m": [
+        0.14,
+        0,
+        0.18
+      ],
+      "radius_m": 0.001,
+      "segments": 21
+    },
+    {
+      "id": "RTOP",
+      "start_m": [
+        0.14,
+        0,
+        0.18
+      ],
+      "end_m": [
+        0.085,
+        0,
+        0.18
+      ],
+      "radius_m": 0.001,
+      "segments": 7
+    },
+    {
+      "id": "RBOT",
+      "start_m": [
+        0.14,
+        0,
+        -0.18
+      ],
+      "end_m": [
+        0.085,
+        0,
+        -0.18
+      ],
+      "radius_m": 0.001,
+      "segments": 7
+    }
+  ],
+  "feeds": [
+    {
+      "wire_id": "DRV",
+      "segment": 10,
+      "voltage_re_v": 1.0,
+      "voltage_im_v": 0.0
+    }
+  ]
+}
