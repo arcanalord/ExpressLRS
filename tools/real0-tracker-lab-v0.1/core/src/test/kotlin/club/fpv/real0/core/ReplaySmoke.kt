@@ -163,6 +163,33 @@ fun main() {
     }
     check(!falseReacquire) { "false reacquire on distractor" }
 
+    // Phone regression: full-frame SEARCHING can take long enough that the
+    // same target moves substantially between confirmation frames.
+    val slow = NccTrackerCore()
+    ts = 3_000_000_000L
+    val slowInitial = box(52f, 48f, 26f, 20f)
+    slow.init(SyntheticFrame(240, 170, Target(slowInitial), timestampNs = ts), slowInitial)
+    repeat(4) {
+        ts += 40_000_000L
+        slow.update(SyntheticFrame(240, 170, null, timestampNs = ts))
+    }
+    var slowReacquired = false
+    repeat(6) { i ->
+        ts += 1_600_000_000L
+        val moved = box(142f + i * 18f, 92f + i * 5f, 28f, 22f)
+        val r = slow.update(
+            SyntheticFrame(
+                240,
+                170,
+                Target(moved),
+                Target(box(82f, 118f, 30f, 24f)),
+                timestampNs = ts
+            )
+        )
+        if (r.state == CoreTrackState.REACQUIRED) slowReacquired = true
+    }
+    check(slowReacquired) { "phone regression: moving candidate never confirmed after sparse SEARCHING frames" }
+
     val autoFit = AutoFitCore()
     val cases = listOf(
         Triple("small", box(82f, 66f, 12f, 8f), 82f to 66f),
@@ -190,5 +217,5 @@ fun main() {
     val idle = tracker.update(SyntheticFrame(160, 120, null))
     check(idle.state == CoreTrackState.IDLE) { "reset must return IDLE" }
 
-    println("CORE_PASS v0.1.6 candidate: autofit + stabilization + timestamp motion + staged reacquire + distractor rejection")
+    println("CORE_PASS v0.1.7 phonefix: autofit + stabilization + timestamp motion + staged reacquire + distractor rejection")
 }
