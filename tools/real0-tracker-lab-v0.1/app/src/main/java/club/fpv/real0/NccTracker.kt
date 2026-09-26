@@ -17,6 +17,7 @@ class NccTracker {
     private var frameW = 0
     private var frameH = 0
     private var scale = 1f
+    private var analysisWidthLimit = 320
 
     private var quickPending = false
     private var quickSeedX = 0f
@@ -26,6 +27,7 @@ class NccTracker {
     val modelUpdates: Int get() = core.modelUpdates
     val modelRestores: Int get() = core.modelRestores
     val isQuickPending: Boolean get() = quickPending
+    val analysisWidth: Int get() = analysisWidthLimit
 
     fun reset() {
         core.reset()
@@ -34,9 +36,11 @@ class NccTracker {
         frameW = 0
         frameH = 0
         scale = 1f
+        analysisWidthLimit = 320
     }
 
     fun init(frame: Bitmap, initial: RectF, timestampNs: Long = 0L) {
+        analysisWidthLimit = chooseAnalysisWidth(frame.width, initial.width())
         val p = prepare(frame, timestampNs)
         frameW = frame.width
         frameH = frame.height
@@ -50,23 +54,38 @@ class NccTracker {
         core.reset()
         stabilizer.reset()
 
-        val p = prepare(frame, timestampNs)
+        // Bootstrap QUICK at higher resolution so small targets are not collapsed before AutoFit.
+        analysisWidthLimit = 640
+        var p = prepare(frame, timestampNs)
         frameW = frame.width
         frameH = frame.height
         scale = p.scale
-        quickSeedX = seedX * scale
-        quickSeedY = seedY * scale
+        quickSeedX = seedX
+        quickSeedY = seedY
 
-        val fit = autoFit.fit(p.gray, quickSeedX, quickSeedY)
-        val initial = fit.box
+        var fit = autoFit.fit(p.gray, seedX * scale, seedY * scale)
+        var initial = fit.box
         if (initial == null) {
             quickPending = false
             return TrackerResult(TrackState.READY, null, null, 0f, 0f, "QUICK: AutoFit failed")
         }
 
+        val targetSourceWidth = initial.width() / scale.coerceAtLeast(1e-6f)
+        analysisWidthLimit = chooseAnalysisWidth(frame.width, targetSourceWidth)
+
+        // Re-run at the locked analysis scale so stabilization and tracking use one geometry.
+        p = prepare(frame, timestampNs)
+        scale = p.scale
+        fit = autoFit.fit(p.gray, seedX * scale, seedY * scale)
+        initial = fit.box
+        if (initial == null) {
+            quickPending = false
+            return TrackerResult(TrackState.READY, null, null, 0f, 0f, "QUICK: AutoFit rescale failed")
+        }
+
         stabilizer.update(fit)
-        quickSeedX = initial.centerX()
-        quickSeedY = initial.centerY()
+        quickSeedX = initial.centerX() / scale.coerceAtLeast(1e-6f)
+        quickSeedY = initial.centerY() / scale.coerceAtLeast(1e-6f)
         quickPending = true
 
         return TrackerResult(
@@ -75,7 +94,7 @@ class NccTracker {
             predictedBox = null,
             quality = fit.confidence,
             processingMs = 0f,
-            reason = "QUICK rough AutoFit; waiting for stabilization"
+            reason = "QUICK rough AutoFit @${analysisWidthLimit}px; waiting for stabilization"
         )
     }
 
@@ -90,11 +109,11 @@ class NccTracker {
         scale = p.scale
 
         if (quickPending) {
-            val fit = autoFit.fit(p.gray, quickSeedX, quickSeedY)
+            val fit = autoFit.fit(p.gray, quickSeedX * scale, quickSeedY * scale)
             val fitted = fit.box
             if (fitted != null) {
-                quickSeedX = fitted.centerX()
-                quickSeedY = fitted.centerY()
+                quickSeedX = fitted.centerX() / scale.coerceAtLeast(1e-6f)
+                quickSeedY = fitted.centerY() / scale.coerceAtLeast(1e-6f)
             }
 
             val stabilized = stabilizer.update(fit)
@@ -135,7 +154,7 @@ class NccTracker {
     }
 
     private fun prepare(bitmap: Bitmap, timestampNs: Long): Prepared {
-        val s = min(1f, 320f / bitmap.width.toFloat())
+        val s = min(1f, analysisWidthLimit.toFloat() / bitmap.width.toFloat())
         val w = (bitmap.width * s).toInt().coerceAtLeast(2)
         val h = (bitmap.height * s).toInt().coerceAtLeast(2)
         val work = if (s < 0.999f) Bitmap.createScaledBitmap(bitmap, w, h, true) else bitmap
@@ -144,6 +163,16 @@ class NccTracker {
         val gray = PixelGrayFrame(work.width, work.height, pixels, timestampNs)
         if (work !== bitmap) work.recycle()
         return Prepared(gray, s)
+    }
+
+    private fun chooseAnalysisWidth(frameWidth: Int, targetSourceWidth: Float): Int {
+        if (targetSourceWidth <= 0f) return 320
+        val desired = 18f * frameWidth / targetSourceWidth
+        return when {
+            desired <= 320f -> 320
+            desired <= 480f -> 480
+            else -> 640
+        }
     }
 
     private data class Prepared(val gray: PixelGrayFrame, val scale: Float)
