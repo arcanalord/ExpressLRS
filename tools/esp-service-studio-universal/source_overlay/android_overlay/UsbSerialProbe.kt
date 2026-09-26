@@ -284,12 +284,19 @@ class UsbSerialProbe(private val context: Context) {
             val pinnedElrs =
                 hardwareSource == "same firmware.zip commit" &&
                     firmwareFamily.startsWith("Unified_ESP8285_")
-            val pinnedMesh =
+            val pinnedMeshStable =
                 hardwareSource == "mesh-release-pinned" &&
                     targetPath == "mesh.happymodel_ep2" &&
                     firmwareFamily == "MeshMessenger_EP2" &&
                     declaredSha ==
                         "6358bdaf6d6dd5edee3ef3e3f1f648bcec445ce80599017a172e2acfd97adadb"
+            val pinnedMeshCandidate =
+                hardwareSource == "mesh-candidate-pinned" &&
+                    targetPath == "mesh.happymodel_ep2" &&
+                    firmwareFamily == "MeshMessenger_EP2" &&
+                    declaredSha ==
+                        "c59351a70d06fd6db8c1a8b16d6c2e93325225bbd3f64c3725f5dbcfeafbe50b"
+            val pinnedMesh = pinnedMeshStable || pinnedMeshCandidate
 
             if (!pinnedElrs && !pinnedMesh) {
                 error("Прошивка не прошла hardware/release gate")
