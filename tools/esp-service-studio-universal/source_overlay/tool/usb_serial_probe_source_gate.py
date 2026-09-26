@@ -1,6 +1,7 @@
 from pathlib import Path
 
 main = Path('lib/main.dart').read_text(encoding='utf-8')
+pubspec = Path('pubspec.yaml').read_text(encoding='utf-8')
 native = Path(
     'android/app/src/main/kotlin/com/arcanalord/service_studio/MainActivity.kt'
 ).read_text(encoding='utf-8')
@@ -25,6 +26,7 @@ device_profiles = Path(
 
 checks = {
     'visible alpha11 id': 'v0.9.0-alpha.11 · Pixel 7a' in main,
+    'android package alpha11 id': 'version: 0.9.0-alpha.11+26092611' in pubspec,
     'real probe button': 'probeEspRom' in main,
     'permission request': 'requestPermission' in native,
     'permission result': 'ACTION_USB_PERMISSION' in native,
