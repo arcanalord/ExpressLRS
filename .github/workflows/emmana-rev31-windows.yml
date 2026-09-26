@@ -90,7 +90,7 @@ jobs:
           Copy-Item ".github/ci_mirror/rev30/files/tests/test_rev30_template_system.py" "src/emmana_rev29/tests/test_rev30_template_system.py" -Force
           Copy-Item ".github/ci_mirror/rev30/files/tests/test_rev30_template_runtime.py" "src/emmana_rev29/tests/test_rev30_template_runtime.py" -Force
           $v=(Get-Content src/emmana_rev29/VERSION).Trim()
-          if ($v -ne '0.1.0-alpha.20-rev31') { throw "Unexpected rev30 VERSION: $v" }
+          if ($v -ne '0.1.0-alpha.20-rev30') { throw "Unexpected rev30 VERSION: $v" }
           python src/emmana_rev29/tests/test_rev28_product_ui.py src/emmana_rev29
           python src/emmana_rev29/tests/test_rev29_optimizer_ux.py src/emmana_rev29
           python src/emmana_rev29/tests/test_rev30_template_system.py src/emmana_rev29
