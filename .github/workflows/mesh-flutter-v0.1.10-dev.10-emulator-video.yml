@@ -70,6 +70,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
+            cat > /tmp/mesh_emulator_qa.sh <<'BASH'
             set -euo pipefail
             EVIDENCE=/tmp/mesh-dev10-emulator-evidence
             mkdir -p "$EVIDENCE/ui"
@@ -174,6 +175,8 @@ jobs:
               echo "PASS: no app FATAL in package logcat"
               echo "LIMIT: no physical USB-UART/M03/radio HIL in emulator"
             } > "$EVIDENCE/QA_EMULATOR_VIDEO_REPORT.txt"
+            BASH
+            bash /tmp/mesh_emulator_qa.sh
 
       - name: Verify video
         run: |
