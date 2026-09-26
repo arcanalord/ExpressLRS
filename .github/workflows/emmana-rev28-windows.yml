@@ -37,15 +37,22 @@ jobs:
           $v=(Get-Content src/emmana_rev28/VERSION).Trim()
           if ($v -ne '0.1.0-alpha.20-rev27') { throw "Unexpected base VERSION: $v" }
 
-      - name: Apply exact rev28 patch
+      - name: Overlay exact rev28 files
         shell: pwsh
         run: |
-          git apply --check --directory=src/emmana_rev28 .github/ci_mirror/rev28/rev28_from_rev27.patch
-          git apply --directory=src/emmana_rev28 .github/ci_mirror/rev28/rev28_from_rev27.patch
+          Copy-Item ".github/ci_mirror/rev28/files/PROJECT_INDEX.md" "src/emmana_rev28/PROJECT_INDEX.md" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/VERSION" "src/emmana_rev28/VERSION" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/apps/linux_web/static/app.css" "src/emmana_rev28/apps/linux_web/static/app.css" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/apps/linux_web/static/app.js" "src/emmana_rev28/apps/linux_web/static/app.js" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/apps/linux_web/static/index.html" "src/emmana_rev28/apps/linux_web/static/index.html" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/apps/shared/help/help-registry.json" "src/emmana_rev28/apps/shared/help/help-registry.json" -Force
+          New-Item -ItemType Directory -Force "src/emmana_rev28/docs" | Out-Null
+          Copy-Item ".github/ci_mirror/rev28/files/docs/WORKLOG_2026-09-25_rev28.md" "src/emmana_rev28/docs/WORKLOG_2026-09-25_rev28.md" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/tests/test_rev28_product_ui.py" "src/emmana_rev28/tests/test_rev28_product_ui.py" -Force
           $v=(Get-Content src/emmana_rev28/VERSION).Trim()
-          if ($v -ne '0.1.0-alpha.20-rev28') { throw "Unexpected patched VERSION: $v" }
+          if ($v -ne '0.1.0-alpha.20-rev28') { throw "Unexpected overlay VERSION: $v" }
           python src/emmana_rev28/tests/test_rev28_product_ui.py src/emmana_rev28
-          Write-Host "REV28_PATCH_PASS"
+          Write-Host "REV28_OVERLAY_PASS"
 
       - name: Install C++ dependencies
         shell: pwsh
