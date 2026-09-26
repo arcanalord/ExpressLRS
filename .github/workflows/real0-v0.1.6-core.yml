@@ -1,13 +1,13 @@
-name: Real0 Android v0.1.6 Candidate APK
+name: Real0 Android v0.1.7 Candidate APK
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - ci/real0-v0.1.6-core
+      - ci/real0-v0.1.7-core
     paths:
       - 'tools/real0-tracker-lab-v0.1/**'
-      - '.github/workflows/real0-v0.1.6-core.yml'
+      - '.github/workflows/real0-v0.1.7-core.yml'
 
 permissions:
   contents: read
@@ -38,7 +38,7 @@ jobs:
           test -f "${PROJECT_DIR}/core/src/main/kotlin/club/fpv/real0/core/TrackerCore.kt"
           test -f "${PROJECT_DIR}/core/src/main/kotlin/club/fpv/real0/core/LockCore.kt"
           grep -q "versionName '0.1.6'" "${PROJECT_DIR}/app/build.gradle"
-          grep -q "versionCode 7" "${PROJECT_DIR}/app/build.gradle"
+          grep -q "versionCode 8" "${PROJECT_DIR}/app/build.gradle"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -86,15 +86,15 @@ jobs:
           "${BT}/apksigner" verify --verbose --print-certs "${APK}" | tee real0-apksigner.txt
           "${BT}/aapt" dump badging "${APK}" | tee real0-apk-badging.txt
           grep -q "package: name='club.fpv.real0.trackerlab'" real0-apk-badging.txt
-          grep -q "versionCode='7'" real0-apk-badging.txt
+          grep -q "versionCode='8'" real0-apk-badging.txt
           grep -q "versionName='0.1.6'" real0-apk-badging.txt
-          cp "${APK}" Real0_v0.1.6_candidate_debug.apk
+          cp "${APK}" Real0_v0.1.7_candidate_debug.apk
 
       - name: Record provenance
         shell: bash
         run: |
           set -euxo pipefail
-          sha256sum Real0_v0.1.6_candidate_debug.apk | tee Real0_v0.1.6_candidate_debug.apk.sha256
+          sha256sum Real0_v0.1.7_candidate_debug.apk | tee Real0_v0.1.7_candidate_debug.apk.sha256
           {
             echo "build_repo=${GITHUB_REPOSITORY}"
             echo "build_commit=${GITHUB_SHA}"
@@ -107,20 +107,20 @@ jobs:
             echo "build_tools=${ANDROID_BUILD_TOOLS}"
             echo "package=club.fpv.real0.trackerlab"
             echo "version_name=0.1.6"
-            echo "version_code=7"
+            echo "version_code=8"
             echo "phone_pass=false"
-          } | tee Real0_v0.1.6_candidate_build_provenance.txt
+          } | tee Real0_v0.1.7_candidate_build_provenance.txt
 
       - name: Upload verified APK
         uses: actions/upload-artifact@v4
         with:
-          name: Real0_v0.1.6_candidate_verified_apk
+          name: Real0_v0.1.7_candidate_verified_apk
           retention-days: 30
           if-no-files-found: error
           path: |
-            Real0_v0.1.6_candidate_debug.apk
-            Real0_v0.1.6_candidate_debug.apk.sha256
-            Real0_v0.1.6_candidate_build_provenance.txt
+            Real0_v0.1.7_candidate_debug.apk
+            Real0_v0.1.7_candidate_debug.apk.sha256
+            Real0_v0.1.7_candidate_build_provenance.txt
             real0-zipalign.txt
             real0-apksigner.txt
             real0-apk-badging.txt
