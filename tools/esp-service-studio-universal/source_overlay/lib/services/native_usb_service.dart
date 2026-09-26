@@ -81,6 +81,13 @@ class EspRomProbeResult {
     this.flashDeviceId,
     this.flashSize,
     this.flashEmbedded,
+    this.meshProtocolVersion,
+    this.meshFirmwareFamily,
+    this.meshFirmwareVersion,
+    this.meshBoardId,
+    this.meshRadioFamily,
+    this.meshBuildHash,
+    this.meshOtaCapable,
   });
 
   final String status;
@@ -99,8 +106,16 @@ class EspRomProbeResult {
   final String? flashDeviceId;
   final String? flashSize;
   final bool? flashEmbedded;
+  final int? meshProtocolVersion;
+  final String? meshFirmwareFamily;
+  final String? meshFirmwareVersion;
+  final String? meshBoardId;
+  final String? meshRadioFamily;
+  final String? meshBuildHash;
+  final bool? meshOtaCapable;
 
-  bool get ok => status == 'rom_ready';
+  bool get ok => status == 'rom_ready' || status == 'mesh_ready';
+  bool get meshReady => status == 'mesh_ready';
 
   factory EspRomProbeResult.fromMap(Map<Object?, Object?> map) {
     return EspRomProbeResult(
@@ -120,6 +135,13 @@ class EspRomProbeResult {
       flashDeviceId: map['flashDeviceId'] as String?,
       flashSize: map['flashSize'] as String?,
       flashEmbedded: map['flashEmbedded'] as bool?,
+      meshProtocolVersion: map['meshProtocolVersion'] as int?,
+      meshFirmwareFamily: map['meshFirmwareFamily'] as String?,
+      meshFirmwareVersion: map['meshFirmwareVersion'] as String?,
+      meshBoardId: map['meshBoardId'] as String?,
+      meshRadioFamily: map['meshRadioFamily'] as String?,
+      meshBuildHash: map['meshBuildHash'] as String?,
+      meshOtaCapable: map['meshOtaCapable'] as bool?,
     );
   }
 }
@@ -529,6 +551,21 @@ class NativeUsbService {
         ) ??
         const <dynamic, dynamic>{};
     return ElrsPreparedFirmware.fromMap(raw.cast<Object?, Object?>());
+  }
+
+  Future<Map<String, Object?>> meshServiceCommand({
+    required String deviceName,
+    required int command,
+  }) async {
+    final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+          'meshServiceCommand',
+          <String, Object?>{
+            'deviceName': deviceName,
+            'command': command,
+          },
+        ) ??
+        const <dynamic, dynamic>{};
+    return raw.cast<String, Object?>();
   }
 
   Future<EspFlashResult> flashPreparedEsp8285({
