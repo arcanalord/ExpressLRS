@@ -24,7 +24,7 @@ device_profiles = Path(
 ).read_text(encoding='utf-8')
 
 checks = {
-    'visible alpha10 id': 'v0.9.0-alpha.10 · Pixel 7a' in main,
+    'visible alpha11 id': 'v0.9.0-alpha.11 · Pixel 7a' in main,
     'real probe button': 'probeEspRom' in main,
     'permission request': 'requestPermission' in native,
     'permission result': 'ACTION_USB_PERMISSION' in native,
@@ -33,7 +33,7 @@ checks = {
     'ESP8285 detect': 'ESP8285' in probe and '0xFFF0C101L' in probe,
     'chip read reg': '0x40001000L' in probe,
     'flash RDID': '0x9FL' in probe and 'Flash ID' in main,
-    'manual EP2 safe DTR RTS': 'Do not touch DTR/RTS here' in probe,
+    'manual ELRS safe DTR RTS': 'Do not touch DTR/RTS here' in probe,
     'WCH 55d3 fallback': '0x55D3' in probe,
     'CH34x driver': 'Ch34xSerialDriver' in probe,
     'usb serial dependency': 'usb-serial-for-android:3.11.0' in app_gradle,
@@ -57,7 +57,7 @@ checks = {
     'prepare not flash': 'readyToFlash' in elrs and 'writeOffset' in elrs,
     'internet permission': 'android.permission.INTERNET' in manifest,
     'no hardcoded ELRS profiles': '"elrs"' not in device_profiles,
-    'dynamic target UI': 'Официальные ExpressLRS приёмники' in main,
+    'dynamic target UI': '2. ELRS оборудование' in main and "labelText: 'ELRS оборудование'" in main,
     'dynamic search UI': 'Поиск модели' in main,
     'MCU filtering': '_detectedPlatform' in main and '_filteredTargets' in main,
     'ESP8266 not aliased': "d.startsWith('esp8285')" in main and "d == 'esp8266ex'" in main,
@@ -71,6 +71,8 @@ checks = {
     'flash target guard': 'expectedTargetPath' in probe and 'Unified_ESP8285_' in probe,
     'flash hash guard': 'SHA-256 firmware.bin' in probe and 'expectedSha256' in probe,
     'block ack disclaimer': 'Полный readback пока не выполнялся' in probe and 'полный readback содержимого пока не выполняется' in main,
+    'generic ELRS ROM guidance': 'Для EP2' not in probe and 'ELRS оборудование' in probe,
+    'one action prepare then flash': '_prepareAndFlashElrs' in main and 'Подготовить и прошить' in main,
     'no forced EP2 default': 'selected ??= p.isEmpty ? null : p.first' not in main,
 }
 
