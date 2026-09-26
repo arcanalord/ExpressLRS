@@ -25,8 +25,11 @@ class MainActivity : FlutterActivity() {
         private const val ACTION_USB_PERMISSION =
             "com.arcanalord.service_studio.USB_PERMISSION"
         private const val REQUEST_PICK_MESH_FIRMWARE = 42017
-        private const val MESH_EP2_SHA256 =
+        private const val MESH_EP2_V040_SHA256 =
             "6358bdaf6d6dd5edee3ef3e3f1f648bcec445ce80599017a172e2acfd97adadb"
+        private const val MESH_EP2_V043_SHA256 =
+            "c59351a70d06fd6db8c1a8b16d6c2e93325225bbd3f64c3725f5dbcfeafbe50b"
+        private const val MESH_EP2_ELRS_TARGET = "Unified_ESP8285_2400_RX"
     }
 
     private val methodChannelName = "service_studio/native"
@@ -101,6 +104,17 @@ class MainActivity : FlutterActivity() {
         }.start()
     }
 
+    private fun containsSequence(haystack: ByteArray, needle: ByteArray): Boolean {
+        if (needle.isEmpty() || haystack.size < needle.size) return false
+        outer@ for (i in 0..haystack.size - needle.size) {
+            for (j in needle.indices) {
+                if (haystack[i + j] != needle[j]) continue@outer
+            }
+            return true
+        }
+        return false
+    }
+
     private fun prepareKnownMeshFirmware(uri: android.net.Uri): Map<String, Any?> {
         return try {
             val displayName = runCatching {
@@ -121,14 +135,27 @@ class MainActivity : FlutterActivity() {
                 .digest(bytes)
                 .joinToString("") { "%02x".format(it) }
 
-            if (!sha.equals(MESH_EP2_SHA256, ignoreCase = true)) {
-                error(
-                    "Файл не совпадает с проверенным Mesh Messenger EP2 v0.4.0. " +
+            val meshVersion = when {
+                sha.equals(MESH_EP2_V043_SHA256, ignoreCase = true) -> "v0.4.3-dev"
+                sha.equals(MESH_EP2_V040_SHA256, ignoreCase = true) -> "v0.4.0"
+                else -> error(
+                    "Файл не входит в разрешённый каталог Mesh Messenger EP2. " +
                         "SHA-256: $sha"
                 )
             }
+            val candidate = meshVersion == "v0.4.3-dev"
+            if (candidate) {
+                val marker = ("\u00BE\u00EF\u00CA\u00FE" + MESH_EP2_ELRS_TARGET)
+                    .toByteArray(Charsets.ISO_8859_1)
+                if (!containsSequence(bytes, marker)) {
+                    error(
+                        "v0.4.3-dev не содержит обязательный ExpressLRS target marker " +
+                            MESH_EP2_ELRS_TARGET
+                    )
+                }
+            }
 
-            val dir = File(filesDir, "firmware/mesh/happymodel_ep2/v0.4.0")
+            val dir = File(filesDir, "firmware/mesh/happymodel_ep2/$meshVersion")
             if (!dir.exists() && !dir.mkdirs()) {
                 error("Не удалось создать каталог Mesh прошивки")
             }
@@ -138,13 +165,18 @@ class MainActivity : FlutterActivity() {
 
             val manifest = org.json.JSONObject()
                 .put("kind", "mesh")
-                .put("version", "v0.4.0")
+                .put("version", meshVersion)
                 .put("targetPath", "mesh.happymodel_ep2")
                 .put("productName", "Mesh Messenger / HappyModel EP2")
                 .put("platform", "esp8285")
                 .put("firmware", "MeshMessenger_EP2")
                 .put("boardId", "happymodel_ep2")
-                .put("hardwareSource", "mesh-release-pinned")
+                .put(
+                    "hardwareSource",
+                    if (candidate) "mesh-candidate-pinned" else "mesh-release-pinned",
+                )
+                .put("wifiFirstFlashCompatible", candidate)
+                .put("expressLrsTarget", if (candidate) MESH_EP2_ELRS_TARGET else org.json.JSONObject.NULL)
                 .put("writeOffset", "0x0")
                 .put("fileName", firmware.name)
                 .put("fileSize", firmware.length())
@@ -156,8 +188,8 @@ class MainActivity : FlutterActivity() {
 
             mapOf(
                 "status" to "prepared",
-                "message" to "Mesh Messenger EP2 v0.4.0 проверена и готова к ROM-записи",
-                "version" to "v0.4.0",
+                "message" to "Mesh Messenger EP2 $meshVersion проверена и готова к ROM-записи",
+                "version" to meshVersion,
                 "targetPath" to "mesh.happymodel_ep2",
                 "productName" to "Mesh Messenger / HappyModel EP2",
                 "platform" to "esp8285",
@@ -169,8 +201,11 @@ class MainActivity : FlutterActivity() {
                 "sha256" to sha,
                 "manifestPath" to manifestFile.absolutePath,
                 "sourceFileName" to displayName,
-                "hardwareSource" to "mesh-release-pinned",
+                "hardwareSource" to
+                    if (candidate) "mesh-candidate-pinned" else "mesh-release-pinned",
                 "hardwarePinned" to true,
+                "wifiFirstFlashCompatible" to candidate,
+                "expressLrsTarget" to if (candidate) MESH_EP2_ELRS_TARGET else null,
                 "readyToFlash" to true,
             )
         } catch (e: Exception) {
