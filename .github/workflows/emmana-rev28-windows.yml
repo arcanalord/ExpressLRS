@@ -1,0 +1,122 @@
+name: EMMana rev28 Windows gate
+
+on:
+  push:
+    branches: [ emmana-next-alpha20 ]
+    paths:
+      - '.github/workflows/emmana-rev28-windows.yml'
+      - '.github/ci_mirror/rev28/rev28_from_rev27.patch'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  rev28-windows:
+    runs-on: windows-2025
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch verified rev27 source snapshot
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 36222692865 --repo "$env:GITHUB_REPOSITORY" -n emmana-rev27-source-snapshot -D base
+          New-Item -ItemType Directory -Force src/emmana_rev28 | Out-Null
+          if (Test-Path "base/VERSION") {
+            Copy-Item "base/*" "src/emmana_rev28" -Recurse -Force
+          } elseif (Test-Path "base/emmana_rev27/VERSION") {
+            Copy-Item "base/emmana_rev27/*" "src/emmana_rev28" -Recurse -Force
+          } else {
+            Get-ChildItem base -Recurse | Select-Object FullName
+            throw "rev27 source snapshot layout not recognized"
+          }
+          $v=(Get-Content src/emmana_rev28/VERSION).Trim()
+          if ($v -ne '0.1.0-alpha.20-rev27') { throw "Unexpected base VERSION: $v" }
+
+      - name: Apply exact rev28 patch
+        shell: pwsh
+        run: |
+          git apply --check --directory=src/emmana_rev28 .github/ci_mirror/rev28/rev28_from_rev27.patch
+          git apply --directory=src/emmana_rev28 .github/ci_mirror/rev28/rev28_from_rev27.patch
+          $v=(Get-Content src/emmana_rev28/VERSION).Trim()
+          if ($v -ne '0.1.0-alpha.20-rev28') { throw "Unexpected patched VERSION: $v" }
+          python src/emmana_rev28/tests/test_rev28_product_ui.py src/emmana_rev28
+          Write-Host "REV28_PATCH_PASS"
+
+      - name: Install C++ dependencies
+        shell: pwsh
+        working-directory: src/emmana_rev28
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-json:x64-windows-static eigen3:x64-windows-static
+
+      - name: Configure and build
+        shell: pwsh
+        working-directory: src/emmana_rev28
+        run: |
+          cmake -S . -B build-win -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static -DEMNEXT_REQUIRE_EIGEN=ON
+          cmake --build build-win --config Release --parallel 2
+
+      - name: Regression and rev28 UI gate
+        shell: pwsh
+        working-directory: src/emmana_rev28
+        run: |
+          ctest --test-dir build-win -C Release --output-on-failure
+          python tests/test_rev28_product_ui.py .
+          python tests/test_primary_actions.py .
+          python tests/test_geometry_editor.py .
+          python tests/test_ui_surface_state.py .
+          python tests/test_help_registry.py .
+          python tests/test_measurement_pipeline.py .
+          python tests/test_product_workflow.py .
+          python tests/test_windows_launcher.py .
+          python tests/test_yagi_rev26.py --root . --emnext build-win/Release/emnext.exe
+
+      - name: Build portable Windows launcher
+        shell: pwsh
+        working-directory: src/emmana_rev28
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller
+          python -m PyInstaller --noconfirm --clean --onefile --name EMMana-Next --hidden-import json --hidden-import hashlib --hidden-import importlib.util --hidden-import math --hidden-import subprocess --hidden-import tempfile --hidden-import urllib.parse --hidden-import http --hidden-import http.server --hidden-import cmath --hidden-import csv --hidden-import io --hidden-import re --hidden-import typing --add-binary "build-win/Release/emnext.exe;EMMana-Next" --add-data "apps;EMMana-Next/apps" --add-data "benchmarks;EMMana-Next/benchmarks" --add-data "schemas;EMMana-Next/schemas" --add-data "VERSION;EMMana-Next" apps/windows_launcher.py
+
+      - name: Portable runtime rev28 UI gate
+        shell: pwsh
+        working-directory: src/emmana_rev28
+        run: |
+          $port=8799
+          $proc=Start-Process -FilePath "dist/EMMana-Next.exe" -ArgumentList "--no-browser","--port","$port" -PassThru -WindowStyle Hidden
+          try {
+            $health=$null
+            for($i=0;$i -lt 60;$i++){Start-Sleep -Seconds 1;try{$health=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2;if($health.ok){break}}catch{}}
+            if(-not $health -or $health.version -ne '0.1.0-alpha.20-rev28'){throw "Portable rev28 health/version failed"}
+            $page=(Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 10).Content
+            foreach($m in @('geometry-undo','geometry-redo','sweep-overlays','variant-compare','yagi-quick-panel')){if($page -notmatch [regex]::Escape($m)){throw "Missing UI marker: $m"}}
+            $app=(Invoke-WebRequest -Uri "http://127.0.0.1:$port/app.js" -TimeoutSec 10).Content
+            foreach($m in @('undoGeometry','redoGeometry','renderSweepOverlayControls','restoreVariantSnapshot','variantDeltaSummary','ui-rev28')){if($app -notmatch [regex]::Escape($m)){throw "Missing JS marker: $m"}}
+            Write-Host "REV28_PORTABLE_UI_PASS"
+          } finally {
+            if($proc -and -not $proc.HasExited){Stop-Process -Id $proc.Id -Force}
+          }
+
+      - name: Package Windows rev28
+        shell: pwsh
+        working-directory: src/emmana_rev28
+        run: |
+          $version=(Get-Content VERSION).Trim()
+          $pkg="dist/EMMana-Next-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          Copy-Item dist/EMMana-Next.exe $pkg/EMMana-Next.exe
+          Copy-Item build-win/Release/emnext.exe $pkg/emnext-cli.exe
+          Copy-Item VERSION $pkg/
+          @("EMMana-Next Portable Windows","","Запустите EMMana-Next.exe.","rev28: A/B/C Sweep overlay + Undo/Redo + было/стало.","Расчёты выполняются локально.") | Set-Content -Encoding UTF8 "$pkg/README-WINDOWS.txt"
+          Compress-Archive -Path "$pkg/*" -DestinationPath "$pkg.zip" -Force
+
+      - name: Upload rev28 Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-rev28-windows-x64
+          path: src/emmana_rev28/dist/EMMana-Next-0.1.0-alpha.20-rev28-windows-x64.zip
+          if-no-files-found: error
