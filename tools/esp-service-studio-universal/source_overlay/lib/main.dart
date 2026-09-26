@@ -6,7 +6,7 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.12 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.13 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
@@ -61,6 +61,13 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   Map<String, Object?>? meshServiceResult;
   Map<String, Object?>? meshPrepared;
   EspFlashResult? meshFlashResult;
+  Map<String, Object?>? meshVerifyResult;
+  bool meshVerifyPending = false;
+  bool meshVerifying = false;
+  Timer? _meshVerifyTimer;
+  DateTime? _meshVerifyDeadline;
+  String? _meshExpectedVersion;
+  String? _meshExpectedBoard;
   bool _usbRefreshInFlight = false;
 
   String? error;
@@ -102,6 +109,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _usbPollTimer?.cancel();
+    _meshVerifyTimer?.cancel();
     _usbSub?.cancel();
     _search.dispose();
     _bindingPhrase.dispose();
@@ -283,10 +291,14 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
   Future<void> _pickKnownMeshFirmware() async {
     if (meshPreparing || flashingEsp) return;
+    _meshVerifyTimer?.cancel();
     setState(() {
       meshPreparing = true;
       meshPrepared = null;
       meshFlashResult = null;
+      meshVerifyResult = null;
+      meshVerifyPending = false;
+      meshVerifying = false;
     });
     try {
       final result = await _usb.pickKnownMeshFirmware();
@@ -369,6 +381,13 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       );
       if (!mounted) return;
       setState(() => meshFlashResult = result);
+      if (result.ok) {
+        _startMeshPostFlashVerification(
+          expectedVersion: prepared['version']?.toString() ?? '',
+          expectedBoard:
+              prepared['boardId']?.toString() ?? 'happymodel_ep2',
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -379,6 +398,171 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       });
     } finally {
       if (mounted) setState(() => flashingEsp = false);
+    }
+  }
+
+  String _normalizeMeshVersion(String? value) {
+    final v = (value ?? '').trim().toLowerCase();
+    return v.startsWith('v') ? v.substring(1) : v;
+  }
+
+  void _startMeshPostFlashVerification({
+    required String expectedVersion,
+    required String expectedBoard,
+  }) {
+    _meshVerifyTimer?.cancel();
+    _meshExpectedVersion = expectedVersion;
+    _meshExpectedBoard = expectedBoard;
+    _meshVerifyDeadline = DateTime.now().add(const Duration(seconds: 60));
+
+    if (!mounted) return;
+    setState(() {
+      meshVerifyPending = true;
+      meshVerifying = false;
+      meshVerifyResult = <String, Object?>{
+        'status': 'waiting_restart',
+        'message':
+            'Запись закончена. Снимите BOOT→GND, перезапустите модуль. '
+                'Studio сама проверит Mesh firmware через MM-UART.',
+        'expectedVersion': expectedVersion,
+        'expectedBoard': expectedBoard,
+      };
+    });
+
+    _meshVerifyTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _tryMeshPostFlashVerification(),
+    );
+    Future<void>.delayed(
+      const Duration(milliseconds: 700),
+      _tryMeshPostFlashVerification,
+    );
+  }
+
+  Future<void> _retryMeshPostFlashVerification() async {
+    final expectedVersion = _meshExpectedVersion;
+    final expectedBoard = _meshExpectedBoard;
+    if (expectedVersion == null || expectedBoard == null) return;
+
+    if (!meshVerifyPending) {
+      _startMeshPostFlashVerification(
+        expectedVersion: expectedVersion,
+        expectedBoard: expectedBoard,
+      );
+      return;
+    }
+
+    await _tryMeshPostFlashVerification();
+  }
+
+  Future<void> _tryMeshPostFlashVerification() async {
+    if (!meshVerifyPending || meshVerifying || !mounted) return;
+
+    final deadline = _meshVerifyDeadline;
+    if (deadline != null && DateTime.now().isAfter(deadline)) {
+      _meshVerifyTimer?.cancel();
+      setState(() {
+        meshVerifyPending = false;
+        meshVerifying = false;
+        meshVerifyResult = <String, Object?>{
+          'status': 'timeout',
+          'message':
+              'Автопроверка не дождалась Mesh firmware. '
+                  'Снимите BOOT→GND, перезапустите модуль и нажмите «Проверить снова».',
+          'expectedVersion': _meshExpectedVersion,
+          'expectedBoard': _meshExpectedBoard,
+        };
+      });
+      return;
+    }
+
+    final device = usbDevices.firstOrNull;
+    if (device == null) {
+      setState(() {
+        meshVerifyResult = <String, Object?>{
+          'status': 'waiting_usb',
+          'message': 'Ожидаю USB-UART после перезапуска модуля…',
+          'expectedVersion': _meshExpectedVersion,
+          'expectedBoard': _meshExpectedBoard,
+        };
+      });
+      return;
+    }
+
+    setState(() => meshVerifying = true);
+    try {
+      final r = await _usb.probeEspRom(deviceName: device.deviceName);
+      if (!mounted) return;
+
+      if (r.meshReady) {
+        final expectedVersion = _normalizeMeshVersion(_meshExpectedVersion);
+        final actualVersion = _normalizeMeshVersion(r.meshFirmwareVersion);
+        final expectedBoard = (_meshExpectedBoard ?? '').trim().toLowerCase();
+        final actualBoard = (r.meshBoardId ?? '').trim().toLowerCase();
+
+        final versionMatches =
+            expectedVersion.isNotEmpty && actualVersion == expectedVersion;
+        final boardMatches =
+            expectedBoard.isNotEmpty && actualBoard == expectedBoard;
+
+        _meshVerifyTimer?.cancel();
+        if (versionMatches && boardMatches) {
+          setState(() {
+            meshVerifyPending = false;
+            probeResult = r;
+            meshVerifyResult = <String, Object?>{
+              'status': 'verified',
+              'message':
+                  'Проверено: модуль загрузился в Mesh Messenger после прошивки.',
+              'expectedVersion': _meshExpectedVersion,
+              'actualVersion': r.meshFirmwareVersion,
+              'expectedBoard': _meshExpectedBoard,
+              'actualBoard': r.meshBoardId,
+              'buildHash': r.meshBuildHash,
+              'radioFamily': r.meshRadioFamily,
+            };
+          });
+        } else {
+          setState(() {
+            meshVerifyPending = false;
+            probeResult = r;
+            meshVerifyResult = <String, Object?>{
+              'status': 'mismatch',
+              'message':
+                  'Mesh firmware отвечает, но версия или board_id не совпали '
+                      'с записанным образом.',
+              'expectedVersion': _meshExpectedVersion,
+              'actualVersion': r.meshFirmwareVersion,
+              'expectedBoard': _meshExpectedBoard,
+              'actualBoard': r.meshBoardId,
+              'buildHash': r.meshBuildHash,
+            };
+          });
+        }
+      } else {
+        setState(() {
+          meshVerifyResult = <String, Object?>{
+            'status': 'waiting_restart',
+            'message': r.status == 'rom_ready'
+                ? 'ESP всё ещё в ROM BOOT. Снимите BOOT→GND и перезапустите модуль.'
+                : 'Ожидаю запуск Mesh firmware после перезапуска… (${r.status})',
+            'expectedVersion': _meshExpectedVersion,
+            'expectedBoard': _meshExpectedBoard,
+          };
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        meshVerifyResult = <String, Object?>{
+          'status': 'waiting_restart',
+          'message': 'Пока не удалось проверить Mesh firmware: $e',
+          'expectedVersion': _meshExpectedVersion,
+          'expectedBoard': _meshExpectedBoard,
+        };
+      });
+    } finally {
+      if (mounted) setState(() => meshVerifying = false);
     }
   }
 
@@ -787,6 +971,15 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                     if (meshFlashResult != null) ...[
                       const SizedBox(height: 8),
                       _MeshFlashResultCard(result: meshFlashResult!),
+                    ],
+                    if (meshVerifyResult != null) ...[
+                      const SizedBox(height: 8),
+                      _MeshVerificationCard(
+                        result: meshVerifyResult!,
+                        pending: meshVerifyPending,
+                        verifying: meshVerifying,
+                        onRetry: _retryMeshPostFlashVerification,
+                      ),
                     ],
                   ],
                 ),
@@ -1480,6 +1673,88 @@ class _MeshFlashResultCard extends StatelessWidget {
             const SizedBox(height: 6),
             _DiagLine('Блоков', '${result.blocksWritten ?? 0}'),
             _DiagLine('Проверка', result.verification ?? '-'),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MeshVerificationCard extends StatelessWidget {
+  const _MeshVerificationCard({
+    required this.result,
+    required this.pending,
+    required this.verifying,
+    required this.onRetry,
+  });
+
+  final Map<String, Object?> result;
+  final bool pending;
+  final bool verifying;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = result['status']?.toString() ?? 'unknown';
+    final ok = status == 'verified';
+    final failed = status == 'mismatch' || status == 'timeout';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: ok
+              ? Colors.greenAccent.withValues(alpha: 0.45)
+              : failed
+                  ? Colors.redAccent.withValues(alpha: 0.45)
+                  : Colors.orangeAccent.withValues(alpha: 0.45),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            ok
+                ? 'Проверка после прошивки: PASS'
+                : 'Проверка после прошивки',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Text(result['message']?.toString() ?? 'Нет сообщения'),
+          if (result['actualVersion'] != null)
+            _DiagLine(
+              'Версия',
+              '${result['actualVersion']} / ожидалась ${result['expectedVersion']}',
+            ),
+          if (result['actualBoard'] != null)
+            _DiagLine(
+              'Плата',
+              '${result['actualBoard']} / ожидалась ${result['expectedBoard']}',
+            ),
+          if (result['radioFamily'] != null)
+            _DiagLine('Радио', result['radioFamily'].toString()),
+          if (result['buildHash'] != null &&
+              result['buildHash'].toString().isNotEmpty)
+            _DiagLine('Build', result['buildHash'].toString()),
+          if (!ok) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: verifying ? null : onRetry,
+              icon: verifying
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.verified_outlined),
+              label: Text(
+                verifying
+                    ? 'Проверяю…'
+                    : pending
+                        ? 'Проверить сейчас'
+                        : 'Проверить снова',
+              ),
+            ),
           ],
         ],
       ),
