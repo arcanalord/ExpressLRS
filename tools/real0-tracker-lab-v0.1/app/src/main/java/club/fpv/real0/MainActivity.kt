@@ -175,7 +175,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 overlay.result = lastResult
                 overlay.invalidate()
-                status.text = "${lastResult.state} q=${"%.2f".format(lastResult.quality)} | ${lastResult.reason}"
+                status.text = "${lastResult.state} q=${"%.2f".format(lastResult.quality)} A=${tracker.analysisWidth}px | ${lastResult.reason}"
             }
         }
     }
@@ -279,7 +279,7 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             frameView.setImageBitmap(bitmap)
             overlay.result = lastResult; overlay.invalidate()
-            if (runTracker) status.text = "${lastResult.state} q=${"%.2f".format(lastResult.quality)} ${"%.1f".format(lastResult.processingMs)} ms | ${tracker.policy}"
+            if (runTracker) status.text = "${lastResult.state} q=${"%.2f".format(lastResult.quality)} ${"%.1f".format(lastResult.processingMs)} ms A=${tracker.analysisWidth}px | ${tracker.policy}"
         }
     }
 
