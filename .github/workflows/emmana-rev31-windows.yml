@@ -1,0 +1,196 @@
+name: EMMana rev31 Windows gate
+
+on:
+  push:
+    branches: [ emmana-next-alpha20 ]
+    paths:
+      - '.github/workflows/emmana-rev31-windows.yml'
+      - '.github/ci_mirror/rev29/files/**'
+      - '.github/ci_mirror/rev30/files/**'
+      - '.github/ci_mirror/rev31/files/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  rev31-windows:
+    runs-on: windows-2025
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch verified rev27 source snapshot
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 36222692865 --repo "$env:GITHUB_REPOSITORY" -n emmana-rev27-source-snapshot -D base
+          New-Item -ItemType Directory -Force src/emmana_rev29 | Out-Null
+          if (Test-Path "base/VERSION") {
+            Copy-Item "base/*" "src/emmana_rev29" -Recurse -Force
+          } elseif (Test-Path "base/emmana_rev27/VERSION") {
+            Copy-Item "base/emmana_rev27/*" "src/emmana_rev29" -Recurse -Force
+          } else {
+            throw "rev27 source snapshot layout not recognized"
+          }
+          $v=(Get-Content src/emmana_rev29/VERSION).Trim()
+          if ($v -ne '0.1.0-alpha.20-rev27') { throw "Unexpected base VERSION: $v" }
+
+      - name: Overlay exact rev28 files
+        shell: pwsh
+        run: |
+          Copy-Item ".github/ci_mirror/rev28/files/PROJECT_INDEX.md" "src/emmana_rev29/PROJECT_INDEX.md" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/VERSION" "src/emmana_rev29/VERSION" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/apps/linux_web/static/app.css" "src/emmana_rev29/apps/linux_web/static/app.css" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/apps/linux_web/static/app.js" "src/emmana_rev29/apps/linux_web/static/app.js" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/apps/linux_web/static/index.html" "src/emmana_rev29/apps/linux_web/static/index.html" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/apps/shared/help/help-registry.json" "src/emmana_rev29/apps/shared/help/help-registry.json" -Force
+          New-Item -ItemType Directory -Force "src/emmana_rev29/docs" | Out-Null
+          Copy-Item ".github/ci_mirror/rev28/files/docs/WORKLOG_2026-09-25_rev28.md" "src/emmana_rev29/docs/WORKLOG_2026-09-25_rev28.md" -Force
+          Copy-Item ".github/ci_mirror/rev28/files/tests/test_rev28_product_ui.py" "src/emmana_rev29/tests/test_rev28_product_ui.py" -Force
+          $v=(Get-Content src/emmana_rev29/VERSION).Trim()
+          if ($v -ne '0.1.0-alpha.20-rev28') { throw "Unexpected rev28 VERSION: $v" }
+
+      - name: Overlay exact rev29 files
+        shell: pwsh
+        run: |
+          Copy-Item ".github/ci_mirror/rev29/files/PROJECT_INDEX.md" "src/emmana_rev29/PROJECT_INDEX.md" -Force
+          Copy-Item ".github/ci_mirror/rev29/files/VERSION" "src/emmana_rev29/VERSION" -Force
+          Copy-Item ".github/ci_mirror/rev29/files/apps/linux_web/static/app.css" "src/emmana_rev29/apps/linux_web/static/app.css" -Force
+          Copy-Item ".github/ci_mirror/rev29/files/apps/linux_web/static/app.js" "src/emmana_rev29/apps/linux_web/static/app.js" -Force
+          Copy-Item ".github/ci_mirror/rev29/files/apps/linux_web/static/index.html" "src/emmana_rev29/apps/linux_web/static/index.html" -Force
+          Copy-Item ".github/ci_mirror/rev29/files/apps/shared/help/help-registry.json" "src/emmana_rev29/apps/shared/help/help-registry.json" -Force
+          Copy-Item ".github/ci_mirror/rev29/files/docs/WORKLOG_2026-09-26_rev29.md" "src/emmana_rev29/docs/WORKLOG_2026-09-26_rev29.md" -Force
+          Copy-Item ".github/ci_mirror/rev29/files/tests/test_rev29_optimizer_ux.py" "src/emmana_rev29/tests/test_rev29_optimizer_ux.py" -Force
+          $v=(Get-Content src/emmana_rev29/VERSION).Trim()
+          if ($v -ne '0.1.0-alpha.20-rev29') { throw "Unexpected rev29 VERSION: $v" }
+          python src/emmana_rev29/tests/test_rev28_product_ui.py src/emmana_rev29
+          python src/emmana_rev29/tests/test_rev29_optimizer_ux.py src/emmana_rev29
+          Write-Host "REV29_OVERLAY_PASS"
+
+      - name: Overlay exact rev30 files
+        shell: pwsh
+        run: |
+          Copy-Item ".github/ci_mirror/rev30/files/CMakeLists.txt" "src/emmana_rev29/CMakeLists.txt" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/PROJECT_INDEX.md" "src/emmana_rev29/PROJECT_INDEX.md" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/VERSION" "src/emmana_rev29/VERSION" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/apps/linux_web/server.py" "src/emmana_rev29/apps/linux_web/server.py" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/apps/linux_web/static/app.css" "src/emmana_rev29/apps/linux_web/static/app.css" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/apps/linux_web/static/app.js" "src/emmana_rev29/apps/linux_web/static/app.js" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/apps/linux_web/static/index.html" "src/emmana_rev29/apps/linux_web/static/index.html" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/apps/shared/help/help-registry.json" "src/emmana_rev29/apps/shared/help/help-registry.json" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/apps/shared/product/template-registry.json" "src/emmana_rev29/apps/shared/product/template-registry.json" -Force
+          New-Item -ItemType Directory -Force "src/emmana_rev29/apps/shared/product/seeds" | Out-Null
+          Copy-Item ".github/ci_mirror/rev30/files/apps/shared/product/seeds/yagi_5el_seed.emnx" "src/emmana_rev29/apps/shared/product/seeds/yagi_5el_seed.emnx" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/apps/shared/product/seeds/yagi_7el_seed.emnx" "src/emmana_rev29/apps/shared/product/seeds/yagi_7el_seed.emnx" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/apps/shared/product/seeds/moxon_seed.emnx" "src/emmana_rev29/apps/shared/product/seeds/moxon_seed.emnx" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/docs/WORKLOG_2026-09-26_rev30.md" "src/emmana_rev29/docs/WORKLOG_2026-09-26_rev30.md" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/tests/test_rev30_template_system.py" "src/emmana_rev29/tests/test_rev30_template_system.py" -Force
+          Copy-Item ".github/ci_mirror/rev30/files/tests/test_rev30_template_runtime.py" "src/emmana_rev29/tests/test_rev30_template_runtime.py" -Force
+          $v=(Get-Content src/emmana_rev29/VERSION).Trim()
+          if ($v -ne '0.1.0-alpha.20-rev31') { throw "Unexpected rev30 VERSION: $v" }
+          python src/emmana_rev29/tests/test_rev28_product_ui.py src/emmana_rev29
+          python src/emmana_rev29/tests/test_rev29_optimizer_ux.py src/emmana_rev29
+          python src/emmana_rev29/tests/test_rev30_template_system.py src/emmana_rev29
+          Write-Host "REV30_OVERLAY_PASS"
+
+      - name: Overlay exact rev31 files
+        shell: pwsh
+        run: |
+          Copy-Item ".github/ci_mirror/rev31/files/VERSION" "src/emmana_rev29/VERSION" -Force
+          Copy-Item ".github/ci_mirror/rev31/files/PROJECT_INDEX.md" "src/emmana_rev29/PROJECT_INDEX.md" -Force
+          Copy-Item ".github/ci_mirror/rev31/files/CMakeLists.txt" "src/emmana_rev29/CMakeLists.txt" -Force
+          Copy-Item ".github/ci_mirror/rev31/files/server.py" "src/emmana_rev29/apps/linux_web/server.py" -Force
+          Copy-Item ".github/ci_mirror/rev31/files/app.js" "src/emmana_rev29/apps/linux_web/static/app.js" -Force
+          Copy-Item ".github/ci_mirror/rev31/files/index.html" "src/emmana_rev29/apps/linux_web/static/index.html" -Force
+          Copy-Item ".github/ci_mirror/rev31/files/template-registry.json" "src/emmana_rev29/apps/linux_web/static/template-registry.json" -Force
+          Copy-Item ".github/ci_mirror/rev31/files/test_rev31_visual_geometry.py" "src/emmana_rev29/tests/test_rev31_visual_geometry.py" -Force
+          Copy-Item ".github/ci_mirror/rev31/files/WORKLOG_2026-09-26_rev31.md" "src/emmana_rev29/docs/WORKLOG_2026-09-26_rev31.md" -Force
+          $v=(Get-Content src/emmana_rev29/VERSION).Trim()
+          if ($v -ne '0.1.0-alpha.20-rev31') { throw "Unexpected rev31 VERSION: $v" }
+          python src/emmana_rev29/tests/test_rev31_visual_geometry.py src/emmana_rev29
+          Write-Host "REV31_OVERLAY_PASS"
+
+      - name: Install C++ dependencies
+        shell: pwsh
+        working-directory: src/emmana_rev29
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-json:x64-windows-static eigen3:x64-windows-static
+
+      - name: Configure and build
+        shell: pwsh
+        working-directory: src/emmana_rev29
+        run: |
+          cmake -S . -B build-win -A x64 -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static -DEMNEXT_REQUIRE_EIGEN=ON
+          cmake --build build-win --config Release --parallel 2
+
+      - name: Regression and rev31 antenna UX gate
+        shell: pwsh
+        working-directory: src/emmana_rev29
+        run: |
+          ctest --test-dir build-win -C Release --output-on-failure
+          python tests/test_rev28_product_ui.py .
+          python tests/test_rev29_optimizer_ux.py .
+          python tests/test_rev30_template_system.py .
+          python tests/test_rev30_template_runtime.py . build-win/Release/emnext.exe
+          python tests/test_rev31_visual_geometry.py .
+          python tests/test_primary_actions.py .
+          python tests/test_geometry_editor.py .
+          python tests/test_ui_surface_state.py .
+          python tests/test_help_registry.py .
+          python tests/test_measurement_pipeline.py .
+          python tests/test_product_workflow.py .
+          python tests/test_windows_launcher.py .
+          python tests/test_yagi_rev26.py --root . --emnext build-win/Release/emnext.exe
+
+      - name: Build portable Windows launcher
+        shell: pwsh
+        working-directory: src/emmana_rev29
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller
+          python -m PyInstaller --noconfirm --clean --onefile --name EMMana-Next --hidden-import json --hidden-import hashlib --hidden-import importlib.util --hidden-import math --hidden-import subprocess --hidden-import tempfile --hidden-import urllib.parse --hidden-import http --hidden-import http.server --hidden-import cmath --hidden-import csv --hidden-import io --hidden-import re --hidden-import typing --add-binary "build-win/Release/emnext.exe;EMMana-Next" --add-data "apps;EMMana-Next/apps" --add-data "benchmarks;EMMana-Next/benchmarks" --add-data "schemas;EMMana-Next/schemas" --add-data "VERSION;EMMana-Next" apps/windows_launcher.py
+
+      - name: Portable runtime rev31 UI gate
+        shell: pwsh
+        working-directory: src/emmana_rev29
+        run: |
+          $port=8799
+          $proc=Start-Process -FilePath "dist/EMMana-Next.exe" -ArgumentList "--no-browser","--port","$port" -PassThru -WindowStyle Hidden
+          try {
+            $health=$null
+            for($i=0;$i -lt 60;$i++){Start-Sleep -Seconds 1;try{$health=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2;if($health.ok){break}}catch{}}
+            if(-not $health -or $health.version -ne '0.1.0-alpha.20-rev31'){throw "Portable rev29 health/version failed"}
+            $page=(Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -TimeoutSec 10).Content
+            foreach($m in @('template-parameter-panel','template-parameter-fields','template-parameter-apply','template-parameter-recalc','template-parameter-optimize','opt-goal','geometry-undo','sweep-overlays')){if($page -notmatch [regex]::Escape($m)){throw "Missing UI marker: $m"}}
+            $templates=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/templates" -TimeoutSec 10
+            if(-not $templates.templates -or $templates.templates.Count -lt 7){throw "Packaged template catalog unavailable"}
+            $fallback=(Invoke-WebRequest -Uri "http://127.0.0.1:$port/template-registry.json" -TimeoutSec 10).Content
+            if($fallback -notmatch [regex]::Escape("Яги, 3 элемента")){throw "Static template fallback unavailable"}
+            $app=(Invoke-WebRequest -Uri "http://127.0.0.1:$port/app.js" -TimeoutSec 10).Content
+            foreach($m in @('renderTemplateParameterPanel','collectTemplateParameterQuery','applyTemplateParameters','syncTemplateParameterPanelFromProject','antennaElementLabel','drawYagiGuide','projectTemplateId','loadGeometryTemplates','OPT_GOAL_PRESETS')){if($app -notmatch [regex]::Escape($m)){throw "Missing JS marker: $m"}}
+            Write-Host "REV31_PORTABLE_UI_PASS"
+          } finally {
+            if($proc -and -not $proc.HasExited){Stop-Process -Id $proc.Id -Force}
+          }
+
+      - name: Package Windows rev31
+        shell: pwsh
+        working-directory: src/emmana_rev29
+        run: |
+          $version=(Get-Content VERSION).Trim()
+          $pkg="dist/EMMana-Next-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path $pkg | Out-Null
+          Copy-Item dist/EMMana-Next.exe $pkg/EMMana-Next.exe
+          Copy-Item build-win/Release/emnext.exe $pkg/emnext-cli.exe
+          Copy-Item VERSION $pkg/
+          @("EMMana-Next Portable Windows","","Запустите EMMana-Next.exe.","rev31: наглядная геометрия антенн и надёжный каталог шаблонов.","Расчёты выполняются локально.") | Set-Content -Encoding UTF8 "$pkg/README-WINDOWS.txt"
+          Compress-Archive -Path "$pkg/*" -DestinationPath "$pkg.zip" -Force
+
+      - name: Upload rev31 Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-rev31-windows-x64
+          path: src/emmana_rev29/dist/EMMana-Next-0.1.0-alpha.20-rev31-windows-x64.zip
+          if-no-files-found: error
