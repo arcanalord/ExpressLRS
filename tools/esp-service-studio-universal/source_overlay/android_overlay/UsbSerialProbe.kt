@@ -120,7 +120,7 @@ class UsbSerialProbe(private val context: Context) {
         } catch (e: Exception) {
             result(
                 status = "serial_error",
-                message = "Ошибка USB-Serial: \${e.message ?: e.javaClass.simpleName}",
+                message = "Ошибка USB-Serial: ${e.message ?: e.javaClass.simpleName}",
                 device = device,
                 driver = driver.javaClass.simpleName,
                 bytesRead = 0,
