@@ -94,6 +94,81 @@ jobs:
           cp "$APK" /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.11-Pixel7a.apk
           sha256sum /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.11-Pixel7a.apk > /tmp/SHA256SUMS.txt
 
+      - name: Build x86_64 emulator APK
+        working-directory: /tmp/service_studio
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --target-platform android-x64
+          cp build/app/outputs/flutter-apk/app-debug.apk /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.11-x86_64-test.apk
+
+      - name: Android 15 API 35 emulator smoke test
+        working-directory: /tmp/service_studio
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/esp-emulator-evidence
+
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          EMULATOR="$ANDROID_HOME/emulator/emulator"
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          IMAGE="system-images;android-35;google_apis;x86_64"
+
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "emulator" "$IMAGE"
+
+          echo no | "$AVDMANAGER" create avd             --force             --name ESPStudio_API35             --package "$IMAGE"             --device "pixel_7"
+
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm || true
+          fi
+
+          nohup "$EMULATOR"             -avd ESPStudio_API35             -no-window             -no-audio             -no-boot-anim             -no-snapshot             -wipe-data             -gpu swiftshader_indirect             > /tmp/esp-emulator-evidence/emulator.log 2>&1 &
+
+          "$ADB" wait-for-device
+
+          booted=""
+          for i in $(seq 1 90); do
+            booted="$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+            [ "$booted" = "1" ] && break
+            sleep 4
+          done
+          [ "$booted" = "1" ]
+
+          "$ADB" shell input keyevent 82 || true
+          "$ADB" install -r /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.11-x86_64-test.apk
+
+          "$ADB" shell dumpsys package com.arcanalord.service_studio             > /tmp/esp-emulator-evidence/package.txt
+          grep -F "versionName=0.9.0-alpha.11" /tmp/esp-emulator-evidence/package.txt
+          grep -F "versionCode=26092611" /tmp/esp-emulator-evidence/package.txt
+
+          "$ADB" logcat -c
+          "$ADB" shell am force-stop com.arcanalord.service_studio
+          "$ADB" shell am start -W -n com.arcanalord.service_studio/.MainActivity             | tee /tmp/esp-emulator-evidence/am-start.txt
+
+          sleep 4
+          "$ADB" shell pidof com.arcanalord.service_studio             | tee /tmp/esp-emulator-evidence/pid.txt
+          test -s /tmp/esp-emulator-evidence/pid.txt
+
+          "$ADB" shell uiautomator dump /sdcard/esp_ui_1.xml >/dev/null
+          "$ADB" pull /sdcard/esp_ui_1.xml /tmp/esp-emulator-evidence/ui_1.xml >/dev/null
+          "$ADB" exec-out screencap -p > /tmp/esp-emulator-evidence/screen_1.png
+
+          "$ADB" shell input swipe 500 1500 500 300 500 || true
+          sleep 2
+          "$ADB" shell uiautomator dump /sdcard/esp_ui_2.xml >/dev/null
+          "$ADB" pull /sdcard/esp_ui_2.xml /tmp/esp-emulator-evidence/ui_2.xml >/dev/null
+          "$ADB" exec-out screencap -p > /tmp/esp-emulator-evidence/screen_2.png
+
+          cat /tmp/esp-emulator-evidence/ui_1.xml /tmp/esp-emulator-evidence/ui_2.xml             > /tmp/esp-emulator-evidence/ui_all.xml
+          grep -F "ESP Service Studio" /tmp/esp-emulator-evidence/ui_all.xml
+          grep -F "ELRS оборудование" /tmp/esp-emulator-evidence/ui_all.xml
+
+          "$ADB" logcat -d > /tmp/esp-emulator-evidence/logcat.txt
+          if grep -E "FATAL EXCEPTION|Process: com\.arcanalord\.service_studio.*has died"             /tmp/esp-emulator-evidence/logcat.txt; then
+            echo "Application crash detected"
+            exit 1
+          fi
+
       - name: Package Dropbox release
         run: |
           set -euo pipefail
@@ -116,5 +191,6 @@ jobs:
             /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.11-release.zip
             /tmp/service-studio-release/ESP-Service-Studio-Universal-v0.9.0-alpha.11-Pixel7a.apk
             /tmp/service-studio-release/SHA256SUMS.txt
+            /tmp/esp-emulator-evidence/
           if-no-files-found: error
           retention-days: 14
