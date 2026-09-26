@@ -134,12 +134,13 @@ jobs:
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
-          BADGING="$("$BT/aapt" dump badging "$APK")"
-          echo "$BADGING" | grep -q "package: name='org.fpvclub.mesh.flutter'"
-          echo "$BADGING" | grep -q "versionCode='26092601'"
-          echo "$BADGING" | grep -q "versionName='0.1.10-dev.12'"
-          unzip -l "$APK" | grep -q 'lib/arm64-v8a/'
-          if unzip -l "$APK" | grep -Eq 'lib/(armeabi-v7a|x86|x86_64)/'; then
+          "$BT/aapt" dump badging "$APK" | tee /tmp/APK_BADGING.txt
+          grep -Fq "package: name='org.fpvclub.mesh.flutter'" /tmp/APK_BADGING.txt
+          grep -Fq "versionCode='26092601'" /tmp/APK_BADGING.txt
+          grep -Fq "versionName='0.1.10-dev.12'" /tmp/APK_BADGING.txt
+          unzip -Z1 "$APK" > /tmp/APK_FILES.txt
+          grep -Fq 'lib/arm64-v8a/' /tmp/APK_FILES.txt
+          if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' /tmp/APK_FILES.txt; then
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
