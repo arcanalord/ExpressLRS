@@ -25,8 +25,8 @@ device_profiles = Path(
 ).read_text(encoding='utf-8')
 
 checks = {
-    'visible alpha11 id': 'v0.9.0-alpha.11 · Pixel 7a' in main,
-    'android package alpha11 id': 'version: 0.9.0-alpha.11+26092611' in pubspec,
+    'visible alpha12 id': 'v0.9.0-alpha.12 · Pixel 7a' in main,
+    'android package alpha12 id': 'version: 0.9.0-alpha.12+26092612' in pubspec,
     'real probe button': 'probeEspRom' in main,
     'permission request': 'requestPermission' in native,
     'permission result': 'ACTION_USB_PERMISSION' in native,
