@@ -87,6 +87,28 @@ class MainActivity : FlutterActivity() {
                         startEspProbe(deviceName, result)
                     }
 
+                    "meshServiceCommand" -> {
+                        val deviceName = call.argument<String>("deviceName")
+                        val command = call.argument<Int>("command") ?: 0x16
+                        Thread {
+                            val probe = UsbSerialProbe(this)
+                            val device = probe.findDevice(deviceName)
+                            val response = if (device == null) {
+                                mapOf(
+                                    "status" to "mesh_no_device",
+                                    "message" to "USB-UART не найден",
+                                )
+                            } else {
+                                probe.meshServiceCommand(device, command)
+                            }
+                            mainHandler.post {
+                                result.success(response)
+                                emitUsbSnapshot("mesh_service", 0)
+                            }
+                        }.start()
+                    }
+
+
                     "fetchOfficialElrsCatalogIndex" -> {
                         Thread {
                             val response = OfficialElrsService(this).fetchCatalogIndex()
