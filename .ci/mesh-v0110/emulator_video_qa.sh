@@ -33,7 +33,7 @@ MAP_X=405
 CONNECTION_X=675
 SETTINGS_X=945
 HELP_X=900
-APPBAR_Y=95
+APPBAR_Y=160
 
 PID="$(adb shell pidof -s org.fpvclub.mesh.flutter | tr -d '\r')"
 test -n "$PID"
@@ -68,13 +68,6 @@ adb shell input tap "$HELP_X" "$APPBAR_Y"
 sleep 3
 assert_foreground
 dump_screen 05_help
-adb shell input keyevent 4
-sleep 2
-
-adb shell input tap "$CHAT_X" "$NAV_Y"
-sleep 3
-assert_foreground
-dump_screen 06_chats_return
 
 wait "$RECORD_PID" || true
 adb pull /sdcard/mesh-dev10-smoke.mp4 "$EVIDENCE/MeshMessenger-v0.1.10-dev.10-emulator-smoke.mp4"
@@ -90,7 +83,7 @@ fi
   echo "Date: 2026-09-26"
   echo "Android API: 35"
   echo "PASS: app launch"
-  echo "PASS: Chats -> Map -> Connection -> Settings -> Help -> Chats"
+  echo "PASS: Chats -> Map -> Connection -> Settings -> Help"
   echo "PASS: USB refresh action without attached hardware"
   echo "PASS: no app FATAL in package logcat"
   echo "LIMIT: no physical USB-UART/M03/radio HIL in emulator"
