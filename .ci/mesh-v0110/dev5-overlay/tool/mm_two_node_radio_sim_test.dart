@@ -6,6 +6,7 @@ import '../lib/core/delivery.dart';
 import '../lib/core/models.dart';
 import '../lib/platform/mm_uart_codec.dart';
 import '../lib/platform/mm_uart_external_radio_session.dart';
+import '../lib/platform/mm_uart_hil_bench.dart';
 import '../lib/platform/mm_uart_message_transport.dart';
 
 final class Net {
@@ -110,29 +111,48 @@ Future<void> main() async {
   final l2 = Link(fw2);
   final t1 = MmUartMessageTransport(session: s1, resolveRecipientBinding: (id) => id == 'mm:b' ? 2 : null);
   final t2 = MmUartMessageTransport(session: s2, resolveRecipientBinding: (id) => id == 'mm:a' ? 1 : null);
+  final hil1 = MmUartHilBench(s1);
+  final hil2 = MmUartHilBench(s2);
   final seen1 = <String>{};
   final seen2 = <String>{};
   final ack1 = <String>{};
   final ack2 = <String>{};
   var dup2 = 0;
-  final sub1 = t1.events.listen((e) async {
+  StreamSubscription<MmUartMessageTransportEvent>? sub1;
+  StreamSubscription<MmUartMessageTransportEvent>? sub2;
+  try {
+    await s1.connect(l1);
+    await s2.connect(l2);
+    if (!t1.isAvailable || !t2.isAvailable) throw StateError('MMRP route unavailable');
+
+    final hilReport = await hil1.run(
+      recipientBinding: 2,
+      count: 100,
+      timeout: const Duration(milliseconds: 300),
+    );
+    if (!hilReport.passed ||
+        hilReport.replied != 100 ||
+        !hilReport.ackPass ||
+        !hilReport.duplicatePass ||
+        !hilReport.mapPointPass) {
+      throw StateError('HIL bench failed: ${hilReport.summary()}');
+    }
+    print('MM_UART_HIL_100_PASS ${hilReport.summary()}');
+
+  sub1 = t1.events.listen((e) async {
     if (e is MmUartRecipientAck) ack1.add(e.messageId);
     if (e is MmUartIncomingMessage) {
       if (!seen1.add(e.messageId)) {}
       await t1.acknowledgeIncoming(messageId: e.messageId, recipientBinding: e.sourceBinding);
     }
   });
-  final sub2 = t2.events.listen((e) async {
+  sub2 = t2.events.listen((e) async {
     if (e is MmUartRecipientAck) ack2.add(e.messageId);
     if (e is MmUartIncomingMessage) {
       if (!seen2.add(e.messageId)) dup2++;
       await t2.acknowledgeIncoming(messageId: e.messageId, recipientBinding: e.sourceBinding);
     }
   });
-  try {
-    await s1.connect(l1);
-    await s2.connect(l2);
-    if (!t1.isAvailable || !t2.isAvailable) throw StateError('MMRP route unavailable');
 
     final text = env('m-text', 'mm:b', 'text', 'hello');
     final r1 = await t1.send(text);
@@ -169,8 +189,10 @@ Future<void> main() async {
     print('MM_TWO_NODE_RADIO_SIM_PASS');
     print('TEXT_ACK=${ack1.contains('m-text')} MAP_ACK=${ack2.contains('m-map')} DUP=$dup2 RESET=${s2.bootId}');
   } finally {
-    await sub1.cancel();
-    await sub2.cancel();
+    await sub1?.cancel();
+    await sub2?.cancel();
+    await hil1.close();
+    await hil2.close();
     await t1.close();
     await t2.close();
     await s1.close();
