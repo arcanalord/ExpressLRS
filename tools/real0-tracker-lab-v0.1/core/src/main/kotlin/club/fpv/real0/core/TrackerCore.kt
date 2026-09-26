@@ -1,5 +1,6 @@
 package club.fpv.real0.core
 
+import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
@@ -21,6 +22,7 @@ data class BoxF(val left: Float, val top: Float, val right: Float, val bottom: F
 interface GrayFrame {
     val width: Int
     val height: Int
+    val timestampNs: Long get() = 0L
     fun gray(x: Int, y: Int): Float
 }
 
@@ -41,10 +43,13 @@ class NccTrackerCore {
     private val reacquire = ReacquireCore()
 
     private var measured: BoxF? = null
+    private var trusted: BoxF? = null
     private var lastKnown: BoxF? = null
     private var predicted: BoxF? = null
+    // Pixels per second. Prediction becomes frame-gap aware when timestampNs is supplied.
     private var vx = 0f
     private var vy = 0f
+    private var lastTimestampNs = 0L
     private var state = CoreTrackState.IDLE
 
     val policy: String get() = model.policy
@@ -56,10 +61,12 @@ class NccTrackerCore {
         gate.reset()
         reacquire.reset()
         measured = null
+        trusted = null
         lastKnown = null
         predicted = null
         vx = 0f
         vy = 0f
+        lastTimestampNs = 0L
         state = CoreTrackState.IDLE
     }
 
@@ -69,13 +76,16 @@ class NccTrackerCore {
         val d = descriptor(frame, b) ?: return
         model.init(d)
         measured = b
+        trusted = b
         lastKnown = b
         predicted = b
+        lastTimestampNs = frame.timestampNs
         state = CoreTrackState.TRACKING
     }
 
     fun update(frame: GrayFrame): CoreTrackerResult {
         val t0 = System.nanoTime()
+        val dt = deltaSeconds(frame.timestampNs)
         val current = measured
         if (current != null) {
             val searchBase = predicted ?: current
@@ -85,48 +95,79 @@ class NccTrackerCore {
             val quality = quality(score)
 
             if (best == null || next == CoreTrackState.LOST) {
-                lastKnown = current
+                // Weak candidates must never become the new trusted geometry.
+                val anchor = trusted ?: current
+                lastKnown = anchor
                 measured = null
                 state = CoreTrackState.LOST
                 model.restore()
-                predicted = clamp((predicted ?: current).translated(vx, vy), frame.width, frame.height)
-                vx *= 0.90f
-                vy *= 0.90f
-                return result(quality, t0, "local lost")
+                predicted = clamp(anchor.translated(vx * dt, vy * dt), frame.width, frame.height)
+                vx *= 0.96f
+                vy *= 0.96f
+                return result(quality, t0, "local lost; trusted geometry restored")
             }
 
-            val prev = current
+            if (next == CoreTrackState.UNCERTAIN) {
+                // Keep the last trusted measurement and velocity source.
+                val anchor = trusted ?: current
+                measured = anchor
+                state = CoreTrackState.UNCERTAIN
+                predicted = clamp(anchor.translated(vx * dt, vy * dt), frame.width, frame.height)
+                vx *= 0.985f
+                vy *= 0.985f
+                return result(quality, t0, "uncertain; trusted hold")
+            }
+
+            val prev = trusted ?: current
             measured = best.box
+            trusted = best.box
             lastKnown = best.box
-            vx = 0.62f * vx + 0.38f * (best.box.centerX() - prev.centerX())
-            vy = 0.62f * vy + 0.38f * (best.box.centerY() - prev.centerY())
-            predicted = clamp(best.box.translated(vx, vy), frame.width, frame.height)
-            state = next
-            if (next == CoreTrackState.TRACKING && score >= 0.72f) model.update(best.desc, score)
-            return result(quality, t0, "local multi-scale")
+            val safeDt = dt.coerceAtLeast(1f / 120f)
+            val rawVx = (best.box.centerX() - prev.centerX()) / safeDt
+            val rawVy = (best.box.centerY() - prev.centerY()) / safeDt
+            vx = 0.60f * vx + 0.40f * rawVx
+            vy = 0.60f * vy + 0.40f * rawVy
+            predicted = clamp(best.box.translated(vx * dt, vy * dt), frame.width, frame.height)
+            state = CoreTrackState.TRACKING
+            if (score >= 0.72f) model.update(best.desc, score)
+            return result(quality, t0, "local trusted tracking")
         }
 
-        val base = predicted ?: lastKnown
-        if (base == null) return CoreTrackerResult(CoreTrackState.IDLE, null, null, 0f, 0f, "not initialized")
+        val trustedBase = trusted ?: lastKnown
+        val base = predicted ?: trustedBase
+        if (base == null || trustedBase == null) {
+            return CoreTrackerResult(CoreTrackState.IDLE, null, null, 0f, 0f, "not initialized")
+        }
 
-        predicted = clamp(base.translated(vx, vy), frame.width, frame.height)
-        vx *= 0.90f
-        vy *= 0.90f
-        val reacq = reacquire.search(frame, predicted ?: base, model)
+        predicted = clamp(base.translated(vx * dt, vy * dt), frame.width, frame.height)
+        vx *= 0.96f
+        vy *= 0.96f
+        val reacq = reacquire.search(frame, predicted ?: base, trustedBase, model)
         val q = quality(reacq.score)
-        if (reacq.confirmed && reacq.box != null && reacq.desc != null) {
+        if (reacq.confirmed && reacq.box != null) {
             measured = reacq.box
+            trusted = reacq.box
             lastKnown = reacq.box
             predicted = reacq.box
             vx = 0f
             vy = 0f
             gate.reset()
             state = CoreTrackState.REACQUIRED
-            model.update(reacq.desc, reacq.score)
-            return result(q, t0, "full-frame reacquired")
+            // Do not poison the adaptive model on the reacquire frame.
+            return result(q, t0, "staged reacquired; model held")
         }
         state = CoreTrackState.SEARCHING
-        return result(q, t0, "full-frame searching")
+        return result(q, t0, "staged searching")
+    }
+
+    private fun deltaSeconds(timestampNs: Long): Float {
+        val dt = if (timestampNs > 0L && lastTimestampNs > 0L) {
+            ((timestampNs - lastTimestampNs) / 1e9).toFloat().coerceIn(1f / 120f, 0.40f)
+        } else {
+            1f / 30f
+        }
+        if (timestampNs > 0L) lastTimestampNs = timestampNs
+        return dt
     }
 
     private fun result(quality: Float, t0: Long, reason: String) = CoreTrackerResult(
@@ -140,10 +181,10 @@ class NccTrackerCore {
 
     private fun scanLocal(frame: GrayFrame, base: BoxF): Candidate? {
         var best: Candidate? = null
-        val rx = max(24f, base.width() * 1.15f)
-        val ry = max(18f, base.height() * 1.15f)
-        val step = max(3, (min(base.width(), base.height()) / 7f).toInt())
-        val scales = floatArrayOf(0.82f, 0.91f, 1.0f, 1.10f, 1.22f)
+        val rx = max(24f, base.width() * 1.30f)
+        val ry = max(18f, base.height() * 1.30f)
+        val step = max(2, (min(base.width(), base.height()) / 8f).toInt())
+        val scales = floatArrayOf(0.78f, 0.88f, 0.96f, 1.0f, 1.06f, 1.14f, 1.28f)
         for (scale in scales) {
             val sized = base.scaledAboutCenter(scale)
             var dy = -ry.toInt()
@@ -155,7 +196,7 @@ class NccTrackerCore {
                         val d = descriptor(frame, b)
                         if (d != null) {
                             val s = model.score(d)
-                            if (best == null || s > best!!.score) best = Candidate(b, d, s)
+                            if (best == null || s > best.score) best = Candidate(b, d, s)
                         }
                     }
                     dx += step
@@ -173,6 +214,7 @@ class NccTrackerCore {
     private class QualityGateCore {
         private var lostStreak = 0
         fun reset() { lostStreak = 0 }
+
         fun classify(score: Float): CoreTrackState {
             return when {
                 score >= 0.64f -> {
@@ -194,22 +236,84 @@ class NccTrackerCore {
     private class ReacquireCore {
         private var pending: BoxF? = null
         private var confirm = 0
+        private var searchFrame = 0
 
         fun reset() {
             pending = null
             confirm = 0
+            searchFrame = 0
         }
 
-        fun search(frame: GrayFrame, base: BoxF, model: TargetModelCore): ReacquireResult {
-            var bestBox: BoxF? = null
-            var bestDesc: FloatArray? = null
-            var bestScore = -1f
-            val scales = floatArrayOf(0.78f, 0.90f, 1.0f, 1.12f, 1.28f)
+        fun search(frame: GrayFrame, predicted: BoxF, trusted: BoxF, model: TargetModelCore): ReacquireResult {
+            searchFrame++
+            var best = when {
+                searchFrame <= 2 -> scanRegion(frame, predicted, model, 1.8f)
+                searchFrame <= 5 -> scanRegion(frame, predicted, model, 4.0f)
+                else -> scanFull(frame, trusted, model)
+            }
+            if (best != null) best = refine(frame, best, model)
+
+            if (best == null || best.score < 0.68f) {
+                pending = null
+                confirm = 0
+                return ReacquireResult(false, best?.box, best?.score ?: -1f)
+            }
+
+            val p = pending
+            if (p != null && centerDistance(p, best.box) <= max(14f, best.box.width() * 0.85f)) {
+                confirm++
+            } else {
+                confirm = 1
+            }
+            pending = best.box
+
+            return if (confirm >= 3) {
+                pending = null
+                confirm = 0
+                searchFrame = 0
+                ReacquireResult(true, best.box, best.score)
+            } else {
+                ReacquireResult(false, best.box, best.score)
+            }
+        }
+
+        private fun scanRegion(frame: GrayFrame, base: BoxF, model: TargetModelCore, multiplier: Float): Candidate? {
+            var best: Candidate? = null
+            val rx = max(30f, base.width() * multiplier)
+            val ry = max(24f, base.height() * multiplier)
+            val scales = floatArrayOf(0.72f, 0.84f, 0.94f, 1.0f, 1.08f, 1.20f, 1.36f)
             for (scale in scales) {
-                val w = (base.width() * scale).coerceIn(10f, frame.width * 0.45f)
-                val h = (base.height() * scale).coerceIn(8f, frame.height * 0.45f)
-                val sx = max(7, (w * 0.34f).toInt())
-                val sy = max(6, (h * 0.34f).toInt())
+                val w = base.width() * scale
+                val h = base.height() * scale
+                val step = max(4, (min(w, h) * 0.30f).toInt())
+                var dy = -ry.toInt()
+                while (dy <= ry.toInt()) {
+                    var dx = -rx.toInt()
+                    while (dx <= rx.toInt()) {
+                        val b = centeredBox(base.centerX() + dx, base.centerY() + dy, w, h)
+                        if (inside(b, frame.width, frame.height)) {
+                            val d = descriptor(frame, b)
+                            if (d != null) {
+                                val s = model.score(d)
+                                if (best == null || s > best.score) best = Candidate(b, d, s)
+                            }
+                        }
+                        dx += step
+                    }
+                    dy += step
+                }
+            }
+            return best
+        }
+
+        private fun scanFull(frame: GrayFrame, base: BoxF, model: TargetModelCore): Candidate? {
+            var best: Candidate? = null
+            val scales = floatArrayOf(0.68f, 0.80f, 0.92f, 1.0f, 1.12f, 1.28f, 1.48f)
+            for (scale in scales) {
+                val w = (base.width() * scale).coerceIn(8f, frame.width * 0.48f)
+                val h = (base.height() * scale).coerceIn(6f, frame.height * 0.48f)
+                val sx = max(5, (w * 0.28f).toInt())
+                val sy = max(4, (h * 0.28f).toInt())
                 var cy = h * 0.5f + 1f
                 while (cy < frame.height - h * 0.5f - 1f) {
                     var cx = w * 0.5f + 1f
@@ -218,45 +322,49 @@ class NccTrackerCore {
                         val d = descriptor(frame, b)
                         if (d != null) {
                             val s = model.score(d)
-                            if (s > bestScore) {
-                                bestScore = s
-                                bestBox = b
-                                bestDesc = d
-                            }
+                            if (best == null || s > best.score) best = Candidate(b, d, s)
                         }
                         cx += sx
                     }
                     cy += sy
                 }
             }
+            return best
+        }
 
-            if (bestBox == null || bestDesc == null || bestScore < 0.70f) {
-                pending = null
-                confirm = 0
-                return ReacquireResult(false, null, null, bestScore)
+        private fun refine(frame: GrayFrame, seed: Candidate, model: TargetModelCore): Candidate {
+            var best = seed
+            val base = seed.box
+            val step = max(1, (min(base.width(), base.height()) / 10f).toInt())
+            for (scale in floatArrayOf(0.90f, 0.96f, 1.0f, 1.05f, 1.12f)) {
+                var dy = -step * 3
+                while (dy <= step * 3) {
+                    var dx = -step * 3
+                    while (dx <= step * 3) {
+                        val b = centeredBox(
+                            base.centerX() + dx,
+                            base.centerY() + dy,
+                            base.width() * scale,
+                            base.height() * scale
+                        )
+                        if (inside(b, frame.width, frame.height)) {
+                            val d = descriptor(frame, b)
+                            if (d != null) {
+                                val s = model.score(d)
+                                if (s > best.score) best = Candidate(b, d, s)
+                            }
+                        }
+                        dx += step
+                    }
+                    dy += step
+                }
             }
-
-            val p = pending
-            if (p != null && centerDistance(p, bestBox) <= max(12f, bestBox.width() * 0.60f)) {
-                confirm++
-            } else {
-                pending = bestBox
-                confirm = 1
-            }
-
-            return if (confirm >= 2) {
-                pending = null
-                confirm = 0
-                ReacquireResult(true, bestBox, bestDesc, bestScore)
-            } else {
-                ReacquireResult(false, bestBox, bestDesc, bestScore)
-            }
+            return best
         }
 
         data class ReacquireResult(
             val confirmed: Boolean,
             val box: BoxF?,
-            val desc: FloatArray?,
             val score: Float
         )
     }
@@ -344,7 +452,7 @@ private fun appearanceScore(a: FloatArray, b: FloatArray): Float {
     if (a.size != b.size || a.isEmpty()) return -1f
     val structural = ncc(a, b)
     var mad = 0f
-    for (i in a.indices) mad += kotlin.math.abs(a[i] - b[i])
+    for (i in a.indices) mad += abs(a[i] - b[i])
     mad /= a.size
     val absolute = (1f - mad / 0.35f).coerceIn(-1f, 1f)
     return 0.72f * structural + 0.28f * absolute
