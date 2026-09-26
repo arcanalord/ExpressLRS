@@ -35,3 +35,19 @@ Stable dev certificate SHA-256:
 ## Release status
 SOFTWARE PASS is required before publishing the APK.
 PHYSICAL RF HIL remains a separate gate.
+
+## Final verified build
+CI run: 36215746688
+CI tested head: 2d934520decc41246ddb368340b860e170ccda11
+CI result: SUCCESS
+
+Final stable-signed APK:
+MeshMessenger-Flutter-v0.1.10-dev.12-r1-arm64-INSTALL.apk
+
+Final signed APK SHA-256:
+f23831d7ae119e0761ce67c126d7affd1fdaad1e653d9a67d0c994430685c2bd
+
+Size: 78259479 bytes
+APK Signature Scheme v2: PASS
+APK Signature Scheme v3: PASS
+zipalign 16 KiB: PASS
