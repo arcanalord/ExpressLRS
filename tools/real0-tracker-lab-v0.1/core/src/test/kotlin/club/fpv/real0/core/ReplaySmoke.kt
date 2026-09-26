@@ -186,6 +186,7 @@ fun main() {
                 timestampNs = ts
             )
         )
+        println("PHONE_REACQ frame=${i + 1} state=${r.state} q=${r.quality} reason=${r.reason} box=${r.measuredBox} pred=${r.predictedBox} ms=${r.processingMs}")
         if (r.state == CoreTrackState.REACQUIRED) slowReacquired = true
     }
     check(slowReacquired) { "phone regression: moving candidate never confirmed after sparse SEARCHING frames" }
