@@ -64,7 +64,7 @@ jobs:
           Copy-Item ".github/ci_mirror/rev29/files/docs/WORKLOG_2026-09-26_rev29.md" "src/emmana_rev29/docs/WORKLOG_2026-09-26_rev29.md" -Force
           Copy-Item ".github/ci_mirror/rev29/files/tests/test_rev29_optimizer_ux.py" "src/emmana_rev29/tests/test_rev29_optimizer_ux.py" -Force
           $v=(Get-Content src/emmana_rev29/VERSION).Trim()
-          if ($v -ne '0.1.0-alpha.20-rev30') { throw "Unexpected rev29 VERSION: $v" }
+          if ($v -ne '0.1.0-alpha.20-rev29') { throw "Unexpected rev29 VERSION: $v" }
           python src/emmana_rev29/tests/test_rev28_product_ui.py src/emmana_rev29
           python src/emmana_rev29/tests/test_rev29_optimizer_ux.py src/emmana_rev29
           Write-Host "REV29_OVERLAY_PASS"
@@ -152,7 +152,7 @@ jobs:
             if($proc -and -not $proc.HasExited){Stop-Process -Id $proc.Id -Force}
           }
 
-      - name: Package Windows rev29
+      - name: Package Windows rev30
         shell: pwsh
         working-directory: src/emmana_rev29
         run: |
