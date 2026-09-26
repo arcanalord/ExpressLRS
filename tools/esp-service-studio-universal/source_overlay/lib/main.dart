@@ -6,7 +6,7 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.10 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.11 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
@@ -388,6 +388,18 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     }
   }
 
+  Future<void> _prepareAndFlashElrs() async {
+    await _prepareElrsFirmware();
+    if (!mounted) return;
+
+    final prepared = preparedElrs;
+    if (prepared == null || !prepared.ok || !prepared.hardwarePinned) {
+      return;
+    }
+
+    await _flashPreparedEsp8285();
+  }
+
   Future<void> _flashPreparedEsp8285() async {
     final device = usbDevices.firstOrNull;
     final target = selectedElrsTarget;
@@ -553,14 +565,14 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                     ),
             ),
             _Section(
-              title: '2. Официальные ExpressLRS приёмники',
+              title: '2. ELRS оборудование',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
                     detectedPlatform == null
-                        ? 'Сначала определите контроллер. Затем каталог отфильтруется автоматически.'
-                        : 'Определено: $detectedPlatform. Показываются совместимые RX targets из официального ExpressLRS/Targets.',
+                        ? 'Сначала определите контроллер. Затем программа покажет совместимое ELRS оборудование.'
+                        : 'Определено: $detectedPlatform. Выберите точную модель ELRS оборудования из официального каталога перед записью.',
                   ),
                   const SizedBox(height: 10),
                   FilledButton.tonalIcon(
@@ -624,7 +636,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                           .toList(),
                       onChanged: _selectElrsTarget,
                       decoration: const InputDecoration(
-                        labelText: 'Модель ELRS приёмника',
+                        labelText: 'ELRS оборудование',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -650,7 +662,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                     preparedElrs = null;
                   });
                 },
-                onPrepare: _prepareElrsFirmware,
+                onPrepare: _prepareAndFlashElrs,
                 bindingPhrase: _bindingPhrase,
                 wifiSsid: _wifiSsid,
                 wifiPassword: _wifiPassword,
@@ -939,8 +951,8 @@ class _DynamicElrsTargetSection extends StatelessWidget {
                   : const Icon(Icons.inventory_2_outlined),
               label: Text(
                 preparing
-                    ? 'Готовлю firmware.bin…'
-                    : 'Подготовить прошивку',
+                    ? 'Готовлю прошивку…'
+                    : 'Подготовить и прошить',
               ),
             ),
           ],
@@ -971,7 +983,7 @@ class _DynamicElrsTargetSection extends StatelessWidget {
                       )
                     : const Icon(Icons.memory),
                 label: Text(
-                  flashing ? 'Записываю…' : 'Записать в контроллер',
+                  flashing ? 'Записываю…' : 'Записать повторно',
                 ),
               ),
             ] else
