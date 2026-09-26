@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
     private var locked = false
     private var source = "NONE"
     @Volatile private var selectionFrozen = false
-    @Volatile private var lastDisplayedFrame: Bitmap? = null
+    @Volatile private var lastDisplayedFrame: Bitmap? = null\n    @Volatile private var lastDisplayedTimestampNs: Long = 0L
 
     private var retriever: MediaMetadataRetriever? = null
     private var videoUs = 0L
@@ -74,7 +74,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildUi()
-        overlay.onLock = { lockOnDisplayedFrame(it) }
+        overlay.onQuickLock = { quickLockOnDisplayedFrame(it.x, it.y) }\n        overlay.onPreciseLock = { lockOnDisplayedFrame(it) }
         handler.post(videoTick)
     }
 
@@ -146,14 +146,34 @@ class MainActivity : AppCompatActivity() {
         }
         setStatus("LOCK init...")
         exec.execute {
-            tracker.init(frame, r)
+            tracker.init(frame, r, lastDisplayedTimestampNs)
             locked = true
-            lastResult = TrackerResult(TrackState.TRACKING, r, r, 1f, 0f, "manual lock")
+            lastResult = TrackerResult(TrackState.TRACKING, r, r, 1f, 0f, "manual precise lock")
             selectionFrozen = false
             runOnUiThread {
                 overlay.result = lastResult
                 overlay.invalidate()
                 status.text = "TRACKING q=1.00 | ${tracker.policy}"
+            }
+        }
+    }
+
+    private fun quickLockOnDisplayedFrame(x: Float, y: Float) {
+        val frame = lastDisplayedFrame
+        if (frame == null) {
+            selectionFrozen = false
+            setStatus("QUICK ERROR: нет отображённого кадра")
+            return
+        }
+        setStatus("QUICK AutoFit...")
+        exec.execute {
+            lastResult = tracker.beginQuick(frame, x, y, lastDisplayedTimestampNs)
+            locked = lastResult.state == TrackState.STABILIZING || lastResult.state == TrackState.TRACKING
+            selectionFrozen = false
+            runOnUiThread {
+                overlay.result = lastResult
+                overlay.invalidate()
+                status.text = "${lastResult.state} q=${"%.2f".format(lastResult.quality)} | ${lastResult.reason}"
             }
         }
     }
@@ -170,14 +190,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun showHelp() {
         AlertDialog.Builder(this)
-            .setTitle("Real-0 Tracker Lab v0.1.5")
+            .setTitle("Real-0 Tracker Lab v0.1.6 core candidate")
             .setMessage("""
                 CAMERA — экран и трекер используют один кадр.
                 VIDEO — локальный видеофайл.
-                QUICK/PRECISE LOCK — замораживает текущий кадр для точного выбора цели.
+                QUICK LOCK — тап задаёт точку; AutoFit подбирает рамку и подтверждает её несколько кадров.\n                PRECISE LOCK — ручная рамка, контрольный режим.
                 RESET — удалить захват.
 
-                TRACKING — сопровождение.
+                STABILIZING — QUICK LOCK ещё уточняет рамку.\n                TRACKING — сопровождение.
                 UNCERTAIN — уверенность снижена.
                 LOST/SEARCHING — измеренная рамка скрыта, идёт полный повторный поиск.
                 REACQUIRED — цель повторно подтверждена.
@@ -215,7 +235,7 @@ class MainActivity : AppCompatActivity() {
         try {
             if (source != "CAMERA" || selectionFrozen) return
             val bitmap = toBitmap(image)
-            publishFrame(bitmap, runTracker = locked)
+            publishFrame(bitmap, runTracker = locked, timestampNs = image.imageInfo.timestamp)
         } catch (t: Throwable) {
             setStatus("CAMERA FRAME ERROR: ${t.message}")
         } finally {
@@ -242,7 +262,7 @@ class MainActivity : AppCompatActivity() {
                 if (source == "VIDEO" && r != null && !selectionFrozen) {
                     val bm = runCatching { r.getFrameAtTime(us, MediaMetadataRetriever.OPTION_CLOSEST) }
                         .getOrElse { setStatus("VIDEO FRAME ERROR: ${it.message}"); null }
-                    if (bm != null && source == "VIDEO") publishFrame(bm, runTracker = locked)
+                    if (bm != null && source == "VIDEO") publishFrame(bm, runTracker = locked, timestampNs = us * 1000L)
                 }
             } finally { videoBusy.set(false) }
         }
@@ -251,7 +271,7 @@ class MainActivity : AppCompatActivity() {
     private fun publishFrame(bitmap: Bitmap, runTracker: Boolean) {
         lastDisplayedFrame = bitmap
         overlay.frameW = bitmap.width; overlay.frameH = bitmap.height
-        if (runTracker) lastResult = tracker.update(bitmap)
+        if (runTracker) lastResult = tracker.update(bitmap, timestampNs)
         runOnUiThread {
             frameView.setImageBitmap(bitmap)
             overlay.result = lastResult; overlay.invalidate()
@@ -260,7 +280,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun resetTracker() {
-        locked = false; selectionFrozen = false; overlay.disarm(); tracker.reset()
+        locked = false; selectionFrozen = false; lastDisplayedTimestampNs = 0L; overlay.disarm(); tracker.reset()
         lastResult = TrackerResult(if (source == "NONE") TrackState.IDLE else TrackState.READY, null, null, 0f, 0f, "reset")
         overlay.result = lastResult; overlay.invalidate()
         setStatus(if (source == "NONE") "Выберите CAMERA или VIDEO" else "Готово. QUICK/PRECISE LOCK")
