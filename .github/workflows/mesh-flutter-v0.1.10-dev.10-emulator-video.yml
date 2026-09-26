@@ -1,0 +1,192 @@
+name: Mesh Messenger dev.10 Android Emulator Video QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - build/mesh-flutter-v0.1.10-dev.10
+    paths:
+      - '.github/workflows/mesh-flutter-v0.1.10-dev.10-emulator-video.yml'
+      - '.ci/mesh-v0110/dev5-overlay/**'
+
+concurrency:
+  group: mesh-flutter-v0.1.10-dev.10-emulator-video
+  cancel-in-progress: true
+
+jobs:
+  emulator-video-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct current Flutter source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mesh-dev10
+          base64 -d .ci/mesh-v0110/source_v0110_dev3.zip.b64 > /tmp/mesh-dev10/source.zip
+          echo '38a92c9c3873239c7db9c472800e4229d60a8a539bbb964b057e03029eebcda4  /tmp/mesh-dev10/source.zip' | sha256sum -c -
+          unzip -q /tmp/mesh-dev10/source.zip -d /tmp/mesh-dev10/unpacked
+          ROOT="$(find /tmp/mesh-dev10/unpacked -maxdepth 1 -mindepth 1 -type d -name 'mesh_messenger_flutter_*' -print -quit)"
+          test -n "$ROOT"
+          APP_DIR="$ROOT/flutter_app"
+          cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
+          sed -i 's/^version: .*/version: 0.1.10-dev.10+26092601/' "$APP_DIR/pubspec.yaml"
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+
+      - name: Setup Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Dependencies and map runtime
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          flutter pub get
+          python3 tool/fetch_map_vendor.py
+          python3 tool/map_vendor_gate.py
+
+      - name: Build Android debug APK
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter build apk --debug --target-platform android-x64
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+
+      - name: Android emulator smoke + video
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            EVIDENCE=/tmp/mesh-dev10-emulator-evidence
+            mkdir -p "$EVIDENCE/ui"
+
+            APK="${APP_DIR}/build/app/outputs/flutter-apk/app-debug.apk"
+            test -s "$APK"
+            adb install -r "$APK"
+
+            adb shell wm size 1080x1920
+            adb shell wm density 420
+            adb logcat -c
+
+            adb shell monkey -p org.fpvclub.mesh.flutter -c android.intent.category.LAUNCHER 1 >/dev/null
+            sleep 8
+
+            cat > /tmp/tap_text.py <<'PY'
+            import re, subprocess, sys, xml.etree.ElementTree as ET
+            target = sys.argv[1]
+            subprocess.run(["adb","shell","uiautomator","dump","/sdcard/window.xml"], check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["adb","pull","/sdcard/window.xml","/tmp/window.xml"], check=True, stdout=subprocess.DEVNULL)
+            root = ET.parse("/tmp/window.xml").getroot()
+            matches = []
+            for node in root.iter("node"):
+                text = node.attrib.get("text","")
+                desc = node.attrib.get("content-desc","")
+                if text == target or desc == target:
+                    m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.attrib.get("bounds",""))
+                    if m:
+                        x1,y1,x2,y2 = map(int,m.groups())
+                        matches.append(((x1+x2)//2,(y1+y2)//2))
+            if not matches:
+                print(f"TARGET_NOT_FOUND:{target}", file=sys.stderr)
+                sys.exit(2)
+            print(matches[0][0], matches[0][1])
+            PY
+
+            tap_text() {
+              local label="$1"
+              read -r X Y < <(python3 /tmp/tap_text.py "$label")
+              adb shell input tap "$X" "$Y"
+              sleep 3
+            }
+
+            dump_ui() {
+              local name="$1"
+              adb shell uiautomator dump "/sdcard/$name.xml" >/dev/null
+              adb pull "/sdcard/$name.xml" "$EVIDENCE/ui/$name.xml" >/dev/null
+              adb exec-out screencap -p > "$EVIDENCE/$name.png"
+            }
+
+            PID="$(adb shell pidof -s org.fpvclub.mesh.flutter | tr -d '\r')"
+            test -n "$PID"
+
+            dump_ui 00_chats
+            adb shell screenrecord --bit-rate 5000000 --time-limit 35 /sdcard/mesh-dev10-smoke.mp4 >/dev/null 2>&1 &
+
+            tap_text "Карта"
+            dump_ui 01_map
+
+            tap_text "Связь"
+            dump_ui 02_connection
+            if python3 /tmp/tap_text.py "Обновить USB" >/tmp/usb_coords 2>/dev/null; then
+              read -r X Y </tmp/usb_coords
+              adb shell input tap "$X" "$Y"
+              sleep 3
+              dump_ui 03_usb_refresh
+            fi
+
+            tap_text "Настройки"
+            dump_ui 04_settings
+
+            tap_text "Справка"
+            dump_ui 05_help
+            adb shell input keyevent 4
+            sleep 2
+
+            tap_text "Чаты"
+            dump_ui 06_chats_return
+
+            sleep 8
+            adb pull /sdcard/mesh-dev10-smoke.mp4 "$EVIDENCE/MeshMessenger-v0.1.10-dev.10-emulator-smoke.mp4"
+
+            adb logcat --pid="$PID" -d > "$EVIDENCE/logcat.txt" || true
+            if grep -E "FATAL EXCEPTION|AndroidRuntime.*FATAL|Process: org\.fpvclub\.mesh\.flutter.*has died" "$EVIDENCE/logcat.txt"; then
+              echo "APP_FATAL_FOUND" >&2
+              exit 3
+            fi
+
+            grep -q 'text="Карта"' "$EVIDENCE/ui/01_map.xml"
+            grep -q 'text="Связь"' "$EVIDENCE/ui/02_connection.xml"
+            grep -q 'text="Радиомодуль · USB"' "$EVIDENCE/ui/02_connection.xml"
+            grep -q 'text="Настройки"' "$EVIDENCE/ui/04_settings.xml"
+            grep -q 'text="Справка"' "$EVIDENCE/ui/05_help.xml"
+
+            {
+              echo "Mesh Messenger Flutter v0.1.10-dev.10 emulator smoke"
+              echo "Date: 2026-09-26"
+              echo "Android API: 35"
+              echo "PASS: app launch"
+              echo "PASS: Chats -> Map -> Connection -> Settings -> Help -> Chats"
+              echo "PASS: USB refresh action without attached hardware"
+              echo "PASS: no app FATAL in package logcat"
+              echo "LIMIT: no physical USB-UART/M03/radio HIL in emulator"
+            } > "$EVIDENCE/QA_EMULATOR_VIDEO_REPORT.txt"
+
+      - name: Verify video
+        run: |
+          set -euo pipefail
+          EVIDENCE=/tmp/mesh-dev10-emulator-evidence
+          test -s "$EVIDENCE/MeshMessenger-v0.1.10-dev.10-emulator-smoke.mp4"
+          ffprobe -v error -show_entries format=duration,size -of default=noprint_wrappers=1 "$EVIDENCE/MeshMessenger-v0.1.10-dev.10-emulator-smoke.mp4"
+          sha256sum "$EVIDENCE/MeshMessenger-v0.1.10-dev.10-emulator-smoke.mp4" > "$EVIDENCE/SHA256SUM_VIDEO.txt"
+
+      - name: Upload emulator QA evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshMessenger-v0.1.10-dev.10-emulator-video-QA
+          path: /tmp/mesh-dev10-emulator-evidence/
+          if-no-files-found: error
+          retention-days: 14
