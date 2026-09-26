@@ -1,0 +1,90 @@
+{
+  "schema_version": "0.5",
+  "name": "5-element Yagi template seed",
+  "frequency_hz": 299792458.0,
+  "wires": [
+    {
+      "id": "REF",
+      "start_m": [
+        0.0,
+        0.0,
+        -0.26
+      ],
+      "end_m": [
+        0.0,
+        0.0,
+        0.26
+      ],
+      "radius_m": 0.001,
+      "segments": 21
+    },
+    {
+      "id": "DRV",
+      "start_m": [
+        0.2,
+        0.0,
+        -0.24
+      ],
+      "end_m": [
+        0.2,
+        0.0,
+        0.24
+      ],
+      "radius_m": 0.001,
+      "segments": 21
+    },
+    {
+      "id": "DIR1",
+      "start_m": [
+        0.35,
+        0.0,
+        -0.225
+      ],
+      "end_m": [
+        0.35,
+        0.0,
+        0.225
+      ],
+      "radius_m": 0.001,
+      "segments": 21
+    },
+    {
+      "id": "DIR2",
+      "start_m": [
+        0.5,
+        0.0,
+        -0.22
+      ],
+      "end_m": [
+        0.5,
+        0.0,
+        0.22
+      ],
+      "radius_m": 0.001,
+      "segments": 21
+    },
+    {
+      "id": "DIR3",
+      "start_m": [
+        0.6499999999999999,
+        0.0,
+        -0.215
+      ],
+      "end_m": [
+        0.6499999999999999,
+        0.0,
+        0.215
+      ],
+      "radius_m": 0.001,
+      "segments": 21
+    }
+  ],
+  "feeds": [
+    {
+      "wire_id": "DRV",
+      "segment": 10,
+      "voltage_re_v": 1.0,
+      "voltage_im_v": 0.0
+    }
+  ]
+}
