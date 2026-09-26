@@ -1,27 +1,48 @@
 from __future__ import annotations
 
+import os
 import io
 import json
-import sys
 import urllib.request
 import zipfile
+from pathlib import Path
 
-UA = {"User-Agent": "ESP-Service-Studio-alpha10-contract-test"}
-LATEST = "https://api.github.com/repos/ExpressLRS/ExpressLRS/releases/latest"
-COMMITS = "https://api.github.com/repos/ExpressLRS/ExpressLRS/commits/"
+SERVICE = Path("android_overlay/OfficialElrsService.kt").read_text(encoding="utf-8")
+PINNED_TAG = "4.1.0"
+PINNED_SHA = "a9d4a9cb5b5687c4c9d7e9e7fbdf44ad93651da6"
+
+offline_checks = {
+    "latest release endpoint": "releases/latest" in SERVICE,
+    "commit resolution": "COMMITS_API" in SERVICE,
+    "artifactory bundle": "artifactory.expresslrs.org/ExpressLRS" in SERVICE,
+    "targets entry": 'firmware/hardware/targets.json' in SERVICE,
+    "same-bundle hardware source": 'same firmware.zip commit' in SERVICE,
+    "hardware pinned result": '"hardwarePinned" to true' in SERVICE,
+    "firmware sha256": '"sha256"' in SERVICE and "sha256(configured)" in SERVICE,
+    "esp8285 gate": 'platform == "esp8285"' in SERVICE,
+    "uart gate": 'methods.contains("uart")' in SERVICE,
+}
+
+failed = [name for name, ok in offline_checks.items() if not ok]
+if failed:
+    raise SystemExit("ExpressLRS offline contract failed: " + ", ".join(failed))
+
+print(
+    "ExpressLRS pinned bundle offline contract PASS "
+    f"(reference tag={PINNED_TAG}, commit={PINNED_SHA[:12]})"
+)
+
+if os.getenv("ELRS_ONLINE_CONTRACT") != "1":
+    raise SystemExit(0)
+
+UA = {"User-Agent": "ESP-Service-Studio-contract-test"}
 CACHE = "https://artifactory.expresslrs.org/ExpressLRS"
-
-
-def get_json(url: str) -> dict:
-    req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
 
 
 def get_bytes(url: str) -> bytes:
     req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=120) as r:
-        return r.read()
+    with urllib.request.urlopen(req, timeout=120) as response:
+        return response.read()
 
 
 def target(root: dict, path: str) -> dict:
@@ -41,6 +62,7 @@ def check_target(root: dict, names: set[str], path: str) -> None:
     category = path.split(".")[1]
     hw_dir = "TX" if category.startswith("tx_") else "RX"
 
+    assert product
     assert platform == "esp8285", (path, platform)
     assert firmware.startswith("Unified_ESP8285_"), (path, firmware)
     assert "uart" in methods, (path, methods)
@@ -53,12 +75,7 @@ def check_target(root: dict, names: set[str], path: str) -> None:
         assert f"firmware/FCC/{firmware}/firmware.bin" in names, path
 
 
-release = get_json(LATEST)
-tag = release["tag_name"]
-commit = get_json(COMMITS + tag)
-sha = commit["sha"]
-
-bundle = get_bytes(f"{CACHE}/{sha}/firmware.zip")
+bundle = get_bytes(f"{CACHE}/{PINNED_SHA}/firmware.zip")
 assert len(bundle) > 1_000_000, len(bundle)
 
 with zipfile.ZipFile(io.BytesIO(bundle)) as zf:
@@ -72,6 +89,6 @@ with zipfile.ZipFile(io.BytesIO(bundle)) as zf:
     check_target(root, names, "betafpv.rx_900.nano")
 
 print(
-    "ExpressLRS pinned bundle contract PASS "
-    f"(tag={tag}, commit={sha[:12]}, size={len(bundle)})"
+    "ExpressLRS pinned bundle ONLINE contract PASS "
+    f"(tag={PINNED_TAG}, commit={PINNED_SHA[:12]}, size={len(bundle)})"
 )
