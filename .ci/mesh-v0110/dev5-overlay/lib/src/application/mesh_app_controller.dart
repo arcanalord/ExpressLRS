@@ -16,6 +16,7 @@ import '../../platform/android_usb_serial_bridge.dart';
 import '../../platform/android_usb_mm_uart_host_link.dart';
 import '../../platform/ep2_uart_transport.dart';
 import '../../platform/mm_uart_external_radio_session.dart';
+import '../../platform/mm_uart_hil_bench.dart';
 import '../../platform/mm_uart_message_transport.dart';
 import '../../platform/lan_transport.dart';
 import '../../platform/meshtastic_transport.dart';
@@ -73,6 +74,7 @@ final class MeshAppController extends ChangeNotifier {
   Ep2UartTransport? _ep2;
   MmUartExternalRadioSession? _externalRadioSession;
   MmUartMessageTransport? _externalRadio;
+  MmUartHilBench? _radioHilBench;
   bool _mmUartActive = false;
   StreamSubscription<DeliveryEnvelope>? _deliverySub;
   StreamSubscription<LanTransportEvent>? _lanSub;
@@ -148,6 +150,11 @@ final class MeshAppController extends ChangeNotifier {
   List<UsbSerialDevice> ep2Devices = const [];
   final List<String> ep2Log = <String>[];
   int? ep2ConnectedDeviceId;
+  bool radioHilRunning = false;
+  int radioHilDone = 0;
+  int radioHilTotal = 0;
+  String? radioHilResult;
+  String? radioHilError;
 
   bool get hasLocalNetworkPermissionBridge => _localNetworkBridge != null;
   bool get lanReady => _lan?.isAvailable ?? false;
@@ -165,6 +172,14 @@ final class MeshAppController extends ChangeNotifier {
       _externalRadioSession?.snapshot().info?.boardId;
   bool get externalRadioSupportsMmrp =>
       _externalRadioSession?.supportsMmrp == true;
+  bool get radioHilAvailable => _radioHilBench?.isAvailable == true;
+  int? get radioHilTargetNode {
+    final contactNode = selectedContact?.ep2NodeId;
+    if (contactNode != null) return contactNode;
+    if (ep2LocalNode == 1) return 2;
+    if (ep2LocalNode == 2) return 1;
+    return null;
+  }
 
   static Future<MeshAppController> create({
     Directory? storageRoot,
@@ -243,6 +258,7 @@ final class MeshAppController extends ChangeNotifier {
       );
       _externalRadioSession = externalSession;
       _externalRadio = externalRadio;
+      _radioHilBench = MmUartHilBench(externalSession);
       transports.add(externalRadio);
       _externalRadioSub = externalRadio.events.listen(_onMmUartTransportEvent);
       _externalSessionSub = externalSession.events.listen(_onMmUartSessionEvent);
@@ -1192,6 +1208,9 @@ final class MeshAppController extends ChangeNotifier {
         try {
           final selftest = await session.compatSelftest();
           final passed = selftest['result'] == 'PASS' || selftest['ok'] == true;
+          final nodeRaw = selftest['nodeBinding'] ?? selftest['nodeId'];
+          final node = nodeRaw is num ? nodeRaw.toInt() : int.tryParse('$nodeRaw');
+          if (node != null && node > 0) ep2LocalNode = node;
           if (passed) ep2InfoNotice = 'MM-UART/1 · MMRP/1 · самопроверка PASS';
           _addEp2Log('AUTO SELFTEST $selftest');
         } catch (error) {
@@ -1320,6 +1339,50 @@ final class MeshAppController extends ChangeNotifier {
       _addEp2Log('PING ERROR node=$target $error');
     }
     notifyListeners();
+  }
+
+  Future<void> runRadioHil(int count) async {
+    final bench = _radioHilBench;
+    final target = radioHilTargetNode;
+    if (bench == null || !bench.isAvailable || radioHilRunning) return;
+    if (target == null) {
+      radioHilError =
+          'Не указан второй радиоузел. Выбери контакт с номером EP2/MM-UART '
+          'или используй узлы 1 и 2.';
+      notifyListeners();
+      return;
+    }
+
+    radioHilRunning = true;
+    radioHilDone = 0;
+    radioHilTotal = count;
+    radioHilResult = null;
+    radioHilError = null;
+    _addEp2Log('HIL START target=$target count=$count');
+    notifyListeners();
+
+    try {
+      final report = await bench.run(
+        recipientBinding: target,
+        count: count,
+        onProgress: (done, total) {
+          radioHilDone = done;
+          radioHilTotal = total;
+          if (done == total || done % 10 == 0) notifyListeners();
+        },
+      );
+      radioHilResult = report.summary();
+      _addEp2Log('HIL RESULT ${report.summary()}');
+      if (report.statsAfter.isNotEmpty) {
+        _applyMmUartStats(report.statsAfter);
+      }
+    } catch (error) {
+      radioHilError = '$error';
+      _addEp2Log('HIL ERROR $error');
+    } finally {
+      radioHilRunning = false;
+      notifyListeners();
+    }
   }
 
   Future<void> startEp2WifiUpdate() async {
@@ -1697,6 +1760,7 @@ final class MeshAppController extends ChangeNotifier {
     _ep2Sub?.cancel();
     _externalRadioSub?.cancel();
     _externalSessionSub?.cancel();
+    _radioHilBench?.close();
     _externalRadio?.close();
     _externalRadioSession?.close();
     _lan?.close();
