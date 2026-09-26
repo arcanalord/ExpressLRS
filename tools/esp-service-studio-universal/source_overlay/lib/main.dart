@@ -734,8 +734,66 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                     ),
             ),
             if (probeResult?.meshReady != true)
+              _Section(
+                title: '2. Mesh Messenger',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      probeResult?.ok == true
+                          ? 'ESP ROM доступен. Можно выполнить первое прошивание '
+                              'или восстановление Mesh Messenger через USB.'
+                          : 'Для первого прошивания/восстановления переведите ESP8285 '
+                              'в ROM BOOT, затем нажмите «Определить и проверить».',
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed:
+                          meshPreparing || flashingEsp ? null : _pickKnownMeshFirmware,
+                      icon: meshPreparing
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.folder_open),
+                      label: Text(
+                        meshPreparing
+                            ? 'Проверяю файл…'
+                            : 'Выбрать Mesh EP2 v0.4.0 .bin',
+                      ),
+                    ),
+                    if (meshPrepared != null) ...[
+                      const SizedBox(height: 8),
+                      _MeshPreparedCard(result: meshPrepared!),
+                      if (meshPrepared!['status'] == 'prepared') ...[
+                        const SizedBox(height: 8),
+                        FilledButton.icon(
+                          onPressed:
+                              flashingEsp ? null : _flashPreparedMesh,
+                          icon: flashingEsp
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.memory),
+                          label: Text(
+                            flashingEsp
+                                ? 'Записываю…'
+                                : 'Записать Mesh через USB',
+                          ),
+                        ),
+                      ],
+                    ],
+                    if (meshFlashResult != null) ...[
+                      const SizedBox(height: 8),
+                      _MeshFlashResultCard(result: meshFlashResult!),
+                    ],
+                  ],
+                ),
+              ),
+            if (probeResult?.meshReady != true)
             _Section(
-              title: '2. ELRS оборудование',
+              title: '3. ELRS оборудование',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -979,7 +1037,7 @@ class _DynamicElrsTargetSection extends StatelessWidget {
     final pinned = catalog?.hardwarePinned == true;
 
     return _Section(
-      title: '3. Настройки и прошивка',
+      title: '4. Настройки и прошивка',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1348,6 +1406,80 @@ class _ProbeResultCard extends StatelessWidget {
                 fontSize: 12,
               ),
             ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MeshPreparedCard extends StatelessWidget {
+  const _MeshPreparedCard({required this.result});
+
+  final Map<String, Object?> result;
+
+  @override
+  Widget build(BuildContext context) {
+    final ok = result['status'] == 'prepared';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: ok
+              ? Colors.greenAccent.withValues(alpha: 0.4)
+              : Colors.orangeAccent.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            result['message']?.toString() ?? 'Нет сообщения',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          if (ok) ...[
+            const SizedBox(height: 6),
+            _DiagLine('Версия', result['version']?.toString() ?? '-'),
+            _DiagLine('Размер', '${result['fileSize'] ?? 0} Б'),
+            _DiagLine('SHA-256', result['sha256']?.toString() ?? '-'),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MeshFlashResultCard extends StatelessWidget {
+  const _MeshFlashResultCard({required this.result});
+
+  final EspFlashResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: result.ok
+              ? Colors.greenAccent.withValues(alpha: 0.4)
+              : Colors.redAccent.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            result.ok ? 'Mesh записан' : 'Ошибка записи Mesh',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Text(result.message),
+          if (result.ok) ...[
+            const SizedBox(height: 6),
+            _DiagLine('Блоков', '${result.blocksWritten ?? 0}'),
+            _DiagLine('Проверка', result.verification ?? '-'),
           ],
         ],
       ),
