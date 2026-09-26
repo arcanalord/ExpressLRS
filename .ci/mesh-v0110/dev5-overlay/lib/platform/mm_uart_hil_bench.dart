@@ -94,11 +94,18 @@ final class MmUartHilBench {
       throw ArgumentError.value(count, 'count', '1..5000');
     }
 
-    final compat = await session.compatSelftest();
-    final compatPass =
-        compat['result'] == 'PASS' ||
-        compat['ok'] == true ||
-        compat['codecRoundTrip'] == true;
+    var compatPass = session.state == 'ready' && session.supportsMmrp;
+    try {
+      final compat = await session.compatSelftest();
+      compatPass =
+          compat['result'] == 'PASS' ||
+          compat['ok'] == true ||
+          compat['codecRoundTrip'] == true;
+    } catch (_) {
+      // v0.4.0 firmware predates COMPAT_SELFTEST. An already established
+      // MM-UART/1 + explicit MMRP/1 session is sufficient to run HIL.
+      compatPass = session.state == 'ready' && session.supportsMmrp;
+    }
 
     Map<String, dynamic> before = const {};
     try {
