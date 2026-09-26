@@ -281,14 +281,21 @@ class UsbSerialProbe(private val context: Context) {
             if (declaredSha != expectedSha256.lowercase()) {
                 error("SHA-256 подготовленной прошивки изменился")
             }
-            if (hardwareSource != "same firmware.zip commit") {
-                error("Прошивка не прошла version-pinned hardware gate")
+            val pinnedElrs =
+                hardwareSource == "same firmware.zip commit" &&
+                    firmwareFamily.startsWith("Unified_ESP8285_")
+            val pinnedMesh =
+                hardwareSource == "mesh-release-pinned" &&
+                    targetPath == "mesh.happymodel_ep2" &&
+                    firmwareFamily == "MeshMessenger_EP2" &&
+                    declaredSha ==
+                        "6358bdaf6d6dd5edee3ef3e3f1f648bcec445ce80599017a172e2acfd97adadb"
+
+            if (!pinnedElrs && !pinnedMesh) {
+                error("Прошивка не прошла hardware/release gate")
             }
             if (platform != "esp8285") {
-                error("ROM-запись alpha.10 разрешена только для ESP8285")
-            }
-            if (!firmwareFamily.startsWith("Unified_ESP8285_")) {
-                error("Неподдерживаемое семейство прошивки: $firmwareFamily")
+                error("ROM-запись разрешена только для ESP8285")
             }
             if (offsetText != "0x0") {
                 error("Для ESP8285 ожидается адрес записи 0x0")
