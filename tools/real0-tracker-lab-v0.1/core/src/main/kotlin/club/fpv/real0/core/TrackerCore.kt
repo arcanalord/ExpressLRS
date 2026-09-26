@@ -235,45 +235,77 @@ class NccTrackerCore {
 
     private class ReacquireCore {
         private var pending: BoxF? = null
+        private var pendingDesc: FloatArray? = null
+        private var pendingTimestampNs = 0L
         private var confirm = 0
         private var searchFrame = 0
 
         fun reset() {
             pending = null
+            pendingDesc = null
+            pendingTimestampNs = 0L
             confirm = 0
             searchFrame = 0
         }
 
         fun search(frame: GrayFrame, predicted: BoxF, trusted: BoxF, model: TargetModelCore): ReacquireResult {
             searchFrame++
+            val fullFrame = searchFrame > 5
+            var margin = 1f
             var best = when {
                 searchFrame <= 2 -> scanRegion(frame, predicted, model, 1.8f)
                 searchFrame <= 5 -> scanRegion(frame, predicted, model, 4.0f)
-                else -> scanFull(frame, trusted, model)
+                else -> {
+                    val full = scanFull(frame, trusted, model)
+                    margin = full.margin
+                    full.best
+                }
             }
             if (best != null) best = refine(frame, best, model)
 
             if (best == null || best.score < 0.68f) {
                 pending = null
+                pendingDesc = null
+                pendingTimestampNs = 0L
                 confirm = 0
-                return ReacquireResult(false, best?.box, best?.score ?: -1f)
+                return ReacquireResult(false, best?.box, best?.score ?: -1f, 0, margin, "no strong candidate")
             }
 
             val p = pending
-            if (p != null && centerDistance(p, best.box) <= max(14f, best.box.width() * 0.85f)) {
+            val previousDesc = pendingDesc
+            val identity = previousDesc != null && appearanceScore(previousDesc, best.desc) >= 0.70f
+            val elapsed = if (frame.timestampNs > 0L && pendingTimestampNs > 0L) {
+                ((frame.timestampNs - pendingTimestampNs) / 1e9).toFloat().coerceIn(1f / 120f, 3.0f)
+            } else {
+                0.10f
+            }
+
+            // Phone evidence showed full-frame SEARCHING frames can be far apart in time.
+            // Confirm identity, not an almost stationary screen coordinate.
+            val geometryAllowance = max(24f, max(best.box.width(), best.box.height()) * 2.8f)
+            val motionAllowance = frame.width * (0.025f + 0.10f * elapsed.coerceAtMost(2.0f))
+            val motionOk = p != null && centerDistance(p, best.box) <= max(geometryAllowance, motionAllowance)
+            val distinctEnough = !fullFrame || margin >= 0.025f
+            val veryStrongIdentity = identity && best.score >= 0.82f && distinctEnough
+
+            if (p != null && ((identity && motionOk) || veryStrongIdentity)) {
                 confirm++
             } else {
                 confirm = 1
             }
+
             pending = best.box
+            pendingDesc = best.desc.copyOf()
+            pendingTimestampNs = frame.timestampNs
 
             return if (confirm >= 3) {
-                pending = null
-                confirm = 0
-                searchFrame = 0
-                ReacquireResult(true, best.box, best.score)
+                val confirmedBox = best.box
+                val confirmedScore = best.score
+                val confirmedMargin = margin
+                reset()
+                ReacquireResult(true, confirmedBox, confirmedScore, 3, confirmedMargin, "identity confirmed")
             } else {
-                ReacquireResult(false, best.box, best.score)
+                ReacquireResult(false, best.box, best.score, confirm, margin, "candidate $confirm/3")
             }
         }
 
@@ -294,8 +326,8 @@ class NccTrackerCore {
                         if (inside(b, frame.width, frame.height)) {
                             val d = descriptor(frame, b)
                             if (d != null) {
-                                val s = model.score(d)
-                                if (best == null || s > best.score) best = Candidate(b, d, s)
+                                val score = model.score(d)
+                                if (best == null || score > best.score) best = Candidate(b, d, score)
                             }
                         }
                         dx += step
@@ -306,14 +338,17 @@ class NccTrackerCore {
             return best
         }
 
-        private fun scanFull(frame: GrayFrame, base: BoxF, model: TargetModelCore): Candidate? {
-            var best: Candidate? = null
-            val scales = floatArrayOf(0.68f, 0.80f, 0.92f, 1.0f, 1.12f, 1.28f, 1.48f)
+        private data class FullScan(val best: Candidate?, val margin: Float)
+
+        private fun scanFull(frame: GrayFrame, base: BoxF, model: TargetModelCore): FullScan {
+            val top = mutableListOf<Candidate>()
+            // Coarse proposal pass. The previous 0.28-box stride caused ~2.2 s SEARCHING frames on phone.
+            val scales = floatArrayOf(0.72f, 0.88f, 1.0f, 1.18f, 1.42f)
             for (scale in scales) {
                 val w = (base.width() * scale).coerceIn(8f, frame.width * 0.48f)
                 val h = (base.height() * scale).coerceIn(6f, frame.height * 0.48f)
-                val sx = max(5, (w * 0.28f).toInt())
-                val sy = max(4, (h * 0.28f).toInt())
+                val sx = max(8, (w * 0.65f).toInt())
+                val sy = max(7, (h * 0.65f).toInt())
                 var cy = h * 0.5f + 1f
                 while (cy < frame.height - h * 0.5f - 1f) {
                     var cx = w * 0.5f + 1f
@@ -321,15 +356,29 @@ class NccTrackerCore {
                         val b = centeredBox(cx, cy, w, h)
                         val d = descriptor(frame, b)
                         if (d != null) {
-                            val s = model.score(d)
-                            if (best == null || s > best.score) best = Candidate(b, d, s)
+                            pushTop(top, Candidate(b, d, model.score(d)))
                         }
                         cx += sx
                     }
                     cy += sy
                 }
             }
-            return best
+
+            val best = top.firstOrNull() ?: return FullScan(null, 0f)
+            val separation = max(best.box.width(), best.box.height()) * 1.75f
+            val second = top.firstOrNull {
+                it !== best && centerDistance(it.box, best.box) >= separation
+            }
+            val margin = if (second == null) 1f else (best.score - second.score).coerceAtLeast(0f)
+            return FullScan(best, margin)
+        }
+
+        private fun pushTop(top: MutableList<Candidate>, candidate: Candidate) {
+            var pos = 0
+            while (pos < top.size && top[pos].score >= candidate.score) pos++
+            if (pos >= 12) return
+            top.add(pos, candidate)
+            if (top.size > 12) top.removeAt(top.lastIndex)
         }
 
         private fun refine(frame: GrayFrame, seed: Candidate, model: TargetModelCore): Candidate {
@@ -350,8 +399,8 @@ class NccTrackerCore {
                         if (inside(b, frame.width, frame.height)) {
                             val d = descriptor(frame, b)
                             if (d != null) {
-                                val s = model.score(d)
-                                if (s > best.score) best = Candidate(b, d, s)
+                                val score = model.score(d)
+                                if (score > best.score) best = Candidate(b, d, score)
                             }
                         }
                         dx += step
@@ -365,7 +414,10 @@ class NccTrackerCore {
         data class ReacquireResult(
             val confirmed: Boolean,
             val box: BoxF?,
-            val score: Float
+            val score: Float,
+            val confirmation: Int,
+            val margin: Float,
+            val note: String
         )
     }
 }
