@@ -26,6 +26,13 @@ jobs:
           if ($v -ne '0.1.0-alpha.20-rev27') { throw "Unexpected VERSION: $v" }
           Write-Host "REV27_SOURCE_PASS sha=$sha"
 
+      - name: Upload exact rev27 source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: emmana-rev27-source-snapshot
+          path: src/emmana_rev27
+          if-no-files-found: error
+
       - name: Install C++ dependencies
         shell: pwsh
         working-directory: src/emmana_rev27
