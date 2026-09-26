@@ -84,7 +84,7 @@ class UsbSerialProbe(private val context: Context) {
                 UsbSerialPort.PARITY_NONE,
             )
 
-            // EP2 enters ROM manually via BOOT pad. Do not touch DTR/RTS here.
+            // ELRS hardware may enter ROM manually via BOOT pad. Do not touch DTR/RTS here.
             drainInput(port)
             val link = RomLink(port)
 
@@ -92,7 +92,7 @@ class UsbSerialProbe(private val context: Context) {
                 result(
                     status = "rom_sync_timeout",
                     message = if (link.bytesRead == 0) {
-                        "USB-UART открыт, но ESP ROM не ответил. Для EP2 замкните BOOT pad на GND при подаче питания и повторите проверку."
+                        "USB-UART открыт, но ESP ROM не ответил. Переведите ELRS оборудование в ROM BOOT (BOOT→GND при подаче питания, если это требуется платой) и повторите проверку."
                     } else {
                         "По UART пришли данные, но ESP ROM SYNC не подтверждён. Проверьте BOOT mode и TX/RX."
                     },
