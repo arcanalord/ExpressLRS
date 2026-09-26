@@ -28,6 +28,92 @@ class UsbSerialProbe(private val context: Context) {
 
     fun hasPermission(device: UsbDevice): Boolean = usbManager.hasPermission(device)
 
+    fun meshServiceCommand(device: UsbDevice, command: Int): Map<String, Any?> {
+        if (!usbManager.hasPermission(device)) {
+            return mapOf(
+                "status" to "no_permission",
+                "message" to "Нет разрешения Android на USB-устройство",
+            )
+        }
+
+        val driver = probeDriver(device)
+            ?: return mapOf(
+                "status" to "no_driver",
+                "message" to "Для этого USB-UART не найден serial-драйвер",
+            )
+
+        val connection = usbManager.openDevice(device)
+            ?: return mapOf(
+                "status" to "open_failed",
+                "message" to "Android не смог открыть USB-устройство",
+            )
+
+        val port = driver.ports.firstOrNull()
+            ?: run {
+                connection.close()
+                return mapOf(
+                    "status" to "no_port",
+                    "message" to "USB-UART найден, но serial-порт отсутствует",
+                )
+            }
+
+        return try {
+            port.open(connection)
+            port.setParameters(
+                115200,
+                8,
+                UsbSerialPort.STOPBITS_1,
+                UsbSerialPort.PARITY_NONE,
+            )
+            drainInput(port)
+
+            val response = sendMmCommand(
+                port = port,
+                type = command,
+                sequence = 0x5353,
+                payload = null,
+                timeoutMs = 2200,
+            ) ?: return mapOf(
+                "status" to "mesh_no_response",
+                "message" to "Mesh Messenger не подтвердил сервисную команду",
+            )
+
+            if (!response.optBoolean("ok", false)) {
+                return mapOf(
+                    "status" to "mesh_command_error",
+                    "message" to (response.optString("error").ifBlank {
+                        "Mesh Messenger отклонил сервисную команду"
+                    }),
+                )
+            }
+
+            val data = response.optJSONObject("data")
+            if (command == 0x16) {
+                linkedMapOf<String, Any?>(
+                    "status" to "mesh_ota_started",
+                    "message" to "Mesh Messenger переведён в Wi-Fi режим обновления",
+                    "ssid" to data?.optString("ssid"),
+                    "url" to data?.optString("url"),
+                    "user" to data?.optString("user"),
+                )
+            } else {
+                linkedMapOf<String, Any?>(
+                    "status" to "mesh_ota_stopped",
+                    "message" to "Mesh Messenger вернулся в радиорежим",
+                    "ready" to data?.optBoolean("ready"),
+                )
+            }
+        } catch (e: Exception) {
+            mapOf(
+                "status" to "serial_error",
+                "message" to "Ошибка MM-UART: ${e.message ?: e.javaClass.simpleName}",
+            )
+        } finally {
+            runCatching { port.close() }
+            runCatching { connection.close() }
+        }
+    }
+
     fun probe(device: UsbDevice): Map<String, Any?> {
         val started = System.currentTimeMillis()
 
@@ -84,11 +170,30 @@ class UsbSerialProbe(private val context: Context) {
                 UsbSerialPort.PARITY_NONE,
             )
 
-            // ELRS hardware may enter ROM manually via BOOT pad. Do not touch DTR/RTS here.
+            // First try the normal Mesh Messenger service protocol.
+            // It is safe and lets already-flashed devices enter OTA without BOOT/GPIO0.
             drainInput(port)
-            val link = RomLink(port)
+            val mesh = probeMeshService(port)
+            if (mesh != null) {
+                linkedMapOf<String, Any?>(
+                    "status" to "mesh_ready",
+                    "message" to "Обнаружена прошивка Mesh Messenger (MM-UART/1)",
+                    "vendorId" to device.vendorId,
+                    "productId" to device.productId,
+                    "deviceName" to device.deviceName,
+                    "product" to runCatching { device.productName }.getOrNull(),
+                    "manufacturer" to runCatching { device.manufacturerName }.getOrNull(),
+                    "driver" to driver.javaClass.simpleName,
+                    "baudRate" to 115200,
+                    "bytesRead" to 0,
+                    "elapsedMs" to (System.currentTimeMillis() - started),
+                ).apply { putAll(mesh) }
+            } else {
+                // ELRS hardware may enter ROM manually via BOOT pad. Do not touch DTR/RTS here.
+                drainInput(port)
+                val link = RomLink(port)
 
-            if (!link.sync()) {
+                if (!link.sync()) {
                 result(
                     status = "rom_sync_timeout",
                     message = if (link.bytesRead == 0) {
@@ -116,6 +221,7 @@ class UsbSerialProbe(private val context: Context) {
                     "bytesRead" to link.bytesRead,
                     "elapsedMs" to (System.currentTimeMillis() - started),
                 ).apply { putAll(diag) }
+                }
             }
         } catch (e: Exception) {
             result(
@@ -722,6 +828,161 @@ class UsbSerialProbe(private val context: Context) {
     }
 
     private data class RomResponse(val value: Long, val data: ByteArray)
+
+    private fun probeMeshService(port: UsbSerialPort): Map<String, Any?>? {
+        val helloPayload = JSONObject()
+            .put("host", "esp-service-studio")
+            .put("protocol", 1)
+            .toString()
+        val hello = sendMmCommand(
+            port = port,
+            type = 0x01,
+            sequence = 1,
+            payload = helloPayload,
+            timeoutMs = 450,
+        ) ?: return null
+        if (!hello.optBoolean("ok", false)) return null
+
+        val info = sendMmCommand(
+            port = port,
+            type = 0x02,
+            sequence = 2,
+            payload = null,
+            timeoutMs = 650,
+        ) ?: return null
+        if (!info.optBoolean("ok", false)) return null
+
+        val data = info.optJSONObject("data") ?: return null
+        return linkedMapOf(
+            "meshProtocolVersion" to data.optInt("protocolVersion", 1),
+            "meshFirmwareFamily" to data.optString("firmwareFamily"),
+            "meshFirmwareVersion" to data.optString("firmwareVersion"),
+            "meshBoardId" to data.optString("boardId"),
+            "meshRadioFamily" to data.optString("radioFamily"),
+            "meshBuildHash" to data.optString("buildHash"),
+            "meshOtaCapable" to true,
+        )
+    }
+
+    private fun sendMmCommand(
+        port: UsbSerialPort,
+        type: Int,
+        sequence: Int,
+        payload: String?,
+        timeoutMs: Long,
+    ): JSONObject? {
+        val payloadBytes = payload?.toByteArray(Charsets.UTF_8) ?: byteArrayOf()
+        val raw = ByteArray(6 + payloadBytes.size + 2)
+        raw[0] = 1
+        raw[1] = (type and 0xFF).toByte()
+        raw[2] = (sequence and 0xFF).toByte()
+        raw[3] = ((sequence ushr 8) and 0xFF).toByte()
+        raw[4] = (payloadBytes.size and 0xFF).toByte()
+        raw[5] = ((payloadBytes.size ushr 8) and 0xFF).toByte()
+        payloadBytes.copyInto(raw, 6)
+        val crc = mmCrc16(raw, 0, raw.size - 2)
+        raw[raw.size - 2] = (crc and 0xFF).toByte()
+        raw[raw.size - 1] = ((crc ushr 8) and 0xFF).toByte()
+
+        val frame = mmCobsEncode(raw) + byteArrayOf(0)
+        port.write(frame, 1200)
+
+        val deadline = System.currentTimeMillis() + timeoutMs
+        val encoded = ByteArrayOutputStream()
+        val buf = ByteArray(256)
+        while (System.currentTimeMillis() < deadline) {
+            val n = runCatching { port.read(buf, 80) }.getOrDefault(0)
+            if (n <= 0) continue
+            for (i in 0 until n) {
+                val b = buf[i].toInt() and 0xFF
+                if (b == 0) {
+                    if (encoded.size() == 0) continue
+                    val decoded = runCatching { mmCobsDecode(encoded.toByteArray()) }.getOrNull()
+                    encoded.reset()
+                    if (decoded == null || decoded.size < 8) continue
+                    if ((decoded[0].toInt() and 0xFF) != 1) continue
+                    val responseType = decoded[1].toInt() and 0xFF
+                    val responseSeq =
+                        (decoded[2].toInt() and 0xFF) or
+                            ((decoded[3].toInt() and 0xFF) shl 8)
+                    val payloadLen =
+                        (decoded[4].toInt() and 0xFF) or
+                            ((decoded[5].toInt() and 0xFF) shl 8)
+                    if (decoded.size != 6 + payloadLen + 2) continue
+                    val expected =
+                        (decoded[decoded.size - 2].toInt() and 0xFF) or
+                            ((decoded[decoded.size - 1].toInt() and 0xFF) shl 8)
+                    val actual = mmCrc16(decoded, 0, decoded.size - 2)
+                    if (expected != actual) continue
+                    if (responseType != 0x90 || responseSeq != sequence) continue
+                    val json = String(decoded, 6, payloadLen, Charsets.UTF_8)
+                    return JSONObject(json)
+                } else {
+                    if (encoded.size() < 4096) encoded.write(b) else encoded.reset()
+                }
+            }
+        }
+        return null
+    }
+
+    private fun mmCrc16(data: ByteArray, offset: Int, length: Int): Int {
+        var crc = 0xFFFF
+        for (i in offset until offset + length) {
+            crc = crc xor ((data[i].toInt() and 0xFF) shl 8)
+            repeat(8) {
+                crc = if ((crc and 0x8000) != 0) {
+                    ((crc shl 1) xor 0x1021) and 0xFFFF
+                } else {
+                    (crc shl 1) and 0xFFFF
+                }
+            }
+        }
+        return crc
+    }
+
+    private fun mmCobsEncode(data: ByteArray): ByteArray {
+        val out = ByteArrayOutputStream()
+        var codeIndex = 0
+        val bytes = ArrayList<Int>()
+        bytes.add(0)
+        var code = 1
+        for (value in data) {
+            val b = value.toInt() and 0xFF
+            if (b == 0) {
+                bytes[codeIndex] = code
+                codeIndex = bytes.size
+                bytes.add(0)
+                code = 1
+            } else {
+                bytes.add(b)
+                code += 1
+                if (code == 0xFF) {
+                    bytes[codeIndex] = code
+                    codeIndex = bytes.size
+                    bytes.add(0)
+                    code = 1
+                }
+            }
+        }
+        bytes[codeIndex] = code
+        for (b in bytes) out.write(b)
+        return out.toByteArray()
+    }
+
+    private fun mmCobsDecode(data: ByteArray): ByteArray {
+        val out = ByteArrayOutputStream()
+        var read = 0
+        while (read < data.size) {
+            val code = data[read].toInt() and 0xFF
+            read += 1
+            require(code != 0) { "COBS_ZERO_CODE" }
+            val copyCount = code - 1
+            require(read + copyCount <= data.size) { "COBS_TRUNCATED" }
+            repeat(copyCount) { out.write(data[read++].toInt() and 0xFF) }
+            if (code != 0xFF && read < data.size) out.write(0)
+        }
+        return out.toByteArray()
+    }
 
     private fun probeDriver(device: UsbDevice): UsbSerialDriver? {
         UsbSerialProber.getDefaultProber().probeDevice(device)?.let { return it }
