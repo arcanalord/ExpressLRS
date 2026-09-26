@@ -553,6 +553,14 @@ class NativeUsbService {
     return ElrsPreparedFirmware.fromMap(raw.cast<Object?, Object?>());
   }
 
+  Future<Map<String, Object?>> pickKnownMeshFirmware() async {
+    final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>(
+          'pickKnownMeshFirmware',
+        ) ??
+        const <dynamic, dynamic>{};
+    return raw.cast<String, Object?>();
+  }
+
   Future<Map<String, Object?>> meshServiceCommand({
     required String deviceName,
     required int command,
