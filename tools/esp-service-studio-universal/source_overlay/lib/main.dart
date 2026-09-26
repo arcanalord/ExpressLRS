@@ -915,9 +915,9 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 onFlash: _flashPreparedEsp8285,
               ),
             if (probeResult?.meshReady == true)
-              _Section(
+              const _Section(
                 title: '2. Mesh Messenger — режим прошивки',
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
