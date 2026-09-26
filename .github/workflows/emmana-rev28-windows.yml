@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/emmana-rev28-windows.yml'
       - '.github/ci_mirror/rev28/rev28_from_rev27.patch'
+      - '.github/ci_mirror/rev28/files/**'
   workflow_dispatch:
 
 permissions:
