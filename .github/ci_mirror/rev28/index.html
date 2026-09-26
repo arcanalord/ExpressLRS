@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>EMMana-Next · Локальная версия</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <button id="mobile-menu" class="icon-button mobile-only" type="button" aria-label="Открыть параметры">☰</button>
+      <div class="logo" aria-hidden="true">EM</div>
+      <div><b>EMMana-Next</b><small id="version">Локальная версия</small></div>
+    </div>
+    <div class="top-actions">
+      <span id="status" class="status">загрузка…</span>
+      <button id="help-trigger" class="secondary help-trigger desktop-help" type="button" data-help-topic="emmana-next.overview">? Справка</button>
+      <button id="help-trigger-mobile" class="secondary icon-button mobile-help" type="button" aria-label="Справка" data-help-topic="emmana-next.overview">?</button>
+      <button id="run" class="primary" type="button">Рассчитать</button>
+    </div>
+  </header>
+
+  <aside id="sidebar" class="sidebar" aria-label="Параметры расчёта">
+    <div class="sidebar-mobile-head mobile-only"><b>Параметры</b><button id="sidebar-close" class="icon-button" type="button" aria-label="Закрыть параметры">×</button></div>
+
+    <div class="section-title">ПРОЕКТ</div>
+    <label>Пример<select id="example"><option value="">—</option></select></label>
+
+    <div class="section-title">ЗЕМЛЯ</div>
+    <label>Модель земли
+      <select id="ground-mode">
+        <option value="free-space">Свободное пространство</option>
+        <option value="pec-image-v1">Идеальная земля (PEC)</option>
+        <option value="homogeneous-halfspace-image-v1">Реальная земля · экспериментально</option>
+      </select>
+    </label>
+    <button class="inline-help" type="button" data-help-topic="emmana-next.ground.model">? Как работает земля</button>
+
+    <div class="section-title sweep-title">РАСЧЁТ ПО ЧАСТОТЕ</div>
+    <div class="sweep-fields basic-sweep-fields">
+      <label>От, МГц<input id="sweep-start" type="number" step="0.1" value="270"></label>
+      <label>До, МГц<input id="sweep-stop" type="number" step="0.1" value="330"></label>
+      <label>Точек<input id="sweep-points" type="number" min="2" max="81" value="21"></label>
+    </div>
+    <button id="run-sweep" class="secondary full" type="button">Частотный расчёт</button>
+
+    <div class="section-title optimizer-title">ОПТИМИЗАЦИЯ</div>
+    <label>Алгоритм<select id="opt-alg"><option value="staged">PSO → Nelder–Mead</option><option value="pso">PSO</option><option value="de">Дифференциальная эволюция</option></select></label>
+    <button id="run-opt" class="secondary full" type="button">Оптимизировать</button>
+
+    <details id="technical-details" class="technical-details">
+      <summary>Технические детали</summary>
+      <div class="technical-status"><span>Проверка:</span><strong id="reference-status" class="status">trust…</strong></div>
+
+      <div class="section-title">ЗЕМЛЯ · ДОПОЛНИТЕЛЬНО</div>
+      <div class="ground-fields">
+        <label>Плоскость Z, м<input id="ground-plane" type="number" step="0.001" value="0"></label>
+        <label>εr<input id="ground-epsr" type="number" step="0.1" min="1" value="13"></label>
+        <label>σ, S/m<input id="ground-sigma" type="number" step="0.001" min="0" value="0.005"></label>
+      </div>
+
+      <div class="section-title">РЕШАТЕЛЬ</div>
+      <div class="segmented" role="group" aria-label="Режим расчёта">
+        <button type="button" data-kernel="reduced" class="active">Быстрый</button>
+        <button type="button" data-kernel="exact">Точный контроль</button>
+      </div>
+      <button id="check" class="secondary full" type="button">Проверить модель</button>
+      <label class="technical-workers">Потоки<input id="parallel-workers" type="number" min="1" max="16" value="4"></label>
+
+      <div class="section-title">ОПТИМИЗАТОР · ДОПОЛНИТЕЛЬНО</div>
+      <div class="optimizer-fields">
+        <label>Популяция<input id="opt-pop" type="number" min="4" max="32" value="10"></label>
+        <label>Поколений<input id="opt-gen" type="number" min="1" max="30" value="6"></label>
+        <label>Локальные итерации<input id="opt-local" type="number" min="0" max="40" value="12"></label>
+        <label>Зерно<input id="opt-seed" type="number" min="0" value="42"></label>
+        <label>Вес согласования<input id="opt-w-match" type="number" min="0" value="40"></label>
+        <label>Вес усиления<input id="opt-w-gain" type="number" min="0" value="30"></label>
+        <label>Вес F/B<input id="opt-w-fb" type="number" min="0" value="20"></label>
+        <label>Вес размера<input id="opt-w-size" type="number" min="0" value="10"></label>
+        <label>Макс. потеря усиления, dB<input id="opt-gain-guard" type="number" min="0" value="0.5" step="0.1"></label>
+        <label>Макс. КСВ<input id="opt-max-vswr" type="number" min="1" value="2" step="0.1"></label>
+        <label>Диапазон от, МГц<input id="opt-band-start" type="number" value="297" step="0.1"></label>
+        <label>Диапазон до, МГц<input id="opt-band-stop" type="number" value="303" step="0.1"></label>
+        <label>Точек диапазона<input id="opt-band-points" type="number" min="1" max="11" value="3"></label>
+        <label>Шаг изготовления, мм<input id="opt-quant-mm" type="number" min="0" value="1" step="0.1"></label>
+        <label>Допуск ±, мм<input id="opt-tol-mm" type="number" min="0" value="1" step="0.1"></label>
+        <label>Проверок устойчивости<input id="opt-robust-samples" type="number" min="0" max="16" value="4"></label>
+        <label>Монте-Карло<input id="opt-mc-samples" type="number" min="0" max="128" value="24"></label>
+      </div>
+      <div class="note">Расчёт выполняет ядро C++ Wire-MoM. Модель реальной земли в alpha.20 остаётся экспериментальной и пока не считается эталонной.</div>
+    </details>
+  </aside>
+  <div id="sidebar-backdrop" class="backdrop" hidden></div>
+
+  <main class="workspace">
+    <section class="hero">
+      <div><small>ТЕКУЩАЯ МОДЕЛЬ</small><h1 id="project-name">—</h1><p id="project-meta">—</p></div>
+      <span id="kernel-chip" class="chip">БЫСТРЫЙ</span>
+    </section>
+
+    <nav class="workspace-tabs" aria-label="Разделы программы">
+      <button type="button" data-view-tab="model">Модель</button>
+      <button type="button" data-view-tab="geometry">Геометрия</button>
+      <button type="button" data-view-tab="solve" class="active">Расчёт</button>
+      <button type="button" data-view-tab="optimize">Оптимизация</button>
+      <button type="button" data-view-tab="measurement">Измерения</button>
+    </nav>
+
+    <section class="geometry-view" data-view="geometry">
+      <div class="geometry-heading">
+        <div><small>ГЕОМЕТРИЯ</small><h2>2D редактор проводов</h2><p>XY / XZ / YZ · перетаскивайте концы проводов мышью. JSON EMNX обновляется сразу.</p></div>
+        <button class="inline-help" type="button" data-help-topic="emmana-next.geometry.editor">? Справка</button>
+      </div>
+      <div class="panel geometry-panel">
+        <div class="geometry-template-bar">
+          <label>Шаблон<select id="geometry-template"><option value="">Загрузка…</option></select></label>
+          <label>Частота, МГц<input id="geometry-template-frequency" type="number" min="0.001" step="0.001"></label>
+          <button id="geometry-template-create" class="primary" type="button">Создать и рассчитать</button>
+          <span id="geometry-template-status">Диполь · GP · Яги · Рамка</span>
+        </div>
+
+        <div id="yagi-quick-panel" class="yagi-quick-panel" hidden>
+          <div class="yagi-quick-head">
+            <div><small>ЯГИ · БЫСТРАЯ НАСТРОЙКА</small><h3>Размеры и расстояния</h3></div>
+            <span id="yagi-quick-state">3 элемента</span>
+          </div>
+          <div class="yagi-quick-fields">
+            <label>Рефлектор, см<input id="yagi-ref-length" type="number" min="1" step="0.1"></label>
+            <label>Активный, см<input id="yagi-drv-length" type="number" min="1" step="0.1"></label>
+            <label>Директор, см<input id="yagi-dir-length" type="number" min="1" step="0.1"></label>
+            <label>REF → DRV, см<input id="yagi-gap-1" type="number" min="0.1" step="0.1"></label>
+            <label>DRV → DIR, см<input id="yagi-gap-2" type="number" min="0.1" step="0.1"></label>
+            <label>Диаметр, мм<input id="yagi-diameter" type="number" min="0.1" step="0.1"></label>
+            <label>Сегментов<input id="yagi-segments" type="number" min="3" step="2"></label>
+          </div>
+          <div class="yagi-quick-actions">
+            <button id="yagi-apply" class="secondary" type="button">Применить геометрию</button>
+            <button id="yagi-recalc" class="primary" type="button">Рассчитать изменения</button>
+            <button id="yagi-optimize" class="secondary" type="button">Быстрая оптимизация</button>
+          </div>
+          <p class="yagi-quick-note">Элементы можно также двигать мышью в 2D. Поля синхронизируются с геометрией; после любого изменения старый расчёт помечается устаревшим.</p>
+        </div>
+        <div class="geometry-toolbar">
+          <div class="segmented geometry-projections" role="group" aria-label="Проекция">
+            <button type="button" data-geometry-projection="xy">XY</button>
+            <button type="button" data-geometry-projection="xz" class="active">XZ</button>
+            <button type="button" data-geometry-projection="yz">YZ</button>
+          </div>
+          <div class="geometry-actions">
+            <div class="geometry-history-actions" role="group" aria-label="История геометрии">
+              <button id="geometry-undo" class="secondary" type="button" disabled>↶ Отменить</button>
+              <button id="geometry-redo" class="secondary" type="button" disabled>↷ Вернуть</button>
+              <span id="geometry-history-state" class="geometry-history-state">история пуста</span>
+            </div>
+            <button id="geometry-add" class="secondary" type="button">+ Провод</button>
+            <button id="geometry-feed" class="secondary" type="button">Назначить питание</button>
+            <button id="geometry-delete" class="secondary danger-soft" type="button">Удалить</button>
+            <button id="geometry-check" class="primary" type="button">Проверить модель</button>
+          </div>
+        </div>
+        <div class="geometry-layout">
+          <div class="geometry-canvas-wrap">
+            <canvas id="geometry-canvas" width="1000" height="560" aria-label="2D редактор геометрии антенны"></canvas>
+            <div id="geometry-summary" class="geometry-summary">—</div>
+          </div>
+          <aside class="geometry-inspector" aria-label="Параметры выбранного провода">
+            <small>ВЫБРАННЫЙ ПРОВОД</small>
+            <h3 id="geometry-wire-id">—</h3>
+            <div class="geometry-coordinates">
+              <label>Начало X, м<input id="geometry-sx" type="number" step="0.001"></label>
+              <label>Начало Y, м<input id="geometry-sy" type="number" step="0.001"></label>
+              <label>Начало Z, м<input id="geometry-sz" type="number" step="0.001"></label>
+              <label>Конец X, м<input id="geometry-ex" type="number" step="0.001"></label>
+              <label>Конец Y, м<input id="geometry-ey" type="number" step="0.001"></label>
+              <label>Конец Z, м<input id="geometry-ez" type="number" step="0.001"></label>
+              <label>Диаметр, мм<input id="geometry-diameter" type="number" min="0.01" step="0.1"></label>
+              <label>Сегменты<input id="geometry-segments" type="number" min="3" step="1"></label>
+            </div>
+            <div id="geometry-feed-status" class="geometry-feed-status">Питание не назначено этому проводу.</div>
+            <div class="note geometry-note">Редактор меняет только физические поля EMNX. Служебные данные вариантов и измерений сюда не записываются.</div>
+          </aside>
+        </div>
+        <div class="geometry-3d-panel">
+          <div class="geometry-3d-head">
+            <div><small>3D ПРОСМОТР</small><h3>Пространственный вид</h3><p>Вращение — мышью или касанием · масштаб — колесом.</p></div>
+            <div class="geometry-3d-actions" aria-label="Ракурс 3D">
+              <button id="geometry-3d-iso" class="secondary active" type="button">Изометрия</button>
+              <button id="geometry-3d-top" class="secondary" type="button">Сверху</button>
+              <button id="geometry-3d-front" class="secondary" type="button">Спереди</button>
+              <button id="geometry-3d-side" class="secondary" type="button">Сбоку</button>
+              <button id="geometry-3d-reset" class="secondary" type="button">Вписать</button>
+            </div>
+          </div>
+          <div class="geometry-3d-wrap">
+            <canvas id="geometry-3d-canvas" width="1000" height="420" aria-label="3D просмотр геометрии антенны"></canvas>
+            <div id="geometry-3d-summary" class="geometry-3d-summary">—</div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="cards metrics-cards" data-view="solve">
+      <article><small>Zin</small><strong id="zin">—</strong><span>Ω</span></article>
+      <article><small>КСВ (VSWR)</small><strong id="vswr">—</strong><span>50 Ω</span></article>
+      <article><small>Dmax</small><strong id="dmax">—</strong><span>dBi</span></article>
+      <article><small>КПД</small><strong id="eff">—</strong><span>%</span></article>
+      <article><small>Принято</small><strong id="accepted">—</strong><span>Вт</span></article>
+      <article><small>Излучено</small><strong id="radiated">—</strong><span>Вт</span></article>
+      <article><small>Потери</small><strong id="dissipated">—</strong><span>Вт</span></article>
+      <article><small>Баланс мощности</small><strong id="balance">—</strong><span>относительный</span></article>
+    </section>
+
+    <section class="panel sweep-panel" data-view="solve">
+      <div class="panel-head"><div><small>ЧАСТОТНЫЙ РАСЧЁТ</small><h2>S11 / КСВ / Zin</h2></div><span id="sweep-summary">ещё не рассчитан</span></div>
+      <canvas id="sweep-chart" width="1000" height="300"></canvas>
+      <div id="sweep-cursor" class="sweep-cursor">Наведите на график: частота · S11 · КСВ · R/X</div>
+      <div id="sweep-overlays" class="sweep-overlays"><span>Наложение A/B/C появится после сохранения рассчитанных вариантов.</span></div>
+    </section>
+
+    <section class="panel measurement-panel" id="measurement-panel" data-view="measurement">
+      <div class="panel-head">
+        <div><small>СРАВНЕНИЕ С ИЗМЕРЕНИЕМ</small><h2>Расчёт и измерение</h2></div>
+        <div class="measurement-head-actions"><span id="measurement-summary">измерение не загружено</span><button class="inline-help" type="button" data-help-topic="emmana-next.measurement.compare">? Справка</button></div>
+      </div>
+
+      <div class="flow-guide measurement-guide">
+        <div><b>Как проверить измерения</b><span>1 · Выполните частотный расчёт</span><span>2 · Импортируйте S1P/CSV</span><span>3 · Нажмите «Сравнить»</span></div>
+        <button id="measurement-demo" class="secondary" type="button">Тестовые данные</button>
+        <small>Тестовые данные строятся из текущего Sweep и помечаются как демо — это не реальное измерение VNA.</small>
+      </div>
+      <div class="measurement-toolbar">
+        <label class="measurement-file">Файл S1P / CSV<input id="measurement-file" type="file" accept=".s1p,.csv,text/plain,text/csv"></label>
+        <label>Калибровка<select id="measurement-calibration"><option value="unknown">Не указана</option><option value="SOL">SOL</option><option value="SOLT">SOLT</option><option value="TRL">TRL</option><option value="other">Другая</option></select></label>
+        <label>Плоскость отсчёта<input id="measurement-reference-plane" type="text" placeholder="Например: разъём питания"></label>
+        <button id="measurement-import" class="secondary" type="button">Импорт</button>
+        <button id="measurement-compare" class="primary" type="button" disabled>Сравнить</button>
+      </div>
+      <div class="measurement-kpis">
+        <article><small>ΔR макс.</small><strong id="measurement-dr">—</strong><span>Ω</span></article>
+        <article><small>ΔX макс.</small><strong id="measurement-dx">—</strong><span>Ω</span></article>
+        <article><small>ΔКСВ макс.</small><strong id="measurement-dvswr">—</strong><span>абсолютное</span></article>
+        <article><small>ΔS11 макс.</small><strong id="measurement-ds11">—</strong><span>dB</span></article>
+      </div>
+      <canvas id="measurement-chart" width="1000" height="290"></canvas>
+      <div class="measurement-lower">
+        <div>
+          <div class="measurement-subhead">СОВМЕЩЁННЫЕ ТОЧКИ</div>
+          <div class="measurement-table-wrap">
+            <table class="measurement-table"><thead><tr><th>МГц</th><th>Sim R</th><th>Meas R</th><th>ΔR</th><th>Sim X</th><th>Meas X</th><th>ΔX</th></tr></thead><tbody id="measurement-table-body"><tr><td colspan="7" class="muted">Нет сравнения.</td></tr></tbody></table>
+          </div>
+        </div>
+        <aside class="measurement-provenance">
+          <div class="measurement-subhead">ПРОИСХОЖДЕНИЕ ДАННЫХ</div>
+          <div id="measurement-provenance" class="muted">Загрузите измерение. Исходный файл останется отдельным от расчёта.</div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="panel workflow-panel" id="workflow-panel" data-view="measurement">
+      <div class="panel-head">
+        <div><small>ИНЖЕНЕРНЫЙ ЦИКЛ</small><h2>Вариант → Измерение → Отчёт</h2></div>
+        <div class="workflow-head-actions"><span id="workflow-summary">вариант ещё не сохранён</span><button class="inline-help" type="button" data-help-topic="emmana-next.workflow.report">? Справка</button></div>
+      </div>
+      <div class="workflow-toolbar">
+        <label>Название варианта<input id="variant-name" type="text" placeholder="Например: B01 lab · v1"></label>
+        <button id="variant-save" class="secondary" type="button">1 · Сохранить вариант</button>
+        <button id="measurement-bind" class="secondary" type="button" disabled>2 · Привязать измерение</button>
+        <button id="report-generate" class="primary" type="button" disabled>3 · Сформировать отчёт</button>
+        <button id="report-download" class="secondary" type="button" disabled>Скачать .md</button>
+      </div>
+      <div class="workflow-grid">
+        <div class="workflow-card">
+          <div class="measurement-subhead">ВАРИАНТЫ A/B/C</div>
+          <div id="variant-history" class="variant-history muted">Сохранённых вариантов пока нет.</div>
+          <div class="measurement-subhead variant-compare-head">СРАВНЕНИЕ A/B/C</div>
+          <div id="variant-compare" class="variant-compare muted">Сохраните рассчитанные варианты — здесь появится сравнение.</div>
+        </div>
+        <div class="workflow-card report-card">
+          <div class="measurement-subhead">ИНЖЕНЕРНЫЙ ОТЧЁТ</div>
+          <div id="report-preview" class="report-preview muted">Сохраните вариант, привяжите измерение и выполните сравнение.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel optimizer-panel" data-view="optimize">
+      <div class="panel-head"><div><small>ПАРАМЕТРИЧЕСКАЯ ОПТИМИЗАЦИЯ</small><h2>Глобальный → локальный поиск · устойчивость · Парето</h2></div><span id="opt-summary">ещё не запускался</span></div>
+
+      <div class="flow-guide optimizer-guide">
+        <b>Простой режим</b>
+        <span>1 · В «Геометрии» выберите «Яги, 3 элемента»</span>
+        <span>2 · Измените размеры вручную или мышью</span>
+        <span>3 · Запустите оптимизацию и примените лучший вариант</span>
+      </div>
+      <div class="optimizer-grid">
+        <div><h3>Переменные / Ограничения</h3><div id="opt-variables" class="muted">В проекте нет переменных оптимизации.</div><div id="opt-constraints" class="muted"></div></div>
+        <div><h3>Сбалансированный результат</h3><div id="opt-metrics" class="muted">—</div><button id="apply-opt" class="secondary full opt-apply" type="button" hidden>Применить результат</button></div>
+        <div><h3>Варианты Парето</h3><div id="opt-pareto" class="pareto-list muted">—</div></div>
+        <div><h3>История</h3><canvas id="opt-chart" width="550" height="190"></canvas></div>
+      </div>
+    </section>
+
+    <section class="grid2" data-view="solve">
+      <article class="panel"><div class="panel-head"><div><small>ДАЛЬНЕЕ ПОЛЕ</small><h2>Диаграмма направленности</h2></div><span>φ = 0°</span></div><canvas id="polar" width="600" height="330"></canvas></article>
+      <article class="panel"><div class="panel-head"><div><small>ТОКИ</small><h2>Токи по сегментам</h2></div><span>|I|</span></div><canvas id="currents" width="600" height="330"></canvas></article>
+    </section>
+
+    <section class="view-note" data-view="model">
+      <div><small>МОДЕЛЬ</small><strong>EMNX и диагностика</strong></div>
+      <span>Изменения JSON сразу отражаются в геометрии. После правок нажмите «Пересчитать».</span>
+    </section>
+    <section class="grid2 lower" data-view="model">
+      <article class="panel editor"><div class="panel-head"><div><small>EMNX</small><h2>Модель</h2></div><span>JSON</span></div><textarea id="project-json" spellcheck="false" aria-label="EMNX JSON"></textarea></article>
+      <article class="panel"><div class="panel-head"><div><small>ДИАГНОСТИКА</small><h2>Проверка и предупреждения</h2></div><button id="diag-help" class="inline-help" type="button" data-help-topic="emmana-next.result.power-balance">? Справка</button></div><pre id="diagnostics">Расчёт ещё не запускался.</pre><details><summary>JSON результата</summary><pre id="raw-result">—</pre></details></article>
+    </section>
+  </main>
+</div>
+
+<aside id="quick-help" class="quick-help" hidden aria-label="Краткая справка" aria-live="polite">
+  <div class="help-head"><div><small>КРАТКАЯ СПРАВКА</small><h2 id="quick-help-title">Справка</h2></div><button id="quick-help-close" class="icon-button" type="button" aria-label="Закрыть справку">×</button></div>
+  <p id="quick-help-summary"></p><div id="quick-help-body" class="help-body"></div><ol id="quick-help-steps" class="help-steps"></ol><div id="quick-help-related" class="help-related"></div>
+  <button id="help-full-open" class="primary full" type="button">Расширенная справка</button>
+</aside>
+<div id="help-backdrop" class="backdrop help-backdrop" hidden></div>
+
+<section id="full-help" class="full-help" hidden aria-label="Расширенная справка">
+  <header class="full-help-head"><div><small>СПРАВКА EMMana-Next</small><h2>Расширенная справка</h2></div><button id="full-help-close" class="icon-button" type="button" aria-label="Закрыть расширенную справку">×</button></header>
+  <div class="full-help-layout">
+    <aside class="help-index"><input id="help-search" type="search" placeholder="Поиск: VSWR, земля, B02…" aria-label="Поиск по справке"><div id="help-topic-list" class="help-topic-list"></div></aside>
+    <article class="help-article"><button id="full-help-back" class="inline-help" type="button">← Назад к краткой</button><small id="full-help-category"></small><h2 id="full-help-title">—</h2><p id="full-help-summary"></p><div id="full-help-body" class="help-body"></div><div id="full-help-related" class="help-related"></div></article>
+  </div>
+</section>
+<script src="/app.js" defer></script>
+<script src="/geometry3d.js" defer></script>
+</body>
+</html>
