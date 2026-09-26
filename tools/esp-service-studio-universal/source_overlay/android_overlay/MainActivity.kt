@@ -5,21 +5,28 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.database.Cursor
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.security.MessageDigest
 
 class MainActivity : FlutterActivity() {
     companion object {
         private const val ACTION_USB_PERMISSION =
             "com.arcanalord.service_studio.USB_PERMISSION"
+        private const val REQUEST_PICK_MESH_FIRMWARE = 42017
+        private const val MESH_EP2_SHA256 =
+            "6358bdaf6d6dd5edee3ef3e3f1f648bcec445ce80599017a172e2acfd97adadb"
     }
 
     private val methodChannelName = "service_studio/native"
@@ -31,6 +38,7 @@ class MainActivity : FlutterActivity() {
 
     private var pendingProbeResult: MethodChannel.Result? = null
     private var pendingProbeDeviceName: String? = null
+    private var pendingMeshPickResult: MethodChannel.Result? = null
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -68,6 +76,111 @@ class MainActivity : FlutterActivity() {
         handleUsbIntent(intent)
     }
 
+    @Deprecated("Deprecated in Android API; retained for document picker compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_PICK_MESH_FIRMWARE) return
+
+        val result = pendingMeshPickResult ?: return
+        pendingMeshPickResult = null
+
+        if (resultCode != RESULT_OK || data?.data == null) {
+            result.success(
+                mapOf(
+                    "status" to "cancelled",
+                    "message" to "Выбор Mesh прошивки отменён",
+                ),
+            )
+            return
+        }
+
+        val uri = data.data!!
+        Thread {
+            val response = prepareKnownMeshFirmware(uri)
+            mainHandler.post { result.success(response) }
+        }.start()
+    }
+
+    private fun prepareKnownMeshFirmware(uri: android.net.Uri): Map<String, Any?> {
+        return try {
+            val displayName = runCatching {
+                contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else null
+                    }
+            }.getOrNull()
+
+            val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: error("Не удалось прочитать выбранный файл")
+
+            if (bytes.size !in 64_000..1_048_576) {
+                error("Размер Mesh прошивки выглядит неверно: ${bytes.size} Б")
+            }
+
+            val sha = MessageDigest.getInstance("SHA-256")
+                .digest(bytes)
+                .joinToString("") { "%02x".format(it) }
+
+            if (!sha.equals(MESH_EP2_SHA256, ignoreCase = true)) {
+                error(
+                    "Файл не совпадает с проверенным Mesh Messenger EP2 v0.4.0. " +
+                        "SHA-256: $sha"
+                )
+            }
+
+            val dir = File(filesDir, "firmware/mesh/happymodel_ep2/v0.4.0")
+            if (!dir.exists() && !dir.mkdirs()) {
+                error("Не удалось создать каталог Mesh прошивки")
+            }
+
+            val firmware = File(dir, "firmware.bin")
+            firmware.writeBytes(bytes)
+
+            val manifest = org.json.JSONObject()
+                .put("kind", "mesh")
+                .put("version", "v0.4.0")
+                .put("targetPath", "mesh.happymodel_ep2")
+                .put("productName", "Mesh Messenger / HappyModel EP2")
+                .put("platform", "esp8285")
+                .put("firmware", "MeshMessenger_EP2")
+                .put("boardId", "happymodel_ep2")
+                .put("hardwareSource", "mesh-release-pinned")
+                .put("writeOffset", "0x0")
+                .put("fileName", firmware.name)
+                .put("fileSize", firmware.length())
+                .put("sha256", sha)
+                .put("hardwarePinned", true)
+
+            val manifestFile = File(dir, "manifest.json")
+            manifestFile.writeText(manifest.toString(2), Charsets.UTF_8)
+
+            mapOf(
+                "status" to "prepared",
+                "message" to "Mesh Messenger EP2 v0.4.0 проверена и готова к ROM-записи",
+                "version" to "v0.4.0",
+                "targetPath" to "mesh.happymodel_ep2",
+                "productName" to "Mesh Messenger / HappyModel EP2",
+                "platform" to "esp8285",
+                "firmware" to "MeshMessenger_EP2",
+                "boardId" to "happymodel_ep2",
+                "writeOffset" to "0x0",
+                "filePath" to firmware.absolutePath,
+                "fileSize" to firmware.length(),
+                "sha256" to sha,
+                "manifestPath" to manifestFile.absolutePath,
+                "sourceFileName" to displayName,
+                "hardwareSource" to "mesh-release-pinned",
+                "hardwarePinned" to true,
+                "readyToFlash" to true,
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "status" to "error",
+                "message" to "Mesh прошивка отклонена: ${e.message ?: e.javaClass.simpleName}",
+            )
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -85,6 +198,27 @@ class MainActivity : FlutterActivity() {
                     "probeEspRom" -> {
                         val deviceName = call.argument<String>("deviceName")
                         startEspProbe(deviceName, result)
+                    }
+
+                    "pickKnownMeshFirmware" -> {
+                        if (pendingMeshPickResult != null) {
+                            result.error("BUSY", "Выбор прошивки уже открыт", null)
+                        } else {
+                            pendingMeshPickResult = result
+                            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "application/octet-stream"
+                                putExtra(
+                                    Intent.EXTRA_MIME_TYPES,
+                                    arrayOf(
+                                        "application/octet-stream",
+                                        "application/macbinary",
+                                        "*/*",
+                                    ),
+                                )
+                            }
+                            startActivityForResult(intent, REQUEST_PICK_MESH_FIRMWARE)
+                        }
                     }
 
                     "meshServiceCommand" -> {
