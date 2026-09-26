@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "device-recognition.schema.json",
+  "title": "DeviceRecognitionSnapshot v1",
+  "type": "object",
+  "required": ["state", "confidence", "transport", "protocol", "capabilities", "evidence"],
+  "properties": {
+    "state": {
+      "type": "string",
+      "enum": ["detached", "attached", "probing", "recognized", "unknown", "error"]
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["unknown", "tentative", "confirmed", "serviceConfirmed"]
+    },
+    "transport": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {"type": "string"},
+        "vendorId": {"type": ["integer", "null"]},
+        "productId": {"type": ["integer", "null"]},
+        "driver": {"type": ["string", "null"]},
+        "deviceName": {"type": ["string", "null"]},
+        "baudRate": {"type": ["integer", "null"], "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "protocol": {
+      "type": "string",
+      "enum": ["unknown", "mmUart1", "ep2LinkAscii", "crsf", "ssBridge1"]
+    },
+    "protocolVersion": {"type": ["string", "null"]},
+    "profileId": {"type": ["string", "null"]},
+    "controllerFamily": {"type": ["string", "null"]},
+    "radioFamily": {"type": ["string", "null"]},
+    "firmwareVersion": {"type": ["string", "null"]},
+    "nodeId": {},
+    "capabilities": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "key"],
+        "properties": {
+          "source": {"type": "string"},
+          "key": {"type": "string"},
+          "value": {}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
