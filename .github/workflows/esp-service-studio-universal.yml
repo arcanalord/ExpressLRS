@@ -127,7 +127,7 @@ jobs:
           retention-days: 14
 
       - name: Android 15 API 35 emulator smoke test
-        timeout-minutes: 12
+        timeout-minutes: 20
         working-directory: /tmp/service_studio
         run: |
           set -euo pipefail
@@ -140,7 +140,7 @@ jobs:
           IMAGE="system-images;android-35;google_apis;x86_64"
 
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" "emulator" "$IMAGE"
+          "$SDKMANAGER" --channel=0 "emulator" "$IMAGE"
 
           echo no | "$AVDMANAGER" create avd             --force             --name ESPStudio_API35             --package "$IMAGE"             --device "pixel_7"
 
@@ -164,7 +164,7 @@ jobs:
           "$ADB" install -r /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.13-x86_64-test.apk
 
           "$ADB" shell dumpsys package com.arcanalord.service_studio             > /tmp/esp-emulator-evidence/package.txt
-          grep -F "versionName=0.9.0-alpha.11" /tmp/esp-emulator-evidence/package.txt
+          grep -F "versionName=0.9.0-alpha.13" /tmp/esp-emulator-evidence/package.txt
           grep -F "versionCode=26092713" /tmp/esp-emulator-evidence/package.txt
 
           "$ADB" logcat -c
