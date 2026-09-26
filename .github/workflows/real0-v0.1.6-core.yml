@@ -87,7 +87,7 @@ jobs:
           "${BT}/aapt" dump badging "${APK}" | tee real0-apk-badging.txt
           grep -q "package: name='club.fpv.real0.trackerlab'" real0-apk-badging.txt
           grep -q "versionCode='8'" real0-apk-badging.txt
-          grep -q "versionName='0.1.6'" real0-apk-badging.txt
+          grep -q "versionName='0.1.7'" real0-apk-badging.txt
           cp "${APK}" Real0_v0.1.7_candidate_debug.apk
 
       - name: Record provenance
@@ -106,7 +106,7 @@ jobs:
             echo "android_api=${ANDROID_API}"
             echo "build_tools=${ANDROID_BUILD_TOOLS}"
             echo "package=club.fpv.real0.trackerlab"
-            echo "version_name=0.1.6"
+            echo "version_name=0.1.7"
             echo "version_code=8"
             echo "phone_pass=false"
           } | tee Real0_v0.1.7_candidate_build_provenance.txt
