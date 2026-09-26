@@ -1,4 +1,4 @@
-set -euo pipefail
+set -euxo pipefail
 EVIDENCE=/tmp/mesh-dev10-emulator-evidence
 mkdir -p "$EVIDENCE/ui"
 
@@ -19,10 +19,11 @@ dump_screen() {
 }
 
 assert_foreground() {
-  local pid
+  local pid activity
   pid="$(adb shell pidof -s org.fpvclub.mesh.flutter | tr -d '\r')"
   test -n "$pid"
-  adb shell dumpsys activity activities | grep -q "org.fpvclub.mesh.flutter"
+  activity="$(adb shell dumpsys activity activities)"
+  grep -q "org.fpvclub.mesh.flutter" <<<"$activity"
 }
 
 # Fixed 1080x1920 test geometry. Bottom NavigationBar has four equal targets.
@@ -40,6 +41,7 @@ test -n "$PID"
 assert_foreground
 dump_screen 00_chats
 adb shell screenrecord --bit-rate 5000000 --time-limit 35 /sdcard/mesh-dev10-smoke.mp4 >/dev/null 2>&1 &
+RECORD_PID=$!
 
 adb shell input tap "$MAP_X" "$NAV_Y"
 sleep 3
@@ -74,7 +76,7 @@ sleep 3
 assert_foreground
 dump_screen 06_chats_return
 
-sleep 8
+wait "$RECORD_PID" || true
 adb pull /sdcard/mesh-dev10-smoke.mp4 "$EVIDENCE/MeshMessenger-v0.1.10-dev.10-emulator-smoke.mp4"
 
 adb logcat --pid="$PID" -d > "$EVIDENCE/logcat.txt" || true
