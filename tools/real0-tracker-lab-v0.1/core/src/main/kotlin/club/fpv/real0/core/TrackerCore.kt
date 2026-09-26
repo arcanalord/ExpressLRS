@@ -157,7 +157,7 @@ class NccTrackerCore {
             return result(q, t0, "staged reacquired; model held")
         }
         state = CoreTrackState.SEARCHING
-        return result(q, t0, "staged searching")
+        return result(q, t0, "staged searching; ${reacq.note}; confirm=${reacq.confirmation}/3; margin=${"%.3f".format(reacq.margin)}")
     }
 
     private fun deltaSeconds(timestampNs: Long): Float {
@@ -237,6 +237,7 @@ class NccTrackerCore {
         private var pending: BoxF? = null
         private var pendingDesc: FloatArray? = null
         private var pendingTimestampNs = 0L
+        private var pendingMisses = 0
         private var confirm = 0
         private var searchFrame = 0
 
@@ -244,29 +245,42 @@ class NccTrackerCore {
             pending = null
             pendingDesc = null
             pendingTimestampNs = 0L
+            pendingMisses = 0
             confirm = 0
             searchFrame = 0
         }
 
         fun search(frame: GrayFrame, predicted: BoxF, trusted: BoxF, model: TargetModelCore): ReacquireResult {
             searchFrame++
-            val fullFrame = searchFrame > 5
+            val hadPending = pending != null
+            var fullFrame = false
             var margin = 1f
-            var best = when {
-                searchFrame <= 2 -> scanRegion(frame, predicted, model, 1.8f)
-                searchFrame <= 5 -> scanRegion(frame, predicted, model, 4.0f)
-                else -> {
-                    val full = scanFull(frame, trusted, model)
-                    margin = full.margin
-                    full.best
+            var best = if (hadPending) {
+                // Once a strong candidate exists, follow that candidate locally.
+                scanRegion(frame, pending!!, model, 3.2f)
+            } else {
+                when {
+                    searchFrame <= 2 -> scanRegion(frame, predicted, model, 1.8f)
+                    searchFrame <= 4 -> scanRegion(frame, predicted, model, 4.0f)
+                    else -> {
+                        fullFrame = true
+                        val full = scanFull(frame, trusted, model)
+                        margin = full.margin
+                        full.best
+                    }
                 }
             }
             if (best != null) best = refine(frame, best, model)
 
             if (best == null || best.score < 0.68f) {
+                if (hadPending && pendingMisses < 1) {
+                    pendingMisses++
+                    return ReacquireResult(false, pending, best?.score ?: -1f, confirm, margin, "pending miss ${pendingMisses}/1")
+                }
                 pending = null
                 pendingDesc = null
                 pendingTimestampNs = 0L
+                pendingMisses = 0
                 confirm = 0
                 return ReacquireResult(false, best?.box, best?.score ?: -1f, 0, margin, "no strong candidate")
             }
@@ -297,6 +311,7 @@ class NccTrackerCore {
             pending = best.box
             pendingDesc = best.desc.copyOf()
             pendingTimestampNs = frame.timestampNs
+            pendingMisses = 0
 
             return if (confirm >= 3) {
                 val confirmedBox = best.box
