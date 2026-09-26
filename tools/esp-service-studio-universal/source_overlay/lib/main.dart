@@ -57,7 +57,10 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   bool preparingElrs = false;
   bool flashingEsp = false;
   bool meshServiceBusy = false;
+  bool meshPreparing = false;
   Map<String, Object?>? meshServiceResult;
+  Map<String, Object?>? meshPrepared;
+  EspFlashResult? meshFlashResult;
   bool _usbRefreshInFlight = false;
 
   String? error;
@@ -276,6 +279,107 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     }).toList()
       ..sort((a, b) => a.productName.compareTo(b.productName));
     return targets;
+  }
+
+  Future<void> _pickKnownMeshFirmware() async {
+    if (meshPreparing || flashingEsp) return;
+    setState(() {
+      meshPreparing = true;
+      meshPrepared = null;
+      meshFlashResult = null;
+    });
+    try {
+      final result = await _usb.pickKnownMeshFirmware();
+      if (!mounted) return;
+      setState(() => meshPrepared = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        meshPrepared = <String, Object?>{
+          'status': 'error',
+          'message': 'Ошибка выбора Mesh прошивки: $e',
+        };
+      });
+    } finally {
+      if (mounted) setState(() => meshPreparing = false);
+    }
+  }
+
+  Future<void> _flashPreparedMesh() async {
+    final device = usbDevices.firstOrNull;
+    final prepared = meshPrepared;
+    if (device == null ||
+        prepared == null ||
+        prepared['status'] != 'prepared' ||
+        prepared['manifestPath'] == null ||
+        prepared['sha256'] == null ||
+        flashingEsp) {
+      return;
+    }
+
+    final chip = probeResult?.chipDescription ?? '';
+    if (!chip.startsWith('ESP8285')) {
+      setState(() {
+        meshFlashResult = const EspFlashResult(
+          status: 'flash_error',
+          message:
+              'Для прямой USB-записи Mesh переведите ESP8285 в ROM BOOT и нажмите «Определить и проверить».',
+        );
+      });
+      return;
+    }
+
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Записать Mesh Messenger?'),
+        content: Text(
+          'Устройство: Mesh Messenger / HappyModel EP2\n'
+          'Версия: ${prepared['version'] ?? '-'}\n'
+          'Размер: ${prepared['fileSize'] ?? 0} Б\n'
+          'SHA-256: ${prepared['sha256']}\n\n'
+          'Будет выполнена прямая запись flash с адреса 0x0. '
+          'Не отключайте питание и USB до завершения.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Записать Mesh'),
+          ),
+        ],
+      ),
+    );
+
+    if (approved != true || !mounted) return;
+
+    setState(() {
+      flashingEsp = true;
+      meshFlashResult = null;
+    });
+    try {
+      final result = await _usb.flashPreparedEsp8285(
+        deviceName: device.deviceName,
+        manifestPath: prepared['manifestPath'].toString(),
+        expectedTargetPath: 'mesh.happymodel_ep2',
+        expectedSha256: prepared['sha256'].toString(),
+      );
+      if (!mounted) return;
+      setState(() => meshFlashResult = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        meshFlashResult = EspFlashResult(
+          status: 'flash_error',
+          message: 'Ошибка записи Mesh: $e',
+        );
+      });
+    } finally {
+      if (mounted) setState(() => flashingEsp = false);
+    }
   }
 
   Future<void> _meshServiceCommand(int command) async {
