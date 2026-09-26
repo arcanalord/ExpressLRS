@@ -43,7 +43,8 @@ class MainActivity : AppCompatActivity() {
     private var locked = false
     private var source = "NONE"
     @Volatile private var selectionFrozen = false
-    @Volatile private var lastDisplayedFrame: Bitmap? = null\n    @Volatile private var lastDisplayedTimestampNs: Long = 0L
+    @Volatile private var lastDisplayedFrame: Bitmap? = null
+    @Volatile private var lastDisplayedTimestampNs: Long = 0L
 
     private var retriever: MediaMetadataRetriever? = null
     private var videoUs = 0L
@@ -74,7 +75,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildUi()
-        overlay.onQuickLock = { quickLockOnDisplayedFrame(it.x, it.y) }\n        overlay.onPreciseLock = { lockOnDisplayedFrame(it) }
+        overlay.onQuickLock = { quickLockOnDisplayedFrame(it.x, it.y) }
+        overlay.onPreciseLock = { lockOnDisplayedFrame(it) }
         handler.post(videoTick)
     }
 
@@ -194,10 +196,12 @@ class MainActivity : AppCompatActivity() {
             .setMessage("""
                 CAMERA — экран и трекер используют один кадр.
                 VIDEO — локальный видеофайл.
-                QUICK LOCK — тап задаёт точку; AutoFit подбирает рамку и подтверждает её несколько кадров.\n                PRECISE LOCK — ручная рамка, контрольный режим.
+                QUICK LOCK — тап задаёт точку; AutoFit подбирает рамку и подтверждает её несколько кадров.
+                PRECISE LOCK — ручная рамка, контрольный режим.
                 RESET — удалить захват.
 
-                STABILIZING — QUICK LOCK ещё уточняет рамку.\n                TRACKING — сопровождение.
+                STABILIZING — QUICK LOCK ещё уточняет рамку.
+                TRACKING — сопровождение.
                 UNCERTAIN — уверенность снижена.
                 LOST/SEARCHING — измеренная рамка скрыта, идёт полный повторный поиск.
                 REACQUIRED — цель повторно подтверждена.
