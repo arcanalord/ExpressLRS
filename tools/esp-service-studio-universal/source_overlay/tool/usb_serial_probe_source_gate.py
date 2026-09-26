@@ -53,7 +53,7 @@ checks = {
     'binding phrase support': 'generateUid(' in elrs and 'bindingPhrase' in native,
     'wifi options': 'wifi-ssid' in elrs and 'wifiPassword' in native,
     'rx baud option': 'rcvr-uart-baud' in elrs and 'rxUartBaud' in native,
-    'simple ELRS UI': '3. Настройки и прошивка' in main and 'Записать в контроллер' in main,
+    'simple ELRS UI': '3. Настройки и прошивка' in main and 'Подготовить и прошить' in main,
     'prepare not flash': 'readyToFlash' in elrs and 'writeOffset' in elrs,
     'internet permission': 'android.permission.INTERNET' in manifest,
     'no hardcoded ELRS profiles': '"elrs"' not in device_profiles,
