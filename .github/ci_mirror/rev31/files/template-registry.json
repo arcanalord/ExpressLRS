@@ -1,0 +1,679 @@
+{
+  "schema_version": "0.2",
+  "product": "EMMana-Next",
+  "synthesis_method": "frequency-scale-seed-v1",
+  "parameter_ui": "registry-driven-v1",
+  "note": "Template parameters are external UI metadata; generated project remains pure EMNX.",
+  "templates": [
+    {
+      "id": "halfwave-dipole",
+      "label": "Полуволновый диполь",
+      "status": "implemented",
+      "seed_model": "benchmarks/B01_halfwave_dipole_51seg.emnx",
+      "family": "dipole",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "reference-validated",
+      "supports_optimizer": false,
+      "parameters": [
+        {
+          "id": "element_length_m",
+          "label": "Общая длина",
+          "ui_unit": "cm",
+          "default_lambda": 0.5,
+          "min_lambda": 0.3,
+          "max_lambda": 0.7,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "W1"
+          }
+        },
+        {
+          "id": "diameter_m",
+          "label": "Диаметр провода",
+          "ui_unit": "mm",
+          "default_lambda": 0.002,
+          "min_lambda": 0.0002,
+          "max_lambda": 0.02,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_diameter_all"
+          }
+        },
+        {
+          "id": "segments",
+          "label": "Сегментов",
+          "ui_unit": "count",
+          "default": 51,
+          "min": 5,
+          "max": 151,
+          "step": 2,
+          "binding": {
+            "kind": "wire_segments_all"
+          }
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "baseline",
+        "single-band wire antenna"
+      ]
+    },
+    {
+      "id": "quarterwave-monopole-pec",
+      "label": "GP 1/4 λ над PEC",
+      "status": "implemented",
+      "seed_model": "benchmarks/B02_quarterwave_monopole_over_pec.emnx",
+      "family": "monopole",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "characterized",
+      "supports_optimizer": false,
+      "parameters": [
+        {
+          "id": "radiator_length_m",
+          "label": "Длина вертикала",
+          "ui_unit": "cm",
+          "default_lambda": 0.25,
+          "min_lambda": 0.15,
+          "max_lambda": 0.4,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length_from_start",
+            "wire_id": "MONO"
+          }
+        },
+        {
+          "id": "diameter_m",
+          "label": "Диаметр провода",
+          "ui_unit": "mm",
+          "default_lambda": 0.002,
+          "min_lambda": 0.0002,
+          "max_lambda": 0.02,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_diameter_all"
+          }
+        },
+        {
+          "id": "segments",
+          "label": "Сегментов",
+          "ui_unit": "count",
+          "default": 25,
+          "min": 5,
+          "max": 101,
+          "step": 2,
+          "binding": {
+            "kind": "wire_segments_all"
+          }
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "ground-plane antenna",
+        "PEC reference"
+      ]
+    },
+    {
+      "id": "yagi-3el",
+      "label": "Яги, 3 элемента",
+      "status": "implemented",
+      "seed_model": "benchmarks/B04_three_element_yagi_parametric.emnx",
+      "family": "yagi",
+      "element_count": 3,
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "characterized",
+      "supports_optimizer": true,
+      "parameters": [
+        {
+          "id": "reflector_length_m",
+          "label": "Рефлектор",
+          "ui_unit": "cm",
+          "default_lambda": 0.52,
+          "min_lambda": 0.42,
+          "max_lambda": 0.62,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "REF"
+          }
+        },
+        {
+          "id": "driven_length_m",
+          "label": "Активный элемент",
+          "ui_unit": "cm",
+          "default_lambda": 0.48,
+          "min_lambda": 0.38,
+          "max_lambda": 0.58,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "DRV"
+          }
+        },
+        {
+          "id": "director1_length_m",
+          "label": "Первый директор",
+          "ui_unit": "cm",
+          "default_lambda": 0.45,
+          "min_lambda": 0.34,
+          "max_lambda": 0.54,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "DIR1"
+          }
+        },
+        {
+          "id": "reflector_driven_gap_m",
+          "label": "REF → DRV",
+          "ui_unit": "cm",
+          "default_lambda": 0.2,
+          "min_lambda": 0.07,
+          "max_lambda": 0.35,
+          "step": 0.1,
+          "binding": {
+            "kind": "center_gap_x",
+            "wire_a": "REF",
+            "wire_b": "DRV"
+          }
+        },
+        {
+          "id": "driven_director_gap_m",
+          "label": "DRV → DIR1",
+          "ui_unit": "cm",
+          "default_lambda": 0.15,
+          "min_lambda": 0.06,
+          "max_lambda": 0.3,
+          "step": 0.1,
+          "binding": {
+            "kind": "center_gap_x",
+            "wire_a": "DRV",
+            "wire_b": "DIR1"
+          }
+        },
+        {
+          "id": "diameter_m",
+          "label": "Диаметр провода",
+          "ui_unit": "mm",
+          "default_lambda": 0.002,
+          "min_lambda": 0.0002,
+          "max_lambda": 0.02,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_diameter_all"
+          }
+        },
+        {
+          "id": "segments",
+          "label": "Сегментов",
+          "ui_unit": "count",
+          "default": 21,
+          "min": 3,
+          "max": 101,
+          "step": 2,
+          "binding": {
+            "kind": "wire_segments_all"
+          }
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "directional antenna",
+        "optimizer seed"
+      ]
+    },
+    {
+      "id": "yagi-5el",
+      "label": "Яги, 5 элементов",
+      "status": "implemented",
+      "seed_model": "apps/shared/product/seeds/yagi_5el_seed.emnx",
+      "family": "yagi",
+      "element_count": 5,
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental",
+      "supports_optimizer": true,
+      "parameters": [
+        {
+          "id": "reflector_length_m",
+          "label": "Рефлектор",
+          "ui_unit": "cm",
+          "default_lambda": 0.52,
+          "min_lambda": 0.42,
+          "max_lambda": 0.62,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "REF"
+          }
+        },
+        {
+          "id": "driven_length_m",
+          "label": "Активный элемент",
+          "ui_unit": "cm",
+          "default_lambda": 0.48,
+          "min_lambda": 0.38,
+          "max_lambda": 0.58,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "DRV"
+          }
+        },
+        {
+          "id": "director1_length_m",
+          "label": "Первый директор",
+          "ui_unit": "cm",
+          "default_lambda": 0.45,
+          "min_lambda": 0.34,
+          "max_lambda": 0.54,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "DIR1"
+          }
+        },
+        {
+          "id": "reflector_driven_gap_m",
+          "label": "REF → DRV",
+          "ui_unit": "cm",
+          "default_lambda": 0.2,
+          "min_lambda": 0.07,
+          "max_lambda": 0.35,
+          "step": 0.1,
+          "binding": {
+            "kind": "center_gap_x",
+            "wire_a": "REF",
+            "wire_b": "DRV"
+          }
+        },
+        {
+          "id": "driven_director_gap_m",
+          "label": "DRV → DIR1",
+          "ui_unit": "cm",
+          "default_lambda": 0.15,
+          "min_lambda": 0.06,
+          "max_lambda": 0.3,
+          "step": 0.1,
+          "binding": {
+            "kind": "center_gap_x",
+            "wire_a": "DRV",
+            "wire_b": "DIR1"
+          }
+        },
+        {
+          "id": "director_spacing_m",
+          "label": "Шаг директоров",
+          "ui_unit": "cm",
+          "default_lambda": 0.15,
+          "min_lambda": 0.06,
+          "max_lambda": 0.3,
+          "step": 0.1,
+          "binding": {
+            "kind": "yagi_director_spacing"
+          }
+        },
+        {
+          "id": "director_step_m",
+          "label": "Укорочение директора",
+          "ui_unit": "mm",
+          "default_lambda": 0.01,
+          "min_lambda": 0,
+          "max_lambda": 0.04,
+          "step": 0.1,
+          "binding": {
+            "kind": "yagi_director_step"
+          }
+        },
+        {
+          "id": "diameter_m",
+          "label": "Диаметр провода",
+          "ui_unit": "mm",
+          "default_lambda": 0.002,
+          "min_lambda": 0.0002,
+          "max_lambda": 0.02,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_diameter_all"
+          }
+        },
+        {
+          "id": "segments",
+          "label": "Сегментов",
+          "ui_unit": "count",
+          "default": 21,
+          "min": 3,
+          "max": 101,
+          "step": 2,
+          "binding": {
+            "kind": "wire_segments_all"
+          }
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "directional antenna",
+        "optimizer seed",
+        "experimental template"
+      ]
+    },
+    {
+      "id": "yagi-7el",
+      "label": "Яги, 7 элементов",
+      "status": "implemented",
+      "seed_model": "apps/shared/product/seeds/yagi_7el_seed.emnx",
+      "family": "yagi",
+      "element_count": 7,
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental",
+      "supports_optimizer": true,
+      "parameters": [
+        {
+          "id": "reflector_length_m",
+          "label": "Рефлектор",
+          "ui_unit": "cm",
+          "default_lambda": 0.52,
+          "min_lambda": 0.42,
+          "max_lambda": 0.62,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "REF"
+          }
+        },
+        {
+          "id": "driven_length_m",
+          "label": "Активный элемент",
+          "ui_unit": "cm",
+          "default_lambda": 0.48,
+          "min_lambda": 0.38,
+          "max_lambda": 0.58,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "DRV"
+          }
+        },
+        {
+          "id": "director1_length_m",
+          "label": "Первый директор",
+          "ui_unit": "cm",
+          "default_lambda": 0.45,
+          "min_lambda": 0.34,
+          "max_lambda": 0.54,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_length",
+            "wire_id": "DIR1"
+          }
+        },
+        {
+          "id": "reflector_driven_gap_m",
+          "label": "REF → DRV",
+          "ui_unit": "cm",
+          "default_lambda": 0.2,
+          "min_lambda": 0.07,
+          "max_lambda": 0.35,
+          "step": 0.1,
+          "binding": {
+            "kind": "center_gap_x",
+            "wire_a": "REF",
+            "wire_b": "DRV"
+          }
+        },
+        {
+          "id": "driven_director_gap_m",
+          "label": "DRV → DIR1",
+          "ui_unit": "cm",
+          "default_lambda": 0.15,
+          "min_lambda": 0.06,
+          "max_lambda": 0.3,
+          "step": 0.1,
+          "binding": {
+            "kind": "center_gap_x",
+            "wire_a": "DRV",
+            "wire_b": "DIR1"
+          }
+        },
+        {
+          "id": "director_spacing_m",
+          "label": "Шаг директоров",
+          "ui_unit": "cm",
+          "default_lambda": 0.15,
+          "min_lambda": 0.06,
+          "max_lambda": 0.3,
+          "step": 0.1,
+          "binding": {
+            "kind": "yagi_director_spacing"
+          }
+        },
+        {
+          "id": "director_step_m",
+          "label": "Укорочение директора",
+          "ui_unit": "mm",
+          "default_lambda": 0.01,
+          "min_lambda": 0,
+          "max_lambda": 0.04,
+          "step": 0.1,
+          "binding": {
+            "kind": "yagi_director_step"
+          }
+        },
+        {
+          "id": "diameter_m",
+          "label": "Диаметр провода",
+          "ui_unit": "mm",
+          "default_lambda": 0.002,
+          "min_lambda": 0.0002,
+          "max_lambda": 0.02,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_diameter_all"
+          }
+        },
+        {
+          "id": "segments",
+          "label": "Сегментов",
+          "ui_unit": "count",
+          "default": 21,
+          "min": 3,
+          "max": 101,
+          "step": 2,
+          "binding": {
+            "kind": "wire_segments_all"
+          }
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "directional antenna",
+        "optimizer seed",
+        "experimental template"
+      ]
+    },
+    {
+      "id": "square-loop",
+      "label": "Квадратная полноразмерная рамка",
+      "status": "implemented",
+      "seed_model": "benchmarks/T04_square_fullwave_loop.emnx",
+      "family": "square-loop",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental",
+      "supports_optimizer": false,
+      "parameters": [
+        {
+          "id": "side_m",
+          "label": "Сторона рамки",
+          "ui_unit": "cm",
+          "default_lambda": 0.25,
+          "min_lambda": 0.12,
+          "max_lambda": 0.4,
+          "step": 0.1,
+          "binding": {
+            "kind": "square_side"
+          }
+        },
+        {
+          "id": "diameter_m",
+          "label": "Диаметр провода",
+          "ui_unit": "mm",
+          "default_lambda": 0.002,
+          "min_lambda": 0.0002,
+          "max_lambda": 0.02,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_diameter_all"
+          }
+        },
+        {
+          "id": "segments",
+          "label": "Сегментов на сторону",
+          "ui_unit": "count",
+          "default": 11,
+          "min": 3,
+          "max": 51,
+          "step": 2,
+          "binding": {
+            "kind": "wire_segments_all"
+          }
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "single-band loop antenna",
+        "geometry-editor starter"
+      ]
+    },
+    {
+      "id": "moxon",
+      "label": "Moxon rectangle",
+      "status": "implemented",
+      "seed_model": "apps/shared/product/seeds/moxon_seed.emnx",
+      "family": "moxon",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental",
+      "supports_optimizer": false,
+      "parameters": [
+        {
+          "id": "span_m",
+          "label": "Высота элемента",
+          "ui_unit": "cm",
+          "default_lambda": 0.36,
+          "min_lambda": 0.22,
+          "max_lambda": 0.55,
+          "step": 0.1,
+          "binding": {
+            "kind": "moxon_span"
+          }
+        },
+        {
+          "id": "spacing_m",
+          "label": "Расстояние DRV → REF",
+          "ui_unit": "cm",
+          "default_lambda": 0.14,
+          "min_lambda": 0.07,
+          "max_lambda": 0.28,
+          "step": 0.1,
+          "binding": {
+            "kind": "moxon_spacing"
+          }
+        },
+        {
+          "id": "end_gap_m",
+          "label": "Зазор концов",
+          "ui_unit": "cm",
+          "default_lambda": 0.03,
+          "min_lambda": 0.005,
+          "max_lambda": 0.12,
+          "step": 0.1,
+          "binding": {
+            "kind": "moxon_end_gap"
+          }
+        },
+        {
+          "id": "diameter_m",
+          "label": "Диаметр провода",
+          "ui_unit": "mm",
+          "default_lambda": 0.002,
+          "min_lambda": 0.0002,
+          "max_lambda": 0.02,
+          "step": 0.1,
+          "binding": {
+            "kind": "wire_diameter_all"
+          }
+        },
+        {
+          "id": "segments",
+          "label": "Сегментов",
+          "ui_unit": "count",
+          "default": 21,
+          "min": 3,
+          "max": 101,
+          "step": 2,
+          "binding": {
+            "kind": "wire_segments_all"
+          }
+        }
+      ],
+      "outputs": [
+        "emnx-project"
+      ],
+      "use_cases": [
+        "compact directional antenna",
+        "experimental geometry starter"
+      ]
+    },
+    {
+      "id": "lpda",
+      "label": "Логопериодическая антенна",
+      "status": "planned",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental"
+    },
+    {
+      "id": "helix",
+      "label": "Спиральная антенна",
+      "status": "planned",
+      "solver_compatibility": [
+        "wire-mom"
+      ],
+      "trust": "experimental"
+    },
+    {
+      "id": "patch",
+      "label": "Microstrip patch",
+      "status": "unsupported-current-solver",
+      "solver_compatibility": [
+        "surface/full-wave backend required"
+      ],
+      "trust": "experimental"
+    }
+  ]
+}
