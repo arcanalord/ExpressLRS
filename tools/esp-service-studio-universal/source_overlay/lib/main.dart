@@ -943,7 +943,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                       label: Text(
                         meshPreparing
                             ? 'Проверяю файл…'
-                            : 'Выбрать Mesh EP2 v0.4.0 .bin',
+                            : 'Выбрать Mesh EP2 .bin',
                       ),
                     ),
                     if (meshPrepared != null) ...[
