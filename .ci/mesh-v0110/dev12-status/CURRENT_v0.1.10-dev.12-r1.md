@@ -52,3 +52,11 @@ Physical two-board RF HIL is still required before release-candidate status.
 7. If PASS, run Test 1000.
 8. Unplug/replug USB on one side and repeat Test 100.
 9. Save result/log as RADIO_HIL_PASS only after the physical test passes.
+
+## Final CI
+Run: 36215746688
+Result: SUCCESS
+Tested head: 2d934520decc41246ddb368340b860e170ccda11
+
+Final signed APK SHA-256:
+f23831d7ae119e0761ce67c126d7affd1fdaad1e653d9a67d0c994430685c2bd
