@@ -74,6 +74,7 @@ checks = {
     'flash hash guard': 'SHA-256 firmware.bin' in probe and 'expectedSha256' in probe,
     'block ack disclaimer': 'Полный readback пока не выполнялся' in probe and 'полный readback содержимого пока не выполняется' in main,
     'generic ELRS ROM guidance': 'Для EP2' not in probe and 'ELRS оборудование' in probe,
+    'real USB error text': r'\${' not in probe,
     'one action prepare then flash': '_prepareAndFlashElrs' in main and 'Подготовить и прошить' in main,
     'no forced EP2 default': 'selected ??= p.isEmpty ? null : p.first' not in main,
 }
