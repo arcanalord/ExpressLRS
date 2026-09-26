@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter Android v0.1.10-dev.12
+name: Mesh Messenger Flutter Android v0.1.10-dev.12-r1
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          sed -i 's/^version: .*/version: 0.1.10-dev.12+26092601/' "$APP_DIR/pubspec.yaml"
+          sed -i 's/^version: .*/version: 0.1.10-dev.12-r1+26092602/' "$APP_DIR/pubspec.yaml"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
@@ -136,23 +136,23 @@ jobs:
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
           "$BT/aapt" dump badging "$APK" | tee /tmp/APK_BADGING.txt
           grep -Fq "package: name='org.fpvclub.mesh.flutter'" /tmp/APK_BADGING.txt
-          grep -Fq "versionCode='26092601'" /tmp/APK_BADGING.txt
-          grep -Fq "versionName='0.1.10-dev.12'" /tmp/APK_BADGING.txt
+          grep -Fq "versionCode='26092602'" /tmp/APK_BADGING.txt
+          grep -Fq "versionName='0.1.10-dev.12-r1'" /tmp/APK_BADGING.txt
           unzip -Z1 "$APK" > /tmp/APK_FILES.txt
           grep -Fq 'lib/arm64-v8a/' /tmp/APK_FILES.txt
           if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' /tmp/APK_FILES.txt; then
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.12-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.12-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.12.txt
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.12-r1-arm64-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.12-r1-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.12-r1.txt
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.10-dev.12-arm64-debug
+          name: MeshMessenger-Flutter-v0.1.10-dev.12-r1-arm64-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.10-dev.12-arm64-debug.apk
-            /tmp/SHA256SUM-v0.1.10-dev.12.txt
+            /tmp/MeshMessenger-Flutter-v0.1.10-dev.12-r1-arm64-debug.apk
+            /tmp/SHA256SUM-v0.1.10-dev.12-r1.txt
           if-no-files-found: error
           retention-days: 14
