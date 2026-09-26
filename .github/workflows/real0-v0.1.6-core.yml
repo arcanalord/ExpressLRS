@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - ci/real0-v0.1.7-core
+      - ci/real0-v0.1.7-phonefix
     paths:
       - 'tools/real0-tracker-lab-v0.1/**'
-      - '.github/workflows/real0-v0.1.7-core.yml'
+      - '.github/workflows/real0-v0.1.6-core.yml'
 
 permissions:
   contents: read
@@ -37,7 +37,7 @@ jobs:
           test -f "${PROJECT_DIR}/app/build.gradle"
           test -f "${PROJECT_DIR}/core/src/main/kotlin/club/fpv/real0/core/TrackerCore.kt"
           test -f "${PROJECT_DIR}/core/src/main/kotlin/club/fpv/real0/core/LockCore.kt"
-          grep -q "versionName '0.1.6'" "${PROJECT_DIR}/app/build.gradle"
+          grep -q "versionName '0.1.7'" "${PROJECT_DIR}/app/build.gradle"
           grep -q "versionCode 8" "${PROJECT_DIR}/app/build.gradle"
 
       - name: Set up JDK 17
