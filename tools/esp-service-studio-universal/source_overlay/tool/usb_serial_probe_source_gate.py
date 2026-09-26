@@ -25,8 +25,8 @@ device_profiles = Path(
 ).read_text(encoding='utf-8')
 
 checks = {
-    'visible alpha12 id': 'v0.9.0-alpha.12 · Pixel 7a' in main,
-    'android package alpha12 id': 'version: 0.9.0-alpha.12+26092612' in pubspec,
+    'visible alpha13 id': 'v0.9.0-alpha.13 · Pixel 7a' in main,
+    'android package alpha13 id': 'version: 0.9.0-alpha.13+26092713' in pubspec,
     'real probe button': 'probeEspRom' in main,
     'permission request': 'requestPermission' in native,
     'permission result': 'ACTION_USB_PERMISSION' in native,
@@ -81,6 +81,7 @@ checks = {
     'Mesh release pin': 'mesh-release-pinned' in probe and '6358bdaf6d6dd5edee3ef3e3f1f648bcec445ce80599017a172e2acfd97adadb' in probe,
     'Mesh picker': 'pickKnownMeshFirmware' in native and 'pickKnownMeshFirmware' in main,
     'Mesh recovery UI': 'Записать Mesh через USB' in main and 'Mesh Messenger' in main,
+    'Mesh post-flash verify': '_startMeshPostFlashVerification' in main and 'Проверка после прошивки: PASS' in main and 'meshFirmwareVersion' in main and 'meshBoardId' in main,
     'no forced EP2 default': 'selected ??= p.isEmpty ? null : p.first' not in main,
 }
 
