@@ -272,8 +272,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun publishFrame(bitmap: Bitmap, runTracker: Boolean) {
+    private fun publishFrame(bitmap: Bitmap, runTracker: Boolean, timestampNs: Long = 0L) {
         lastDisplayedFrame = bitmap
+        lastDisplayedTimestampNs = timestampNs
         overlay.frameW = bitmap.width; overlay.frameH = bitmap.height
         if (runTracker) lastResult = tracker.update(bitmap, timestampNs)
         runOnUiThread {
