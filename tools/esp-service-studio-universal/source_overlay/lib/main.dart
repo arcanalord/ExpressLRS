@@ -942,7 +942,9 @@ class _DynamicElrsTargetSection extends StatelessWidget {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed:
-                  regulatoryDomain == null || preparing ? null : onPrepare,
+                  regulatoryDomain == null || preparing || flashing
+                      ? null
+                      : onPrepare,
               icon: preparing
                   ? const SizedBox.square(
                       dimension: 16,
