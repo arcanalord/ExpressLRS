@@ -70,6 +70,10 @@ jobs:
         working-directory: /tmp/service_studio
         run: python3 tool/elrs_pinned_bundle_contract_test.py
 
+      - name: ESP8285 ROM protocol contract
+        working-directory: /tmp/service_studio
+        run: python3 tool/rom_protocol_contract_test.py
+
       - name: Analyze
         working-directory: /tmp/service_studio
         run: flutter analyze
