@@ -261,6 +261,90 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       'Узел ${controller.ep2LocalNode ?? '—'} · ${controller.ep2Firmware ?? '—'} · ${controller.ep2Profile ?? '—'}',
                     ),
                   ],
+                  if (controller.mmUartActive) ...[
+                    const SizedBox(height: 12),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Проверка двух радиоузлов',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              controller.radioHilTargetNode == null
+                                  ? 'На втором телефоне достаточно открыть приложение и подключить радиомодуль. Здесь выбери контакт с номером радиоузла.'
+                                  : 'Второй узел отвечает автоматически · цель: узел ${controller.radioHilTargetNode}',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                FilledButton.tonalIcon(
+                                  onPressed: controller.radioHilRunning ||
+                                          !controller.radioHilAvailable ||
+                                          controller.radioHilTargetNode == null
+                                      ? null
+                                      : () => controller.runRadioHil(100),
+                                  icon: const Icon(Icons.science_outlined),
+                                  label: const Text('Тест 100'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: controller.radioHilRunning ||
+                                          !controller.radioHilAvailable ||
+                                          controller.radioHilTargetNode == null
+                                      ? null
+                                      : () => controller.runRadioHil(1000),
+                                  icon: const Icon(Icons.speed_outlined),
+                                  label: const Text('Тест 1000'),
+                                ),
+                              ],
+                            ),
+                            if (controller.radioHilRunning) ...[
+                              const SizedBox(height: 10),
+                              LinearProgressIndicator(
+                                value: controller.radioHilTotal <= 0
+                                    ? null
+                                    : controller.radioHilDone /
+                                        controller.radioHilTotal,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Проверка ${controller.radioHilDone} / ${controller.radioHilTotal}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                            if (controller.radioHilResult?.isNotEmpty == true) ...[
+                              const SizedBox(height: 10),
+                              SelectableText(
+                                controller.radioHilResult!,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                            if (controller.radioHilError?.isNotEmpty == true) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                controller.radioHilError!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   if (controller.ep2Connected && !controller.mmUartActive) ...[
                     const SizedBox(height: 10),
                     Wrap(
