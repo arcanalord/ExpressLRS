@@ -1,0 +1,385 @@
+--- a/PROJECT_INDEX.md	2026-09-22 14:28:56.000000000 +0000
++++ b/PROJECT_INDEX.md	2026-09-24 20:29:27.000000000 +0000
+@@ -1,6 +1,6 @@
+ # EMMana-Next — PROJECT INDEX
+ 
+-**Current version:** 0.1.0-alpha.20-rev20  
++**Current version:** 0.1.0-alpha.20-rev28  
+ **Current Git branch:** `arcanalord/ExpressLRS:emmana-next-alpha20`  
+ **Source provenance:** exact Git SHA is stored in the CI source-manifest sidecar; PROJECT_INDEX intentionally does not hard-code its own commit SHA.  
+ **Project storage owner:** Dropbox `/FPV Club Research/07_Simulation_Testing/EMMana-Next`  
+@@ -10,7 +10,7 @@
+ ## Current source
+ 
+ - GitHub working source: `EMMana-Next/` on `emmana-next-alpha20`
+-- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev20-source-artifact.zip`
++- Dropbox current snapshot target: `EMMana-Next-0.1.0-alpha.20-rev28-source-artifact.zip`
+ - Older source bundles are history/evidence and are not current.
+ 
+ ## Current architecture
+@@ -219,3 +219,14 @@
+ - Windows CI launches the packaged EXE and verifies `/api/health`, exact VERSION, Geometry UI and Template UI.
+ - `emnext-cli.exe` stays in the ZIP for engineering diagnostics.
+ - No Tauri/Electron/WebView layer was introduced.
++
++
++## Rev28 — compare / tune workflow
++
++- Geometry Undo/Redo: up to 30 steps, including endpoint drag, numeric edits, wire add/delete, feed assignment, template replacement and optimizer apply.
++- Three latest saved variants are presented chronologically as A/B/C.
++- Saved snapshots retain compact S11 Sweep traces and an exact local EMNX copy.
++- Current Sweep can overlay A/B/C S11 traces with per-variant toggles.
++- B/C relative-to-A summary shows dimensional and RF deltas.
++- Open A/B/C restores exact geometry and intentionally invalidates old results until recalculation.
++- Solver physics, schemas and optimization semantics remain unchanged.
+--- a/VERSION	2026-09-24 19:56:22.000000000 +0000
++++ b/VERSION	2026-09-24 20:26:43.000000000 +0000
+@@ -1 +1 @@
+-0.1.0-alpha.20-rev27
++0.1.0-alpha.20-rev28
+--- a/apps/linux_web/static/app.css	2026-09-24 19:56:22.000000000 +0000
++++ b/apps/linux_web/static/app.css	2026-09-24 20:26:43.000000000 +0000
+@@ -74,3 +74,18 @@
+ .variant-compare-table .variant-missing{color:#6f7b8d;font-style:italic}
+ .variant-compare-note{padding:8px 9px;color:#778195;font-size:9px;border-top:1px solid #1c222c}
+ @media(max-width:650px){.sweep-cursor{font-size:9px}.variant-compare{margin-left:-2px;margin-right:-2px}}
++
++
++/* rev28: compare -> tune -> undo */
++.geometry-history-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-right:8px;margin-right:2px;border-right:1px solid #252d3a}
++.geometry-history-state{font-size:9px;color:#778195;white-space:nowrap;padding:0 3px}
++.sweep-overlays{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;color:#778195;font-size:10px}
++.sweep-overlay-chip{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:5px 9px;border:1px solid #2a3443;border-radius:999px;background:#11151b;color:#8f9bad;cursor:pointer}
++.sweep-overlay-chip.active{color:#e6edf7;border-color:#52637a;background:#171e29}
++.sweep-overlay-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--overlay-color,#8f9bad)}
++.variant-compare-table th .variant-restore{display:block;margin:5px 0 0 auto;min-height:25px;padding:4px 8px;border:1px solid #334155;border-radius:7px;background:#151b24;color:#aebbd0;font-size:9px;cursor:pointer}
++.variant-delta-list{display:grid;gap:6px;padding:9px;border-top:1px solid #1c222c}
++.variant-delta-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px;align-items:start;padding:7px 8px;border:1px solid #202632;border-radius:8px;background:#10141b;font-size:10px}
++.variant-delta-row b{color:#dce6f5}.variant-delta-row span{color:#95a3b7;line-height:1.45}
++.variant-archive-label{color:#667284;font-size:9px}
++@media(max-width:900px){.geometry-actions{align-items:flex-start}.geometry-history-actions{width:100%;border-right:0;border-bottom:1px solid #252d3a;padding:0 0 7px;margin:0 0 2px}.variant-delta-row{grid-template-columns:1fr}}
+--- a/apps/linux_web/static/app.js	2026-09-24 19:56:22.000000000 +0000
++++ b/apps/linux_web/static/app.js	2026-09-24 20:28:08.000000000 +0000
+@@ -1,5 +1,5 @@
+-const $=s=>document.querySelector(s);let kernel='reduced',lastResult=null,lastOptimizer=null,lastSweep=null,lastMeasurement=null,lastComparison=null,lastMeasurementRawText='',lastVariant=null,lastMeasurementSet=null,lastReport=null;let variantHistory=[],variantSnapshots={};
+-const els={status:$('#status'),run:$('#run'),runSweep:$('#run-sweep'),runOpt:$('#run-opt'),applyOpt:$('#apply-opt'),example:$('#example'),editor:$('#project-json'),name:$('#project-name'),meta:$('#project-meta'),zin:$('#zin'),vswr:$('#vswr'),dmax:$('#dmax'),eff:$('#eff'),accepted:$('#accepted'),radiated:$('#radiated'),dissipated:$('#dissipated'),balance:$('#balance'),diag:$('#diagnostics'),raw:$('#raw-result'),polar:$('#polar'),currents:$('#currents'),chip:$('#kernel-chip'),sweepChart:$('#sweep-chart'),sweepSummary:$('#sweep-summary'),sweepCursor:$('#sweep-cursor'),sweepStart:$('#sweep-start'),sweepStop:$('#sweep-stop'),sweepPoints:$('#sweep-points'),parallelWorkers:$('#parallel-workers'),optAlg:$('#opt-alg'),optPop:$('#opt-pop'),optGen:$('#opt-gen'),optLocal:$('#opt-local'),optSeed:$('#opt-seed'),optWMatch:$('#opt-w-match'),optWGain:$('#opt-w-gain'),optWFb:$('#opt-w-fb'),optWSize:$('#opt-w-size'),optGainGuard:$('#opt-gain-guard'),optMaxVswr:$('#opt-max-vswr'),optBandStart:$('#opt-band-start'),optBandStop:$('#opt-band-stop'),optBandPoints:$('#opt-band-points'),optQuantMm:$('#opt-quant-mm'),optTolMm:$('#opt-tol-mm'),optRobustSamples:$('#opt-robust-samples'),optMcSamples:$('#opt-mc-samples'),optSummary:$('#opt-summary'),optVariables:$('#opt-variables'),optConstraints:$('#opt-constraints'),optMetrics:$('#opt-metrics'),optPareto:$('#opt-pareto'),optChart:$('#opt-chart'),measurementFile:$('#measurement-file'),measurementCalibration:$('#measurement-calibration'),measurementReferencePlane:$('#measurement-reference-plane'),measurementImport:$('#measurement-import'),measurementCompare:$('#measurement-compare'),measurementSummary:$('#measurement-summary'),measurementDr:$('#measurement-dr'),measurementDx:$('#measurement-dx'),measurementDvswr:$('#measurement-dvswr'),measurementDs11:$('#measurement-ds11'),measurementChart:$('#measurement-chart'),measurementTableBody:$('#measurement-table-body'),measurementProvenance:$('#measurement-provenance'),variantName:$('#variant-name'),variantSave:$('#variant-save'),measurementBind:$('#measurement-bind'),reportGenerate:$('#report-generate'),reportDownload:$('#report-download'),workflowSummary:$('#workflow-summary'),variantHistory:$('#variant-history'),variantCompare:$('#variant-compare'),reportPreview:$('#report-preview'),geometryCanvas:$('#geometry-canvas'),geometrySummary:$('#geometry-summary'),geometryWireId:$('#geometry-wire-id'),geometrySx:$('#geometry-sx'),geometrySy:$('#geometry-sy'),geometrySz:$('#geometry-sz'),geometryEx:$('#geometry-ex'),geometryEy:$('#geometry-ey'),geometryEz:$('#geometry-ez'),geometryDiameter:$('#geometry-diameter'),geometrySegments:$('#geometry-segments'),geometryFeedStatus:$('#geometry-feed-status'),geometryAdd:$('#geometry-add'),geometryFeed:$('#geometry-feed'),geometryDelete:$('#geometry-delete'),geometryCheck:$('#geometry-check'),geometryTemplate:$('#geometry-template'),geometryTemplateFrequency:$('#geometry-template-frequency'),geometryTemplateCreate:$('#geometry-template-create'),geometryTemplateStatus:$('#geometry-template-status'),yagiQuickPanel:$('#yagi-quick-panel'),yagiQuickState:$('#yagi-quick-state'),yagiRefLength:$('#yagi-ref-length'),yagiDrvLength:$('#yagi-drv-length'),yagiDirLength:$('#yagi-dir-length'),yagiGap1:$('#yagi-gap-1'),yagiGap2:$('#yagi-gap-2'),yagiDiameter:$('#yagi-diameter'),yagiSegments:$('#yagi-segments'),yagiApply:$('#yagi-apply'),yagiRecalc:$('#yagi-recalc'),yagiOptimize:$('#yagi-optimize'),measurementDemo:$('#measurement-demo')};
++const $=s=>document.querySelector(s);let kernel='reduced',lastResult=null,lastOptimizer=null,lastSweep=null,lastMeasurement=null,lastComparison=null,lastMeasurementRawText='',lastVariant=null,lastMeasurementSet=null,lastReport=null;let variantHistory=[],variantSnapshots={},variantOverlayVisible={};let geometryUndoStack=[],geometryRedoStack=[];const GEOMETRY_HISTORY_LIMIT=30;
++const els={status:$('#status'),run:$('#run'),runSweep:$('#run-sweep'),runOpt:$('#run-opt'),applyOpt:$('#apply-opt'),example:$('#example'),editor:$('#project-json'),name:$('#project-name'),meta:$('#project-meta'),zin:$('#zin'),vswr:$('#vswr'),dmax:$('#dmax'),eff:$('#eff'),accepted:$('#accepted'),radiated:$('#radiated'),dissipated:$('#dissipated'),balance:$('#balance'),diag:$('#diagnostics'),raw:$('#raw-result'),polar:$('#polar'),currents:$('#currents'),chip:$('#kernel-chip'),sweepChart:$('#sweep-chart'),sweepSummary:$('#sweep-summary'),sweepCursor:$('#sweep-cursor'),sweepOverlays:$('#sweep-overlays'),sweepStart:$('#sweep-start'),sweepStop:$('#sweep-stop'),sweepPoints:$('#sweep-points'),parallelWorkers:$('#parallel-workers'),optAlg:$('#opt-alg'),optPop:$('#opt-pop'),optGen:$('#opt-gen'),optLocal:$('#opt-local'),optSeed:$('#opt-seed'),optWMatch:$('#opt-w-match'),optWGain:$('#opt-w-gain'),optWFb:$('#opt-w-fb'),optWSize:$('#opt-w-size'),optGainGuard:$('#opt-gain-guard'),optMaxVswr:$('#opt-max-vswr'),optBandStart:$('#opt-band-start'),optBandStop:$('#opt-band-stop'),optBandPoints:$('#opt-band-points'),optQuantMm:$('#opt-quant-mm'),optTolMm:$('#opt-tol-mm'),optRobustSamples:$('#opt-robust-samples'),optMcSamples:$('#opt-mc-samples'),optSummary:$('#opt-summary'),optVariables:$('#opt-variables'),optConstraints:$('#opt-constraints'),optMetrics:$('#opt-metrics'),optPareto:$('#opt-pareto'),optChart:$('#opt-chart'),measurementFile:$('#measurement-file'),measurementCalibration:$('#measurement-calibration'),measurementReferencePlane:$('#measurement-reference-plane'),measurementImport:$('#measurement-import'),measurementCompare:$('#measurement-compare'),measurementSummary:$('#measurement-summary'),measurementDr:$('#measurement-dr'),measurementDx:$('#measurement-dx'),measurementDvswr:$('#measurement-dvswr'),measurementDs11:$('#measurement-ds11'),measurementChart:$('#measurement-chart'),measurementTableBody:$('#measurement-table-body'),measurementProvenance:$('#measurement-provenance'),variantName:$('#variant-name'),variantSave:$('#variant-save'),measurementBind:$('#measurement-bind'),reportGenerate:$('#report-generate'),reportDownload:$('#report-download'),workflowSummary:$('#workflow-summary'),variantHistory:$('#variant-history'),variantCompare:$('#variant-compare'),reportPreview:$('#report-preview'),geometryCanvas:$('#geometry-canvas'),geometrySummary:$('#geometry-summary'),geometryWireId:$('#geometry-wire-id'),geometrySx:$('#geometry-sx'),geometrySy:$('#geometry-sy'),geometrySz:$('#geometry-sz'),geometryEx:$('#geometry-ex'),geometryEy:$('#geometry-ey'),geometryEz:$('#geometry-ez'),geometryDiameter:$('#geometry-diameter'),geometrySegments:$('#geometry-segments'),geometryFeedStatus:$('#geometry-feed-status'),geometryAdd:$('#geometry-add'),geometryFeed:$('#geometry-feed'),geometryDelete:$('#geometry-delete'),geometryCheck:$('#geometry-check'),geometryTemplate:$('#geometry-template'),geometryTemplateFrequency:$('#geometry-template-frequency'),geometryTemplateCreate:$('#geometry-template-create'),geometryTemplateStatus:$('#geometry-template-status'),geometryUndo:$('#geometry-undo'),geometryRedo:$('#geometry-redo'),geometryHistoryState:$('#geometry-history-state'),yagiQuickPanel:$('#yagi-quick-panel'),yagiQuickState:$('#yagi-quick-state'),yagiRefLength:$('#yagi-ref-length'),yagiDrvLength:$('#yagi-drv-length'),yagiDirLength:$('#yagi-dir-length'),yagiGap1:$('#yagi-gap-1'),yagiGap2:$('#yagi-gap-2'),yagiDiameter:$('#yagi-diameter'),yagiSegments:$('#yagi-segments'),yagiApply:$('#yagi-apply'),yagiRecalc:$('#yagi-recalc'),yagiOptimize:$('#yagi-optimize'),measurementDemo:$('#measurement-demo')};
+ function status(t,type=''){els.status.textContent=t;els.status.className='status '+type}
+ function fmt(x,n=3){return Number.isFinite(Number(x))?Number(x).toFixed(n):'—'}
+ function markResultsStale(message='модель изменена · нужно пересчитать'){
+@@ -14,7 +14,7 @@
+ async function loadReferenceStatus(){try{const r=await api('/api/reference-status');const ref=r.independent_reference||{},internal=r.internal_numerical_gates||{};const internalOk=Object.values(internal).every(x=>String(x).toLowerCase()==='pass');const necPass=String(ref.ci_status||'').toLowerCase()==='pass'||String(ref.local_status||'').toLowerCase()==='pass';const el=$('#reference-status');el.textContent=necPass?'NEC2 ПРОЙДЕН':(internalOk?'ВНУТРЕННИЕ ТЕСТЫ ПРОЙДЕНЫ · NEC2 НЕ ЗАПУЩЕН':'ТРЕБУЕТ ПРОВЕРКИ');el.className='status '+(necPass?'ok':(internalOk?'':'err'));el.title=`NEC2 local: ${ref.local_status||'unknown'} · CI: ${ref.ci_status||'unknown'}${ref.local_reason?' · '+ref.local_reason:''}`}catch(e){const el=$('#reference-status');el.textContent='СТАТУС НЕИЗВЕСТЕН';el.className='status err'}}
+ function project(){return JSON.parse(els.editor.value)}
+ function updateMeta(p){els.name.textContent=p.name||'Без имени';const lossy=(p.wires||[]).filter(w=>Number(w.conductivity_s_per_m||0)>0).length;els.meta.textContent=`${fmt((p.frequency_hz||0)/1e6,3)} MHz · проводов ${p.wires?.length||0} · питание ${p.feeds?.length||0} · нагрузок ${p.loads?.length||0} · потерь в проводах ${lossy} · переменных ${p.design_variables?.length||0}`;renderVariables(p);}
+-async function loadExample(){const name=els.example.value;if(!name)return;const p=await api('/api/example/'+encodeURIComponent(name));els.editor.value=JSON.stringify(p,null,2);updateMeta(p);const mhz=(p.frequency_hz||0)/1e6;if(mhz>0){els.sweepStart.value=(mhz*.9).toFixed(3);els.sweepStop.value=(mhz*1.1).toFixed(3);els.optBandStart.value=(mhz*.99).toFixed(3);els.optBandStop.value=(mhz*1.01).toFixed(3)}markResultsStale('модель загружена · нажмите «Рассчитать»')}
++async function loadExample(){const name=els.example.value;if(!name)return;const p=await api('/api/example/'+encodeURIComponent(name));els.editor.value=JSON.stringify(p,null,2);resetGeometryHistory();updateMeta(p);const mhz=(p.frequency_hz||0)/1e6;if(mhz>0){els.sweepStart.value=(mhz*.9).toFixed(3);els.sweepStop.value=(mhz*1.1).toFixed(3);els.optBandStart.value=(mhz*.99).toFixed(3);els.optBandStop.value=(mhz*1.01).toFixed(3)}markResultsStale('модель загружена · нажмите «Рассчитать»')}
+ function cpx(z){if(!z)return '—';return `${fmt(z.re,3)} ${Number(z.im)>=0?'+':'−'} j${fmt(Math.abs(z.im),3)}`}
+ function drawPolar(result){const c=els.polar,ctx=c.getContext('2d'),W=c.width,H=c.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#0b0d11';ctx.fillRect(0,0,W,H);const cx=W/2,cy=H/2,r=Math.min(W,H)*.41;ctx.strokeStyle='#202735';ctx.lineWidth=1;for(let k=1;k<=4;k++){ctx.beginPath();ctx.arc(cx,cy,r*k/4,0,Math.PI*2);ctx.stroke()}ctx.beginPath();ctx.moveTo(cx-r,cy);ctx.lineTo(cx+r,cy);ctx.moveTo(cx,cy-r);ctx.lineTo(cx,cy+r);ctx.stroke();const pts=(result.pattern||[]).filter(p=>Math.abs(p.phi_rad)<1e-8).sort((a,b)=>a.theta_rad-b.theta_rad);const max=Math.max(...pts.map(p=>p.directivity_linear),1e-12);if(!pts.length)return;ctx.strokeStyle='#5ba0ff';ctx.lineWidth=3;ctx.beginPath();pts.forEach((p,i)=>{const ang=p.theta_rad-Math.PI/2,rr=r*Math.sqrt(Math.max(0,p.directivity_linear/max)),x=cx+rr*Math.cos(ang),y=cy+rr*Math.sin(ang);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});for(let i=pts.length-1;i>=0;i--){const p=pts[i],ang=-(p.theta_rad-Math.PI/2)+Math.PI,rr=r*Math.sqrt(Math.max(0,p.directivity_linear/max)),x=cx+rr*Math.cos(ang),y=cy+rr*Math.sin(ang);ctx.lineTo(x,y)}ctx.closePath();ctx.globalAlpha=.18;ctx.fillStyle='#3b82f6';ctx.fill();ctx.globalAlpha=1;ctx.stroke();ctx.fillStyle='#798499';ctx.font='12px system-ui';ctx.fillText('0°',cx-8,cy-r-8);ctx.fillText('90°',cx+r+8,cy+4);ctx.fillText('180°',cx-14,cy+r+18)}
+ function drawCurrents(result){const c=els.currents,ctx=c.getContext('2d'),W=c.width,H=c.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#0b0d11';ctx.fillRect(0,0,W,H);const vals=(result.segment_currents_a||[]).map(z=>Math.hypot(z.re,z.im));if(!vals.length)return;const m=Math.max(...vals,1e-12),pad=35,bw=(W-2*pad)/vals.length;ctx.strokeStyle='#202735';for(let k=0;k<=4;k++){const y=pad+(H-2*pad)*k/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke()}ctx.fillStyle='#5ba0ff';vals.forEach((v,i)=>{const h=(H-2*pad)*v/m;ctx.fillRect(pad+i*bw,H-pad-h,Math.max(1,bw*.72),h)});ctx.fillStyle='#798499';ctx.font='12px system-ui';ctx.fillText(`max |I| = ${m.toExponential(3)} A`,pad,20);ctx.fillText(`${vals.length} сегм.`,W-130,H-12)}
+@@ -24,22 +24,36 @@
+   const z=p.impedance_ohm||{};
+   return `${fmt(Number(p.frequency_hz)/1e6,3)} МГц · S11 ${fmt(s11db(p.s11),2)} dB · КСВ ${fmt(p.vswr,3)} · R ${fmt(z.re,2)} Ω · X ${fmt(z.im,2)} Ω · D ${fmt(p.dmax_dbi,2)} dBi`;
+ }
++function comparisonVariantRows(){
++  const recent=variantHistory.slice(0,3).map((v,index)=>({v,index})).reverse();
++  return recent.map((row,i)=>({...row,label:String.fromCharCode(65+i),snapshot:variantSnapshots[row.v.immutability?.fingerprint]||null}));
++}
++function sweepOverlayRows(){
++  return comparisonVariantRows().filter(r=>r.snapshot?.sweep?.samples?.length).map(r=>{const fp=r.v.immutability?.fingerprint;if(!(fp in variantOverlayVisible))variantOverlayVisible[fp]=true;return {...r,visible:variantOverlayVisible[fp]!==false}})
++}
++function renderSweepOverlayControls(){
++  if(!els.sweepOverlays)return;const rows=sweepOverlayRows();
++  if(!rows.length){els.sweepOverlays.innerHTML='<span>Наложение A/B/C появится после сохранения рассчитанных вариантов.</span>';return}
++  const colors=['#ffbd59','#d68cff','#ff7d7d'];
++  els.sweepOverlays.innerHTML='<span>Наложение S11:</span>'+rows.map((r,i)=>`<button type="button" class="sweep-overlay-chip${r.visible?' active':''}" data-sweep-overlay="${escapeHtml(r.v.immutability.fingerprint)}" style="--overlay-color:${colors[i%colors.length]}"><span class="sweep-overlay-dot"></span>${r.label} · ${escapeHtml(r.v.name||r.v.variant_id)}</button>`).join('');
++  els.sweepOverlays.querySelectorAll('[data-sweep-overlay]').forEach(b=>b.onclick=()=>{const fp=b.dataset.sweepOverlay;variantOverlayVisible[fp]=variantOverlayVisible[fp]===false;renderSweepOverlayControls();if(lastSweep)drawSweep(lastSweep)});
++}
+ function drawSweep(sw,hoverIndex=null){
+   const c=els.sweepChart,ctx=c.getContext('2d'),W=c.width,H=c.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#0b0d11';ctx.fillRect(0,0,W,H);
+   const pts=sw?.samples||[];if(pts.length<2)return;
++  const overlays=sweepOverlayRows().filter(r=>r.visible),overlayColors=['#ffbd59','#d68cff','#ff7d7d'];
+   const padL=64,padR=64,padT=34,padB=42,x0=pts[0].frequency_hz,x1=pts[pts.length-1].frequency_hz;
+-  const dbs=pts.map(p=>s11db(p.s11)),vs=pts.map(p=>Math.min(Number(p.vswr||1),10));let yDbMin=Math.min(-10,...dbs),yDbMax=0;if(yDbMin<-60)yDbMin=-60;
++  const dbs=pts.map(p=>s11db(p.s11)),vs=pts.map(p=>Math.min(Number(p.vswr||1),10)),overlayDbs=overlays.flatMap(r=>(r.snapshot.sweep.samples||[]).map(p=>s11db(p.s11)).filter(Number.isFinite));let yDbMin=Math.min(-10,...dbs,...overlayDbs),yDbMax=0;if(yDbMin<-60)yDbMin=-60;
+   const X=f=>padL+(W-padL-padR)*(f-x0)/(x1-x0||1),Ydb=d=>padT+(H-padT-padB)*(yDbMax-d)/(yDbMax-yDbMin||1),Yv=v=>padT+(H-padT-padB)*(v-1)/9;
+   ctx.strokeStyle='#202735';ctx.lineWidth=1;for(let k=0;k<=5;k++){const y=padT+(H-padT-padB)*k/5;ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(W-padR,y);ctx.stroke()}for(let k=0;k<=6;k++){const x=padL+(W-padL-padR)*k/6;ctx.beginPath();ctx.moveTo(x,padT);ctx.lineTo(x,H-padB);ctx.stroke()}
+   if(yDbMin<=-10){ctx.strokeStyle='#344154';ctx.setLineDash([3,4]);ctx.beginPath();ctx.moveTo(padL,Ydb(-10));ctx.lineTo(W-padR,Ydb(-10));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#6f7b8d';ctx.font='10px system-ui';ctx.fillText('−10 dB',8,Ydb(-10)+3)}
++  overlays.forEach((r,i)=>{const samples=(r.snapshot.sweep.samples||[]).filter(p=>Number(p.frequency_hz)>=x0&&Number(p.frequency_hz)<=x1);if(samples.length<2)return;ctx.strokeStyle=overlayColors[i%overlayColors.length];ctx.lineWidth=1.8;ctx.setLineDash([7,5]);ctx.beginPath();samples.forEach((p,k)=>{const x=X(Number(p.frequency_hz)),y=Ydb(s11db(p.s11));k?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=overlayColors[i%overlayColors.length];ctx.font='10px system-ui';ctx.fillText(r.label,padL+250+i*32,padT-14)});
+   ctx.strokeStyle='#5ba0ff';ctx.lineWidth=3;ctx.beginPath();pts.forEach((p,i)=>{const x=X(p.frequency_hz),y=Ydb(dbs[i]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
+   ctx.strokeStyle='#43d17c';ctx.lineWidth=2;ctx.beginPath();pts.forEach((p,i)=>{const x=X(p.frequency_hz),y=Yv(vs[i]);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
+   const marker=(f,color,dash,label,slot)=>{if(!(Number(f)>=x0&&Number(f)<=x1))return;const x=X(Number(f));ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(x,padT);ctx.lineTo(x,H-padB);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=color;ctx.font='10px system-ui';ctx.fillText(label,padL+slot,padT-14)};
+   let workingHz=NaN;try{workingHz=Number(project().frequency_hz)}catch{}
+-  marker(workingHz,'#d6deea',[2,3],'рабочая',0);
+-  marker(sw.resonance_frequency_hz,'#ffbd59',[6,5],'резонанс',78);
+-  marker(sw.min_s11_frequency_hz,'#d68cff',[3,3],'мин. S11',162);
+-  ctx.fillStyle='#798499';ctx.font='12px system-ui';ctx.fillText(`${(x0/1e6).toFixed(1)} МГц`,padL,H-15);ctx.fillText(`${(x1/1e6).toFixed(1)} МГц`,W-padR-70,H-15);ctx.fillStyle='#5ba0ff';ctx.fillText('S11 dB',padL,H-2);ctx.fillStyle='#43d17c';ctx.fillText('КСВ 1…10',padL+75,H-2);
++  marker(workingHz,'#d6deea',[2,3],'рабочая',0);marker(sw.resonance_frequency_hz,'#ffbd59',[6,5],'резонанс',78);marker(sw.min_s11_frequency_hz,'#d68cff',[3,3],'мин. S11',162);
++  ctx.fillStyle='#798499';ctx.font='12px system-ui';ctx.fillText(`${(x0/1e6).toFixed(1)} МГц`,padL,H-15);ctx.fillText(`${(x1/1e6).toFixed(1)} МГц`,W-padR-70,H-15);ctx.fillStyle='#5ba0ff';ctx.fillText('S11 текущий',padL,H-2);ctx.fillStyle='#43d17c';ctx.fillText('КСВ 1…10',padL+105,H-2);
+   if(Number.isInteger(hoverIndex)&&hoverIndex>=0&&hoverIndex<pts.length){const p=pts[hoverIndex],x=X(p.frequency_hz),yd=Ydb(dbs[hoverIndex]),yv=Yv(vs[hoverIndex]);ctx.strokeStyle='#e6edf7';ctx.lineWidth=1;ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(x,padT);ctx.lineTo(x,H-padB);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='#5ba0ff';ctx.beginPath();ctx.arc(x,yd,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='#43d17c';ctx.beginPath();ctx.arc(x,yv,3.5,0,Math.PI*2);ctx.fill()}
+ }
+ function initSweepInteractions(){
+@@ -53,7 +67,7 @@
+ function renderPareto(opt){const featured=opt.featured_candidates||[];els.optPareto.classList.toggle('muted',!featured.length);if(!featured.length){els.optPareto.textContent='Pareto-кандидатов нет.';return}els.optPareto.innerHTML=featured.map((x,i)=>`<button class="pareto-card" data-pareto="${i}"><b>${x.label}</b><small>${candidateRows(x.candidate)}</small></button>`).join('')+`<div class="objective-note">Pareto front: ${(opt.pareto_front||[]).length} вариантов</div>`;els.optPareto.querySelectorAll('[data-pareto]').forEach(b=>b.onclick=()=>{const x=featured[Number(b.dataset.pareto)];if(x)applyCandidate(x.candidate,x.label)})}
+ function showOptimizer(opt,cacheHit=false){lastOptimizer=opt;const a=opt.initial.metrics,b=opt.best.metrics,w=opt.weights||{};const band=Number(opt.band_points)>1?`${fmt(opt.band_start_hz/1e6,2)}…${fmt(opt.band_stop_hz/1e6,2)} MHz / ${opt.band_points}`:`single ${fmt(opt.band_start_hz/1e6,3)} MHz`;els.optSummary.textContent=`${opt.algorithm} · score ${fmt(a.score,4)} → ${fmt(b.score,4)} · ${band} · Pareto ${(opt.pareto_front||[]).length} · eval ${opt.evaluations}${cacheHit?' · cache':''}`;const feasibility=b.feasible?'OK':`VIOLATIONS ${b.violated_constraints}`;const violations=(opt.best.constraint_violations||[]).map(v=>[`⚠ ${v.id}`,fmt(v.amount,5)]);const audit=opt.tolerance_audit,ra=opt.robust_tolerance_audit,rb=opt.robust_best,mc=opt.monte_carlo_audit,bn=opt.best_nominal?.metrics;const auditRows=[...(audit?[['Axis tolerance',`${audit.passes_guardrails?'PASS':'FAIL'} · ±${fmt(1000*audit.tolerance_m,2)} mm · ${audit.stress_cases} cases`],['Tol worst VSWR',`${fmt(audit.worst_case.vswr,3)} @ ${fmt(audit.worst_case.worst_vswr_frequency_hz/1e6,2)} MHz`],['Tol min Gain',`${fmt(audit.worst_case.forward_gain_dbi,2)} dBi @ ${fmt(audit.worst_case.min_gain_frequency_hz/1e6,2)} MHz`]]:[]),...(mc?[['Monte Carlo',`${fmt(100*mc.pass_fraction,1)}% PASS · ${mc.passing_samples}/${mc.samples}`],['MC p95 VSWR',fmt(mc.p95_vswr,3)],['MC p05 Gain',`${fmt(mc.p05_gain_dbi,2)} dBi`],['MC p05 F/B',`${fmt(mc.p05_front_to_back_db,2)} dB`]]:[]),...(bn?[['Nominal best',`VSWR ${fmt(bn.vswr,3)} · Gain ${fmt(bn.forward_gain_dbi,2)} dBi · F/B ${fmt(bn.front_to_back_db,2)} dB`]]:[]),...(rb&&ra?[['Robust balanced',`score ${fmt(rb.metrics.score,4)} · ${ra.passes_guardrails?'PASS':'FAIL'}`],['Robust values',rb.values.map(v=>`${v.id}=${fmt(v.value,3)}`).join(' · ')]]:[])];els.optMetrics.classList.remove('muted');els.optMetrics.innerHTML=[['Feasible',feasibility],['Band',band],['Manufacturing',`grid ${fmt(1000*opt.quantization_step_m,2)} mm · tol ±${fmt(1000*opt.manufacturing_tolerance_m,2)} mm · robust ${opt.robust_objective_samples||0} · MC ${opt.monte_carlo_samples||0}`],['Weights',`${fmt(100*w.match,0)}/${fmt(100*w.gain,0)}/${fmt(100*w.front_to_back,0)}/${fmt(100*w.size,0)}`],['Guardrail',`gain −${fmt(opt.gain_guardrail_db,2)} dB · VSWR ≤ ${fmt(opt.max_vswr,2)}`],['Worst VSWR',`${fmt(a.vswr,3)} → ${fmt(b.vswr,3)} @ ${fmt(b.worst_vswr_frequency_hz/1e6,2)} MHz`],['Min Gain +X',`${fmt(a.forward_gain_dbi,2)} → ${fmt(b.forward_gain_dbi,2)} dBi @ ${fmt(b.min_gain_frequency_hz/1e6,2)} MHz`],['Min F/B',`${fmt(a.front_to_back_db,2)} → ${fmt(b.front_to_back_db,2)} dB @ ${fmt(b.min_front_to_back_frequency_hz/1e6,2)} MHz`],['Boom',`${fmt(a.boom_length_m,3)} → ${fmt(b.boom_length_m,3)} m`],...auditRows,...violations,...opt.best.values.map(v=>[v.id,fmt(v.value,6)])].map(([k,v])=>`<div class="opt-row"><span>${k}</span><b>${v}</b></div>`).join('');els.applyOpt.hidden=!(rb?.metrics?.feasible||b.feasible);els.applyOpt.textContent=rb?'Применить robust-balanced':'Применить balanced';renderPareto(opt);drawOpt(opt)}
+ async function runOptimize(){setWorkspaceView('optimize');try{const p=project();updateMeta(p);if(!(p.design_variables||[]).length)throw new Error('В проекте нет design_variables');const parallel_workers=Number(els.parallelWorkers.value);if(!(parallel_workers>=1&&parallel_workers<=16))throw new Error('Потоки: 1…16');const population=Number(els.optPop.value),generations=Number(els.optGen.value),local_iterations=Number(els.optLocal.value),seed=Number(els.optSeed.value),algorithm=els.optAlg.value;const weights={match:Number(els.optWMatch.value),gain:Number(els.optWGain.value),front_to_back:Number(els.optWFb.value),size:Number(els.optWSize.value)};const gain_guardrail_db=Number(els.optGainGuard.value),max_vswr=Number(els.optMaxVswr.value),band_points=Number(els.optBandPoints.value),band_start_hz=Number(els.optBandStart.value)*1e6,band_stop_hz=Number(els.optBandStop.value)*1e6,quantization_step_m=Number(els.optQuantMm.value)/1000,manufacturing_tolerance_m=Number(els.optTolMm.value)/1000,robust_objective_samples=Number(els.optRobustSamples.value),monte_carlo_samples=Number(els.optMcSamples.value);if(Object.values(weights).some(x=>x<0)||Object.values(weights).reduce((a,b)=>a+b,0)<=0)throw new Error('Вес хотя бы одной цели должен быть > 0');if(!(band_points>=1&&band_points<=11))throw new Error('Band points: 1…11');if(band_points>1&&!(band_start_hz>0&&band_stop_hz>band_start_hz))throw new Error('Проверь диапазон optimizer band');if(!(robust_objective_samples>=0&&robust_objective_samples<=16))throw new Error('Robust samples: 0…16');if(!(monte_carlo_samples>=0&&monte_carlo_samples<=128))throw new Error('Monte Carlo: 0…128');if((robust_objective_samples>0||monte_carlo_samples>0)&&!(manufacturing_tolerance_m>0))throw new Error('Для robust/Monte Carlo нужен допуск > 0');els.runOpt.disabled=true;status('optimizer…');const j=await api('/api/optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,kernel,population,generations,local_iterations,seed,algorithm,weights,gain_guardrail_db,max_vswr,band_start_hz,band_stop_hz,band_points,quantization_step_m,manufacturing_tolerance_m,robust_objective_samples,monte_carlo_samples,parallel_workers})});showOptimizer(j.optimizer,j.cache_hit);status(j.cache_hit?'optimizer из кэша':'optimizer завершён','ok')}catch(e){status('ошибка optimizer','err');els.diag.textContent=String(e.message||e)}finally{els.runOpt.disabled=false}}
+-async function applyCandidate(candidate,label='вариант'){if(!candidate)return;try{els.applyOpt.disabled=true;const p=project(),map=new Map((candidate.values||[]).map(v=>[v.id,Number(v.value)]));for(const dv of p.design_variables||[]){if(!map.has(dv.id))continue;const w=(p.wires||[]).find(x=>x.id===dv.wire_id);if(!w)continue;const value=map.get(dv.id),a=w.start_m,b=w.end_m;if(dv.kind==='wire_center_x_m'){const mid=(a[0]+b[0])/2,dx=value-mid;a[0]+=dx;b[0]+=dx}else if(dv.kind==='wire_length_m'){const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],old=Math.hypot(dx,dy,dz),ux=dx/old,uy=dy/old,uz=dz/old,mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,mz=(a[2]+b[2])/2,h=value/2;w.start_m=[mx-ux*h,my-uy*h,mz-uz*h];w.end_m=[mx+ux*h,my+uy*h,mz+uz*h]}}els.editor.value=JSON.stringify(p,null,2);updateMeta(p);status(`${label} применён · контрольный solve…`);await run();status('контрольный sweep…');await runSweep();status(`${label} применён и перепроверен`,'ok')}catch(e){status('ошибка применения','err');els.diag.textContent=String(e.message||e)}finally{els.applyOpt.disabled=false}}
++async function applyCandidate(candidate,label='вариант'){if(!candidate)return;try{els.applyOpt.disabled=true;const beforeText=els.editor.value,p=project(),map=new Map((candidate.values||[]).map(v=>[v.id,Number(v.value)]));for(const dv of p.design_variables||[]){if(!map.has(dv.id))continue;const w=(p.wires||[]).find(x=>x.id===dv.wire_id);if(!w)continue;const value=map.get(dv.id),a=w.start_m,b=w.end_m;if(dv.kind==='wire_center_x_m'){const mid=(a[0]+b[0])/2,dx=value-mid;a[0]+=dx;b[0]+=dx}else if(dv.kind==='wire_length_m'){const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],old=Math.hypot(dx,dy,dz),ux=dx/old,uy=dy/old,uz=dz/old,mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,mz=(a[2]+b[2])/2,h=value/2;w.start_m=[mx-ux*h,my-uy*h,mz-uz*h];w.end_m=[mx+ux*h,my+uy*h,mz+uz*h]}}geometryCommit(p,`${label} применён`,beforeText);status(`${label} применён · контрольный solve…`);await run();status('контрольный sweep…');await runSweep();status(`${label} применён и перепроверен`,'ok')}catch(e){status('ошибка применения','err');els.diag.textContent=String(e.message||e)}finally{els.applyOpt.disabled=false}}
+ async function applyBest(){if(lastOptimizer){const c=lastOptimizer.robust_best||lastOptimizer.best;await applyCandidate(c,lastOptimizer.robust_best?'robust-balanced':'balanced')}}
+ async function runSweep(){setWorkspaceView('solve');try{const p=project();updateMeta(p);const startHz=Number(els.sweepStart.value)*1e6,stopHz=Number(els.sweepStop.value)*1e6,points=Number(els.sweepPoints.value),parallel_workers=Number(els.parallelWorkers.value);if(!(parallel_workers>=1&&parallel_workers<=16))throw new Error('Потоки: 1…16');if(!(startHz>0&&stopHz>=startHz&&points>=2))throw new Error('Проверь диапазон частотного расчёта');els.runSweep.disabled=true;status('частотный расчёт…');const j=await api('/api/sweep',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,kernel,start_hz:startHz,stop_hz:stopHz,points,parallel_workers})});const sw=j.sweep;lastSweep=sw;drawSweep(sw);if(els.sweepCursor)els.sweepCursor.textContent='Наведите на график: частота · S11 · КСВ · R/X';if(lastMeasurement)els.measurementCompare.disabled=false;els.sweepSummary.textContent=`резонанс ${fmt(sw.resonance_frequency_hz/1e6,3)} MHz · мин. S11 ${fmt(sw.min_s11_db,2)} dB @ ${fmt(sw.min_s11_frequency_hz/1e6,3)} MHz · полоса −10 dB ${fmt(sw.bandwidth_10db_hz/1e6,3)} MHz · потоков ${sw.execution_workers}${j.cache_hit?' · кэш':''}`;status(j.cache_hit?'частотный расчёт из кэша':'частотный расчёт завершён','ok')}catch(e){status('ошибка частотного расчёта','err');els.diag.textContent=String(e.message||e)}finally{els.runSweep.disabled=false}}
+ 
+@@ -123,29 +137,44 @@
+ function loadVariantHistory(){
+   try{const rows=JSON.parse(localStorage.getItem(VARIANT_STORAGE_KEY)||'[]');variantHistory=Array.isArray(rows)?rows.filter(x=>x&&x.variant_id&&x.immutability?.fingerprint).slice(0,8):[]}catch{variantHistory=[]}
+   try{const rows=JSON.parse(localStorage.getItem(VARIANT_SNAPSHOT_STORAGE_KEY)||'{}');variantSnapshots=rows&&typeof rows==='object'&&!Array.isArray(rows)?rows:{}}catch{variantSnapshots={}}
+-  renderVariantHistory();renderVariantComparison()
++  renderVariantHistory();renderVariantComparison();renderSweepOverlayControls()
+ }
+ function persistVariantHistory(){try{localStorage.setItem(VARIANT_STORAGE_KEY,JSON.stringify(variantHistory.slice(0,8)));localStorage.setItem(VARIANT_SNAPSHOT_STORAGE_KEY,JSON.stringify(variantSnapshots))}catch{}}
++function compactSweep(sw){return sw?{resonance_frequency_hz:Number(sw.resonance_frequency_hz),min_s11_frequency_hz:Number(sw.min_s11_frequency_hz),min_s11_db:Number(sw.min_s11_db),bandwidth_10db_hz:Number(sw.bandwidth_10db_hz),samples:(sw.samples||[]).map(p=>({frequency_hz:Number(p.frequency_hz),s11:{re:Number(p.s11?.re||0),im:Number(p.s11?.im||0)},vswr:Number(p.vswr),dmax_dbi:Number(p.dmax_dbi)}))}:null}
+ function captureVariantSnapshot(p,v){
+   const hash=v?.model_ref?.model_hash||'',resultOk=!!(lastResult&&lastResult.model_hash===hash),sweepOk=!!(lastSweep&&lastSweep.source_model_hash===hash),f=resultOk?lastResult.feeds?.[0]:null;
+   const ref=yagiWire(p,'REF'),drv=yagiWire(p,'DRV'),dir=yagiWire(p,'DIR1'),yagi=ref&&drv&&dir?{ref_cm:100*yagiWireLength(ref),drv_cm:100*yagiWireLength(drv),dir_cm:100*yagiWireLength(dir),gap1_cm:100*(yagiCenterX(drv)-yagiCenterX(ref)),gap2_cm:100*(yagiCenterX(dir)-yagiCenterX(drv))}:null;
+-  return {captured_at:new Date().toISOString(),model_hash:hash,frequency_hz:Number(p.frequency_hz||0),result:resultOk?{r_ohm:Number(f?.impedance_ohm?.re),x_ohm:Number(f?.impedance_ohm?.im),vswr:Number(f?.vswr),dmax_dbi:Number(lastResult.summary?.dmax_dbi),efficiency:Number(lastResult.efficiency)}:null,sweep:sweepOk?{resonance_frequency_hz:Number(lastSweep.resonance_frequency_hz),min_s11_frequency_hz:Number(lastSweep.min_s11_frequency_hz),min_s11_db:Number(lastSweep.min_s11_db),bandwidth_10db_hz:Number(lastSweep.bandwidth_10db_hz)}:null,yagi};
++  return {captured_at:new Date().toISOString(),model_hash:hash,frequency_hz:Number(p.frequency_hz||0),project:JSON.parse(JSON.stringify(p)),result:resultOk?{r_ohm:Number(f?.impedance_ohm?.re),x_ohm:Number(f?.impedance_ohm?.im),vswr:Number(f?.vswr),dmax_dbi:Number(lastResult.summary?.dmax_dbi),efficiency:Number(lastResult.efficiency)}:null,sweep:sweepOk?compactSweep(lastSweep):null,yagi};
+ }
+ function snapshotValue(s,path,n=2){let v=s;for(const k of path.split('.'))v=v?.[k];return Number.isFinite(Number(v))?Number(v).toFixed(n):'—'}
++function signed(v,n=2,suffix=''){const x=Number(v);if(!Number.isFinite(x))return '—';return `${x>0?'+':''}${x.toFixed(n)}${suffix}`}
++function variantDeltaSummary(base,row){
++  const a=base?.snapshot,b=row?.snapshot;if(!a||!b)return 'нет полного снимка для сравнения';const parts=[];
++  if(a.yagi&&b.yagi){parts.push(`DIR ${signed((b.yagi.dir_cm-a.yagi.dir_cm)*10,1,' мм')}`);parts.push(`DRV→DIR ${signed((b.yagi.gap2_cm-a.yagi.gap2_cm)*10,1,' мм')}`)}
++  if(Number.isFinite(a.result?.vswr)&&Number.isFinite(b.result?.vswr))parts.push(`КСВ ${a.result.vswr.toFixed(2)}→${b.result.vswr.toFixed(2)} (${signed(b.result.vswr-a.result.vswr,2)})`);
++  if(Number.isFinite(a.result?.dmax_dbi)&&Number.isFinite(b.result?.dmax_dbi))parts.push(`Dmax ${signed(b.result.dmax_dbi-a.result.dmax_dbi,2,' dB')}`);
++  if(Number.isFinite(a.sweep?.resonance_frequency_hz)&&Number.isFinite(b.sweep?.resonance_frequency_hz))parts.push(`резонанс ${signed((b.sweep.resonance_frequency_hz-a.sweep.resonance_frequency_hz)/1e6,3,' МГц')}`);
++  if(Number.isFinite(a.sweep?.min_s11_db)&&Number.isFinite(b.sweep?.min_s11_db))parts.push(`мин. S11 ${signed(b.sweep.min_s11_db-a.sweep.min_s11_db,2,' dB')}`);
++  return parts.length?parts.join(' · '):'показатели ещё не рассчитаны';
++}
++function restoreVariantSnapshot(fp,label='вариант'){
++  try{const snap=variantSnapshots[fp];if(!snap?.project)throw new Error('В этом старом снимке нет геометрии для восстановления');geometryRecordUndo(els.editor.value);const text=JSON.stringify(snap.project,null,2);els.editor.value=text;selectedWireId=snap.project.wires?.[0]?.id||null;updateMeta(snap.project);markResultsStale(`${label} восстановлен · нужно пересчитать`);setWorkspaceView('geometry');status(`${label} восстановлен · нажмите «Рассчитать изменения»`,'ok')}catch(e){status('не удалось восстановить вариант','err');els.diag.textContent=String(e.message||e)}
++}
+ function renderVariantComparison(){
+-  if(!els.variantCompare)return;const rows=variantHistory.slice(0,3);if(!rows.length){els.variantCompare.className='variant-compare muted';els.variantCompare.textContent='Сохраните рассчитанные варианты — здесь появится сравнение.';return}
+-  els.variantCompare.className='variant-compare';const cols=rows.map((v,i)=>({v,s:variantSnapshots[v.immutability?.fingerprint]||null,l:String.fromCharCode(65+i)}));
+-  const cell=(c,fn,missing='—')=>c.s?fn(c.s):`<span class="variant-missing">${missing}</span>`;
++  if(!els.variantCompare)return;const rows=comparisonVariantRows();if(!rows.length){els.variantCompare.className='variant-compare muted';els.variantCompare.textContent='Сохраните рассчитанные варианты — здесь появится сравнение.';renderSweepOverlayControls();return}
++  els.variantCompare.className='variant-compare';const cols=rows;
++  const cell=(c,fn,missing='—')=>c.snapshot?fn(c.snapshot):`<span class="variant-missing">${missing}</span>`;
+   const tr=(label,fn)=>`<tr><td>${label}</td>${cols.map(c=>`<td>${cell(c,fn)}</td>`).join('')}</tr>`;
+-  els.variantCompare.innerHTML=`<table class="variant-compare-table"><thead><tr><th>Параметр</th>${cols.map(c=>`<th class="variant-col">${c.l} · ${escapeHtml(c.v.name||c.v.variant_id)}</th>`).join('')}</tr></thead><tbody>${tr('Zin, Ω',s=>s.result?`${snapshotValue(s,'result.r_ohm')} ${Number(s.result.x_ohm)>=0?'+':'−'} j${snapshotValue({v:Math.abs(Number(s.result.x_ohm))},'v')}`:'—')}${tr('КСВ',s=>snapshotValue(s,'result.vswr',3))}${tr('Dmax, dBi',s=>snapshotValue(s,'result.dmax_dbi',2))}${tr('Резонанс, МГц',s=>Number.isFinite(Number(s.sweep?.resonance_frequency_hz))?(Number(s.sweep.resonance_frequency_hz)/1e6).toFixed(3):'—')}${tr('Мин. S11, dB',s=>snapshotValue(s,'sweep.min_s11_db',2))}${tr('Полоса −10 dB, МГц',s=>Number.isFinite(Number(s.sweep?.bandwidth_10db_hz))?(Number(s.sweep.bandwidth_10db_hz)/1e6).toFixed(3):'—')}${tr('REF / DRV / DIR, см',s=>s.yagi?`${s.yagi.ref_cm.toFixed(1)} / ${s.yagi.drv_cm.toFixed(1)} / ${s.yagi.dir_cm.toFixed(1)}`:'—')}${tr('Зазоры, см',s=>s.yagi?`${s.yagi.gap1_cm.toFixed(1)} / ${s.yagi.gap2_cm.toFixed(1)}`:'—')}</tbody></table><div class="variant-compare-note">Снимок сохраняется только для результата, чей model hash совпадает с вариантом. Старые или нерассчитанные данные не подставляются.</div>`;
++  const deltas=cols.length>1?`<div class="variant-delta-list">${cols.slice(1).map(c=>`<div class="variant-delta-row"><b>${c.label} относительно A</b><span>${escapeHtml(variantDeltaSummary(cols[0],c))}</span></div>`).join('')}</div>`:'';
++  els.variantCompare.innerHTML=`<table class="variant-compare-table"><thead><tr><th>Параметр</th>${cols.map(c=>`<th class="variant-col">${c.label} · ${escapeHtml(c.v.name||c.v.variant_id)}${c.snapshot?.project?`<button type="button" class="variant-restore" data-variant-restore="${escapeHtml(c.v.immutability.fingerprint)}">Открыть ${c.label}</button>`:''}</th>`).join('')}</tr></thead><tbody>${tr('Zin, Ω',s=>s.result?`${snapshotValue(s,'result.r_ohm')} ${Number(s.result.x_ohm)>=0?'+':'−'} j${snapshotValue({v:Math.abs(Number(s.result.x_ohm))},'v')}`:'—')}${tr('КСВ',s=>snapshotValue(s,'result.vswr',3))}${tr('Dmax, dBi',s=>snapshotValue(s,'result.dmax_dbi',2))}${tr('Резонанс, МГц',s=>Number.isFinite(Number(s.sweep?.resonance_frequency_hz))?(Number(s.sweep.resonance_frequency_hz)/1e6).toFixed(3):'—')}${tr('Мин. S11, dB',s=>snapshotValue(s,'sweep.min_s11_db',2))}${tr('Полоса −10 dB, МГц',s=>Number.isFinite(Number(s.sweep?.bandwidth_10db_hz))?(Number(s.sweep.bandwidth_10db_hz)/1e6).toFixed(3):'—')}${tr('REF / DRV / DIR, см',s=>s.yagi?`${s.yagi.ref_cm.toFixed(1)} / ${s.yagi.drv_cm.toFixed(1)} / ${s.yagi.dir_cm.toFixed(1)}`:'—')}${tr('Зазоры, см',s=>s.yagi?`${s.yagi.gap1_cm.toFixed(1)} / ${s.yagi.gap2_cm.toFixed(1)}`:'—')}</tbody></table>${deltas}<div class="variant-compare-note">A/B/C — три последних сохранённых варианта в порядке создания. «Открыть» восстанавливает геометрию, но требует нового расчёта.</div>`;
++  els.variantCompare.querySelectorAll('[data-variant-restore]').forEach(b=>b.onclick=()=>{const row=cols.find(c=>c.v.immutability?.fingerprint===b.dataset.variantRestore);restoreVariantSnapshot(b.dataset.variantRestore,row?`${row.label} · ${row.v.name||row.v.variant_id}`:'вариант')});renderSweepOverlayControls();if(lastSweep)drawSweep(lastSweep)
+ }
+ function renderVariantHistory(){
+   if(!els.variantHistory)return;
+   if(!variantHistory.length){els.variantHistory.className='variant-history muted';els.variantHistory.textContent='Сохранённых вариантов пока нет.';return}
+-  els.variantHistory.className='variant-history';
+-  els.variantHistory.innerHTML=variantHistory.map((v,i)=>{const active=lastVariant?.immutability?.fingerprint===v.immutability?.fingerprint;const letter=String.fromCharCode(65+i);return `<button type="button" class="variant-row${active?' active':''}" data-variant-index="${i}"><span class="variant-letter">${letter}</span><span><b>${escapeHtml(v.name||v.variant_id)}</b><small>${escapeHtml(v.variant_id)} · model ${escapeHtml(workflowShort(v.model_ref?.model_hash,12))}</small></span><span class="variant-fp">${escapeHtml(workflowShort(v.immutability?.fingerprint,10))}</span></button>`}).join('');
+-  els.variantHistory.querySelectorAll('[data-variant-index]').forEach(b=>b.onclick=()=>{const v=variantHistory[Number(b.dataset.variantIndex)];if(v){lastVariant=v;lastMeasurementSet=null;lastReport=null;els.variantName.value=v.name||v.variant_id;renderVariantHistory();renderVariantComparison();renderReportPreview();syncWorkflowButtons();status('вариант выбран','ok')}})
+-  renderVariantComparison()
++  els.variantHistory.className='variant-history';const compare=new Map(comparisonVariantRows().map(r=>[r.v.immutability?.fingerprint,r.label]));
++  els.variantHistory.innerHTML=variantHistory.map((v,i)=>{const active=lastVariant?.immutability?.fingerprint===v.immutability?.fingerprint,letter=compare.get(v.immutability?.fingerprint)||'·',archived=letter==='·';return `<button type="button" class="variant-row${active?' active':''}" data-variant-index="${i}"><span class="variant-letter">${letter}</span><span><b>${escapeHtml(v.name||v.variant_id)}</b><small>${archived?'<span class="variant-archive-label">архив · </span>':''}${escapeHtml(v.variant_id)} · model ${escapeHtml(workflowShort(v.model_ref?.model_hash,12))}</small></span><span class="variant-fp">${escapeHtml(workflowShort(v.immutability?.fingerprint,10))}</span></button>`}).join('');
++  els.variantHistory.querySelectorAll('[data-variant-index]').forEach(b=>b.onclick=()=>{const v=variantHistory[Number(b.dataset.variantIndex)];if(v){lastVariant=v;lastMeasurementSet=null;lastReport=null;els.variantName.value=v.name||v.variant_id;renderVariantHistory();renderVariantComparison();renderReportPreview();syncWorkflowButtons();status('вариант выбран','ok')}});renderVariantComparison()
+ }
+ function syncWorkflowButtons(){
+   if(!els.variantSave)return;
+@@ -171,7 +200,7 @@
+   try{
+     const p=project(),name=(els.variantName.value||p.name||'Design Variant').trim(),variant_id='variant-'+Date.now().toString(36);
+     els.variantSave.disabled=true;status('сохраняю вариант…');
+-    const j=await api('/api/variant/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,variant_id,name,tags:['ui-rev27']})});
++    const j=await api('/api/variant/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,variant_id,name,tags:['ui-rev28']})});
+     lastVariant=j.variant;lastMeasurementSet=null;lastReport=null;
+     variantHistory=[lastVariant,...variantHistory.filter(v=>v.immutability?.fingerprint!==lastVariant.immutability?.fingerprint)].slice(0,8);
+     variantSnapshots[lastVariant.immutability.fingerprint]=captureVariantSnapshot(p,lastVariant);
+@@ -186,7 +215,7 @@
+     if(!lastMeasurement||!lastMeasurementRawText)throw new Error('Сначала импортируйте измерение в этой вкладке');
+     els.measurementBind.disabled=true;status('привязка измерения…');
+     const measurement_id=(lastMeasurement.source?.name||'measurement').replace(/[^a-zA-Z0-9_.-]+/g,'-')+'-'+Date.now().toString(36);
+-    const j=await api('/api/measurement/bind',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({variant:lastVariant,measurement:lastMeasurement,raw_text:lastMeasurementRawText,measurement_id,calibration:{type:els.measurementCalibration.value||'unknown',reference_plane_note:els.measurementReferencePlane.value.trim(),fixture_deembedded:false},provenance:{instrument_or_source:lastMeasurement.source?.name||'browser import',notes:'Bound in EMMana-Next rev16 UI'}})});
++    const j=await api('/api/measurement/bind',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({variant:lastVariant,measurement:lastMeasurement,raw_text:lastMeasurementRawText,measurement_id,calibration:{type:els.measurementCalibration.value||'unknown',reference_plane_note:els.measurementReferencePlane.value.trim(),fixture_deembedded:false},provenance:{instrument_or_source:lastMeasurement.source?.name||'browser import',notes:'Bound in EMMana-Next rev28 UI'}})});
+     lastMeasurementSet=j.measurement_set;lastReport=null;renderReportPreview();syncWorkflowButtons();status('измерение привязано к варианту','ok')
+   }catch(e){status('ошибка привязки','err');els.diag.textContent=String(e.message||e)}finally{syncWorkflowButtons()}
+ }
+@@ -213,14 +242,22 @@
+ function geometryDistanceToSegment(px,py,a,b){const dx=b.x-a.x,dy=b.y-a.y,l2=dx*dx+dy*dy;if(!l2)return Math.hypot(px-a.x,py-a.y);const t=Math.max(0,Math.min(1,((px-a.x)*dx+(py-a.y)*dy)/l2));return Math.hypot(px-(a.x+t*dx),py-(a.y+t*dy))}
+ function syncGeometryInspector(p){const w=ensureGeometrySelection(p),inputs=[els.geometrySx,els.geometrySy,els.geometrySz,els.geometryEx,els.geometryEy,els.geometryEz,els.geometryDiameter,els.geometrySegments];inputs.forEach(x=>{if(x)x.disabled=!w});els.geometryDelete.disabled=!w;els.geometryFeed.disabled=!w;if(!w){els.geometryWireId.textContent='—';els.geometryFeedStatus.textContent='Нет проводов.';els.geometryFeedStatus.classList.remove('active');return}els.geometryWireId.textContent=w.id;[els.geometrySx,els.geometrySy,els.geometrySz].forEach((x,i)=>x.value=Number(w.start_m[i]).toFixed(4));[els.geometryEx,els.geometryEy,els.geometryEz].forEach((x,i)=>x.value=Number(w.end_m[i]).toFixed(4));els.geometryDiameter.value=(2000*Number(w.radius_m)).toFixed(3);els.geometrySegments.value=Number(w.segments);const feed=(p.feeds||[]).find(f=>f.wire_id===w.id);els.geometryFeedStatus.textContent=feed?'● Feed · segment '+feed.segment:'Feed не назначен этому проводу.';els.geometryFeedStatus.classList.toggle('active',!!feed)}
+ function renderGeometry(p){if(!els.geometryCanvas)return;const c=els.geometryCanvas,ctx=c.getContext('2d'),W=c.width,H=c.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#0b0d11';ctx.fillRect(0,0,W,H);const wires=p.wires||[],view=geometryTransform(p,geometryDrag?.view||null);geometryView=view;ctx.strokeStyle='#202632';ctx.lineWidth=1;for(let i=0;i<=10;i++){const x=40+(W-80)*i/10;ctx.beginPath();ctx.moveTo(x,28);ctx.lineTo(x,H-36);ctx.stroke()}for(let i=0;i<=7;i++){const y=28+(H-64)*i/7;ctx.beginPath();ctx.moveTo(40,y);ctx.lineTo(W-40,y);ctx.stroke()}const axes=geometryAxes[geometryProjection];ctx.fillStyle='#697384';ctx.font='12px Inter,system-ui';ctx.fillText(axes[2]+' →',W-55,H-12);ctx.fillText(axes[3]+' ↑',12,20);for(const w of wires){const a=view.toScreen(w.start_m),b=view.toScreen(w.end_m),sel=w.id===selectedWireId;ctx.strokeStyle=sel?'#3b82f6':'#8992a3';ctx.lineWidth=sel?6:4;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.fillStyle=sel?'#82b5ff':'#8992a3';ctx.font='11px Inter,system-ui';ctx.fillText(w.id,(a.x+b.x)/2+7,(a.y+b.y)/2-7);if(sel){for(const pt of[a,b]){ctx.beginPath();ctx.fillStyle='#f4f6fb';ctx.strokeStyle='#3b82f6';ctx.lineWidth=3;ctx.arc(pt.x,pt.y,7,0,Math.PI*2);ctx.fill();ctx.stroke()}}const feed=(p.feeds||[]).find(f=>f.wire_id===w.id);if(feed){const t=Math.max(0,Math.min(1,(Number(feed.segment)+.5)/Math.max(1,Number(w.segments)))),x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t;ctx.beginPath();ctx.fillStyle='#43d17c';ctx.strokeStyle='#0b0d11';ctx.lineWidth=3;ctx.arc(x,y,8,0,Math.PI*2);ctx.fill();ctx.stroke()}}syncGeometryInspector(p);els.geometrySummary.textContent=geometryProjection.toUpperCase()+' · '+wires.length+' wires · drag endpoints · '+(selectedWireId||'no selection')}
+-function geometryCommit(p,msg='геометрия обновлена'){els.editor.value=JSON.stringify(p,null,2);updateMeta(p);markResultsStale(`${msg} · нужно пересчитать`)}
++const GEOMETRY_STALE_MESSAGE='геометрия обновлена · нужно пересчитать';
++function syncGeometryHistoryButtons(){if(els.geometryUndo)els.geometryUndo.disabled=!geometryUndoStack.length;if(els.geometryRedo)els.geometryRedo.disabled=!geometryRedoStack.length;if(els.geometryHistoryState)els.geometryHistoryState.textContent=geometryUndoStack.length||geometryRedoStack.length?`назад ${geometryUndoStack.length} · вперёд ${geometryRedoStack.length}`:'история пуста'}
++function resetGeometryHistory(){geometryUndoStack=[];geometryRedoStack=[];syncGeometryHistoryButtons()}
++function geometryRecordUndo(text){if(!text)return;const last=geometryUndoStack[geometryUndoStack.length-1];if(last!==text)geometryUndoStack.push(text);if(geometryUndoStack.length>GEOMETRY_HISTORY_LIMIT)geometryUndoStack.shift();geometryRedoStack=[];syncGeometryHistoryButtons()}
++function geometryRestoreText(text,message){els.editor.value=text;const p=project();selectedWireId=(p.wires||[]).some(w=>w.id===selectedWireId)?selectedWireId:p.wires?.[0]?.id||null;updateMeta(p);markResultsStale(`${message} · нужно пересчитать`);syncGeometryHistoryButtons()}
++function undoGeometry(){if(!geometryUndoStack.length)return;try{const current=els.editor.value,prev=geometryUndoStack.pop();geometryRedoStack.push(current);geometryRestoreText(prev,'изменение отменено');status('изменение геометрии отменено','ok')}catch(e){status('ошибка Undo','err');els.diag.textContent=String(e.message||e)}}
++function redoGeometry(){if(!geometryRedoStack.length)return;try{const current=els.editor.value,next=geometryRedoStack.pop();geometryUndoStack.push(current);geometryRestoreText(next,'изменение возвращено');status('изменение геометрии возвращено','ok')}catch(e){status('ошибка Redo','err');els.diag.textContent=String(e.message||e)}}
++function geometryCommit(p,msg='геометрия обновлена',beforeText=null){const before=beforeText??els.editor.value,after=JSON.stringify(p,null,2);if(before!==after)geometryRecordUndo(before);els.editor.value=after;updateMeta(p);markResultsStale(`${msg} · нужно пересчитать`);syncGeometryHistoryButtons()}
++
+ function applyGeometryFields(){try{const p=project(),w=geometryWire(p);if(!w)return;const s=[els.geometrySx,els.geometrySy,els.geometrySz].map(x=>Number(x.value)),e=[els.geometryEx,els.geometryEy,els.geometryEz].map(x=>Number(x.value)),diam=Number(els.geometryDiameter.value),segments=Math.round(Number(els.geometrySegments.value));if([...s,...e,diam,segments].some(x=>!Number.isFinite(x))||diam<=0||segments<3)throw new Error('Проверь координаты, диаметр и число сегментов');w.start_m=s;w.end_m=e;w.radius_m=diam/2000;w.segments=segments;const feed=(p.feeds||[]).find(f=>f.wire_id===w.id);if(feed)feed.segment=Math.min(Math.max(0,Number(feed.segment)||0),segments-1);geometryCommit(p)}catch(e){status('ошибка геометрии','err');els.diag.textContent=String(e.message||e)}}
+ function addGeometryWire(){try{const p=project(),wires=p.wires||(p.wires=[]),used=new Set(wires.map(w=>w.id));let n=1;while(used.has('W'+n))n++;const id='W'+n,[a,b]=geometryAxes[geometryProjection],freq=Number(p.frequency_hz)||299792458,lambda=299792458/freq,len=.5*lambda,gap=.18*lambda,bounds=geometryBounds(p),centerA=wires.length?bounds.maxA+gap:0,centerB=(bounds.minB+bounds.maxB)/2,hidden=[0,1,2].find(x=>x!==a&&x!==b),start=[0,0,0],end=[0,0,0];start[a]=end[a]=centerA;start[b]=centerB-len/2;end[b]=centerB+len/2;start[hidden]=end[hidden]=0;wires.push({id,start_m:start,end_m:end,radius_m:.001,segments:21});selectedWireId=id;geometryCommit(p,'провод добавлен')}catch(e){status('ошибка добавления','err');els.diag.textContent=String(e.message||e)}}
+ function deleteGeometryWire(){try{const p=project(),w=geometryWire(p);if(!w)return;if((p.wires||[]).length<=1)throw new Error('Нельзя удалить последний провод');const referenced=(p.design_variables||[]).some(v=>v.wire_id===w.id)||(p.design_constraints||[]).some(c=>c.wire_a===w.id||c.wire_b===w.id);if(referenced)throw new Error('Провод используется в переменных или ограничениях оптимизации. Сначала измените их в EMNX.');p.wires=p.wires.filter(x=>x.id!==w.id);p.loads=(p.loads||[]).filter(x=>x.wire_id!==w.id);p.feeds=(p.feeds||[]).filter(x=>x.wire_id!==w.id);if(!p.feeds.length&&p.wires.length){const q=p.wires[0];p.feeds=[{wire_id:q.id,segment:Math.floor((Number(q.segments)-1)/2),voltage_re_v:1,voltage_im_v:0}]}selectedWireId=p.wires[0]?.id||null;geometryCommit(p,'провод удалён')}catch(e){status('удаление отменено','err');els.diag.textContent=String(e.message||e)}}
+ function assignGeometryFeed(){try{const p=project(),w=geometryWire(p);if(!w)throw new Error('Выберите провод');p.feeds=[{wire_id:w.id,segment:Math.floor((Number(w.segments)-1)/2),voltage_re_v:1,voltage_im_v:0}];geometryCommit(p,'питание назначено')}catch(e){status('ошибка назначения питания','err');els.diag.textContent=String(e.message||e)}}
+-function geometryPointerDown(ev){try{const p=project(),wires=p.wires||[],pt=geometryCanvasPoint(ev),view=geometryView||geometryTransform(p);let endpoint=null,best=14;for(const w of wires){for(const key of['start_m','end_m']){const q=view.toScreen(w[key]),d=Math.hypot(pt.x-q.x,pt.y-q.y);if(d<best){best=d;endpoint={wireId:w.id,key}}}}if(endpoint){selectedWireId=endpoint.wireId;geometryDrag={wireId:endpoint.wireId,key:endpoint.key,view:{bounds:{...view.bounds}}};els.geometryCanvas.setPointerCapture?.(ev.pointerId);renderGeometry(p);ev.preventDefault();return}let hit=null,hd=12;for(const w of wires){const a=view.toScreen(w.start_m),b=view.toScreen(w.end_m),d=geometryDistanceToSegment(pt.x,pt.y,a,b);if(d<hd){hd=d;hit=w.id}}if(hit){selectedWireId=hit;renderGeometry(p);ev.preventDefault()}}catch(e){status('ошибка выбора','err')}}
++function geometryPointerDown(ev){try{const p=project(),wires=p.wires||[],pt=geometryCanvasPoint(ev),view=geometryView||geometryTransform(p);let endpoint=null,best=14;for(const w of wires){for(const key of['start_m','end_m']){const q=view.toScreen(w[key]),d=Math.hypot(pt.x-q.x,pt.y-q.y);if(d<best){best=d;endpoint={wireId:w.id,key}}}}if(endpoint){selectedWireId=endpoint.wireId;geometryDrag={wireId:endpoint.wireId,key:endpoint.key,view:{bounds:{...view.bounds}},beforeText:els.editor.value};els.geometryCanvas.setPointerCapture?.(ev.pointerId);renderGeometry(p);ev.preventDefault();return}let hit=null,hd=12;for(const w of wires){const a=view.toScreen(w.start_m),b=view.toScreen(w.end_m),d=geometryDistanceToSegment(pt.x,pt.y,a,b);if(d<hd){hd=d;hit=w.id}}if(hit){selectedWireId=hit;renderGeometry(p);ev.preventDefault()}}catch(e){status('ошибка выбора','err')}}
+ function geometryPointerMove(ev){if(!geometryDrag)return;try{const p=project(),w=(p.wires||[]).find(x=>x.id===geometryDrag.wireId);if(!w)return;const pt=geometryCanvasPoint(ev),view=geometryTransform(p,geometryDrag.view),base=w[geometryDrag.key];w[geometryDrag.key]=view.fromScreen(pt.x,pt.y,base);els.editor.value=JSON.stringify(p,null,2);updateMeta(p);status('геометрия изменена · отпустите мышь и пересчитайте','warn');ev.preventDefault()}catch(e){status('ошибка drag','err')}}
+-function geometryPointerUp(ev){if(!geometryDrag)return;geometryDrag=null;try{const p=project();renderGeometry(p);markResultsStale('геометрия обновлена · нужно пересчитать')}catch{}els.geometryCanvas.releasePointerCapture?.(ev.pointerId)}
++function geometryPointerUp(ev){if(!geometryDrag)return;const beforeText=geometryDrag.beforeText;geometryDrag=null;try{const p=project();geometryCommit(p,'геометрия обновлена',beforeText)}catch{}els.geometryCanvas.releasePointerCapture?.(ev.pointerId)}
+ function syncGeometryFromProject(p){if(!els.geometryCanvas)return;ensureGeometrySelection(p);renderGeometry(p);syncYagiQuickPanel(p);if(els.geometryTemplateFrequency&&document.activeElement!==els.geometryTemplateFrequency&&p.frequency_hz)els.geometryTemplateFrequency.value=(Number(p.frequency_hz)/1e6).toFixed(3)}
+ 
+ function yagiWire(p,id){return(p.wires||[]).find(w=>w.id===id)}
+@@ -273,9 +310,9 @@
+     const id=els.geometryTemplate.value,fmhz=Number(els.geometryTemplateFrequency.value);
+     if(!id)throw new Error('Выберите шаблон');if(!(fmhz>0))throw new Error('Частота должна быть > 0');
+     if(!confirm('Заменить текущую модель шаблоном и выполнить расчёт?'))return;
+-    els.geometryTemplateCreate.disabled=true;status('создаю шаблон…');
++    const beforeText=els.editor.value;els.geometryTemplateCreate.disabled=true;status('создаю шаблон…');
+     const r=await api('/api/template/'+encodeURIComponent(id)+'?frequency_hz='+encodeURIComponent(fmhz*1e6)),p=r.project;templateLoaded=true;
+-    els.editor.value=JSON.stringify(p,null,2);selectedWireId=p.wires?.[0]?.id||null;updateMeta(p);
++    geometryRecordUndo(beforeText);els.editor.value=JSON.stringify(p,null,2);selectedWireId=p.wires?.[0]?.id||null;updateMeta(p);syncGeometryHistoryButtons();
+     const mhz=Number(p.frequency_hz)/1e6;els.sweepStart.value=(mhz*.9).toFixed(3);els.sweepStop.value=(mhz*1.1).toFixed(3);els.optBandStart.value=(mhz*.99).toFixed(3);els.optBandStop.value=(mhz*1.01).toFixed(3);
+     markResultsStale('шаблон создан · выполняю проверку');stage='проверка модели';
+     const cj=await api('/api/model-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,kernel})});
+@@ -289,12 +326,13 @@
+   }finally{els.geometryTemplateCreate.disabled=false}
+ }
+ 
+-function initGeometryEditor(){if(!els.geometryCanvas)return;els.geometryTemplateCreate.onclick=createGeometryTemplate;if(els.yagiApply)els.yagiApply.onclick=applyYagiQuickPanel;if(els.yagiRecalc)els.yagiRecalc.onclick=recalcYagiQuick;if(els.yagiOptimize)els.yagiOptimize.onclick=optimizeYagiQuick;els.geometryTemplate.addEventListener('change',syncGeometryTemplateStatus);loadGeometryTemplates();document.querySelectorAll('[data-geometry-projection]').forEach(b=>b.addEventListener('click',()=>{geometryProjection=b.dataset.geometryProjection;document.querySelectorAll('[data-geometry-projection]').forEach(x=>x.classList.toggle('active',x===b));try{renderGeometry(project())}catch{}}));els.geometryAdd.onclick=addGeometryWire;els.geometryFeed.onclick=assignGeometryFeed;els.geometryDelete.onclick=deleteGeometryWire;els.geometryCheck.onclick=check;[els.geometrySx,els.geometrySy,els.geometrySz,els.geometryEx,els.geometryEy,els.geometryEz,els.geometryDiameter,els.geometrySegments].forEach(x=>x.addEventListener('change',applyGeometryFields));els.geometryCanvas.addEventListener('pointerdown',geometryPointerDown);els.geometryCanvas.addEventListener('pointermove',geometryPointerMove);els.geometryCanvas.addEventListener('pointerup',geometryPointerUp);els.geometryCanvas.addEventListener('pointercancel',geometryPointerUp);els.editor.addEventListener('input',()=>{try{updateMeta(project());markResultsStale('модель изменена в EMNX · нужно пересчитать')}catch{}})}
++function initGeometryEditor(){if(!els.geometryCanvas)return;els.geometryTemplateCreate.onclick=createGeometryTemplate;if(els.geometryUndo)els.geometryUndo.onclick=undoGeometry;if(els.geometryRedo)els.geometryRedo.onclick=redoGeometry;syncGeometryHistoryButtons();if(els.yagiApply)els.yagiApply.onclick=applyYagiQuickPanel;if(els.yagiRecalc)els.yagiRecalc.onclick=recalcYagiQuick;if(els.yagiOptimize)els.yagiOptimize.onclick=optimizeYagiQuick;els.geometryTemplate.addEventListener('change',syncGeometryTemplateStatus);loadGeometryTemplates();document.querySelectorAll('[data-geometry-projection]').forEach(b=>b.addEventListener('click',()=>{geometryProjection=b.dataset.geometryProjection;document.querySelectorAll('[data-geometry-projection]').forEach(x=>x.classList.toggle('active',x===b));try{renderGeometry(project())}catch{}}));els.geometryAdd.onclick=addGeometryWire;els.geometryFeed.onclick=assignGeometryFeed;els.geometryDelete.onclick=deleteGeometryWire;els.geometryCheck.onclick=check;[els.geometrySx,els.geometrySy,els.geometrySz,els.geometryEx,els.geometryEy,els.geometryEz,els.geometryDiameter,els.geometrySegments].forEach(x=>x.addEventListener('change',applyGeometryFields));els.geometryCanvas.addEventListener('pointerdown',geometryPointerDown);els.geometryCanvas.addEventListener('pointermove',geometryPointerMove);els.geometryCanvas.addEventListener('pointerup',geometryPointerUp);els.geometryCanvas.addEventListener('pointercancel',geometryPointerUp);els.editor.addEventListener('input',()=>{try{updateMeta(project());markResultsStale('модель изменена в EMNX · нужно пересчитать')}catch{}})}
+ function showResult(r){lastResult=r;const f=r.feeds?.[0],p=project(),lossy=(p.wires||[]).filter(w=>Number(w.conductivity_s_per_m||0)>0),loads=p.loads||[];const lossLines=[`Loss model: ${lossy.length?lossy.length+' finite-conductivity wire(s)':'PEC conductors'} · ${loads.length} lumped load(s)`];if(lossy.length)lossLines.push('Conductivity: '+lossy.map(w=>`${w.id||'?'}=${Number(w.conductivity_s_per_m).toExponential(3)} S/m`).join(', '));if(loads.length)lossLines.push('Loads: '+loads.map(x=>`${x.id||'?'}[${x.wire_id||'?'}:${x.segment_index??'?'}] R=${Number(x.resistance_ohm||0)}Ω L=${Number(x.inductance_h||0).toExponential(3)}H C=${Number(x.capacitance_f||0).toExponential(3)}F`).join('; '));els.zin.textContent=cpx(f?.impedance_ohm);els.vswr.textContent=fmt(f?.vswr,3);els.dmax.textContent=fmt(r.summary?.dmax_dbi,3);els.eff.textContent=fmt(100*(r.efficiency??0),3);els.accepted.textContent=Number(r.accepted_power_w||0).toExponential(3);els.radiated.textContent=Number(r.radiated_power_w||0).toExponential(3);els.dissipated.textContent=Number(r.dissipated_power_w||0).toExponential(3);els.balance.textContent=(r.power_balance_relative_error??0).toExponential(2);els.raw.textContent=JSON.stringify(r,null,2);els.diag.textContent=[`Solver: ${r.solver_id} v${r.solver_version}`,`Settings: ${r.solver_settings_id}`,`Model hash: ${r.model_hash}`,...lossLines,`Accepted power: ${r.accepted_power_w} W`,`Radiated power: ${r.radiated_power_w} W`,`Dissipated power: ${r.dissipated_power_w} W`,`Efficiency: ${fmt(100*(r.efficiency??0),4)}%`,'',...(r.warnings||[]).map(x=>'⚠ '+x)].join('\n');drawPolar(r);drawCurrents(r)}
+ async function run(){setWorkspaceView('solve');try{const p=project();updateMeta(p);document.body.classList.add('busy');els.run.disabled=true;status('расчёт…');const j=await api('/api/solve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,kernel})});showResult(j.result);els.run.textContent='Рассчитать';status('расчёт завершён','ok')}catch(e){status('ошибка','err');els.diag.textContent=String(e.message||e)}finally{document.body.classList.remove('busy');els.run.disabled=false}}
+ async function check(){try{const p=project();status('проверка…');const j=await api('/api/model-check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:p,kernel})});els.diag.textContent=j.stdout+(j.stderr?'\n'+j.stderr:'');status(j.ok?'модель корректна':'модель с ошибками',j.ok?'ok':'err')}catch(e){status('ошибка','err');els.diag.textContent=String(e.message||e)}}
+ let initialView='geometry';try{initialView=localStorage.getItem('emnext.workspaceView')||'solve'}catch{}setWorkspaceView(initialView);
+ initGeometryEditor();
++document.addEventListener('keydown',e=>{const tag=String(document.activeElement?.tagName||'').toLowerCase();if(tag==='input'||tag==='textarea'||tag==='select')return;if(!(e.ctrlKey||e.metaKey))return;if(String(e.key).toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoGeometry():undoGeometry()}else if(String(e.key).toLowerCase()==='y'){e.preventDefault();redoGeometry()}});
+ initSweepInteractions();
+ document.querySelectorAll('[data-kernel]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-kernel]').forEach(x=>x.classList.remove('active'));b.classList.add('active');kernel=b.dataset.kernel;els.chip.textContent=kernel==='reduced'?'БЫСТРЫЙ':'ТОЧНЫЙ КОНТРОЛЬ'});els.run.onclick=run;els.runSweep.onclick=runSweep;els.runOpt.onclick=runOptimize;els.applyOpt.onclick=applyBest;$('#check').onclick=check;els.example.onchange=loadExample;els.measurementImport.onclick=importMeasurement;if(els.measurementDemo)els.measurementDemo.onclick=loadMeasurementDemo;els.measurementCompare.onclick=compareMeasurement;els.measurementCalibration.onchange=renderMeasurementProvenance;els.measurementReferencePlane.oninput=renderMeasurementProvenance;els.variantSave.onclick=saveVariant;els.measurementBind.onclick=bindMeasurement;els.reportGenerate.onclick=generateReport;els.reportDownload.onclick=downloadReport;loadVariantHistory();syncWorkflowButtons();
+ (async()=>{try{const h=await api('/api/health');$('#version').textContent=`Локальная версия · ${h.version}`;await loadReferenceStatus();const e=await api('/api/examples');e.examples.forEach(x=>{const o=document.createElement('option');o.value=x.file;o.textContent=x.name;els.example.appendChild(o)});const preferred=e.examples.find(x=>x.file.includes('51seg'))||e.examples[0];if(preferred)els.example.value=preferred.file;await loadExample();status('готово · выберите шаблон или измените геометрию','ok')}catch(e){status('не готово','err');els.diag.textContent=String(e.message||e)}})();
+--- a/apps/linux_web/static/index.html	2026-09-24 19:56:22.000000000 +0000
++++ b/apps/linux_web/static/index.html	2026-09-24 20:26:43.000000000 +0000
+@@ -150,6 +150,11 @@
+             <button type="button" data-geometry-projection="yz">YZ</button>
+           </div>
+           <div class="geometry-actions">
++            <div class="geometry-history-actions" role="group" aria-label="История геометрии">
++              <button id="geometry-undo" class="secondary" type="button" disabled>↶ Отменить</button>
++              <button id="geometry-redo" class="secondary" type="button" disabled>↷ Вернуть</button>
++              <span id="geometry-history-state" class="geometry-history-state">история пуста</span>
++            </div>
+             <button id="geometry-add" class="secondary" type="button">+ Провод</button>
+             <button id="geometry-feed" class="secondary" type="button">Назначить питание</button>
+             <button id="geometry-delete" class="secondary danger-soft" type="button">Удалить</button>
+@@ -211,6 +216,7 @@
+       <div class="panel-head"><div><small>ЧАСТОТНЫЙ РАСЧЁТ</small><h2>S11 / КСВ / Zin</h2></div><span id="sweep-summary">ещё не рассчитан</span></div>
+       <canvas id="sweep-chart" width="1000" height="300"></canvas>
+       <div id="sweep-cursor" class="sweep-cursor">Наведите на график: частота · S11 · КСВ · R/X</div>
++      <div id="sweep-overlays" class="sweep-overlays"><span>Наложение A/B/C появится после сохранения рассчитанных вариантов.</span></div>
+     </section>
+ 
+     <section class="panel measurement-panel" id="measurement-panel" data-view="measurement">
+--- a/apps/shared/help/help-registry.json	2026-09-20 18:15:42.000000000 +0000
++++ b/apps/shared/help/help-registry.json	2026-09-24 20:29:18.000000000 +0000
+@@ -240,14 +240,17 @@
+       "id": "emmana-next.workflow.report",
+       "title": "Вариант → Измерение → Отчёт",
+       "summary": "Фиксирует точную модель, связывает с ней конкретное измерение и формирует воспроизводимый инженерный отчёт.",
+-      "body": "«Сохранить вариант» сначала проверяет модель и фиксирует хэш модели и неизменяемый отпечаток. «Привязать измерение» создаёт MeasurementSet с SHA-256 исходного файла и нормализованных данных. «Сформировать отчёт» связывает вариант, MeasurementSet, частотный расчёт, сравнение и текущий статус подтверждения. Отчёт не меняет статус доверия решателя и не заменяет расчёт измерением.",
++      "body": "«Сохранить вариант» сначала проверяет модель и фиксирует хэш модели и неизменяемый отпечаток. Для трёх последних рассчитанных вариантов интерфейс хранит локальный компактный Sweep-снимок и EMNX-копию: A/B/C можно сравнить по КСВ, Dmax, резонансу, S11 и размерам Яги, наложить их S11 на текущий Sweep и открыть сохранённую геометрию обратно. После открытия расчёт намеренно помечается устаревшим. Измерение и отчёт остаются отдельным инженерным доказательством.",
+       "keywords": [
+         "DesignVariant",
+         "MeasurementSet",
+         "report",
+         "fingerprint",
+         "model hash",
+-        "SHA-256"
++        "SHA-256",
++        "A/B/C",
++        "Sweep overlay",
++        "сравнение вариантов"
+       ],
+       "aliases": [
+         "инженерный отчёт",
+@@ -256,10 +259,11 @@
+       ],
+       "category": "workflow",
+       "quickSteps": [
+-        "Сохраните Variant для текущей EMNX-модели",
+-        "Импортируйте S1P/CSV и выполните Sweep + Сравнить",
+-        "Нажмите Привязать измерение",
+-        "Нажмите Сформировать отчёт и при необходимости сохраните Markdown"
++        "Рассчитайте модель и Sweep",
++        "Сохраните вариант A, измените геометрию и сохраните B/C",
++        "Сравните таблицу и включите нужные A/B/C на Sweep",
++        "При необходимости нажмите Открыть A/B/C и пересчитайте",
++        "Для отчёта импортируйте измерение, привяжите его и сформируйте Markdown"
+       ],
+       "relatedTopics": [
+         "emmana-next.measurement.compare",
+@@ -270,8 +274,8 @@
+     {
+       "id": "emmana-next.geometry.editor",
+       "title": "2D редактор геометрии",
+-      "summary": "Шаблоны Dipole/GP/Yagi/Loop и редактирование wire-геометрии EMNX мышью в проекциях XY, XZ и YZ.",
+-      "body": "Выберите проекцию и провод. Концы выбранного провода отмечены круглыми маркерами — перетаскивайте их мышью. Численные координаты, диаметр и segments можно менять справа. Кнопка «Назначить feed» переносит единственный источник в центральный сегмент выбранного провода. Удаление блокируется, если провод используется design_variables или design_constraints.",
++      "summary": "Шаблоны Dipole/GP/Yagi/Loop, редактирование wire-геометрии EMNX и история Undo/Redo в проекциях XY, XZ и YZ.",
++      "body": "Выберите проекцию и провод. Концы выбранного провода отмечены круглыми маркерами — перетаскивайте их мышью. Численные координаты, диаметр и segments можно менять справа. «Отменить» и «Вернуть» хранят до 30 шагов геометрии; история включает перетаскивание, поля, добавление/удаление провода, питание, шаблон и применение оптимизированной геометрии. Восстановленный A/B/C-вариант всегда требует нового расчёта.",
+       "keywords": [
+         "geometry",
+         "wire",
+@@ -280,7 +284,10 @@
+         "YZ",
+         "feed",
+         "diameter",
+-        "segments"
++        "segments",
++        "undo",
++        "redo",
++        "A/B/C"
+       ],
+       "aliases": [
+         "геометрия",
+@@ -290,10 +297,10 @@
+       "category": "model",
+       "quickSteps": [
+         "Выберите шаблон и частоту или редактируйте текущую модель",
+-        "Нажмите Создать и рассчитать для новой стартовой модели",
+-        "Выберите XY, XZ или YZ",
+-        "Щёлкните провод и перетащите его конечную точку",
+-        "Проверьте модель и выполните Sweep/Оптимизацию при необходимости"
++        "Измените размеры мышью или численно",
++        "Если нужно — используйте Отменить / Вернуть",
++        "Проверьте модель и выполните расчёт + Sweep",
++        "Сохраните варианты A/B/C для сравнения и возврата к геометрии"
+       ],
+       "relatedTopics": [
+         "emmana-next.overview",
+--- /dev/null	2026-09-25 20:06:10.247299555 +0000
++++ b/docs/WORKLOG_2026-09-25_rev28.md	2026-09-24 20:26:43.000000000 +0000
+@@ -0,0 +1,10 @@
++# EMMana-Next rev28 — compare/tune workflow
++
++- Added geometry Undo/Redo (30 steps) with toolbar buttons and Ctrl/Cmd+Z, Ctrl/Cmd+Y shortcuts outside form fields.
++- Yagi quick edits, wire add/delete/feed assignment, endpoint drag, template replacement and optimizer apply participate in geometry history.
++- Saved Design Variant snapshots now retain a compact S11 Sweep trace and exact EMNX project copy locally.
++- The three most recent variants are presented chronologically as A/B/C.
++- Added optional A/B/C S11 overlays on the current Sweep chart with per-variant toggles.
++- Added concise B/C relative-to-A change summaries (Yagi dimensions + VSWR + Dmax + resonance + min S11).
++- Added Open A/B/C to restore exact saved geometry; results are intentionally invalidated and must be recalculated.
++- Solver physics, schemas, measurement contract and optimizer semantics are unchanged.
+--- /dev/null	2026-09-25 20:06:10.247299555 +0000
++++ b/tests/test_rev28_product_ui.py	2026-09-24 20:26:43.000000000 +0000
+@@ -0,0 +1,15 @@
++#!/usr/bin/env python3
++from pathlib import Path
++import sys
++root=Path(sys.argv[1] if len(sys.argv)>1 else '.')
++html=(root/'apps/linux_web/static/index.html').read_text(encoding='utf-8')
++js=(root/'apps/linux_web/static/app.js').read_text(encoding='utf-8')
++css=(root/'apps/linux_web/static/app.css').read_text(encoding='utf-8')
++for marker in ['geometry-undo','geometry-redo','geometry-history-state','sweep-overlays','variant-compare']:
++    assert f'id="{marker}"' in html, marker
++for marker in ['geometryUndoStack','undoGeometry','redoGeometry','geometryRecordUndo','renderSweepOverlayControls','sweepOverlayRows','compactSweep','restoreVariantSnapshot','variantDeltaSummary','ui-rev28']:
++    assert marker in js, marker
++for marker in ['sweep-overlay-chip','variant-delta-row','geometry-history-actions','variant-restore']:
++    assert marker in css, marker
++assert "tags:['ui-rev28']" in js
++print('REV28_PRODUCT_UI_PASS')
