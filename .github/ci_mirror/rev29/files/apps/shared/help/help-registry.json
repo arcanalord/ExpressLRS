@@ -1,0 +1,339 @@
+{
+  "schemaVersion": "1.0",
+  "app": "emmana-next",
+  "fallbackTopic": "emmana-next.overview",
+  "errorMap": {
+    "INVALID_GROUND_TERMINAL": "emmana-next.error.invalid-ground-terminal",
+    "NEC2_NOT_RUN": "emmana-next.error.nec2-not-run",
+    "MODEL_CHECK_FAILED": "emmana-next.error.model-check-failed"
+  },
+  "topics": [
+    {
+      "id": "emmana-next.overview",
+      "title": "EMMana-Next",
+      "summary": "Расчёт и оптимизация проволочных антенн с проверяемым Wire-MoM ядром.",
+      "body": "Начните с готового примера или EMNX-модели, проверьте модель, затем выполните расчёт. Для инженерных выводов учитывайте статус независимой NEC2-проверки.",
+      "keywords": [
+        "антенна",
+        "Wire-MoM",
+        "расчёт",
+        "EMNX"
+      ],
+      "category": "overview",
+      "quickSteps": [
+        "Выберите пример или вставьте EMNX JSON",
+        "Нажмите Проверить модель",
+        "Запустите Рассчитать или Sweep",
+        "Проверьте Zin, VSWR, диаграмму и статус trust"
+      ]
+    },
+    {
+      "id": "emmana-next.ground.model",
+      "title": "Модель земли",
+      "summary": "Задаёт свободное пространство, идеальную PEC-землю или приближённую реальную землю.",
+      "body": "free-space отключает землю. pec-image-v1 использует зеркальный ток над идеальной проводящей плоскостью. homogeneous-halfspace-image-v1 использует комплексное коэффициентное image-приближение и пока не заменяет Sommerfeld/Norton.",
+      "keywords": [
+        "ground",
+        "земля",
+        "PEC",
+        "epsilon",
+        "sigma"
+      ],
+      "aliases": [
+        "грунт",
+        "реальная земля"
+      ],
+      "category": "ground",
+      "relatedTopics": [
+        "emmana-next.ground.pec",
+        "emmana-next.ground.real",
+        "emmana-next.benchmark.b02"
+      ]
+    },
+    {
+      "id": "emmana-next.ground.pec",
+      "title": "Идеальная земля (PEC)",
+      "summary": "Идеальная бесконечная проводящая плоскость через image theory.",
+      "body": "Для PEC нижняя полусфера подавляется, потери земли равны нулю. Ground-terminal feed разрешён только в этом режиме на текущем этапе.",
+      "keywords": [
+        "PEC",
+        "image theory",
+        "идеальная земля"
+      ],
+      "category": "ground",
+      "relatedTopics": [
+        "emmana-next.benchmark.b02"
+      ]
+    },
+    {
+      "id": "emmana-next.ground.real",
+      "title": "Реальная земля",
+      "summary": "Однородное полупространство с относительной диэлектрической проницаемостью и проводимостью.",
+      "body": "Текущая alpha.20 модель использует complex-image approximation. Потери земли определяются через энергетическое замыкание. Для окончательных инженерных выводов требуется независимое сравнение с NEC2/полноволновым решателем.",
+      "keywords": [
+        "relative permittivity",
+        "conductivity",
+        "epsilon r",
+        "sigma",
+        "Sommerfeld",
+        "Norton"
+      ],
+      "category": "ground"
+    },
+    {
+      "id": "emmana-next.feed.ground-terminal",
+      "title": "Питание от земли",
+      "summary": "Источник между концом провода и PEC-плоскостью.",
+      "body": "ground-terminal-start/end создаёт half-rooftop токовую базисную функцию на контакте с PEC. Конец провода должен точно лежать на ground plane. Для конечной проводимости этот режим пока запрещён до отдельной валидации.",
+      "keywords": [
+        "feed",
+        "ground terminal",
+        "monopole",
+        "источник"
+      ],
+      "category": "feed",
+      "relatedTopics": [
+        "emmana-next.benchmark.b02"
+      ]
+    },
+    {
+      "id": "emmana-next.result.zin",
+      "title": "Входной импеданс Zin",
+      "summary": "Комплексное отношение напряжения источника к входному току.",
+      "body": "Re(Zin) связан с активной мощностью, Im(Zin) показывает реактивную составляющую. Сравнивайте Zin только при одинаковых source semantics, сетке и модели среды.",
+      "keywords": [
+        "Zin",
+        "impedance",
+        "R",
+        "X"
+      ],
+      "category": "result"
+    },
+    {
+      "id": "emmana-next.result.vswr",
+      "title": "VSWR",
+      "summary": "КСВ относительно заданного опорного сопротивления, обычно 50 Ом.",
+      "body": "VSWR показывает согласование, но сам по себе не оценивает усиление, диаграмму или КПД. Для широкополосной оценки используйте частотный расчёт.",
+      "keywords": [
+        "VSWR",
+        "КСВ",
+        "S11",
+        "50 ohm"
+      ],
+      "category": "result"
+    },
+    {
+      "id": "emmana-next.result.power-balance",
+      "title": "Баланс мощности",
+      "summary": "Контроль энергетического баланса решения.",
+      "body": "Сравнивает принятую мощность с радиацией и моделируемыми потерями. Малый остаток является внутренним численным gate, но не заменяет независимую проверку физической модели.",
+      "keywords": [
+        "power balance",
+        "energy",
+        "residual",
+        "мощность"
+      ],
+      "category": "diagnostics"
+    },
+    {
+      "id": "emmana-next.result.efficiency",
+      "title": "КПД",
+      "summary": "Доля мощности, уходящая в излучение после моделируемых потерь.",
+      "body": "Для PEC без потерь эффективность близка к 100%. Для проводников, резистивных нагрузок и реальной земли она снижается. Смотрите одновременно dissipated power и ground loss.",
+      "keywords": [
+        "efficiency",
+        "КПД",
+        "loss",
+        "ground loss"
+      ],
+      "category": "result"
+    },
+    {
+      "id": "emmana-next.benchmark.b02",
+      "title": "B02: четвертьволновый монополь над PEC",
+      "summary": "Канонический benchmark для ground-terminal и image theory.",
+      "body": "Монополь длиной 0.25 lambda подключён к PEC-плоскости через ground-terminal-start. Основной внутренний gate: входной импеданс должен быть примерно половиной импеданса соответствующего симметричного полуволнового диполя, с малой разницей из-за source discretization.",
+      "keywords": [
+        "B02",
+        "monopole",
+        "quarter wave",
+        "image theory"
+      ],
+      "category": "benchmark",
+      "relatedTopics": [
+        "emmana-next.ground.pec",
+        "emmana-next.feed.ground-terminal"
+      ]
+    },
+    {
+      "id": "emmana-next.error.invalid-ground-terminal",
+      "title": "Некорректный ground-terminal",
+      "summary": "Источник ground-terminal не соответствует PEC-плоскости или концу провода.",
+      "body": "Проверьте ground.model=pec-image-v1, plane_z_m и координату start/end выбранного wire. Контактный конец должен лежать на плоскости с численным допуском модели.",
+      "keywords": [
+        "INVALID_GROUND_TERMINAL",
+        "ground terminal error"
+      ],
+      "category": "error",
+      "quickSteps": [
+        "Проверьте режим PEC",
+        "Проверьте plane_z_m",
+        "Проверьте start/end wire и feed.mode"
+      ]
+    },
+    {
+      "id": "emmana-next.error.nec2-not-run",
+      "title": "NEC2 ещё не запущен",
+      "summary": "Внутренние численные тесты прошли, но независимый решатель ещё не подтвердил результат.",
+      "body": "Не повышайте экспериментальный решатель до release-authoritative. Запустите подготовленный NEC2 CI/reference suite и сохраните измеренные дельты R/X и provenance.",
+      "keywords": [
+        "NEC2_NOT_RUN",
+        "trust",
+        "reference"
+      ],
+      "category": "error"
+    },
+    {
+      "id": "emmana-next.error.model-check-failed",
+      "title": "Проверка модели не пройдена",
+      "summary": "Модель не прошла проверку геометрии, источника или параметров среды.",
+      "body": "Исправьте первую конкретную ошибку model-check, затем повторите проверку. Не запускайте решатель, пока model-check не проходит.",
+      "keywords": [
+        "MODEL_CHECK_FAILED",
+        "model check",
+        "validation"
+      ],
+      "category": "error"
+    },
+    {
+      "id": "emmana-next.measurement.compare",
+      "title": "Расчёт и измерение",
+      "summary": "Сравнивает частотный расчёт EMMana-Next с отдельным файлом измерений S1P или CSV от анализатора цепей.",
+      "body": "Импорт измерения не изменяет EMNX и не заменяет расчёт. S1P поддерживает RI/MA/DB. CSV автоматически распознаёт Frequency + R/X, Frequency + S11 Real/Imag или Frequency + S11 dB/Phase. Выполните частотный расчёт на пересекающемся диапазоне, затем нажмите «Сравнить». Дельты считаются как расчёт − измерение; измерение линейно интерполируется на частотную сетку расчёта.",
+      "keywords": [
+        "measurement",
+        "S1P",
+        "Touchstone",
+        "VNA",
+        "compare",
+        "ΔR",
+        "ΔX",
+        "S11"
+      ],
+      "aliases": [
+        "измерения",
+        "сравнение с VNA"
+      ],
+      "category": "measurement",
+      "quickSteps": [
+        "Выберите .s1p или .csv и нажмите Импорт",
+        "Проверьте калибровку и reference plane",
+        "Выполните Sweep на пересекающемся диапазоне",
+        "Нажмите Сравнить и проверьте ΔR, ΔX, ΔVSWR и ΔS11"
+      ],
+      "relatedTopics": [
+        "emmana-next.result.zin",
+        "emmana-next.result.vswr"
+      ]
+    },
+    {
+      "id": "emmana-next.workflow.report",
+      "title": "Вариант → Измерение → Отчёт",
+      "summary": "Фиксирует точную модель, связывает с ней конкретное измерение и формирует воспроизводимый инженерный отчёт.",
+      "body": "«Сохранить вариант» сначала проверяет модель и фиксирует хэш модели и неизменяемый отпечаток. Для трёх последних рассчитанных вариантов интерфейс хранит локальный компактный Sweep-снимок и EMNX-копию: A/B/C можно сравнить по КСВ, Dmax, резонансу, S11 и размерам Яги, наложить их S11 на текущий Sweep и открыть сохранённую геометрию обратно. После открытия расчёт намеренно помечается устаревшим. Измерение и отчёт остаются отдельным инженерным доказательством.",
+      "keywords": [
+        "DesignVariant",
+        "MeasurementSet",
+        "report",
+        "fingerprint",
+        "model hash",
+        "SHA-256",
+        "A/B/C",
+        "Sweep overlay",
+        "сравнение вариантов"
+      ],
+      "aliases": [
+        "инженерный отчёт",
+        "вариант антенны",
+        "привязать измерение"
+      ],
+      "category": "workflow",
+      "quickSteps": [
+        "Рассчитайте модель и Sweep",
+        "Сохраните вариант A, измените геометрию и сохраните B/C",
+        "Сравните таблицу и включите нужные A/B/C на Sweep",
+        "При необходимости нажмите Открыть A/B/C и пересчитайте",
+        "Для отчёта импортируйте измерение, привяжите его и сформируйте Markdown"
+      ],
+      "relatedTopics": [
+        "emmana-next.measurement.compare",
+        "emmana-next.result.zin",
+        "emmana-next.error.nec2-not-run"
+      ]
+    },
+    {
+      "id": "emmana-next.geometry.editor",
+      "title": "2D редактор геометрии",
+      "summary": "Шаблоны Dipole/GP/Yagi/Loop, редактирование wire-геометрии EMNX и история Undo/Redo в проекциях XY, XZ и YZ.",
+      "body": "Выберите проекцию и провод. Концы выбранного провода отмечены круглыми маркерами — перетаскивайте их мышью. Численные координаты, диаметр и segments можно менять справа. «Отменить» и «Вернуть» хранят до 30 шагов геометрии; история включает перетаскивание, поля, добавление/удаление провода, питание, шаблон и применение оптимизированной геометрии. Восстановленный A/B/C-вариант всегда требует нового расчёта.",
+      "keywords": [
+        "geometry",
+        "wire",
+        "XY",
+        "XZ",
+        "YZ",
+        "feed",
+        "diameter",
+        "segments",
+        "undo",
+        "redo",
+        "A/B/C"
+      ],
+      "aliases": [
+        "геометрия",
+        "редактор антенны",
+        "провода"
+      ],
+      "category": "model",
+      "quickSteps": [
+        "Выберите шаблон и частоту или редактируйте текущую модель",
+        "Измените размеры мышью или численно",
+        "Если нужно — используйте Отменить / Вернуть",
+        "Проверьте модель и выполните расчёт + Sweep",
+        "Сохраните варианты A/B/C для сравнения и возврата к геометрии"
+      ],
+      "relatedTopics": [
+        "emmana-next.overview",
+        "emmana-next.result.zin",
+        "emmana-next.ground.model"
+      ]
+    },
+    {
+      "id": "emmana-next.optimizer.goals",
+      "title": "Цели оптимизации",
+      "summary": "Выберите понятную цель; технические параметры останутся доступны отдельно.",
+      "body": "Баланс подходит для первого запуска. Лучшее согласование сильнее снижает КСВ в выбранном диапазоне. Максимум усиления даёт больший вес усилению, сохраняя ограничения по согласованию и направленности. Ручные изменения в Технических деталях не блокируются и используются при следующем запуске.",
+      "keywords": [
+        "оптимизация",
+        "optimizer",
+        "КСВ",
+        "усиление",
+        "gain",
+        "matching",
+        "PSO",
+        "DE"
+      ],
+      "category": "optimization",
+      "quickSteps": [
+        "Выберите параметрическую антенну, например Яги 3 элемента",
+        "Укажите цель и диапазон частот",
+        "Нажмите Оптимизировать",
+        "Сравните результат и примените его только после проверки"
+      ],
+      "relatedTopics": [
+        "emmana-next.geometry.editor",
+        "emmana-next.result.vswr"
+      ]
+    }
+  ]
+}
