@@ -6,7 +6,7 @@ import 'data/profile_repository.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
-const appBuildLabel = 'v0.9.0-alpha.13 · Pixel 7a';
+const appBuildLabel = 'v0.9.0-alpha.14 · Pixel 7a';
 
 void main() => runApp(const ServiceStudioApp());
 
