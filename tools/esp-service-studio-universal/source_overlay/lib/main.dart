@@ -56,6 +56,8 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   bool loadingElrsTarget = false;
   bool preparingElrs = false;
   bool flashingEsp = false;
+  bool meshServiceBusy = false;
+  Map<String, Object?>? meshServiceResult;
   bool _usbRefreshInFlight = false;
 
   String? error;
@@ -274,6 +276,34 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     }).toList()
       ..sort((a, b) => a.productName.compareTo(b.productName));
     return targets;
+  }
+
+  Future<void> _meshServiceCommand(int command) async {
+    final device = usbDevices.firstOrNull;
+    if (device == null || meshServiceBusy) return;
+
+    setState(() {
+      meshServiceBusy = true;
+      meshServiceResult = null;
+    });
+    try {
+      final result = await _usb.meshServiceCommand(
+        deviceName: device.deviceName,
+        command: command,
+      );
+      if (!mounted) return;
+      setState(() => meshServiceResult = result);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        meshServiceResult = <String, Object?>{
+          'status': 'mesh_command_error',
+          'message': '$e',
+        };
+      });
+    } finally {
+      if (mounted) setState(() => meshServiceBusy = false);
+    }
   }
 
   Future<void> _fetchElrsIndex() async {
@@ -560,10 +590,46 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                         if (probeResult != null) ...[
                           const SizedBox(height: 12),
                           _ProbeResultCard(result: probeResult!),
+                          if (probeResult!.meshReady) ...[
+                            const SizedBox(height: 10),
+                            FilledButton.icon(
+                              onPressed: meshServiceBusy
+                                  ? null
+                                  : () => _meshServiceCommand(0x16),
+                              icon: meshServiceBusy
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.wifi_tethering),
+                              label: Text(
+                                meshServiceBusy
+                                    ? 'Переключаю…'
+                                    : 'Включить Wi-Fi обновление',
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              onPressed: meshServiceBusy
+                                  ? null
+                                  : () => _meshServiceCommand(0x17),
+                              icon: const Icon(Icons.settings_backup_restore),
+                              label: const Text('Вернуться в радиорежим'),
+                            ),
+                            if (meshServiceResult != null) ...[
+                              const SizedBox(height: 8),
+                              _MeshServiceResultCard(
+                                result: meshServiceResult!,
+                              ),
+                            ],
+                          ],
                         ],
                       ],
                     ),
             ),
+            if (probeResult?.meshReady != true)
             _Section(
               title: '2. ELRS оборудование',
               child: Column(
@@ -685,6 +751,25 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                 flashing: flashingEsp,
                 flashResult: flashResult,
                 onFlash: _flashPreparedEsp8285,
+              ),
+            if (probeResult?.meshReady == true)
+              _Section(
+                title: '2. Mesh Messenger — режим прошивки',
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Основной путь — программно включить Wi-Fi OTA кнопкой выше. '
+                      'ROM-загрузчик нужен только для первого прошивания или восстановления.',
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'ESP8285: BOOT/GPIO0 → GND при включении питания. '
+                      'ESP32-C3: используйте штатный BOOT/RESET или USB download mode платы.',
+                      style: TextStyle(color: Colors.white60),
+                    ),
+                  ],
+                ),
               ),
             _Section(
               title: 'Расширенный сервис',
@@ -1076,6 +1161,7 @@ class _ProbeResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ok = result.ok;
+    final mesh = result.meshReady;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1104,7 +1190,9 @@ class _ProbeResultCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  ok ? 'ESP ROM отвечает' : 'Проверка не завершена',
+                  mesh
+                      ? 'Mesh Messenger обнаружен'
+                      : (ok ? 'ESP ROM отвечает' : 'Проверка не завершена'),
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
                   ),
@@ -1114,7 +1202,21 @@ class _ProbeResultCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(result.message),
-          if (result.ok) ...[
+          if (result.meshReady) ...[
+            const SizedBox(height: 10),
+            if (result.meshFirmwareVersion != null)
+              _DiagLine('Прошивка', result.meshFirmwareVersion!),
+            if (result.meshBoardId != null)
+              _DiagLine('Плата', result.meshBoardId!),
+            if (result.meshRadioFamily != null)
+              _DiagLine('Радиочип', result.meshRadioFamily!),
+            if (result.meshBuildHash != null)
+              _DiagLine('Сборка', result.meshBuildHash!),
+            _DiagLine(
+              'MM-UART',
+              'v${result.meshProtocolVersion ?? 1}',
+            ),
+          ] else if (result.ok) ...[
             const SizedBox(height: 10),
             if (result.chipDescription != null)
               _DiagLine('Контроллер', result.chipDescription!),
@@ -1143,6 +1245,46 @@ class _ProbeResultCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MeshServiceResultCard extends StatelessWidget {
+  const _MeshServiceResultCard({required this.result});
+
+  final Map<String, Object?> result;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = result['status']?.toString() ?? 'unknown';
+    final ok = status == 'mesh_ota_started' || status == 'mesh_ota_stopped';
+    final message = result['message']?.toString() ?? 'Нет сообщения';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: ok
+              ? Colors.greenAccent.withValues(alpha: 0.4)
+              : Colors.orangeAccent.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          if (result['ssid'] != null)
+            _DiagLine('Wi-Fi', result['ssid'].toString()),
+          if (result['url'] != null)
+            _DiagLine('Адрес', result['url'].toString()),
+          if (result['user'] != null)
+            _DiagLine('Логин', result['user'].toString()),
         ],
       ),
     );
@@ -1426,14 +1568,16 @@ class _HelpSheet extends StatelessWidget {
         ),
         SizedBox(height: 8),
         Text(
-          '2. Введите ESP-приёмник в ROM-загрузчик его штатным способом. '
-          'Для многих ESP8285 это BOOT pad → GND при подаче питания.',
+          '2. Если на устройстве уже стоит Mesh Messenger, просто нажмите '
+          '«Определить и проверить»: программа сначала попробует MM-UART и '
+          'предложит программно включить Wi-Fi OTA. ROM-загрузчик нужен для '
+          'первого прошивания или восстановления.',
         ),
         SizedBox(height: 8),
         Text(
           '3. Нажмите «Определить и проверить». Android при необходимости запросит '
-          'разрешение на USB. Программа откроет UART 115200 и отправит безопасную '
-          'команду ESP ROM SYNC. Флеш-память при этой проверке не изменяется.',
+          'разрешение на USB. Сначала проверяется Mesh Messenger/MM-UART, затем — '
+          'ESP ROM. Флеш-память при определении не изменяется.',
         ),
         SizedBox(height: 12),
         Text(
