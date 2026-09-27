@@ -269,12 +269,33 @@ class _ConnectionPageState extends State<ConnectionPage> {
                             Text('RX: ${controller.lr24RxFrames} кадров · ${controller.lr24RxBytes} байт'),
                             Text('Ошибки кадров: ${controller.lr24BadFrames}'),
                             const SizedBox(height: 8),
-                            const Text(
-                              'Мощность: LR24-F до 500 мВт. Программное переключение ступеней пока не включено: команда конфигуратора должна быть подтверждена. Первый тест — на низкой мощности, заданной в MicoAssistant.',
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Ranging / ToF: штатная функция LR24-F не подтверждена, поэтому измерение расстояния выключено.',
+                            ExpansionTile(
+                              tilePadding: EdgeInsets.zero,
+                              childrenPadding: EdgeInsets.zero,
+                              title: const Text(
+                                'Параметры и ограничения',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              children: const [
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'Мощность: LR24-F до 500 мВт. '
+                                    'Переключение ступеней из приложения пока не включено, '
+                                    'пока не подтверждена команда MicoAssistant.',
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'Ranging / ToF: штатная функция LR24-F не подтверждена. '
+                                    'Кнопка проверки связи показывает RTT, а не расстояние.',
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 10),
                             Wrap(
