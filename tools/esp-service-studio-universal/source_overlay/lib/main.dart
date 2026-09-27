@@ -344,9 +344,9 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     final approved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Записать Mesh Messenger?'),
+        title: const Text('Записать M03 радиомодуль?'),
         content: Text(
-          'Устройство: Mesh Messenger / HappyModel EP2\n'
+          'Устройство: M03 External Radio / HappyModel EP2\n'
           'Версия: ${prepared['version'] ?? '-'}\n'
           'Размер: ${prepared['fileSize'] ?? 0} Б\n'
           'SHA-256: ${prepared['sha256']}\n\n'
@@ -360,7 +360,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Записать Mesh'),
+            child: const Text('Записать M03'),
           ),
         ],
       ),
@@ -393,7 +393,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       setState(() {
         meshFlashResult = EspFlashResult(
           status: 'flash_error',
-          message: 'Ошибка записи Mesh: $e',
+          message: 'Ошибка записи M03: $e',
         );
       });
     } finally {
@@ -423,7 +423,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         'status': 'waiting_restart',
         'message':
             'Запись закончена. Снимите BOOT→GND, перезапустите модуль. '
-                'Studio сама проверит Mesh firmware через MM-UART.',
+                'Studio сама проверит M03 firmware через MM-UART.',
         'expectedVersion': expectedVersion,
         'expectedBoard': expectedBoard,
       };
@@ -467,7 +467,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         meshVerifyResult = <String, Object?>{
           'status': 'timeout',
           'message':
-              'Автопроверка не дождалась Mesh firmware. '
+              'Автопроверка не дождалась M03 firmware. '
                   'Снимите BOOT→GND, перезапустите модуль и нажмите «Проверить снова».',
           'expectedVersion': _meshExpectedVersion,
           'expectedBoard': _meshExpectedBoard,
@@ -513,7 +513,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
             meshVerifyResult = <String, Object?>{
               'status': 'verified',
               'message':
-                  'Проверено: модуль загрузился в Mesh Messenger после прошивки.',
+                  'Проверено: M03 радиомодуль загрузился после прошивки и отвечает по MM-UART.',
               'expectedVersion': _meshExpectedVersion,
               'actualVersion': r.meshFirmwareVersion,
               'expectedBoard': _meshExpectedBoard,
@@ -529,7 +529,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
             meshVerifyResult = <String, Object?>{
               'status': 'mismatch',
               'message':
-                  'Mesh firmware отвечает, но версия или board_id не совпали '
+                  'M03 firmware отвечает, но версия или board_id не совпали '
                       'с записанным образом.',
               'expectedVersion': _meshExpectedVersion,
               'actualVersion': r.meshFirmwareVersion,
@@ -545,7 +545,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
             'status': 'waiting_restart',
             'message': r.status == 'rom_ready'
                 ? 'ESP всё ещё в ROM BOOT. Снимите BOOT→GND и перезапустите модуль.'
-                : 'Ожидаю запуск Mesh firmware после перезапуска… (${r.status})',
+                : 'Ожидаю запуск M03 firmware после перезапуска… (${r.status})',
             'expectedVersion': _meshExpectedVersion,
             'expectedBoard': _meshExpectedBoard,
           };
@@ -556,7 +556,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
       setState(() {
         meshVerifyResult = <String, Object?>{
           'status': 'waiting_restart',
-          'message': 'Пока не удалось проверить Mesh firmware: $e',
+          'message': 'Пока не удалось проверить M03 firmware: $e',
           'expectedVersion': _meshExpectedVersion,
           'expectedBoard': _meshExpectedBoard,
         };
@@ -919,14 +919,14 @@ class _ServiceHomePageState extends State<ServiceHomePage>
             ),
             if (probeResult?.meshReady != true)
               _Section(
-                title: '2. Mesh Messenger',
+                title: '2. M03 радиомодуль',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
                       probeResult?.ok == true
                           ? 'ESP ROM доступен. Можно выполнить первое прошивание '
-                              'или восстановление Mesh Messenger через USB.'
+                              'или восстановление M03 радиомодуля через USB.'
                           : 'Для первого прошивания/восстановления переведите ESP8285 '
                               'в ROM BOOT, затем нажмите «Определить и проверить».',
                     ),
@@ -943,7 +943,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                       label: Text(
                         meshPreparing
                             ? 'Проверяю файл…'
-                            : 'Выбрать Mesh EP2 .bin',
+                            : 'Выбрать M03 EP2 .bin',
                       ),
                     ),
                     if (meshPrepared != null) ...[
@@ -963,7 +963,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                           label: Text(
                             flashingEsp
                                 ? 'Записываю…'
-                                : 'Записать Mesh через USB',
+                                : 'Записать M03 через USB',
                           ),
                         ),
                       ],
@@ -1109,7 +1109,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
               ),
             if (probeResult?.meshReady == true)
               const _Section(
-                title: '2. Mesh Messenger — режим прошивки',
+                title: '2. M03 радиомодуль — режим прошивки',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1546,7 +1546,7 @@ class _ProbeResultCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   mesh
-                      ? 'Mesh Messenger обнаружен'
+                      ? 'M03 радиомодуль обнаружен'
                       : (ok ? 'ESP ROM отвечает' : 'Проверка не завершена'),
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
@@ -1664,7 +1664,7 @@ class _MeshFlashResultCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            result.ok ? 'Mesh записан' : 'Ошибка записи Mesh',
+            result.ok ? 'M03 записан' : 'Ошибка записи M03',
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 6),
@@ -2079,7 +2079,7 @@ class _HelpSheet extends StatelessWidget {
         ),
         SizedBox(height: 8),
         Text(
-          '2. Если на устройстве уже стоит Mesh Messenger, просто нажмите '
+          '2. Если на устройстве уже стоит M03 firmware (Mesh Messenger или пеленгатор), просто нажмите '
           '«Определить и проверить»: программа сначала попробует MM-UART и '
           'предложит программно включить Wi-Fi OTA. ROM-загрузчик нужен для '
           'первого прошивания или восстановления.',
@@ -2087,7 +2087,7 @@ class _HelpSheet extends StatelessWidget {
         SizedBox(height: 8),
         Text(
           '3. Нажмите «Определить и проверить». Android при необходимости запросит '
-          'разрешение на USB. Сначала проверяется Mesh Messenger/MM-UART, затем — '
+          'разрешение на USB. Сначала проверяется M03/MM-UART, затем — '
           'ESP ROM. Флеш-память при определении не изменяется.',
         ),
         SizedBox(height: 12),
