@@ -510,7 +510,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   const SizedBox(height: 8),
                   if (controller.ep2Devices.isEmpty)
                     Text(
-                      'Подключи радиомодуль по USB — поиск и подключение выполняются автоматически.',
+                      'Подключи радиомодуль по USB и выбери его профиль: LR24-F или Авто M03. До выбора приложение не отправляет probe-команды.',
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
