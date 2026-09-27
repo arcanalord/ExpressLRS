@@ -3,6 +3,7 @@ enum DeliveryState {
   sending,
   waitingAck,
   delivered,
+  broadcasted,
   noRoute,
   retryWait,
   expired,
@@ -13,12 +14,40 @@ enum DeliveryState {
 extension DeliveryStateX on DeliveryState {
   bool get isTerminal => switch (this) {
     DeliveryState.delivered ||
+    DeliveryState.broadcasted ||
     DeliveryState.expired ||
     DeliveryState.failed ||
     DeliveryState.cancelled => true,
     _ => false,
   };
 }
+
+enum ConversationKind { channel, direct }
+
+final class ConversationRef {
+  const ConversationRef.channel(this.id) : kind = ConversationKind.channel;
+  const ConversationRef.direct(this.id) : kind = ConversationKind.direct;
+
+  final ConversationKind kind;
+  final String id;
+
+  String get key => '${kind.name}:$id';
+
+  static ConversationRef fromKey(String key) {
+    if (key.startsWith('channel:')) {
+      return ConversationRef.channel(key.substring('channel:'.length));
+    }
+    if (key.startsWith('direct:')) {
+      return ConversationRef.direct(key.substring('direct:'.length));
+    }
+    throw FormatException('Unknown conversation key: $key');
+  }
+}
+
+String channelTargetKey(String channelId) => 'channel:$channelId';
+bool isChannelTargetKey(String value) => value.startsWith('channel:');
+String? channelIdFromTargetKey(String value) =>
+    isChannelTargetKey(value) ? value.substring('channel:'.length) : null;
 
 final class Contact {
   const Contact({
@@ -114,6 +143,8 @@ final class ConversationMessage {
     required this.createdAt,
     this.messageClass = 'text',
     this.mapPoint,
+    this.conversationKey,
+    this.senderMmId,
   });
 
   final String messageId;
@@ -123,12 +154,19 @@ final class ConversationMessage {
   final DateTime createdAt;
   final String messageClass;
   final MapPoint? mapPoint;
+  final String? conversationKey;
+  final String? senderMmId;
 
   bool get isMapPoint => messageClass == 'map_point' && mapPoint != null;
+  String get effectiveConversationKey =>
+      conversationKey ?? 'direct:$peerMmId';
 
   Map<String, Object?> toJson() => {
+    'schemaVersion': 2,
     'messageId': messageId,
     'peerMmId': peerMmId,
+    'conversationKey': effectiveConversationKey,
+    'senderMmId': senderMmId,
     'text': text,
     'outgoing': outgoing,
     'createdAt': createdAt.toIso8601String(),
@@ -145,6 +183,8 @@ final class ConversationMessage {
       outgoing: json['outgoing'] as bool,
       createdAt: DateTime.parse(json['createdAt'] as String),
       messageClass: json['messageClass'] as String? ?? 'text',
+      conversationKey: json['conversationKey'] as String?,
+      senderMmId: json['senderMmId'] as String?,
       mapPoint: rawPoint is Map<String, dynamic>
           ? MapPoint.fromJson(rawPoint)
           : rawPoint is Map
@@ -173,6 +213,9 @@ final class DeliveryEnvelope {
   final String messageId;
   final String recipientMmId;
   final String messageClass;
+
+  bool get isChannel => isChannelTargetKey(recipientMmId);
+  String? get channelId => channelIdFromTargetKey(recipientMmId);
   final String payload;
   final DateTime createdAt;
   final DateTime expiresAt;
