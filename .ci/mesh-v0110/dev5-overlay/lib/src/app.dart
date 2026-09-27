@@ -19,6 +19,33 @@ class MeshMessengerApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
         colorSchemeSeed: const Color(0xFF84A8FF),
+        scaffoldBackgroundColor: const Color(0xFF090C12),
+        cardTheme: CardThemeData(
+          color: const Color(0xFF151A24).withValues(alpha: 0.78),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(
+              color: const Color(0xFFB9C7E8).withValues(alpha: 0.14),
+            ),
+          ),
+        ),
+        appBarTheme: AppBarTheme(
+          backgroundColor: const Color(0xFF0E131D).withValues(alpha: 0.82),
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: const Color(0xFF0E131D).withValues(alpha: 0.86),
+          indicatorColor: const Color(0xFF84A8FF).withValues(alpha: 0.18),
+          elevation: 0,
+        ),
+        navigationRailTheme: NavigationRailThemeData(
+          backgroundColor: const Color(0xFF0E131D).withValues(alpha: 0.76),
+          indicatorColor: const Color(0xFF84A8FF).withValues(alpha: 0.18),
+          elevation: 0,
+        ),
       ),
       home: const _Bootstrap(),
     );
