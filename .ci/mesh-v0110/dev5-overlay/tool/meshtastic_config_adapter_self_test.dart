@@ -1,4 +1,3 @@
-import '../lib/core/settings_registry.dart';
 import '../lib/platform/meshtastic_config_adapter.dart';
 
 void main() {
