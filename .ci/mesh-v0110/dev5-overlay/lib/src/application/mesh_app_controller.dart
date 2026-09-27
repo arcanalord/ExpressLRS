@@ -1758,7 +1758,7 @@ final class MeshAppController extends ChangeNotifier {
       contacts.where((contact) => contact.ep2NodeId == nodeId).firstOrNull;
 
   Future<void> _onEp2Event(Ep2TransportEvent event) async {
-    if (_mmUartActive && event is! Ep2LogEvent) return;
+    if ((_mmUartActive || _lr24Active) && event is! Ep2LogEvent) return;
     if (event is Ep2StateEvent) {
       ep2State = event.state;
       ep2Error = event.error;
