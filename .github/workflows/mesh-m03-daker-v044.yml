@@ -1,0 +1,91 @@
+name: Mesh M03 DAKER LR1121 v0.4.4-dev
+
+on:
+  push:
+    branches:
+      - build/mesh-m03-dakefpv-lr1121-v0.4.4-dev
+    paths:
+      - '.ci/m03-v044-daker/**'
+      - '.github/workflows/mesh-m03-daker-v044.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Restore source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .ci/m03-v044-daker/p* | base64 -d > /tmp/m03-v044.tgz
+          echo "52341c4ddf6e188e371b20f2f7309c7003e509a3eb4371a6b28786b09492dacf  /tmp/m03-v044.tgz" | sha256sum -c -
+          mkdir -p /tmp/m03
+          tar -xzf /tmp/m03-v044.tgz -C /tmp/m03
+          grep -q 'mmfw_dakerfpv_nano_c3_lr1121' /tmp/m03/platformio.ini
+          grep -q 'MM_BOARD_DAKERFPV_NANO_C3' /tmp/m03/platformio.ini
+          grep -q 'MM_RADIO_LR1121' /tmp/m03/platformio.ini
+          grep -q 'PIN_RST = 2' /tmp/m03/include/boards/dakerfpv_nano_c3_lr1121.h
+          grep -q 'setRegulatorDCDC' /tmp/m03/src/radio_adapter.cpp
+          grep -q 'setRfSwitchTable' /tmp/m03/src/radio_adapter.cpp
+          grep -q 'setBandwidth(mm::target::BW_KHZ,true)' /tmp/m03/src/radio_adapter.cpp
+
+      - name: Install PlatformIO
+        run: python -m pip install --upgrade platformio
+
+      - name: Contract and MMRP tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/m03
+          python tests/contract_static.py
+          node tests/mmrp_codec_test.js
+          g++ -std=c++17 -Iinclude tests/mmrp_vector_test.cpp src/mmrp_packet.cpp src/mm_uart.cpp -o /tmp/mmrp_vector_test
+          /tmp/mmrp_vector_test
+
+      - name: Build DAKERFPV Nano C3 LR1121
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/m03
+          pio run -e mmfw_dakerfpv_nano_c3_lr1121
+
+      - name: Validate and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          BIN=/tmp/m03/.pio/build/mmfw_dakerfpv_nano_c3_lr1121/firmware.bin
+          cp "$BIN" out/DAKERFPV-Nano-C3-LR1121-M03-v0.4.4-dev.bin
+          python -m esptool image_info out/DAKERFPV-Nano-C3-LR1121-M03-v0.4.4-dev.bin
+          cd /tmp/m03
+          zip -qr /home/runner/work/ExpressLRS/ExpressLRS/out/M03-ER-FW-FRAMEWORK-v0.4.4-dev-DAKERFPV-SOURCE.zip . -x '.pio/*'
+          cd /home/runner/work/ExpressLRS/ExpressLRS/out
+          cat > QA_REPORT_v0.4.4-dev.md <<'EOF'
+          # Mesh Messenger M03 v0.4.4-dev - DAKERFPV Nano C3 LR1121
+          CI BUILD PASS.
+          Target: ESP32-C3 + LR1121.
+          Board pins: RX20 TX21 MISO5 MOSI4 SCK6 BUSY3 DIO1=1 NSS7 RST2.
+          Radio: DCDC enabled; internal LR1121 RF-switch table configured.
+          PHY candidate: 2440 MHz, LoRa BW 812.5 kHz, SF8, CR 4/7, sync 0x12, preamble 12.
+          MM-UART/1 + MMRP/1 software contract tests: PASS.
+          ESP32-C3 PlatformIO build: PASS.
+          esptool image_info: PASS.
+          Physical DAKER RF HIL: PENDING.
+          Cross-radio EP2/SX1280 <-> DAKER/LR1121 HIL: PENDING.
+          EOF
+          sha256sum DAKERFPV-Nano-C3-LR1121-M03-v0.4.4-dev.bin M03-ER-FW-FRAMEWORK-v0.4.4-dev-DAKERFPV-SOURCE.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: M03-DAKER-LR1121-v0.4.4-dev
+          path: out/*
