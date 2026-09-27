@@ -128,7 +128,7 @@ class MainActivity : FlutterActivity() {
                 ?: error("Не удалось прочитать выбранный файл")
 
             if (bytes.size !in 64_000..1_048_576) {
-                error("Размер Mesh прошивки выглядит неверно: ${bytes.size} Б")
+                error("Размер M03 прошивки выглядит неверно: ${bytes.size} Б")
             }
 
             val sha = MessageDigest.getInstance("SHA-256")
@@ -139,7 +139,7 @@ class MainActivity : FlutterActivity() {
                 sha.equals(MESH_EP2_V043_SHA256, ignoreCase = true) -> "v0.4.3-dev"
                 sha.equals(MESH_EP2_V040_SHA256, ignoreCase = true) -> "v0.4.0"
                 else -> error(
-                    "Файл не входит в разрешённый каталог Mesh Messenger EP2. " +
+                    "Файл не входит в разрешённый каталог M03 / HappyModel EP2. " +
                         "SHA-256: $sha"
                 )
             }
@@ -157,7 +157,7 @@ class MainActivity : FlutterActivity() {
 
             val dir = File(filesDir, "firmware/mesh/happymodel_ep2/$meshVersion")
             if (!dir.exists() && !dir.mkdirs()) {
-                error("Не удалось создать каталог Mesh прошивки")
+                error("Не удалось создать каталог M03 прошивки")
             }
 
             val firmware = File(dir, "firmware.bin")
@@ -167,7 +167,7 @@ class MainActivity : FlutterActivity() {
                 .put("kind", "mesh")
                 .put("version", meshVersion)
                 .put("targetPath", "mesh.happymodel_ep2")
-                .put("productName", "Mesh Messenger / HappyModel EP2")
+                .put("productName", "M03 External Radio / HappyModel EP2")
                 .put("platform", "esp8285")
                 .put("firmware", "MeshMessenger_EP2")
                 .put("boardId", "happymodel_ep2")
@@ -188,10 +188,10 @@ class MainActivity : FlutterActivity() {
 
             mapOf(
                 "status" to "prepared",
-                "message" to "Mesh Messenger EP2 $meshVersion проверена и готова к ROM-записи",
+                "message" to "M03 EP2 $meshVersion проверена и готова к ROM-записи",
                 "version" to meshVersion,
                 "targetPath" to "mesh.happymodel_ep2",
-                "productName" to "Mesh Messenger / HappyModel EP2",
+                "productName" to "M03 External Radio / HappyModel EP2",
                 "platform" to "esp8285",
                 "firmware" to "MeshMessenger_EP2",
                 "boardId" to "happymodel_ep2",
@@ -211,7 +211,7 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             mapOf(
                 "status" to "error",
-                "message" to "Mesh прошивка отклонена: ${e.message ?: e.javaClass.simpleName}",
+                "message" to "M03 прошивка отклонена: ${e.message ?: e.javaClass.simpleName}",
             )
         }
     }
