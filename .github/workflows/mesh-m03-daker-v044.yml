@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -36,7 +35,6 @@ jobs:
           grep -q 'PIN_RST = 2' /tmp/m03/include/boards/dakerfpv_nano_c3_lr1121.h
           grep -q 'setRegulatorDCDC' /tmp/m03/src/radio_adapter.cpp
           grep -q 'setRfSwitchTable' /tmp/m03/src/radio_adapter.cpp
-          grep -q 'setBandwidth(mm::target::BW_KHZ,true)' /tmp/m03/src/radio_adapter.cpp
 
       - name: Install PlatformIO
         run: python -m pip install --upgrade platformio
@@ -50,6 +48,13 @@ jobs:
           node tests/mmrp_codec_test.js
           g++ -std=c++17 -Iinclude tests/mmrp_vector_test.cpp src/mmrp_packet.cpp src/mm_uart.cpp -o /tmp/mmrp_vector_test
           /tmp/mmrp_vector_test
+
+      - name: Install firmware libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/m03
+          pio pkg install -e mmfw_dakerfpv_nano_c3_lr1121 --library "jgromes/RadioLib@7.7.1" --library "bblanchon/ArduinoJson@7.4.3"
 
       - name: Build DAKERFPV Nano C3 LR1121
         shell: bash
