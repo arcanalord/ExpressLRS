@@ -63,7 +63,7 @@ jobs:
           BIN="$SRC/.pio/build/mmfw_dakerfpv_nano_c3_lr1121/firmware.bin"
           cp "$BIN" out/DAKERFPV-Nano-C3-LR1121-M03-v0.4.4-dev.bin
           python -m esptool image_info out/DAKERFPV-Nano-C3-LR1121-M03-v0.4.4-dev.bin
-          (cd "$SRC" && zip -qr ../../../out/M03-ER-FW-FRAMEWORK-v0.4.4-dev-DAKERFPV-SOURCE.zip . -x '.pio/*')
+          (cd "$SRC" && zip -qr ../../out/M03-ER-FW-FRAMEWORK-v0.4.4-dev-DAKERFPV-SOURCE.zip . -x '.pio/*')
           cat > out/QA_REPORT_v0.4.4-dev.md <<'EOF'
           # Mesh Messenger M03 v0.4.4-dev - DAKERFPV Nano C3 LR1121
           CI BUILD PASS.
