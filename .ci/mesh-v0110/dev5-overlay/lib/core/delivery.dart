@@ -139,6 +139,12 @@ final class DeliveryManager {
       latest = _items[messageId] ?? latest;
       if (result.status == TransportSendStatus.accepted) {
         allUnavailable = false;
+        // Channel sends have no single final recipient. Transport acceptance
+        // means the logical broadcast left the outbox; per-peer receipts are
+        // tracked separately and must not redefine direct Delivered semantics.
+        if (latest.isChannel) {
+          return _save(latest.copyWith(state: DeliveryState.broadcasted));
+        }
         // ACK may arrive while send() is still returning; never overwrite it.
         if (latest.state != DeliveryState.sending) return latest;
         return _save(latest.copyWith(state: DeliveryState.waitingAck));
@@ -188,6 +194,7 @@ final class DeliveryManager {
   }) async {
     final current = _items[messageId];
     if (current == null || current.state.isTerminal) return current;
+    if (current.isChannel) return current;
     if (current.recipientMmId != fromMmId) return current;
     if (ok) return _save(current.copyWith(state: DeliveryState.delivered));
     if (current.attempts >= maxAttempts) {
