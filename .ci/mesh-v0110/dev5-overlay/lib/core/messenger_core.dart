@@ -32,6 +32,10 @@ final class MeshMessengerCore {
   Future<void> saveContact(Contact contact) => _storage.saveContact(contact);
   Future<List<ConversationMessage>> messagesFor(String peerMmId) =>
       _storage.loadMessages(peerMmId: peerMmId);
+
+  Future<List<ConversationMessage>> messagesForConversation(
+    ConversationRef conversation,
+  ) => _storage.loadMessages(conversationKey: conversation.key);
   DeliveryEnvelope? deliveryById(String id) => delivery.byId(id);
   Future<void> maintenance() => delivery.maintenance();
 
@@ -52,6 +56,34 @@ final class MeshMessengerCore {
         text: clean,
         outgoing: true,
         createdAt: _now(),
+        conversationKey: ConversationRef.direct(peerMmId).key,
+        senderMmId: ownMmId,
+      ),
+    );
+    return result;
+  }
+
+  Future<DeliveryEnvelope> sendChannelText({
+    required String channelId,
+    required String text,
+  }) async {
+    final clean = text.trim();
+    if (clean.isEmpty) throw ArgumentError('text must not be empty');
+    final target = channelTargetKey(channelId);
+    final result = await delivery.enqueue(
+      recipientMmId: target,
+      messageClass: 'text',
+      payload: clean,
+    );
+    await _storage.appendMessageUnique(
+      ConversationMessage(
+        messageId: result.messageId,
+        peerMmId: target,
+        text: clean,
+        outgoing: true,
+        createdAt: _now(),
+        conversationKey: ConversationRef.channel(channelId).key,
+        senderMmId: ownMmId,
       ),
     );
     return result;
@@ -68,6 +100,25 @@ final class MeshMessengerCore {
       text: text,
       outgoing: false,
       createdAt: _now(),
+      conversationKey: ConversationRef.direct(fromMmId).key,
+      senderMmId: fromMmId,
+    ),
+  );
+
+  Future<bool> receiveChannelText({
+    required String messageId,
+    required String fromMmId,
+    required String channelId,
+    required String text,
+  }) => _storage.appendMessageUnique(
+    ConversationMessage(
+      messageId: messageId,
+      peerMmId: channelTargetKey(channelId),
+      text: text,
+      outgoing: false,
+      createdAt: _now(),
+      conversationKey: ConversationRef.channel(channelId).key,
+      senderMmId: fromMmId,
     ),
   );
 
@@ -89,6 +140,8 @@ final class MeshMessengerCore {
         createdAt: _now(),
         messageClass: 'map_point',
         mapPoint: point,
+        conversationKey: ConversationRef.direct(peerMmId).key,
+        senderMmId: ownMmId,
       ),
     );
     return result;
@@ -117,6 +170,8 @@ final class MeshMessengerCore {
         createdAt: _now(),
         messageClass: 'map_point',
         mapPoint: point,
+        conversationKey: ConversationRef.direct(fromMmId).key,
+        senderMmId: fromMmId,
       ),
     );
   }
