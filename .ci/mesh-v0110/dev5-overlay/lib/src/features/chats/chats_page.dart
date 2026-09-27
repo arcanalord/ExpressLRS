@@ -52,6 +52,7 @@ class _ChatsPageState extends State<ChatsPage> {
     DeliveryState.sending => 'Отправка',
     DeliveryState.waitingAck => 'Ждём ACK',
     DeliveryState.delivered => 'Доставлено',
+    DeliveryState.broadcasted => 'Отправлено',
     DeliveryState.noRoute => 'Нет маршрута',
     DeliveryState.retryWait => 'Повтор',
     DeliveryState.expired => 'Истёк TTL',
@@ -125,10 +126,27 @@ class _ContactList extends StatelessWidget {
           ),
           Expanded(
             child: ListView.builder(
-              itemCount: controller.contacts.length,
+              itemCount: controller.contacts.length + 1,
               itemBuilder: (context, index) {
-                final contact = controller.contacts[index];
-                final selected = contact.mmId == controller.selectedPeerMmId;
+                if (index == 0) {
+                  return ListTile(
+                    selected: controller.isGeneralChat,
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.forum_outlined, size: 20),
+                    ),
+                    title: const Text('Общий чат'),
+                    subtitle: Text(
+                      'Все совместимые узлы · в сети: ${controller.generalOnlineCount}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: controller.selectGeneralChat,
+                  );
+                }
+                final contact = controller.contacts[index - 1];
+                final selected =
+                    !controller.isGeneralChat &&
+                    contact.mmId == controller.selectedPeerMmId;
                 return ListTile(
                   selected: selected,
                   leading: CircleAvatar(
@@ -264,8 +282,9 @@ class _ConversationPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isGeneral = controller.isGeneralChat;
     final contact = controller.selectedContact;
-    if (contact == null) {
+    if (!isGeneral && contact == null) {
       return const Card(child: Center(child: Text('Нет выбранного контакта')));
     }
 
@@ -275,11 +294,17 @@ class _ConversationPane extends StatelessWidget {
         children: [
           ListTile(
             leading: CircleAvatar(
-              child: Text(contact.displayName.characters.first.toUpperCase()),
+              child: isGeneral
+                  ? const Icon(Icons.forum_outlined, size: 20)
+                  : Text(
+                      contact!.displayName.characters.first.toUpperCase(),
+                    ),
             ),
-            title: Text(contact.displayName),
-            subtitle: const Text(
-              'Контакт существует независимо от текущего маршрута',
+            title: Text(isGeneral ? 'Общий чат' : contact!.displayName),
+            subtitle: Text(
+              isGeneral
+                  ? 'Все совместимые узлы · в сети: ${controller.generalOnlineCount}'
+                  : 'Контакт существует независимо от текущего маршрута',
             ),
           ),
           const Divider(height: 1),
@@ -313,6 +338,20 @@ class _ConversationPane extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (isGeneral &&
+                                  !message.outgoing &&
+                                  message.senderMmId != null) ...[
+                                Text(
+                                  controller.displayNameForMmId(
+                                    message.senderMmId!,
+                                  ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelSmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 3),
+                              ],
                               if (message.isMapPoint) ...[
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -372,12 +411,21 @@ class _ConversationPane extends StatelessWidget {
                                   if (message.outgoing) ...[
                                     const SizedBox(width: 8),
                                     Text(
-                                      stateLabel(state),
+                                      isGeneral &&
+                                              state ==
+                                                  DeliveryState.broadcasted &&
+                                              controller.channelReceiptCountFor(
+                                                    message.messageId,
+                                                  ) >
+                                                  0
+                                          ? 'Получено: ${controller.channelReceiptCountFor(message.messageId)}'
+                                          : stateLabel(state),
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelSmall,
                                     ),
-                                    if (state == DeliveryState.waitingAck) ...[
+                                    if (!isGeneral &&
+                                        state == DeliveryState.waitingAck) ...[
                                       const SizedBox(width: 4),
                                       IconButton(
                                         visualDensity: VisualDensity.compact,
