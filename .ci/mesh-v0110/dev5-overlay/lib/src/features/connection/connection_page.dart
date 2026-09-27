@@ -303,9 +303,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               runSpacing: 8,
                               children: [
                                 FilledButton.tonalIcon(
-                                  onPressed: controller.selectedContact == null
-                                      ? null
-                                      : controller.probeLr24Peer,
+                                  onPressed: controller.lr24Connected
+                                      ? controller.probeLr24Peer
+                                      : null,
                                   icon: const Icon(Icons.network_ping),
                                   label: Text(controller.lr24RttMs == null
                                       ? 'Проверить связь'
@@ -318,11 +318,32 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                 ),
                               ],
                             ),
+                            if (controller.lr24PeerMmId?.isNotEmpty == true) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                'Ответил MM-ID: ${controller.lr24PeerMmId}',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              if (controller.selectedPeerMmId != null &&
+                                  controller.selectedPeerMmId != controller.lr24PeerMmId)
+                                Text(
+                                  'Радиоканал работает, но выбранный контакт имеет другой MM-ID. '
+                                  'Перепривяжи контакт перед проверкой чата.',
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.tertiary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                            ],
                             if (controller.lr24Error?.isNotEmpty == true) ...[
                               const SizedBox(height: 8),
                               Text(
                                 controller.lr24Error!,
-                                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
                               ),
                             ],
                           ],
