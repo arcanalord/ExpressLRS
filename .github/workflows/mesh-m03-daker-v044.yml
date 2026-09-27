@@ -45,7 +45,7 @@ jobs:
           g++ -std=c++17 -Iinclude -c src/mmrp_packet.cpp -o /tmp/mmrp_packet.o
 
       - name: Install PlatformIO
-        run: python -m pip install --upgrade platformio
+        run: python -m pip install --upgrade platformio esptool
 
       - name: Build DAKERFPV Nano C3 LR1121
         shell: bash
