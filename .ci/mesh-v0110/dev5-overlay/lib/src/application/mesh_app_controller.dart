@@ -91,9 +91,6 @@ final class MeshAppController extends ChangeNotifier {
   bool _maintenanceBusy = false;
   bool _usbMaintenanceBusy = false;
   int _usbMaintenanceTick = 0;
-  DateTime? _lastUsbAutoConnectAttempt;
-  int? _lastUsbAutoConnectDeviceId;
-  bool _usbAutoConnectSuppressed = false;
 
   bool initialized = false;
   bool busy = false;
@@ -753,7 +750,6 @@ final class MeshAppController extends ChangeNotifier {
           );
       if (changed) {
         ep2Devices = devices;
-        _usbAutoConnectSuppressed = false;
         _addEp2Log('USB devices=${devices.length}');
       }
 
@@ -791,9 +787,6 @@ final class MeshAppController extends ChangeNotifier {
           devices.length == 1 &&
           changed) {
         final device = devices.single;
-        _usbAutoConnectSuppressed = true;
-        _lastUsbAutoConnectAttempt = DateTime.now();
-        _lastUsbAutoConnectDeviceId = device.deviceId;
         ep2InfoNotice =
             'USB-модуль найден · выбери LR24-F или Авто M03. '
             'Активный probe не запускается до выбора профиля.';
@@ -1182,7 +1175,6 @@ final class MeshAppController extends ChangeNotifier {
     final lr24 = _lr24;
     if (lr24 == null || busy) return;
     busy = true;
-    _usbAutoConnectSuppressed = true;
     lr24Error = null;
     lr24ConnectedDeviceId = deviceId;
     lr24State = 'connecting';
@@ -1269,7 +1261,6 @@ final class MeshAppController extends ChangeNotifier {
     if (lr24Connected || _lr24Active) {
       await disconnectLr24();
     }
-    _usbAutoConnectSuppressed = false;
     ep2Error = null;
     ep2DetectedProtocol = 'detecting';
     ep2RxBytes = 0;
@@ -1367,7 +1358,6 @@ final class MeshAppController extends ChangeNotifier {
     final session = _externalRadioSession;
     if (ep2 == null) return;
     _addEp2Log('DISCONNECT requested');
-    _usbAutoConnectSuppressed = true;
     ep2ConnectedDeviceId = null;
     _mmUartActive = false;
     if (session != null) {
