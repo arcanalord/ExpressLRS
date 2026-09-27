@@ -20,6 +20,7 @@ enum DeviceHostProtocol {
   ep2LinkAscii,
   crsf,
   ssBridge1,
+  transparentByteStream,
 }
 
 final class RecognitionEvidence {
@@ -268,6 +269,33 @@ abstract final class DeviceRecognition {
             source: 'protocol_frame',
             key: 'crc_valid_crsf',
             value: true,
+          ),
+        ],
+      );
+
+  static DeviceRecognitionSnapshot lr24Stock({
+    required int baudRate,
+  }) =>
+      DeviceRecognitionSnapshot(
+        state: DeviceRecognitionState.recognized,
+        confidence: DeviceRecognitionConfidence.confirmed,
+        transport: DeviceTransportIdentity(
+          kind: 'usb_uart',
+          baudRate: baudRate,
+        ),
+        protocol: DeviceHostProtocol.transparentByteStream,
+        profileId: 'MICOAIR_LR24_F_STOCK',
+        radioFamily: 'MICOAIR_LR24_F',
+        capabilities: const <String>{
+          'text',
+          'map_point',
+          'transparent_uart',
+        },
+        evidence: const <RecognitionEvidence>[
+          RecognitionEvidence(
+            source: 'user_override',
+            key: 'profile',
+            value: 'MICOAIR_LR24_F_STOCK',
           ),
         ],
       );
