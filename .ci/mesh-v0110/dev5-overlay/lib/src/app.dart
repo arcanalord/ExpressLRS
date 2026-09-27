@@ -89,7 +89,7 @@ class _AppShellState extends State<AppShell> {
       ),
       MapPage(controller: widget.controller),
       ConnectionPage(controller: widget.controller),
-      const SettingsPage(),
+      SettingsPage(controller: widget.controller),
     ];
     final wide = MediaQuery.sizeOf(context).width >= 760;
     final body = Row(
