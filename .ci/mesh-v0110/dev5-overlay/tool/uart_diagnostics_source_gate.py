@@ -25,8 +25,18 @@ for needle in ['crc8DvbS2', 'length < 2 || length > 62']:
 for needle in ['pingEp2Neighbor', "ep2Protocol = switch", 'ep2Rssi10', 'connectLr24', 'TransparentUartRadioTransport']:
     assert needle in controller, needle
 
-for needle in ['PING соседнего узла', "'Повторить'", "'Авто M03'", 'ELRS / CRSF']:
+for needle in [
+    'PING соседнего узла',
+    "'Авто M03'",
+    'LR24-F выбран',
+    'UART диагностика M03 / ELRS',
+    'ELRS / CRSF',
+]:
     assert needle in page, needle
+
+# LR24 and M03 are mutually exclusive modes; the old generic retry action
+# must not be shown beside an already selected LR24 transport.
+assert "'Повторить'" not in page
 
 # Keep engineering details out of the normal device list.
 assert 'VID:' not in page and 'PID:' not in page
