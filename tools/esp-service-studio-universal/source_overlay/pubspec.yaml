@@ -1,7 +1,7 @@
 name: service_studio
 version: 0.9.0-alpha.14+26092714
 publish_to: none
-description: Universal service studio for ESP controllers, radio modules and Mesh Messenger hardware.
+description: Universal service studio for ESP controllers, M03 radio modules, ELRS equipment and shared project hardware.
 environment:
   sdk: '>=3.5.0 <4.0.0'
 dependencies:
