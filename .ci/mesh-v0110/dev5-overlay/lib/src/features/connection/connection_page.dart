@@ -75,6 +75,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
   String _transportLabel(String? id) => switch (id) {
     'lan' => 'Локальная сеть',
     'ep2-uart' => 'Радиомодуль',
+    'lr24-usb' => 'MicoAir LR24-F',
     'meshtastic' => 'Meshtastic',
     null => 'Канал выбирается',
     _ => 'Другой канал',
@@ -94,8 +95,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
       'offline',
       'disconnected',
     }.contains(controller.ep2State);
-    final anyRouteReady =
-        controller.lanReady || controller.ep2Connected || controller.radioConnected;
+    final anyRouteReady = controller.lanReady ||
+        controller.ep2Connected ||
+        controller.lr24Connected ||
+        controller.radioConnected;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -139,8 +142,13 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     ),
                     _StatusPill(
                       icon: Icons.usb,
-                      label: 'Радио',
+                      label: 'M03 / ELRS',
                       ready: controller.ep2Connected,
+                    ),
+                    _StatusPill(
+                      icon: Icons.usb_rounded,
+                      label: 'LR24-F',
+                      ready: controller.lr24Connected,
                     ),
                     _StatusPill(
                       icon: Icons.bluetooth,
@@ -164,7 +172,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
               children: [
                 Row(
                   children: [
-                    Icon(controller.ep2Connected ? Icons.usb : Icons.usb_off),
+                    Icon((controller.ep2Connected || controller.lr24Connected)
+                        ? Icons.usb
+                        : Icons.usb_off),
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Text(
@@ -181,7 +191,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    _transportState(controller.ep2State),
+                    controller.lr24Active
+                        ? 'MicoAir LR24-F · ${_transportState(controller.lr24State)}'
+                        : _transportState(controller.ep2State),
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
@@ -235,6 +247,66 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         ),
                     ],
                   ),
+                  if (controller.lr24Active) ...[
+                    const SizedBox(height: 10),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'MicoAir LR24-F · прозрачный модем',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 6),
+                            Text('USB UART: ${controller.lr24Baud} бод'),
+                            Text('TX: ${controller.lr24TxFrames} кадров · ${controller.lr24TxBytes} байт'),
+                            Text('RX: ${controller.lr24RxFrames} кадров · ${controller.lr24RxBytes} байт'),
+                            Text('Ошибки кадров: ${controller.lr24BadFrames}'),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Мощность: LR24-F до 500 мВт. Программное переключение ступеней пока не включено: команда конфигуратора должна быть подтверждена. Первый тест — на низкой мощности, заданной в MicoAssistant.',
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Ranging / ToF: штатная функция LR24-F не подтверждена, поэтому измерение расстояния выключено.',
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                FilledButton.tonalIcon(
+                                  onPressed: controller.selectedContact == null
+                                      ? null
+                                      : controller.probeLr24Peer,
+                                  icon: const Icon(Icons.network_ping),
+                                  label: Text(controller.lr24RttMs == null
+                                      ? 'Проверить связь'
+                                      : 'Связь · ${controller.lr24RttMs} мс'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: controller.disconnectLr24,
+                                  icon: const Icon(Icons.link_off),
+                                  label: const Text('Отключить LR24'),
+                                ),
+                              ],
+                            ),
+                            if (controller.lr24Error?.isNotEmpty == true) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                controller.lr24Error!,
+                                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   if (controller.ep2Protocol != 'unknown' ||
                       controller.ep2Baud != null) ...[
                     const SizedBox(height: 10),
@@ -454,18 +526,32 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               ? 'USB-устройство · готово к автоподключению'
                               : 'USB-устройство · Android запросит разрешение',
                         ),
-                        trailing: FilledButton(
-                          onPressed: controller.busy ||
-                                  {'connecting', 'handshaking', 'probing', 'permission'}
-                                      .contains(controller.ep2State) ||
-                                  controller.ep2Connected
-                              ? null
-                              : () => controller.connectEp2(device.deviceId),
-                          child: Text(
-                            {'unknown', 'error'}.contains(controller.ep2State)
-                                ? 'Повторить'
-                                : 'Авто',
-                          ),
+                        trailing: Wrap(
+                          spacing: 6,
+                          children: [
+                            OutlinedButton(
+                              onPressed: controller.busy ||
+                                      controller.ep2Connected ||
+                                      controller.lr24Connected
+                                  ? null
+                                  : () => controller.connectLr24(device.deviceId),
+                              child: const Text('LR24-F'),
+                            ),
+                            FilledButton(
+                              onPressed: controller.busy ||
+                                      {'connecting', 'handshaking', 'probing', 'permission'}
+                                          .contains(controller.ep2State) ||
+                                      controller.ep2Connected ||
+                                      controller.lr24Connected
+                                  ? null
+                                  : () => controller.connectEp2(device.deviceId),
+                              child: Text(
+                                {'unknown', 'error'}.contains(controller.ep2State)
+                                    ? 'Повторить'
+                                    : 'Авто M03',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -495,6 +581,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     lines: controller.ep2Log,
                     onClear: controller.clearEp2Log,
                   ),
+                  if (controller.lr24Active || controller.lr24Log.isNotEmpty)
+                    _LogExpansion(
+                      title: 'Диагностика LR24-F',
+                      lines: controller.lr24Log,
+                      onClear: controller.clearLr24Log,
+                    ),
                 ],
               ],
             ),
