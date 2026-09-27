@@ -9,6 +9,7 @@ import '../../core/delivery.dart';
 import '../../core/identity_crypto.dart';
 import '../../core/messenger_core.dart';
 import '../../core/models.dart';
+import '../../core/usb_profile_binding.dart';
 import '../../platform/android_local_network_bridge.dart';
 import '../../platform/android_secure_identity_bridge.dart';
 import '../../platform/android_meshtastic_bridge.dart';
@@ -19,6 +20,7 @@ import '../../platform/mm_uart_external_radio_session.dart';
 import '../../platform/mm_uart_hil_bench.dart';
 import '../../platform/mm_uart_message_transport.dart';
 import '../../platform/transparent_uart_radio_transport.dart';
+import '../../platform/usb_profile_binding_store.dart';
 import '../../platform/lan_transport.dart';
 import '../../platform/meshtastic_transport.dart';
 
@@ -77,6 +79,8 @@ final class MeshAppController extends ChangeNotifier {
   MmUartMessageTransport? _externalRadio;
   MmUartHilBench? _radioHilBench;
   TransparentUartRadioTransport? _lr24;
+  UsbProfileBindingStore? _usbProfileBindingStore;
+  UsbProfileBinding? _usbProfileBinding;
   StreamSubscription<TransparentUartRadioEvent>? _lr24Sub;
   bool _mmUartActive = false;
   bool _lr24Active = false;
@@ -235,6 +239,10 @@ final class MeshAppController extends ChangeNotifier {
     _localNetworkBridge = localNetworkBridge;
     _androidBridge = bridge;
     _usbBridge = usbBridge;
+    if (usbBridge != null) {
+      _usbProfileBindingStore = UsbProfileBindingStore(root);
+      _usbProfileBinding = await _usbProfileBindingStore!.load();
+    }
 
     final storage = AppStorage(root);
     final legacyIdentity = await storage.loadOrCreateIdentity();
@@ -788,12 +796,28 @@ final class MeshAppController extends ChangeNotifier {
           devices.length == 1 &&
           changed) {
         final device = devices.single;
-        ep2InfoNotice =
-            'USB-модуль найден · выбери LR24-F или Авто M03. '
-            'Активный probe не запускается до выбора профиля.';
-        _addEp2Log(
-          'USB device=${device.deviceId} waiting profile selection; no active probe',
-        );
+        final saved = _usbProfileBinding;
+        if (saved != null &&
+            saved.profileId == 'MICOAIR_LR24_F_STOCK' &&
+            saved.matches(
+              vendorId: device.vendorId,
+              productId: device.productId,
+              driver: device.driver,
+              deviceName: device.name,
+            )) {
+          ep2InfoNotice = 'Сохранённый профиль LR24-F найден · переподключаем без probe.';
+          _addEp2Log(
+            'USB device=${device.deviceId} saved LR24 binding matched; no active probe',
+          );
+          await connectLr24(device.deviceId, rememberProfile: false);
+        } else {
+          ep2InfoNotice =
+              'USB-модуль найден · выбери LR24-F или Авто M03. '
+              'Активный probe не запускается до выбора профиля.';
+          _addEp2Log(
+            'USB device=${device.deviceId} waiting profile selection; no active probe',
+          );
+        }
       }
 
       if (changed && initialized) notifyListeners();
@@ -1172,7 +1196,10 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> connectLr24(int deviceId) async {
+  Future<void> connectLr24(
+    int deviceId, {
+    bool rememberProfile = true,
+  }) async {
     final lr24 = _lr24;
     if (lr24 == null || busy) return;
     busy = true;
@@ -1214,6 +1241,21 @@ final class MeshAppController extends ChangeNotifier {
       _lr24Active = true;
       _addLr24Log('CONNECT device=$deviceId baud=$lr24Baud');
       await lr24.connect(deviceId, baudRate: lr24Baud);
+      if (rememberProfile) {
+        final device = ep2Devices.where((item) => item.deviceId == deviceId).firstOrNull;
+        if (device != null) {
+          final binding = UsbProfileBinding(
+            profileId: 'MICOAIR_LR24_F_STOCK',
+            vendorId: device.vendorId,
+            productId: device.productId,
+            driver: device.driver,
+            deviceName: device.name,
+          );
+          await _usbProfileBindingStore?.save(binding);
+          _usbProfileBinding = binding;
+          _addLr24Log('PROFILE binding saved for ${device.name}');
+        }
+      }
     } catch (error) {
       _lr24Active = false;
       lr24Error = error.toString();
@@ -1300,6 +1342,21 @@ final class MeshAppController extends ChangeNotifier {
     final bridge = _usbBridge;
     if (ep2 == null || session == null || bridge == null || busy) return;
     busy = true;
+    final selectedDevice = ep2Devices.where((item) => item.deviceId == deviceId).firstOrNull;
+    final saved = _usbProfileBinding;
+    if (selectedDevice != null &&
+        saved != null &&
+        saved.profileId == 'MICOAIR_LR24_F_STOCK' &&
+        saved.matches(
+          vendorId: selectedDevice.vendorId,
+          productId: selectedDevice.productId,
+          driver: selectedDevice.driver,
+          deviceName: selectedDevice.name,
+        )) {
+      await _usbProfileBindingStore?.clear();
+      _usbProfileBinding = null;
+      _addEp2Log('Saved LR24 binding cleared by manual Auto M03 selection');
+    }
     if (lr24Connected || _lr24Active) {
       await disconnectLr24();
     }
