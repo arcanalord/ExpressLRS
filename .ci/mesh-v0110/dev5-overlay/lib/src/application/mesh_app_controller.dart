@@ -786,21 +786,20 @@ final class MeshAppController extends ChangeNotifier {
         ep2InfoNotice = 'Радиомодуль отключён. Ждём повторного подключения.';
       }
 
-      if (!ep2Connected && !lr24Connected && !_usbAutoConnectSuppressed && devices.length == 1) {
+      if (!ep2Connected &&
+          !lr24Connected &&
+          devices.length == 1 &&
+          changed) {
         final device = devices.single;
-        final now = DateTime.now();
-        final last = _lastUsbAutoConnectAttempt;
-        final sameDevice = _lastUsbAutoConnectDeviceId == device.deviceId;
-        final backoffActive =
-            sameDevice &&
-            last != null &&
-            now.difference(last) < const Duration(seconds: 8);
-        if (!backoffActive) {
-          _lastUsbAutoConnectAttempt = now;
-          _lastUsbAutoConnectDeviceId = device.deviceId;
-          _addEp2Log('AUTO hotplug device=${device.deviceId}');
-          unawaited(connectEp2(device.deviceId));
-        }
+        _usbAutoConnectSuppressed = true;
+        _lastUsbAutoConnectAttempt = DateTime.now();
+        _lastUsbAutoConnectDeviceId = device.deviceId;
+        ep2InfoNotice =
+            'USB-модуль найден · выбери LR24-F или Авто M03. '
+            'Активный probe не запускается до выбора профиля.';
+        _addEp2Log(
+          'USB device=${device.deviceId} waiting profile selection; no active probe',
+        );
       }
 
       if (changed && initialized) notifyListeners();
@@ -1962,7 +1961,9 @@ final class MeshAppController extends ChangeNotifier {
     _ep2Sub?.cancel();
     _externalRadioSub?.cancel();
     _externalSessionSub?.cancel();
+    _lr24Sub?.cancel();
     _radioHilBench?.close();
+    _lr24?.close();
     _externalRadio?.close();
     _externalRadioSession?.close();
     _lan?.close();
