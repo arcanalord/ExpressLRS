@@ -40,6 +40,35 @@ final class TransparentUartRecipientAck extends TransparentUartRadioEvent {
   final String fromMmId;
 }
 
+final class TransparentUartIncomingChannelMessage
+    extends TransparentUartRadioEvent {
+  const TransparentUartIncomingChannelMessage({
+    required this.messageId,
+    required this.fromMmId,
+    required this.channelId,
+    required this.messageClass,
+    required this.payload,
+  });
+
+  final String messageId;
+  final String fromMmId;
+  final String channelId;
+  final String messageClass;
+  final String payload;
+}
+
+final class TransparentUartChannelReceipt extends TransparentUartRadioEvent {
+  const TransparentUartChannelReceipt({
+    required this.messageId,
+    required this.fromMmId,
+    required this.channelId,
+  });
+
+  final String messageId;
+  final String fromMmId;
+  final String channelId;
+}
+
 final class TransparentUartProbeResult extends TransparentUartRadioEvent {
   const TransparentUartProbeResult({
     required this.peerMmId,
@@ -162,17 +191,30 @@ final class TransparentUartRadioTransport implements MessageTransport {
         detail: 'LR24_CLASS_UNSUPPORTED',
       );
     }
-    final frame = <String, Object?>{
-      'v': 1,
-      'p': 'MMRP/1',
-      'k': 'data',
-      'id': envelope.messageId,
-      'from': ownMmId,
-      'to': envelope.recipientMmId,
-      'class': envelope.messageClass,
-      'q': envelope.priority,
-      'payload': envelope.payload,
-    };
+    final frame = envelope.isChannel
+        ? <String, Object?>{
+            'v': 1,
+            'p': 'MMRP/1',
+            'k': 'channel_data',
+            'id': envelope.messageId,
+            'from': ownMmId,
+            'to': '*',
+            'channel': envelope.channelId,
+            'class': envelope.messageClass,
+            'q': envelope.priority,
+            'payload': envelope.payload,
+          }
+        : <String, Object?>{
+            'v': 1,
+            'p': 'MMRP/1',
+            'k': 'data',
+            'id': envelope.messageId,
+            'from': ownMmId,
+            'to': envelope.recipientMmId,
+            'class': envelope.messageClass,
+            'q': envelope.priority,
+            'payload': envelope.payload,
+          };
     try {
       await _writeFrame(frame);
       return const TransportSendResult(TransportSendStatus.accepted);
@@ -196,6 +238,25 @@ final class TransparentUartRadioTransport implements MessageTransport {
         'from': ownMmId,
         'to': toMmId,
       });
+
+  Future<void> acknowledgeChannelIncoming({
+    required String messageId,
+    required String channelId,
+    required String toMmId,
+  }) async {
+    final jitterMs = 50 + (DateTime.now().microsecondsSinceEpoch % 451);
+    await Future<void>.delayed(Duration(milliseconds: jitterMs));
+    if (!isAvailable) return;
+    await _writeFrame(<String, Object?>{
+      'v': 1,
+      'p': 'MMRP/1',
+      'k': 'channel_receipt',
+      'id': messageId,
+      'from': ownMmId,
+      'to': toMmId,
+      'channel': channelId,
+    });
+  }
 
   Future<Duration> probe(
     String peerMmId, {
@@ -311,6 +372,37 @@ final class TransparentUartRadioTransport implements MessageTransport {
               fromMmId: from,
               messageClass: messageClass,
               payload: payload,
+            ),
+          );
+        }
+      case 'channel_data':
+        final id = (frame['id'] ?? '').toString().trim();
+        final channelId = (frame['channel'] ?? '').toString().trim();
+        final messageClass = (frame['class'] ?? '').toString().trim();
+        final payload = frame['payload'];
+        if (id.isNotEmpty &&
+            channelId.isNotEmpty &&
+            messageClass.isNotEmpty &&
+            payload is String) {
+          _events.add(
+            TransparentUartIncomingChannelMessage(
+              messageId: id,
+              fromMmId: from,
+              channelId: channelId,
+              messageClass: messageClass,
+              payload: payload,
+            ),
+          );
+        }
+      case 'channel_receipt':
+        final id = (frame['id'] ?? '').toString().trim();
+        final channelId = (frame['channel'] ?? '').toString().trim();
+        if (id.isNotEmpty && channelId.isNotEmpty) {
+          _events.add(
+            TransparentUartChannelReceipt(
+              messageId: id,
+              fromMmId: from,
+              channelId: channelId,
             ),
           );
         }
