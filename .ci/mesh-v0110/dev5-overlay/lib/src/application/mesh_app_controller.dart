@@ -98,9 +98,12 @@ final class MeshAppController extends ChangeNotifier {
 
   bool initialized = false;
   bool busy = false;
+  ConversationRef activeConversation = const ConversationRef.channel('general');
   String? selectedPeerMmId;
   List<Contact> contacts = const [];
   List<ConversationMessage> messages = const [];
+  final Map<String, DateTime> _peerLastSeen = <String, DateTime>{};
+  final Map<String, Set<String>> _channelReceipts = <String, Set<String>>{};
   MapPoint? requestedMapFocus;
   int mapFocusSerial = 0;
 
@@ -356,7 +359,8 @@ final class MeshAppController extends ChangeNotifier {
           .where((contact) => contact.verified)
           .map((contact) => contact.mmId),
     );
-    selectedPeerMmId = contacts.firstOrNull?.mmId;
+    selectedPeerMmId = null;
+    activeConversation = const ConversationRef.channel('general');
     await _reloadMessages();
     initialized = true;
 
@@ -376,9 +380,34 @@ final class MeshAppController extends ChangeNotifier {
   }
 
   Contact? get selectedContact {
+    if (activeConversation.kind != ConversationKind.direct) return null;
     final id = selectedPeerMmId;
     if (id == null) return null;
     return contacts.where((c) => c.mmId == id).firstOrNull;
+  }
+
+  bool get isGeneralChat =>
+      activeConversation.kind == ConversationKind.channel &&
+      activeConversation.id == 'general';
+
+  int get generalOnlineCount {
+    final cutoff = DateTime.now().toUtc().subtract(const Duration(seconds: 30));
+    return _peerLastSeen.values.where((seen) => seen.isAfter(cutoff)).length;
+  }
+
+  int channelReceiptCountFor(String messageId) =>
+      _channelReceipts[messageId]?.length ?? 0;
+
+  String displayNameForMmId(String mmId) {
+    final contact = contacts.where((c) => c.mmId == mmId).firstOrNull;
+    if (contact != null) return contact.displayName;
+    final compact = mmId.length <= 12 ? mmId : mmId.substring(0, 12);
+    return 'Узел $compact';
+  }
+
+  void _markPeerSeen(String mmId) {
+    if (mmId.isEmpty || mmId == ownMmId) return;
+    _peerLastSeen[mmId] = DateTime.now().toUtc();
   }
 
   List<DeliveryEnvelope> get pendingDeliveries => _core.pending;
@@ -432,19 +461,35 @@ final class MeshAppController extends ChangeNotifier {
     }
   }
 
+  Future<void> selectGeneralChat() async {
+    activeConversation = const ConversationRef.channel('general');
+    selectedPeerMmId = null;
+    await _reloadMessages();
+    notifyListeners();
+  }
+
   Future<void> selectContact(String mmId) async {
+    activeConversation = ConversationRef.direct(mmId);
     selectedPeerMmId = mmId;
     await _reloadMessages();
     notifyListeners();
   }
 
   Future<void> sendText(String text) async {
-    final peer = selectedPeerMmId;
-    if (peer == null || text.trim().isEmpty || busy) return;
+    if (text.trim().isEmpty || busy) return;
     busy = true;
     notifyListeners();
     try {
-      await _core.sendText(peerMmId: peer, text: text);
+      if (activeConversation.kind == ConversationKind.channel) {
+        await _core.sendChannelText(
+          channelId: activeConversation.id,
+          text: text,
+        );
+      } else {
+        final peer = selectedPeerMmId;
+        if (peer == null) return;
+        await _core.sendText(peerMmId: peer, text: text);
+      }
       await _reloadMessages();
     } finally {
       busy = false;
@@ -2043,8 +2088,7 @@ final class MeshAppController extends ChangeNotifier {
   }
 
   Future<void> _reloadMessages() async {
-    final peer = selectedPeerMmId;
-    messages = peer == null ? const [] : await _core.messagesFor(peer);
+    messages = await _core.messagesForConversation(activeConversation);
   }
 
   @override
