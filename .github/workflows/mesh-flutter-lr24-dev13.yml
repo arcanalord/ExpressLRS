@@ -5,7 +5,7 @@ on:
     branches:
       - feature/mesh-lr24-usb
     paths:
-      - '.github/workflows/mesh-flutter-v0.1.10-dev.12.yml'
+      - '.github/workflows/mesh-flutter-lr24-dev13.yml'
       - '.ci/mesh-v0110/dev5-overlay/**'
   workflow_dispatch:
 
