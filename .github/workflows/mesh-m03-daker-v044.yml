@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           cat .ci/m03-v044-daker/p* | base64 -d > /tmp/m03-v044.tgz
-          echo "52341c4ddf6e188e371b20f2f7309c7003e509a3eb4371a6b28786b09492dacf  /tmp/m03-v044.tgz" | sha256sum -c -
+          echo "54cace04440a138541cbb669a475e0d6bebdb0fc9127ec2433e4b60d4a4ee8d9  /tmp/m03-v044.tgz" | sha256sum -c -
           mkdir -p /tmp/m03
           tar -xzf /tmp/m03-v044.tgz -C /tmp/m03
           grep -q 'mmfw_dakerfpv_nano_c3_lr1121' /tmp/m03/platformio.ini
