@@ -75,14 +75,14 @@ class UsbSerialProbe(private val context: Context) {
                 timeoutMs = 2200,
             ) ?: return mapOf(
                 "status" to "mesh_no_response",
-                "message" to "Mesh Messenger не подтвердил сервисную команду",
+                "message" to "M03 радиомодуль не подтвердил сервисную команду",
             )
 
             if (!response.optBoolean("ok", false)) {
                 return mapOf(
                     "status" to "mesh_command_error",
                     "message" to (response.optString("error").ifBlank {
-                        "Mesh Messenger отклонил сервисную команду"
+                        "M03 радиомодуль отклонил сервисную команду"
                     }),
                 )
             }
@@ -91,7 +91,7 @@ class UsbSerialProbe(private val context: Context) {
             if (command == 0x16) {
                 linkedMapOf<String, Any?>(
                     "status" to "mesh_ota_started",
-                    "message" to "Mesh Messenger переведён в Wi-Fi режим обновления",
+                    "message" to "M03 радиомодуль переведён в Wi-Fi режим обновления",
                     "ssid" to data?.optString("ssid"),
                     "url" to data?.optString("url"),
                     "user" to data?.optString("user"),
@@ -99,7 +99,7 @@ class UsbSerialProbe(private val context: Context) {
             } else {
                 linkedMapOf<String, Any?>(
                     "status" to "mesh_ota_stopped",
-                    "message" to "Mesh Messenger вернулся в радиорежим",
+                    "message" to "M03 радиомодуль вернулся в радиорежим",
                     "ready" to data?.optBoolean("ready"),
                 )
             }
@@ -170,14 +170,14 @@ class UsbSerialProbe(private val context: Context) {
                 UsbSerialPort.PARITY_NONE,
             )
 
-            // First try the normal Mesh Messenger service protocol.
-            // It is safe and lets already-flashed devices enter OTA without BOOT/GPIO0.
+            // First try the shared M03/MM-UART service protocol.
+            // The same M03 firmware is used by Mesh Messenger and RF Direction Finding.
             drainInput(port)
             val mesh = probeMeshService(port)
             if (mesh != null) {
                 linkedMapOf<String, Any?>(
                     "status" to "mesh_ready",
-                    "message" to "Обнаружена прошивка Mesh Messenger (MM-UART/1)",
+                    "message" to "Обнаружен M03 радиомодуль (MM-UART/1)",
                     "vendorId" to device.vendorId,
                     "productId" to device.productId,
                     "deviceName" to device.deviceName,
