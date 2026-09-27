@@ -1179,6 +1179,27 @@ final class MeshAppController extends ChangeNotifier {
     lr24ConnectedDeviceId = deviceId;
     lr24State = 'connecting';
     lr24RttMs = null;
+
+    // LR24 is a separate transparent transport. Clear stale M03/EP2 probe
+    // state so an earlier timeout cannot leak into the active LR24 UI.
+    ep2Error = null;
+    ep2State = 'offline';
+    ep2DetectedProtocol = 'unknown';
+    ep2Protocol = 'unknown';
+    ep2Baud = null;
+    ep2InfoNotice = null;
+    ep2PingResult = null;
+    ep2Rssi10 = null;
+    ep2Snr10 = null;
+    ep2RttMs = null;
+    ep2TxCount = null;
+    ep2RxCount = null;
+    ep2LossCount = null;
+    ep2RetryCount = null;
+    ep2OtaNotice = null;
+    ep2OtaSsid = null;
+    ep2OtaPassword = null;
+    ep2OtaUrl = null;
     notifyListeners();
     try {
       if (_mmUartActive) {
