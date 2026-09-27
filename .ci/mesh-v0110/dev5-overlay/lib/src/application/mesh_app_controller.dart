@@ -1817,16 +1817,15 @@ final class MeshAppController extends ChangeNotifier {
     if (event is TransparentUartProbeResult) {
       lr24RttMs = event.rttMillis;
       lr24PeerMmId = event.peerMmId;
-      final selected = selectedPeerMmId;
-      if (selected != null && selected != event.peerMmId) {
-        _addLr24Log(
-          'PEER MM-ID mismatch selected=$selected discovered=${event.peerMmId}',
-        );
-      }
+      _markPeerSeen(event.peerMmId);
+      _addLr24Log(
+        'PEER ${event.peerMmId} RTT=${event.rttMillis}ms',
+      );
       notifyListeners();
       return;
     }
     if (event is TransparentUartRecipientAck) {
+      _markPeerSeen(event.fromMmId);
       await _core.recipientDeliveryResult(
         messageId: event.messageId,
         fromMmId: event.fromMmId,
@@ -1836,7 +1835,59 @@ final class MeshAppController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (event is TransparentUartChannelReceipt) {
+      _markPeerSeen(event.fromMmId);
+      final receipts = _channelReceipts.putIfAbsent(
+        event.messageId,
+        () => <String>{},
+      );
+      receipts.add(event.fromMmId);
+      _addLr24Log(
+        'CHANNEL RECEIPT ${event.channelId} ${event.messageId} <- ${event.fromMmId}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is TransparentUartIncomingChannelMessage) {
+      _markPeerSeen(event.fromMmId);
+      if (event.channelId != 'general') {
+        _addLr24Log(
+          'DROP unsupported channel=${event.channelId} id=${event.messageId}',
+        );
+        return;
+      }
+      if (event.messageClass != 'text') {
+        _addLr24Log(
+          'DROP channel class=${event.messageClass} id=${event.messageId}',
+        );
+        return;
+      }
+      try {
+        await _core.receiveChannelText(
+          messageId: event.messageId,
+          fromMmId: event.fromMmId,
+          channelId: event.channelId,
+          text: event.payload,
+        );
+        unawaited(
+          _lr24?.acknowledgeChannelIncoming(
+            messageId: event.messageId,
+            channelId: event.channelId,
+            toMmId: event.fromMmId,
+          ),
+        );
+      } catch (error) {
+        _addLr24Log('CHANNEL STORE ERROR ${event.messageId} | $error');
+        return;
+      }
+      if (isGeneralChat) await _reloadMessages();
+      lastRadioNotice =
+          'Общий чат · ${displayNameForMmId(event.fromMmId)}';
+      notifyListeners();
+      return;
+    }
     if (event is TransparentUartIncomingMessage) {
+      _markPeerSeen(event.fromMmId);
       final contact =
           contacts.where((c) => c.mmId == event.fromMmId).firstOrNull;
       if (contact == null) {
