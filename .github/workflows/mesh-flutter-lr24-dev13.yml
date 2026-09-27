@@ -152,6 +152,46 @@ jobs:
           fi
           cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.13-lr24-arm64-debug.apk
           sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.13-lr24-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.13-lr24.txt
+          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.13-lr24-arm64-debug.apk | awk '{print $1}')"
+          export APK_SHA256
+          python3 - <<'PY'
+          import json
+          import os
+          manifest = {
+              "schema": "mesh-messenger-release-manifest/v1",
+              "version": "0.1.10-dev.13-lr24",
+              "versionCode": 26092701,
+              "applicationId": "org.fpvclub.mesh.flutter",
+              "abi": ["arm64-v8a"],
+              "git": {
+                  "repository": "arcanalord/ExpressLRS",
+                  "branch": "feature/mesh-lr24-usb",
+                  "commit": os.environ["GITHUB_SHA"],
+                  "workflow": "mesh-flutter-lr24-dev13.yml",
+                  "runId": os.environ["GITHUB_RUN_ID"],
+              },
+              "artifact": {
+                  "file": "MeshMessenger-Flutter-v0.1.10-dev.13-lr24-arm64-debug.apk",
+                  "sha256": os.environ["APK_SHA256"],
+              },
+              "gates": {
+                  "analyze": "PASS",
+                  "selfTests": "PASS",
+                  "widgetTests": "PASS",
+                  "apkVerify": "PASS",
+                  "physicalLr24Hil": "PENDING",
+                  "release": "PENDING",
+              },
+              "limitations": [
+                  "Physical two-phone/two-LR24-F RF HIL is still required.",
+                  "LR24-F TX power control is not claimed.",
+                  "LR24-F RTT is not distance/ranging.",
+              ],
+          }
+          with open("/tmp/mesh-messenger-release-manifest-v1.json", "w", encoding="utf-8") as f:
+              json.dump(manifest, f, ensure_ascii=False, indent=2)
+              f.write("\n")
+          PY
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
@@ -160,5 +200,6 @@ jobs:
           path: |
             /tmp/MeshMessenger-Flutter-v0.1.10-dev.13-lr24-arm64-debug.apk
             /tmp/SHA256SUM-v0.1.10-dev.13-lr24.txt
+            /tmp/mesh-messenger-release-manifest-v1.json
           if-no-files-found: error
           retention-days: 14
