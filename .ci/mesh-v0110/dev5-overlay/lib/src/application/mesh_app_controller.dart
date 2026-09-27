@@ -18,6 +18,7 @@ import '../../platform/ep2_uart_transport.dart';
 import '../../platform/mm_uart_external_radio_session.dart';
 import '../../platform/mm_uart_hil_bench.dart';
 import '../../platform/mm_uart_message_transport.dart';
+import '../../platform/transparent_uart_radio_transport.dart';
 import '../../platform/lan_transport.dart';
 import '../../platform/meshtastic_transport.dart';
 
@@ -75,7 +76,10 @@ final class MeshAppController extends ChangeNotifier {
   MmUartExternalRadioSession? _externalRadioSession;
   MmUartMessageTransport? _externalRadio;
   MmUartHilBench? _radioHilBench;
+  TransparentUartRadioTransport? _lr24;
+  StreamSubscription<TransparentUartRadioEvent>? _lr24Sub;
   bool _mmUartActive = false;
+  bool _lr24Active = false;
   StreamSubscription<DeliveryEnvelope>? _deliverySub;
   StreamSubscription<LanTransportEvent>? _lanSub;
   StreamSubscription<MeshtasticTransportEvent>? _meshtasticSub;
@@ -151,6 +155,17 @@ final class MeshAppController extends ChangeNotifier {
   final List<String> ep2Log = <String>[];
   int? ep2ConnectedDeviceId;
   bool radioHilRunning = false;
+  String lr24State = 'disconnected';
+  String? lr24Error;
+  int? lr24ConnectedDeviceId;
+  int lr24Baud = 57600;
+  int lr24TxBytes = 0;
+  int lr24RxBytes = 0;
+  int lr24TxFrames = 0;
+  int lr24RxFrames = 0;
+  int lr24BadFrames = 0;
+  int? lr24RttMs;
+  final List<String> lr24Log = <String>[];
   int radioHilDone = 0;
   int radioHilTotal = 0;
   String? radioHilResult;
@@ -164,6 +179,8 @@ final class MeshAppController extends ChangeNotifier {
   bool get radioConnected => _androidBridge?.connected ?? false;
   bool get hasEp2Uart => _usbBridge != null;
   bool get mmUartActive => _mmUartActive;
+  bool get lr24Active => _lr24Active;
+  bool get lr24Connected => _lr24?.isAvailable == true;
   bool get ep2Connected =>
       (_externalRadio?.isAvailable ?? false) || (_ep2?.isAvailable ?? false);
   String? get externalRadioFamily =>
@@ -262,6 +279,14 @@ final class MeshAppController extends ChangeNotifier {
       transports.add(externalRadio);
       _externalRadioSub = externalRadio.events.listen(_onMmUartTransportEvent);
       _externalSessionSub = externalSession.events.listen(_onMmUartSessionEvent);
+
+      final lr24 = TransparentUartRadioTransport(
+        bridge: usbBridge,
+        ownMmId: ownMmId,
+      );
+      _lr24 = lr24;
+      transports.add(lr24);
+      _lr24Sub = lr24.events.listen(_onLr24Event);
 
       final ep2 = Ep2UartTransport(
         bridge: usbBridge,
@@ -732,6 +757,18 @@ final class MeshAppController extends ChangeNotifier {
         _addEp2Log('USB devices=${devices.length}');
       }
 
+      final lr24Id = lr24ConnectedDeviceId;
+      if (lr24Id != null && !ids.contains(lr24Id)) {
+        _addLr24Log('USB device=$lr24Id detached');
+        lr24ConnectedDeviceId = null;
+        _lr24Active = false;
+        try {
+          await _lr24?.disconnect();
+        } catch (_) {}
+        lr24State = 'disconnected';
+        lr24Error = null;
+      }
+
       final connectedId = ep2ConnectedDeviceId;
       if (connectedId != null && !ids.contains(connectedId)) {
         _addEp2Log('USB device=$connectedId detached');
@@ -749,7 +786,7 @@ final class MeshAppController extends ChangeNotifier {
         ep2InfoNotice = 'Радиомодуль отключён. Ждём повторного подключения.';
       }
 
-      if (!ep2Connected && !_usbAutoConnectSuppressed && devices.length == 1) {
+      if (!ep2Connected && !lr24Connected && !_usbAutoConnectSuppressed && devices.length == 1) {
         final device = devices.single;
         final now = DateTime.now();
         final last = _lastUsbAutoConnectAttempt;
@@ -1142,12 +1179,97 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> connectLr24(int deviceId) async {
+    final lr24 = _lr24;
+    if (lr24 == null || busy) return;
+    busy = true;
+    _usbAutoConnectSuppressed = true;
+    lr24Error = null;
+    lr24ConnectedDeviceId = deviceId;
+    lr24State = 'connecting';
+    lr24RttMs = null;
+    notifyListeners();
+    try {
+      if (_mmUartActive) {
+        await _externalRadioSession?.disconnect();
+        _mmUartActive = false;
+      }
+      if (_ep2?.isAvailable == true) {
+        await _ep2?.disconnect();
+      }
+      _lr24Active = true;
+      _addLr24Log('CONNECT device=$deviceId baud=$lr24Baud');
+      await lr24.connect(deviceId, baudRate: lr24Baud);
+    } catch (error) {
+      _lr24Active = false;
+      lr24Error = error.toString();
+      lr24State = 'error';
+      _addLr24Log('CONNECT ERROR $error');
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> disconnectLr24() async {
+    final lr24 = _lr24;
+    if (lr24 == null) return;
+    _addLr24Log('DISCONNECT requested');
+    _lr24Active = false;
+    lr24ConnectedDeviceId = null;
+    lr24RttMs = null;
+    try {
+      await lr24.disconnect();
+    } catch (error) {
+      lr24Error = error.toString();
+    }
+    lr24State = 'disconnected';
+    notifyListeners();
+  }
+
+  Future<void> probeLr24Peer() async {
+    final lr24 = _lr24;
+    final peer = selectedPeerMmId;
+    if (lr24 == null || peer == null || !lr24.isAvailable) return;
+    lr24RttMs = null;
+    lr24Error = null;
+    notifyListeners();
+    try {
+      final elapsed = await lr24.probe(peer);
+      lr24RttMs = elapsed.inMilliseconds;
+      _addLr24Log('PING $peer RTT=${elapsed.inMilliseconds}ms');
+    } catch (error) {
+      lr24Error = error.toString();
+      _addLr24Log('PING ERROR $error');
+    }
+    notifyListeners();
+  }
+
+  void clearLr24Log() {
+    lr24Log.clear();
+    notifyListeners();
+  }
+
+  void _addLr24Log(String message) {
+    if (message.trim().isEmpty) return;
+    final time = DateTime.now();
+    final stamp =
+        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
+    lr24Log.add('$stamp | $message');
+    if (lr24Log.length > 100) {
+      lr24Log.removeRange(0, lr24Log.length - 100);
+    }
+  }
+
   Future<void> connectEp2(int deviceId) async {
     final ep2 = _ep2;
     final session = _externalRadioSession;
     final bridge = _usbBridge;
     if (ep2 == null || session == null || bridge == null || busy) return;
     busy = true;
+    if (lr24Connected || _lr24Active) {
+      await disconnectLr24();
+    }
     _usbAutoConnectSuppressed = false;
     ep2Error = null;
     ep2DetectedProtocol = 'detecting';
@@ -1537,6 +1659,86 @@ final class MeshAppController extends ChangeNotifier {
       _addEp2Log('MM-UART DEVICE RESET');
     }
     if (initialized) notifyListeners();
+  }
+
+  Future<void> _onLr24Event(TransparentUartRadioEvent event) async {
+    if (event is TransparentUartStateEvent) {
+      lr24State = event.state;
+      lr24Error = event.error;
+      _lr24Active = event.state != 'disconnected' && event.state != 'error';
+      _addLr24Log(
+        'STATE ${event.state}${event.error == null ? '' : ' | ${event.error}'}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is TransparentUartStatsEvent) {
+      lr24TxBytes = event.txBytes;
+      lr24RxBytes = event.rxBytes;
+      lr24TxFrames = event.txFrames;
+      lr24RxFrames = event.rxFrames;
+      lr24BadFrames = event.badFrames;
+      notifyListeners();
+      return;
+    }
+    if (event is TransparentUartProbeResult) {
+      lr24RttMs = event.rttMillis;
+      notifyListeners();
+      return;
+    }
+    if (event is TransparentUartRecipientAck) {
+      await _core.recipientDeliveryResult(
+        messageId: event.messageId,
+        fromMmId: event.fromMmId,
+        ok: true,
+      );
+      _addLr24Log('ACK ${event.messageId} <- ${event.fromMmId}');
+      notifyListeners();
+      return;
+    }
+    if (event is TransparentUartIncomingMessage) {
+      final contact =
+          contacts.where((c) => c.mmId == event.fromMmId).firstOrNull;
+      if (contact == null) {
+        _addLr24Log(
+          'DROP unknown peer=${event.fromMmId} id=${event.messageId}',
+        );
+        return;
+      }
+      try {
+        switch (event.messageClass) {
+          case 'text':
+            await _core.receiveText(
+              messageId: event.messageId,
+              fromMmId: event.fromMmId,
+              text: event.payload,
+            );
+          case 'map_point':
+            await _core.receiveMapPoint(
+              messageId: event.messageId,
+              fromMmId: event.fromMmId,
+              payload: event.payload,
+            );
+          default:
+            _addLr24Log(
+              'DROP class=${event.messageClass} id=${event.messageId}',
+            );
+            return;
+        }
+        await _lr24?.acknowledgeIncoming(
+          messageId: event.messageId,
+          toMmId: event.fromMmId,
+        );
+      } catch (error) {
+        _addLr24Log('STORE ERROR ${event.messageId} | $error');
+        return;
+      }
+      if (selectedPeerMmId == event.fromMmId) await _reloadMessages();
+      lastRadioNotice = event.messageClass == 'map_point'
+          ? 'Получена точка по LR24 от ${contact.displayName}'
+          : 'Получено по LR24 от ${contact.displayName}';
+      notifyListeners();
+    }
   }
 
   int? _resolveEp2Node(String mmId) =>
