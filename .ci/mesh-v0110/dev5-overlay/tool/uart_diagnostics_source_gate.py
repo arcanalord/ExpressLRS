@@ -22,10 +22,10 @@ for needle in required_transport:
 for needle in ['crc8DvbS2', 'length < 2 || length > 62']:
     assert needle in probe, needle
 
-for needle in ['pingEp2Neighbor', "ep2Protocol = switch", 'ep2Rssi10']:
+for needle in ['pingEp2Neighbor', "ep2Protocol = switch", 'ep2Rssi10', 'connectLr24', 'TransparentUartRadioTransport']:
     assert needle in controller, needle
 
-for needle in ['PING соседнего узла', "'Повторить'", "'Авто'", 'ELRS / CRSF']:
+for needle in ['PING соседнего узла', "'Повторить'", "'Авто M03'", 'ELRS / CRSF']:
     assert needle in page, needle
 
 # Keep engineering details out of the normal device list.
