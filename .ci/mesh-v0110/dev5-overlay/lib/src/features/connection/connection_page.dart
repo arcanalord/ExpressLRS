@@ -327,11 +327,13 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                               ),
-                              if (controller.selectedPeerMmId != null &&
-                                  controller.selectedPeerMmId != controller.lr24PeerMmId)
+                              if (!controller.isGeneralChat &&
+                                  controller.selectedPeerMmId != null &&
+                                  controller.selectedPeerMmId !=
+                                      controller.lr24PeerMmId)
                                 Text(
-                                  'Радиоканал работает, но выбранный контакт имеет другой MM-ID. '
-                                  'Перепривяжи контакт перед проверкой чата.',
+                                  'Радиоканал работает. Для выбранного личного чата '
+                                  'обнаружен другой MM-ID; общий чат этим не блокируется.',
                                   style: TextStyle(
                                     color: Theme.of(context).colorScheme.tertiary,
                                     fontWeight: FontWeight.w600,
