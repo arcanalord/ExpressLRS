@@ -90,11 +90,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     final pending = controller.pendingDeliveries;
-    final ep2Active = !{
-      'unavailable',
-      'offline',
-      'disconnected',
-    }.contains(controller.ep2State);
+    final ep2Active = !controller.lr24Active &&
+        !{
+          'unavailable',
+          'offline',
+          'disconnected',
+        }.contains(controller.ep2State);
     final anyRouteReady = controller.lanReady ||
         controller.ep2Connected ||
         controller.lr24Connected ||
@@ -202,7 +203,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Подключение через USB-C OTG и совместимый USB-UART адаптер.',
+                  'LR24-F подключается к телефону напрямую по USB-C OTG. '
+                  'Отдельный USB-UART адаптер не нужен. Для M03-плат без собственного USB адаптер может понадобиться.',
                 ),
                 if (!controller.hasEp2Uart) ...[
                   const SizedBox(height: 10),
@@ -307,8 +309,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ),
                     ),
                   ],
-                  if (controller.ep2Protocol != 'unknown' ||
-                      controller.ep2Baud != null) ...[
+                  if (!controller.lr24Active &&
+                      (controller.ep2Protocol != 'unknown' ||
+                          controller.ep2Baud != null)) ...[
                     const SizedBox(height: 10),
                     Text(
                       '${controller.ep2Protocol == 'unknown' ? 'Определение протокола' : controller.ep2Protocol}'
@@ -433,7 +436,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ],
                     ),
                   ],
-                  if (controller.ep2InfoNotice?.trim().isNotEmpty == true) ...[
+                  if (!controller.lr24Active &&
+                      controller.ep2InfoNotice?.trim().isNotEmpty == true) ...[
                     const SizedBox(height: 8),
                     Text(
                       controller.ep2InfoNotice!,
@@ -443,9 +447,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ),
                     ),
                   ],
-                  if (controller.ep2Rssi10 != null ||
-                      controller.ep2Snr10 != null ||
-                      controller.ep2RttMs != null) ...[
+                  if (!controller.lr24Active &&
+                      (controller.ep2Rssi10 != null ||
+                          controller.ep2Snr10 != null ||
+                          controller.ep2RttMs != null)) ...[
                     const SizedBox(height: 8),
                     Text(
                       'RSSI ${controller.ep2Rssi10 == null ? '—' : (controller.ep2Rssi10! / 10).toStringAsFixed(1)} dBm'
@@ -459,7 +464,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ),
                     ),
                   ],
-                  if (controller.ep2Error?.trim().isNotEmpty == true) ...[
+                  if (!controller.lr24Active &&
+                      controller.ep2Error?.trim().isNotEmpty == true) ...[
                     const SizedBox(height: 10),
                     Text(
                       controller.ep2Error!,
@@ -468,7 +474,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ),
                     ),
                   ],
-                  if (controller.ep2OtaNotice?.trim().isNotEmpty == true) ...[
+                  if (!controller.lr24Active &&
+                      controller.ep2OtaNotice?.trim().isNotEmpty == true) ...[
                     const SizedBox(height: 10),
                     Text(
                       controller.ep2OtaNotice!,
@@ -477,7 +484,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ),
                     ),
                   ],
-                  if (controller.ep2OtaSsid != null) ...[
+                  if (!controller.lr24Active &&
+                      controller.ep2OtaSsid != null) ...[
                     const SizedBox(height: 10),
                     Card(
                       color: Theme.of(context)
@@ -516,71 +524,151 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       ),
                     )
                   else
-                    ...controller.ep2Devices.map(
-                      (device) => ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.usb),
-                        title: Text(device.name),
-                        subtitle: Text(
-                          device.permission
-                              ? 'USB-устройство · готово к автоподключению'
-                              : 'USB-устройство · Android запросит разрешение',
+                    ...controller.ep2Devices.map((device) {
+                      final lr24Selected =
+                          controller.lr24Active &&
+                          controller.lr24ConnectedDeviceId == device.deviceId;
+                      final compactName = device.name
+                              .toLowerCase()
+                              .contains('cp21')
+                          ? 'CP2102 · USB-UART'
+                          : device.name;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .outlineVariant,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        trailing: Wrap(
-                          spacing: 6,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            OutlinedButton(
-                              onPressed: controller.busy ||
-                                      controller.ep2Connected ||
-                                      controller.lr24Connected
-                                  ? null
-                                  : () => controller.connectLr24(device.deviceId),
-                              child: const Text('LR24-F'),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.usb),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        lr24Selected
+                                            ? 'MicoAir LR24-F'
+                                            : compactName,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        lr24Selected
+                                            ? 'Выбран как прозрачный модем · USB готов'
+                                            : device.permission
+                                                ? 'USB-UART найден · выбери профиль'
+                                                : 'Android запросит разрешение USB',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (lr24Selected)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 8),
+                                    child: Icon(
+                                      Icons.check_circle,
+                                      size: 20,
+                                    ),
+                                  ),
+                              ],
                             ),
-                            FilledButton(
-                              onPressed: controller.busy ||
-                                      {'connecting', 'handshaking', 'probing', 'permission'}
-                                          .contains(controller.ep2State) ||
-                                      controller.ep2Connected ||
-                                      controller.lr24Connected
-                                  ? null
-                                  : () => controller.connectEp2(device.deviceId),
-                              child: Text(
-                                {'unknown', 'error'}.contains(controller.ep2State)
-                                    ? 'Повторить'
-                                    : 'Авто M03',
+                            const SizedBox(height: 10),
+                            if (lr24Selected)
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Chip(
+                                  avatar: Icon(Icons.radio, size: 18),
+                                  label: Text('LR24-F выбран'),
+                                ),
+                              )
+                            else
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: controller.busy ||
+                                            controller.ep2Connected ||
+                                            controller.lr24Connected
+                                        ? null
+                                        : () => controller.connectLr24(
+                                              device.deviceId,
+                                            ),
+                                    icon: const Icon(Icons.radio),
+                                    label: const Text('LR24-F'),
+                                  ),
+                                  FilledButton.tonalIcon(
+                                    onPressed: controller.busy ||
+                                            {
+                                              'connecting',
+                                              'handshaking',
+                                              'probing',
+                                              'permission',
+                                            }.contains(controller.ep2State) ||
+                                            controller.ep2Connected ||
+                                            controller.lr24Connected
+                                        ? null
+                                        : () => controller.connectEp2(
+                                              device.deviceId,
+                                            ),
+                                    icon: const Icon(Icons.auto_fix_high),
+                                    label: const Text('Авто M03'),
+                                  ),
+                                ],
                               ),
+                          ],
+                        ),
+                      );
+                    }),
+                  const SizedBox(height: 8),
+                  if (!controller.lr24Active) ...[
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'UART диагностика M03 / ELRS',
+                              style: TextStyle(fontWeight: FontWeight.w700),
                             ),
+                            const SizedBox(height: 6),
+                            Text('Протокол: ${controller.ep2DetectedProtocol}'),
+                            Text('RX: ${controller.ep2RxBytes} байт'),
+                            if (controller.ep2LastHex.isNotEmpty)
+                              SelectableText(
+                                'HEX: ${controller.ep2LastHex}',
+                              ),
                           ],
                         ),
                       ),
                     ),
-                  const SizedBox(height: 8),
-                  Card(
-                    margin: EdgeInsets.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'UART диагностика',
-                            style: TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 6),
-                          Text('Протокол: ${controller.ep2DetectedProtocol}'),
-                          Text('RX: ${controller.ep2RxBytes} байт'),
-                          if (controller.ep2LastHex.isNotEmpty)
-                            SelectableText('HEX: ${controller.ep2LastHex}'),
-                        ],
-                      ),
+                    _LogExpansion(
+                      title: 'Диагностика M03 / ELRS',
+                      lines: controller.ep2Log,
+                      onClear: controller.clearEp2Log,
                     ),
-                  ),
-                  _LogExpansion(
-                    title: 'Диагностика радиомодуля',
-                    lines: controller.ep2Log,
-                    onClear: controller.clearEp2Log,
-                  ),
+                  ],
                   if (controller.lr24Active || controller.lr24Log.isNotEmpty)
                     _LogExpansion(
                       title: 'Диагностика LR24-F',
