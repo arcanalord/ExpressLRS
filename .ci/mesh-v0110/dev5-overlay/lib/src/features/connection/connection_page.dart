@@ -45,6 +45,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     DeliveryState.noRoute => 'Нет маршрута',
     DeliveryState.retryWait => 'Ожидание повтора',
     DeliveryState.delivered => 'Доставлено',
+    DeliveryState.broadcasted => 'Отправлено',
     DeliveryState.expired => 'Истёк TTL',
     DeliveryState.failed => 'Ошибка',
     DeliveryState.cancelled => 'Отменено',
