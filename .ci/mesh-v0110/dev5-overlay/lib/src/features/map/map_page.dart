@@ -128,6 +128,10 @@ class _MapPageState extends State<MapPage> {
                 Expanded(
                   child: Card(
                     margin: EdgeInsets.zero,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surface
+                        .withValues(alpha: 0.62),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
@@ -171,6 +175,10 @@ class _MapPageState extends State<MapPage> {
               top: false,
               child: Card(
                 margin: EdgeInsets.zero,
+                color: Theme.of(context)
+                    .colorScheme
+                    .surface
+                    .withValues(alpha: 0.62),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
