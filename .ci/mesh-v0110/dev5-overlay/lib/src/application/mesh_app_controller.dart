@@ -162,6 +162,7 @@ final class MeshAppController extends ChangeNotifier {
   int lr24RxFrames = 0;
   int lr24BadFrames = 0;
   int? lr24RttMs;
+  String? lr24PeerMmId;
   final List<String> lr24Log = <String>[];
   int radioHilDone = 0;
   int radioHilTotal = 0;
@@ -1179,6 +1180,7 @@ final class MeshAppController extends ChangeNotifier {
     lr24ConnectedDeviceId = deviceId;
     lr24State = 'connecting';
     lr24RttMs = null;
+    lr24PeerMmId = null;
 
     // LR24 is a separate transparent transport. Clear stale M03/EP2 probe
     // state so an earlier timeout cannot leak into the active LR24 UI.
@@ -1230,6 +1232,7 @@ final class MeshAppController extends ChangeNotifier {
     _lr24Active = false;
     lr24ConnectedDeviceId = null;
     lr24RttMs = null;
+    lr24PeerMmId = null;
     try {
       await lr24.disconnect();
     } catch (error) {
@@ -1241,19 +1244,37 @@ final class MeshAppController extends ChangeNotifier {
 
   Future<void> probeLr24Peer() async {
     final lr24 = _lr24;
-    final peer = selectedPeerMmId;
-    if (lr24 == null || peer == null || !lr24.isAvailable) return;
+    if (lr24 == null || !lr24.isAvailable) return;
     lr24RttMs = null;
+    lr24PeerMmId = null;
     lr24Error = null;
     notifyListeners();
-    try {
-      final elapsed = await lr24.probe(peer);
-      lr24RttMs = elapsed.inMilliseconds;
-      _addLr24Log('PING $peer RTT=${elapsed.inMilliseconds}ms');
-    } catch (error) {
-      lr24Error = error.toString();
-      _addLr24Log('PING ERROR $error');
+
+    Object? lastError;
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      try {
+        // Link diagnostics must prove the transparent radio path independently
+        // of a possibly stale contact/MM-ID binding.
+        final elapsed = await lr24.probe(
+          '*',
+          timeout: const Duration(seconds: 2),
+        );
+        lr24RttMs = elapsed.inMilliseconds;
+        _addLr24Log(
+          'LINK PROBE broadcast attempt=$attempt RTT=${elapsed.inMilliseconds}ms',
+        );
+        notifyListeners();
+        return;
+      } catch (error) {
+        lastError = error;
+        _addLr24Log('LINK PROBE attempt=$attempt ERROR $error');
+        if (attempt < 3) {
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+        }
+      }
     }
+
+    lr24Error = lastError?.toString() ?? 'LR24 probe failed';
     notifyListeners();
   }
 
@@ -1693,6 +1714,13 @@ final class MeshAppController extends ChangeNotifier {
     }
     if (event is TransparentUartProbeResult) {
       lr24RttMs = event.rttMillis;
+      lr24PeerMmId = event.peerMmId;
+      final selected = selectedPeerMmId;
+      if (selected != null && selected != event.peerMmId) {
+        _addLr24Log(
+          'PEER MM-ID mismatch selected=$selected discovered=${event.peerMmId}',
+        );
+      }
       notifyListeners();
       return;
     }
