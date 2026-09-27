@@ -137,6 +137,8 @@ final class TransparentUartRadioTransport implements MessageTransport {
     try {
       await _bridge.disconnect();
     } finally {
+      await _subscription?.cancel();
+      _subscription = null;
       _codec.reset();
       _failProbes(StateError('LR24 disconnected'));
       deviceId = null;
