@@ -108,7 +108,7 @@ jobs:
           python3 tool/identity_source_gate.py
           python3 tool/map_source_gate.py
           python3 tool/release_ui_gate.py
-          grep -q "AUTO hotplug device=" lib/src/application/mesh_app_controller.dart
+          grep -q "waiting profile selection; no active probe" lib/src/application/mesh_app_controller.dart
           grep -q "runRadioSelfTest" lib/src/application/mesh_app_controller.dart
           grep -q "session.enterOta" lib/src/application/mesh_app_controller.dart
           grep -q "Всё работает" lib/src/features/connection/connection_page.dart
