@@ -95,10 +95,18 @@ final class AppStorage {
     );
   });
 
-  Future<List<ConversationMessage>> loadMessages({String? peerMmId}) async {
+  Future<List<ConversationMessage>> loadMessages({
+    String? peerMmId,
+    String? conversationKey,
+  }) async {
     final all = (await _readList(_messagesFile))
         .map(ConversationMessage.fromJson)
         .toList();
+    if (conversationKey != null) {
+      return all
+          .where((m) => m.effectiveConversationKey == conversationKey)
+          .toList();
+    }
     if (peerMmId == null) return all;
     return all.where((m) => m.peerMmId == peerMmId).toList();
   }
