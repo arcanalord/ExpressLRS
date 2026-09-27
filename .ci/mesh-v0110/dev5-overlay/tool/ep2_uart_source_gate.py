@@ -25,7 +25,7 @@ for label, needle in checks.items():
     assert needle in transport or needle in controller or needle in models, f'missing {label}'
 
 assert 'Радиомодуль · USB' in connection
-assert 'Диагностика радиомодуля' in connection
+assert 'Диагностика M03 / ELRS' in connection
 assert 'EP2 / SX1280 · USB-UART' not in connection
 assert 'EP2 LINK v0.2.0' not in connection
 assert 'ep2NodeId' in models
