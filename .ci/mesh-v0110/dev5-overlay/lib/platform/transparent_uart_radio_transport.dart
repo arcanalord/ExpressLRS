@@ -197,18 +197,21 @@ final class TransparentUartRadioTransport implements MessageTransport {
         'to': toMmId,
       });
 
-  Future<Duration> probe(String peerMmId) async {
+  Future<Duration> probe(
+    String peerMmId, {
+    Duration timeout = const Duration(seconds: 2),
+  }) async {
     if (!isAvailable) throw StateError('LR24_NOT_READY');
     final nonce = DateTime.now().microsecondsSinceEpoch.toString() +
         '-' +
         (_probes.length + 1).toString();
     final completer = Completer<Duration>();
     late final Timer timer;
-    timer = Timer(const Duration(seconds: 6), () {
+    timer = Timer(timeout, () {
       final pending = _probes.remove(nonce);
       if (pending != null && !pending.completer.isCompleted) {
         pending.completer.completeError(
-          TimeoutException('LR24 probe timeout', const Duration(seconds: 6)),
+          TimeoutException('LR24 probe timeout', timeout),
         );
       }
     });
