@@ -37,6 +37,8 @@ final class FileTransferSenderSession {
   FileTransferSessionState state = FileTransferSessionState.idle;
   bool _manifestAcked = false;
   bool _completeSent = false;
+  int _completeAttempts = 0;
+  int _lastCompleteSentAtMs = -0x7fffffff;
   final Queue<int> _pending = Queue<int>();
   final Set<int> _acked = <int>{};
   final Map<int, int> _lastSentAtMs = <int, int>{};
@@ -80,10 +82,23 @@ final class FileTransferSenderSession {
       capacity--;
     }
 
-    if (_acked.length == totalChunkCount && !_completeSent) {
-      _completeSent = true;
-      state = FileTransferSessionState.waiting;
-      frames.add(File1Codec.complete(plan.manifest.transferId));
+    if (_acked.length == totalChunkCount) {
+      final shouldSendComplete = !_completeSent ||
+          nowMs - _lastCompleteSentAtMs >= ackTimeoutMs;
+      if (shouldSendComplete) {
+        final attempts = _completeAttempts + 1;
+        if (attempts > maxRetries + 1) {
+          state = FileTransferSessionState.failed;
+          return frames;
+        }
+        _completeAttempts = attempts;
+        _completeSent = true;
+        _lastCompleteSentAtMs = nowMs;
+        state = FileTransferSessionState.waiting;
+        frames.add(File1Codec.complete(plan.manifest.transferId));
+      } else {
+        state = FileTransferSessionState.waiting;
+      }
     } else if (frames.isNotEmpty) {
       state = FileTransferSessionState.sending;
     } else {
@@ -108,13 +123,20 @@ final class FileTransferSenderSession {
         }
       case File1FrameType.missing:
         final missing = File1Codec.decodeMissing(frame);
+        var reopened = false;
         for (final index in missing) {
-          if (index >= 0 &&
-              index < totalChunkCount &&
-              !_acked.contains(index)) {
+          if (index >= 0 && index < totalChunkCount) {
+            _acked.remove(index);
             _lastSentAtMs.remove(index);
             if (!_pending.contains(index)) _pending.add(index);
+            reopened = true;
           }
+        }
+        if (reopened) {
+          _completeSent = false;
+          _completeAttempts = 0;
+          _lastCompleteSentAtMs = -0x7fffffff;
+          state = FileTransferSessionState.sending;
         }
       case File1FrameType.complete:
         state = FileTransferSessionState.completed;
