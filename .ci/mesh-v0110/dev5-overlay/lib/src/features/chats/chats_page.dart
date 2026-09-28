@@ -779,16 +779,19 @@ class _ConversationPane extends StatelessWidget {
                         ? null
                         : () async {
                             try {
-                              final file = await FilePicker.pickFile();
+                              final result = await FilePicker.platform.pickFiles(
+                                allowMultiple: false,
+                                withData: true,
+                              );
+                              final file = result?.files.single;
                               if (file == null) return;
-                              final length = file.lengthSync() ?? await file.length();
-                              if (length == null) {
-                                throw StateError('Не удалось определить размер файла');
+                              final bytes = file.bytes;
+                              if (bytes == null) {
+                                throw StateError('Не удалось прочитать выбранный файл');
                               }
-                              if (length > 100 * 1024) {
+                              if (bytes.length > 100 * 1024) {
                                 throw ArgumentError('Пока лимит 100 КБ');
                               }
-                              final bytes = await file.readAsBytes();
                               await controller.prepareSmallFile(
                                 fileName: file.name,
                                 mimeType: 'application/octet-stream',
