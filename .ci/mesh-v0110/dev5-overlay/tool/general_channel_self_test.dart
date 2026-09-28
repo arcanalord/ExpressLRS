@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import '../lib/core/app_storage.dart';
@@ -61,6 +62,24 @@ Future<void> main() async {
       throw StateError('Outgoing channel history invalid');
     }
 
+    final outgoingPoint = MapPoint(
+      id: 'general-point-out',
+      latitude: 48.123,
+      longitude: 11.456,
+      createdAt: DateTime.utc(2026, 9, 28),
+      label: 'meeting',
+    );
+    final sentPoint = await core.sendChannelMapPoint(
+      channelId: 'general',
+      point: outgoingPoint,
+    );
+    if (!sentPoint.isChannel ||
+        sentPoint.channelId != 'general' ||
+        sentPoint.messageClass != 'map_point' ||
+        sentPoint.state != DeliveryState.broadcasted) {
+      throw StateError('Channel MapPoint delivery invalid: ${sentPoint.state}');
+    }
+
     final first = await core.receiveChannelText(
       messageId: 'remote-1',
       fromMmId: 'mm:unknown-peer',
@@ -77,14 +96,46 @@ Future<void> main() async {
       throw StateError('Channel dedupe failed');
     }
 
+    final remotePoint = MapPoint(
+      id: 'general-point-in',
+      latitude: 50.321,
+      longitude: 8.765,
+      createdAt: DateTime.utc(2026, 9, 28, 12),
+      label: 'remote point',
+    );
+    final firstPoint = await core.receiveChannelMapPoint(
+      messageId: 'remote-point-1',
+      fromMmId: 'mm:unknown-peer',
+      channelId: 'general',
+      payload: jsonEncode(remotePoint.toJson()),
+    );
+    final duplicatePoint = await core.receiveChannelMapPoint(
+      messageId: 'remote-point-1',
+      fromMmId: 'mm:unknown-peer',
+      channelId: 'general',
+      payload: jsonEncode(remotePoint.toJson()),
+    );
+    if (!firstPoint || duplicatePoint) {
+      throw StateError('Channel MapPoint dedupe failed');
+    }
+
     final history = await core.messagesForConversation(general);
-    if (history.length != 2) {
+    if (history.length != 4) {
       throw StateError('General history count mismatch: ${history.length}');
     }
-    final incoming = history.where((m) => !m.outgoing).single;
+    final incoming = history
+        .where((m) => !m.outgoing && m.messageClass == 'text')
+        .single;
     if (incoming.senderMmId != 'mm:unknown-peer' ||
         incoming.peerMmId != 'channel:general') {
       throw StateError('Unknown channel sender metadata lost');
+    }
+    final incomingPoint = history
+        .where((m) => !m.outgoing && m.messageClass == 'map_point')
+        .single;
+    if (incomingPoint.mapPoint?.id != 'general-point-in' ||
+        incomingPoint.effectiveConversationKey != 'channel:general') {
+      throw StateError('Incoming channel MapPoint metadata lost');
     }
 
     if ((await core.contacts()).isNotEmpty) {
