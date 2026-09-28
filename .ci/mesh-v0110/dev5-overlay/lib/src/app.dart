@@ -125,10 +125,21 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int index = 0;
+  bool _mapActivated = false;
 
   void _selectIndex(int value) {
-    if (!mounted || value == index || value < 0 || value > 3) return;
-    setState(() => index = value);
+    if (!mounted || value < 0 || value > 3) return;
+    if (value == index && (value != 1 || _mapActivated)) return;
+    setState(() {
+      index = value;
+      if (value == 1) _mapActivated = true;
+    });
+  }
+
+  void _openMapComposerAfterOverlay() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _selectIndex(1);
+    });
   }
 
   @override
@@ -140,9 +151,11 @@ class _AppShellState extends State<AppShell> {
           widget.controller.requestMapFocus(point);
           _selectIndex(1);
         },
-        onOpenMapComposer: () => _selectIndex(1),
+        onOpenMapComposer: _openMapComposerAfterOverlay,
       ),
-      MapPage(controller: widget.controller),
+      _mapActivated
+          ? MapPage(controller: widget.controller)
+          : const SizedBox.shrink(),
       ConnectionPage(controller: widget.controller),
       SettingsPage(controller: widget.controller),
     ];
