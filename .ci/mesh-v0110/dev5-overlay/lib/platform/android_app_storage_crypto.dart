@@ -1,17 +1,6 @@
 import 'package:flutter/services.dart';
 
-abstract interface class AppStorageCrypto {
-  Future<Map<String, String>> encrypt({
-    required String purpose,
-    required String plaintext,
-  });
-
-  Future<String> decrypt({
-    required String purpose,
-    required String iv,
-    required String ciphertext,
-  });
-}
+import '../core/local_storage_crypto.dart';
 
 final class AndroidAppStorageCrypto implements AppStorageCrypto {
   AndroidAppStorageCrypto({
