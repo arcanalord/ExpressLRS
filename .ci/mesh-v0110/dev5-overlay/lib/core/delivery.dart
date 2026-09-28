@@ -178,8 +178,9 @@ final class DeliveryManager {
       return _save(
         latest.copyWith(
           state: DeliveryState.retryWait,
+          attempts: current.attempts,
           lastError: lastDetail,
-          nextRetryAt: _now().add(_retryDelayFor(latest)),
+          nextRetryAt: _now().add(_retryDelayFor(current)),
           clearSelectedTransport: true,
         ),
       );
