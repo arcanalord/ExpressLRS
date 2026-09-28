@@ -286,11 +286,11 @@ enum Mmrp2FrameClass {
   const Mmrp2FrameClass(this.wire);
   final int wire;
 
-  static Mmrp2FrameClass fromWire(int wire) => Mmrp2FrameClass.values.firstWhere(
+  static Mmrp2FrameClass fromWire(int wire) =>
+      Mmrp2FrameClass.values.firstWhere(
         (value) => value.wire == wire,
-        orElse: () => throw FormatException(
-          'Reserved/unknown MMRP/2 frame class: $wire',
-        ),
+        orElse: () =>
+            throw FormatException('Reserved/unknown MMRP/2 frame class: $wire'),
       );
 }
 
@@ -359,10 +359,7 @@ final class Mmrp2Packet {
 }
 
 final class Mmrp2LinkAck {
-  const Mmrp2LinkAck({
-    required this.ackBaseCounter,
-    required this.ackBitmap,
-  });
+  const Mmrp2LinkAck({required this.ackBaseCounter, required this.ackBitmap});
 
   final int ackBaseCounter;
   final int ackBitmap;
