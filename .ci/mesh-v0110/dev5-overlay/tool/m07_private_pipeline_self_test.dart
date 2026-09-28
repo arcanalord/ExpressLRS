@@ -40,6 +40,7 @@ final class _TestM07Provider implements M07CryptoProvider {
 
   final String mmId;
   int encryptCalls = 0;
+  PortablePreKeyBundle? lastEnsurePreKeyBundle;
   final Map<String, PortablePreKeyBundle> peerBundles =
       <String, PortablePreKeyBundle>{};
 
@@ -93,12 +94,14 @@ final class _TestM07Provider implements M07CryptoProvider {
   Future<SecureSessionRef> ensureDirectSession(
     IdentityPublicMaterial peer, {
     PortablePreKeyBundle? preKeyBundle,
-  }) async =>
-      SecureSessionRef(
-        sessionId: 'session:$mmId->${peer.mmId}',
-        peerMmId: peer.mmId,
-        suiteId: suiteProfile.ratchetSuite,
-      );
+  }) async {
+    lastEnsurePreKeyBundle = preKeyBundle;
+    return SecureSessionRef(
+      sessionId: 'session:$mmId->${peer.mmId}',
+      peerMmId: peer.mmId,
+      suiteId: suiteProfile.ratchetSuite,
+    );
+  }
 
   @override
   Future<EncryptedApplicationEnvelope> encryptDirect(
@@ -180,11 +183,12 @@ final class _TestM07Provider implements M07CryptoProvider {
       Uint8List.fromList(ciphertext);
 }
 
-Contact _contact(String mmId) => Contact(
+Contact _contact(String mmId, {String? preKeyBundle}) => Contact(
   mmId: mmId,
   displayName: mmId,
   verified: true,
   identityPublicKey: 'pk-$mmId',
+  preKeyBundle: preKeyBundle,
   fingerprint: 'fp-$mmId',
 );
 
@@ -196,18 +200,18 @@ Future<void> main() async {
     final aliceStorage = AppStorage(aliceRoot);
     final bobStorage = AppStorage(bobRoot);
     final malloryStorage = AppStorage(malloryRoot);
-    await aliceStorage.saveContact(_contact('mm:bob'));
-    await bobStorage.saveContact(_contact('mm:alice'));
 
     final aliceProvider = _TestM07Provider('mm:alice');
     final bobProvider = _TestM07Provider('mm:bob');
     final malloryProvider = _TestM07Provider('mm:mallory');
 
-    await aliceProvider.importPeerPreKeyBundle(
-      await bobProvider.localPreKeyBundle(),
+    final bobBundle = await bobProvider.localPreKeyBundle();
+    final aliceBundle = await aliceProvider.localPreKeyBundle();
+    await aliceStorage.saveContact(
+      _contact('mm:bob', preKeyBundle: bobBundle.encode()),
     );
-    await bobProvider.importPeerPreKeyBundle(
-      await aliceProvider.localPreKeyBundle(),
+    await bobStorage.saveContact(
+      _contact('mm:alice', preKeyBundle: aliceBundle.encode()),
     );
 
     final rejectRoute = _CaptureTransport(
@@ -252,6 +256,10 @@ Future<void> main() async {
     check(
       !acceptRoute.sent.single.payload.contains(secret),
       'transport payload must not contain private plaintext',
+    );
+    check(
+      aliceProvider.lastEnsurePreKeyBundle?.bundleId == bobBundle.bundleId,
+      'persisted peer prekey bundle must reach session bootstrap',
     );
 
     final outer = acceptRoute.sent.single;
