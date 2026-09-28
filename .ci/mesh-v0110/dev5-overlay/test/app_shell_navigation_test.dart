@@ -33,7 +33,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await tester.binding.setSurfaceSize(null);
-    await tester.runAsync(() => controller.shutdown());
+    await controller.shutdown();
     controller.dispose();
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
