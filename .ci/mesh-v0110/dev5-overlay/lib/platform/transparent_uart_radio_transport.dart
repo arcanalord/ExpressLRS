@@ -151,6 +151,23 @@ final class TransparentUartFileReceived extends TransparentUartRadioEvent {
   final Uint8List bytes;
 }
 
+final class TransparentUartFileProgress extends TransparentUartRadioEvent {
+  const TransparentUartFileProgress({
+    required this.transferId,
+    required this.state,
+    required this.ackedChunks,
+    required this.totalChunks,
+  });
+
+  final String transferId;
+  final String state;
+  final int ackedChunks;
+  final int totalChunks;
+
+  double get fraction =>
+      totalChunks == 0 ? 1 : ackedChunks / totalChunks;
+}
+
 final class TransparentUartStatsEvent extends TransparentUartRadioEvent {
   const TransparentUartStatsEvent({
     required this.txBytes,
@@ -196,6 +213,16 @@ final class TransparentUartRadioTransport implements MessageTransport {
             fileName: received.manifest.fileName,
             mimeType: received.manifest.mimeType,
             bytes: received.bytes,
+          ),
+        );
+      },
+      onProgress: (progress) {
+        _events.add(
+          TransparentUartFileProgress(
+            transferId: progress.transferId,
+            state: progress.state.name,
+            ackedChunks: progress.ackedChunks,
+            totalChunks: progress.totalChunks,
           ),
         );
       },
@@ -353,6 +380,9 @@ final class TransparentUartRadioTransport implements MessageTransport {
     }
     return _file1.send(plan);
   }
+
+  Future<bool> cancelFileTransfer(String transferId) =>
+      _file1.cancel(transferId);
 
   Future<void> discoverPeers() async {
     if (!isAvailable) return;

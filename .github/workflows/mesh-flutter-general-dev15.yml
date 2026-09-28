@@ -157,6 +157,10 @@ jobs:
           grep -q "IndexedStack" lib/src/app.dart
           grep -q "rapid tab switching keeps inherited dependencies stable" test/app_shell_navigation_test.dart
           grep -q "sendPreparedSmallFile" lib/src/features/chats/chats_page.dart
+          grep -q "cancelPreparedFileTransfer" lib/src/application/mesh_app_controller.dart
+          grep -q "TransparentUartFileProgress" lib/platform/transparent_uart_radio_transport.dart
+          grep -q "File1TransportProgress" lib/platform/file1_transport_bridge.dart
+          grep -q "Повторить передачу" lib/src/features/chats/chats_page.dart
           grep -q "Мой QR" lib/src/features/chats/chats_page.dart
           grep -q "Сканировать QR" lib/src/features/chats/chats_page.dart
           grep -q "Планируемые разделы" lib/src/features/settings/settings_page.dart

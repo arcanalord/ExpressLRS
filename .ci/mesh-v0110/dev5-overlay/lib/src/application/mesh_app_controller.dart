@@ -116,8 +116,21 @@ final class MeshAppController extends ChangeNotifier {
   String? preparedFileSha256;
   AdaptiveLinkProfile preparedFileProfile = AdaptiveLinkProfile.reliable;
   String? fileTransferNotice;
+  String fileTransferState = 'idle';
+  int fileTransferAckedChunks = 0;
   FileTransferPlan? _preparedFilePlan;
   bool fileTransferSending = false;
+
+  double get fileTransferProgress {
+    final total = preparedFileChunks ?? 0;
+    if (total <= 0) return 0;
+    return (fileTransferAckedChunks / total).clamp(0.0, 1.0);
+  }
+
+  bool get fileTransferCanRetry =>
+      _preparedFilePlan != null &&
+      !fileTransferSending &&
+      (fileTransferState == 'failed' || fileTransferState == 'cancelled');
   String? lastReceivedFileName;
   String? lastReceivedFilePath;
   final Map<String, DateTime> _peerLastSeen = <String, DateTime>{};
@@ -723,6 +736,8 @@ final class MeshAppController extends ChangeNotifier {
     preparedFileSha256 = plan.manifest.sha256Hex;
     preparedFileProfile = decision.profile;
     _preparedFilePlan = plan;
+    fileTransferState = 'prepared';
+    fileTransferAckedChunks = 0;
     fileTransferNotice = 'Подготовлено: ' +
         plan.manifest.chunkCount.toString() +
         ' блоков по ' +
@@ -742,13 +757,16 @@ final class MeshAppController extends ChangeNotifier {
 
     busy = true;
     fileTransferSending = true;
+    fileTransferState = 'sendingManifest';
+    fileTransferAckedChunks = 0;
     fileTransferNotice =
-        'Отправка ' + plan.manifest.fileName + ': ' +
-        plan.manifest.chunkCount.toString() + ' блоков…';
+        'Согласование передачи · ' + plan.manifest.fileName;
     notifyListeners();
     try {
       await lr24.sendFilePlan(plan);
-      fileTransferNotice = 'Файл отправлен: ' +
+      fileTransferState = 'completed';
+      fileTransferAckedChunks = plan.manifest.chunkCount;
+      fileTransferNotice = 'Доставлено: ' +
           plan.manifest.fileName + ' · ' +
           plan.manifest.totalBytes.toString() + ' Б';
       _addLr24Log(
@@ -756,8 +774,16 @@ final class MeshAppController extends ChangeNotifier {
         plan.manifest.fileName + ' ' +
         plan.manifest.totalBytes.toString() + 'B',
       );
-      clearPreparedFile(notify: false);
+      clearPreparedFile(notify: false, keepTransferStatus: true);
     } catch (error) {
+      if (fileTransferState == 'cancelled') {
+        fileTransferNotice = 'Передача отменена';
+        _addLr24Log(
+          'FILE CANCELLED ' + plan.manifest.transferId,
+        );
+        return;
+      }
+      fileTransferState = 'failed';
       fileTransferNotice = 'Ошибка передачи файла: ' + error.toString();
       _addLr24Log(
         'FILE SEND ERROR ' + plan.manifest.transferId + ' | ' + error.toString(),
@@ -770,12 +796,30 @@ final class MeshAppController extends ChangeNotifier {
     }
   }
 
-  void clearPreparedFile({bool notify = true}) {
+  Future<void> cancelPreparedFileTransfer() async {
+    final plan = _preparedFilePlan;
+    final lr24 = _lr24;
+    if (plan == null || lr24 == null || !fileTransferSending) return;
+    final cancelled = await lr24.cancelFileTransfer(plan.manifest.transferId);
+    if (!cancelled) return;
+    fileTransferState = 'cancelled';
+    fileTransferNotice = 'Передача отменена';
+    notifyListeners();
+  }
+
+  void clearPreparedFile({
+    bool notify = true,
+    bool keepTransferStatus = false,
+  }) {
     preparedFileName = null;
     preparedFileBytes = null;
     preparedFileChunks = null;
     preparedFileSha256 = null;
     _preparedFilePlan = null;
+    if (!keepTransferStatus) {
+      fileTransferState = 'idle';
+      fileTransferAckedChunks = 0;
+    }
     if (notify) {
       fileTransferNotice = null;
       notifyListeners();
@@ -2182,6 +2226,35 @@ final class MeshAppController extends ChangeNotifier {
         );
       }
       notifyListeners();
+      return;
+    }
+    if (event is TransparentUartFileProgress) {
+      final plan = _preparedFilePlan;
+      if (plan != null && plan.manifest.transferId == event.transferId) {
+        fileTransferState = event.state;
+        fileTransferAckedChunks = event.ackedChunks;
+        switch (event.state) {
+          case 'idle':
+          case 'sendingManifest':
+            fileTransferNotice = 'Согласование передачи…';
+          case 'sending':
+            fileTransferNotice =
+                'Отправка: ${event.ackedChunks}/${event.totalChunks} блоков';
+          case 'waiting':
+            fileTransferNotice =
+                'Ожидание подтверждения: ${event.ackedChunks}/${event.totalChunks}';
+          case 'completed':
+            fileTransferNotice =
+                'Доставлено: ${event.totalChunks}/${event.totalChunks} блоков';
+          case 'failed':
+            fileTransferNotice = 'Ошибка передачи';
+          case 'cancelled':
+            fileTransferNotice = 'Передача отменена';
+          default:
+            fileTransferNotice = 'Передача файла…';
+        }
+        notifyListeners();
+      }
       return;
     }
     if (event is TransparentUartFileReceived) {

@@ -789,27 +789,55 @@ class _ConversationPane extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Card(
-                child: ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.insert_drive_file_outlined),
-                  title: Text(controller.preparedFileName!),
-                  subtitle: Text(
-                    (controller.preparedFileBytes ?? 0).toString() +
-                        ' Б · ' +
-                        (controller.preparedFileChunks ?? 0).toString() +
-                        ' блоков · ' +
-                        controller.preparedFileProfile.name,
-                  ),
-                  trailing: controller.fileTransferSending
-                      ? const SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : IconButton(
-                          tooltip: 'Убрать',
-                          onPressed: controller.clearPreparedFile,
-                          icon: const Icon(Icons.close),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.insert_drive_file_outlined),
+                        title: Text(controller.preparedFileName!),
+                        subtitle: Text(
+                          (controller.preparedFileBytes ?? 0).toString() +
+                              ' Б · ' +
+                              (controller.preparedFileChunks ?? 0).toString() +
+                              ' блоков · ' +
+                              controller.preparedFileProfile.name,
                         ),
+                        trailing: controller.fileTransferSending
+                            ? IconButton(
+                                tooltip: 'Отменить передачу',
+                                onPressed: controller.cancelPreparedFileTransfer,
+                                icon: const Icon(Icons.stop_circle_outlined),
+                              )
+                            : controller.fileTransferCanRetry
+                            ? IconButton(
+                                tooltip: 'Повторить передачу',
+                                onPressed: controller.sendPreparedSmallFile,
+                                icon: const Icon(Icons.refresh),
+                              )
+                            : IconButton(
+                                tooltip: 'Убрать',
+                                onPressed: controller.clearPreparedFile,
+                                icon: const Icon(Icons.close),
+                              ),
+                      ),
+                      if (controller.fileTransferSending ||
+                          controller.fileTransferProgress > 0) ...[
+                        LinearProgressIndicator(
+                          value: controller.fileTransferProgress,
+                        ),
+                        const SizedBox(height: 6),
+                      ],
+                      if (controller.fileTransferNotice != null)
+                        Text(
+                          controller.fileTransferNotice!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -848,7 +876,9 @@ class _ConversationPane extends StatelessWidget {
                   const SizedBox(width: 4),
                   IconButton.filled(
                     tooltip: controller.preparedFileName != null
-                        ? 'Отправить файл'
+                        ? controller.fileTransferCanRetry
+                            ? 'Повторить отправку файла'
+                            : 'Отправить файл'
                         : 'Отправить',
                     onPressed: controller.busy
                         ? null

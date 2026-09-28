@@ -29,7 +29,7 @@ checks = {
     'ui automatic route': 'Автоматический маршрут' in connection,
     'ui lan active': 'Локальная сеть' in connection and 'Позже · использует ту же очередь' not in connection,
     'ui diagnostics collapsed': connection.count('ExpansionTile(') >= 2,
-    'help lan': 'Локальная сеть' in help_text and 'одном hotspot' in help_text and 'SAS-кода' in help_text,
+    'help lan': 'Локальная сеть' in help_text and 'одном hotspot' in help_text and 'SAS-код' in help_text,
     'ui lan probe': 'Проверить связь' in connection,
     'pairing wire': "'pair_offer'" in transport and "'pair_answer'" in transport and "'pair_confirm'" in transport,
     'verified outbound gate': 'LAN_CONTACT_NOT_VERIFIED' in transport,

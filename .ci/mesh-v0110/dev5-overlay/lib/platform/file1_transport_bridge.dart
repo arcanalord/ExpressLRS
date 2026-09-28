@@ -15,16 +15,36 @@ final class File1TransportReceived {
   final Uint8List bytes;
 }
 
+final class File1TransportProgress {
+  const File1TransportProgress({
+    required this.transferId,
+    required this.state,
+    required this.ackedChunks,
+    required this.totalChunks,
+  });
+
+  final String transferId;
+  final FileTransferSessionState state;
+  final int ackedChunks;
+  final int totalChunks;
+
+  double get fraction =>
+      totalChunks == 0 ? 1 : ackedChunks / totalChunks;
+}
+
 final class File1TransportBridge {
   File1TransportBridge({
     required Future<void> Function(Uint8List payload) sendBytes,
     required void Function(File1TransportReceived received) onReceived,
+    void Function(File1TransportProgress progress)? onProgress,
     this.tickInterval = const Duration(milliseconds: 25),
   })  : _sendBytes = sendBytes,
-        _onReceived = onReceived;
+        _onReceived = onReceived,
+        _onProgress = onProgress;
 
   final Future<void> Function(Uint8List payload) _sendBytes;
   final void Function(File1TransportReceived received) _onReceived;
+  final void Function(File1TransportProgress progress)? _onProgress;
   final Duration tickInterval;
   final Map<String, _SenderState> _senders = <String, _SenderState>{};
   final Map<String, FileTransferReceiverSession> _receivers =
@@ -35,13 +55,33 @@ final class File1TransportBridge {
   Future<void> send(FileTransferPlan plan) {
     final id = plan.manifest.transferId;
     if (_senders.containsKey(id)) {
-      return Future<void>.error(StateError('FILE/1 transfer already active: $id'));
+      return Future<void>.error(
+        StateError('FILE/1 transfer already active: $id'),
+      );
     }
     final state = _SenderState(FileTransferSenderSession(plan: plan));
     _senders[id] = state;
+    _emitProgress(id, state, force: true);
     _ensureTimer();
     unawaited(_drive());
     return state.completer.future;
+  }
+
+  Future<bool> cancel(String transferId) async {
+    final state = _senders[transferId];
+    if (state == null || state.session.isTerminal) return false;
+    state.session.cancel();
+    _emitProgress(transferId, state, force: true);
+    try {
+      await _sendBytes(
+        File1Codec.encode(File1Codec.error(transferId, 'cancelled')),
+      );
+    } catch (_) {
+      // Local cancellation must still release the sender even if the link
+      // vanished before the remote cancellation notice could be delivered.
+    }
+    _completeSenderIfTerminal(transferId, state);
+    return true;
   }
 
   Future<void> handleIncoming(Uint8List bytes) async {
@@ -53,7 +93,13 @@ final class File1TransportBridge {
             frame.type == File1FrameType.complete ||
             frame.type == File1FrameType.error)) {
       senderState.session.onFrame(frame, _nowMs());
+      _emitProgress(frame.transferId, senderState);
       _completeSenderIfTerminal(frame.transferId, senderState);
+      return;
+    }
+
+    if (frame.type == File1FrameType.error) {
+      _receivers.remove(frame.transferId);
       return;
     }
 
@@ -92,6 +138,7 @@ final class File1TransportBridge {
           continue;
         }
         final outbound = state.session.poll(now);
+        _emitProgress(entry.key, state);
         for (final frame in outbound) {
           if (frame.type == File1FrameType.manifest) {
             state.lastManifestSentMs = now;
@@ -101,7 +148,10 @@ final class File1TransportBridge {
         _completeSenderIfTerminal(entry.key, state);
       }
     } catch (error, stackTrace) {
-      for (final state in _senders.values) {
+      for (final entry in _senders.entries.toList(growable: false)) {
+        final state = entry.value;
+        state.session.state = FileTransferSessionState.failed;
+        _emitProgress(entry.key, state, force: true);
         if (!state.completer.isCompleted) {
           state.completer.completeError(error, stackTrace);
         }
@@ -116,12 +166,39 @@ final class File1TransportBridge {
     }
   }
 
+  void _emitProgress(
+    String id,
+    _SenderState state, {
+    bool force = false,
+  }) {
+    final callback = _onProgress;
+    if (callback == null) return;
+    final session = state.session;
+    if (!force &&
+        state.lastState == session.state &&
+        state.lastAckedChunks == session.ackedChunkCount) {
+      return;
+    }
+    state.lastState = session.state;
+    state.lastAckedChunks = session.ackedChunkCount;
+    callback(
+      File1TransportProgress(
+        transferId: id,
+        state: session.state,
+        ackedChunks: session.ackedChunkCount,
+        totalChunks: session.totalChunkCount,
+      ),
+    );
+  }
+
   void _completeSenderIfTerminal(String id, _SenderState state) {
     if (state.session.state == FileTransferSessionState.completed) {
+      _emitProgress(id, state, force: true);
       if (!state.completer.isCompleted) state.completer.complete();
       _senders.remove(id);
     } else if (state.session.state == FileTransferSessionState.failed ||
         state.session.state == FileTransferSessionState.cancelled) {
+      _emitProgress(id, state, force: true);
       if (!state.completer.isCompleted) {
         state.completer.completeError(
           StateError('FILE/1 transfer ended: ${state.session.state.name}'),
@@ -140,7 +217,10 @@ final class File1TransportBridge {
   void close() {
     _timer?.cancel();
     _timer = null;
-    for (final state in _senders.values) {
+    for (final entry in _senders.entries) {
+      final state = entry.value;
+      state.session.state = FileTransferSessionState.failed;
+      _emitProgress(entry.key, state, force: true);
       if (!state.completer.isCompleted) {
         state.completer.completeError(StateError('FILE/1 bridge closed'));
       }
@@ -156,4 +236,6 @@ final class _SenderState {
   final FileTransferSenderSession session;
   final Completer<void> completer = Completer<void>();
   int lastManifestSentMs = -0x7fffffff;
+  FileTransferSessionState? lastState;
+  int lastAckedChunks = -1;
 }
