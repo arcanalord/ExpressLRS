@@ -1,4 +1,7 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../core/models.dart';
 
@@ -208,8 +211,8 @@ class _ContactList extends StatelessWidget {
                   icon: const Icon(Icons.group_add_outlined),
                 ),
                 IconButton(
-                  tooltip: 'Добавить контакт вручную',
-                  onPressed: () => _showAddContact(context, controller),
+                  tooltip: 'Добавить контакт',
+                  onPressed: () => _showContactActions(context, controller),
                   icon: const Icon(Icons.person_add_alt_1_outlined),
                 ),
               ],
@@ -291,6 +294,141 @@ Future<void> _showCreateGroup(
     );
   }
   name.dispose();
+}
+
+Future<void> _showContactActions(
+  BuildContext context,
+  MeshAppController controller,
+) async {
+  final action = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.qr_code_scanner),
+            title: const Text('Сканировать QR'),
+            subtitle: const Text('Камера распознает карточку Mesh Messenger'),
+            onTap: () => Navigator.pop(context, 'scan'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.content_paste_go_outlined),
+            title: const Text('Вставить код'),
+            subtitle: const Text('Из буфера обмена'),
+            onTap: () => Navigator.pop(context, 'paste'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Ввести вручную'),
+            subtitle: const Text('MM-ID и параметры транспорта'),
+            onTap: () => Navigator.pop(context, 'manual'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (!context.mounted || action == null) return;
+
+  try {
+    if (action == 'manual') {
+      await _showAddContact(context, controller);
+      return;
+    }
+
+    String? raw;
+    if (action == 'paste') {
+      raw = (await Clipboard.getData('text/plain'))?.text;
+      if (raw == null || raw.trim().isEmpty) {
+        throw const FormatException('Буфер обмена пуст');
+      }
+    } else if (action == 'scan') {
+      raw = await Navigator.of(context).push<String>(
+        MaterialPageRoute(builder: (_) => const _ContactQrScannerPage()),
+      );
+      if (raw == null) return;
+    }
+
+    await controller.addContactCard(raw!);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Контакт добавлен')),
+      );
+    }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось добавить контакт: ' + error.toString())),
+      );
+    }
+  }
+}
+
+class _ContactQrScannerPage extends StatefulWidget {
+  const _ContactQrScannerPage();
+
+  @override
+  State<_ContactQrScannerPage> createState() => _ContactQrScannerPageState();
+}
+
+class _ContactQrScannerPageState extends State<_ContactQrScannerPage> {
+  bool _done = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Сканировать контакт')),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          MobileScanner(
+            formats: const [BarcodeFormat.qrCode],
+            onDetect: (capture) {
+              if (_done) return;
+              for (final barcode in capture.barcodes) {
+                final raw = barcode.rawValue;
+                if (raw != null && raw.trim().isNotEmpty) {
+                  _done = true;
+                  Navigator.of(context).pop(raw);
+                  break;
+                }
+              }
+            },
+          ),
+          IgnorePointer(
+            child: Center(
+              child: Container(
+                width: 260,
+                height: 260,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 3,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+            ),
+          ),
+          const Positioned(
+            left: 24,
+            right: 24,
+            bottom: 32,
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: Text(
+                  'Наведи камеру на QR-код контакта Mesh Messenger.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 Future<void> _showAddContact(
@@ -582,6 +720,29 @@ class _ConversationPane extends StatelessWidget {
                     },
                   ),
           ),
+          if (controller.preparedFileName != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Card(
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.insert_drive_file_outlined),
+                  title: Text(controller.preparedFileName!),
+                  subtitle: Text(
+                    (controller.preparedFileBytes ?? 0).toString() +
+                        ' Б · ' +
+                        (controller.preparedFileChunks ?? 0).toString() +
+                        ' блоков · ' +
+                        controller.preparedFileProfile.name,
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Убрать',
+                    onPressed: controller.clearPreparedFile,
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+              ),
+            ),
           const Divider(height: 1),
           SafeArea(
             top: false,
@@ -603,6 +764,50 @@ class _ConversationPane extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Прикрепить небольшой файл',
+                    onPressed: controller.busy
+                        ? null
+                        : () async {
+                            try {
+                              final file = await FilePicker.platform.pickFile();
+                              if (file == null) return;
+                              final length = file.lengthSync() ?? await file.length();
+                              if (length == null) {
+                                throw StateError('Не удалось определить размер файла');
+                              }
+                              if (length > 100 * 1024) {
+                                throw ArgumentError('Пока лимит 100 КБ');
+                              }
+                              final bytes = await file.readAsBytes();
+                              await controller.prepareSmallFile(
+                                fileName: file.name,
+                                mimeType: 'application/octet-stream',
+                                bytes: bytes,
+                              );
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      controller.fileTransferNotice ??
+                                          'Файл подготовлен',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } catch (error) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Файл не выбран: ' + error.toString()),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    icon: const Icon(Icons.attach_file),
+                  ),
+                  const SizedBox(width: 4),
                   IconButton.filled(
                     tooltip: 'Отправить',
                     onPressed: controller.busy

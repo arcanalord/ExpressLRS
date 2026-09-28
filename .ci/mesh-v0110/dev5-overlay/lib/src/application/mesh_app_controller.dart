@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
 import '../../core/app_storage.dart';
+import '../../core/adaptive_link_profile.dart';
+import '../../core/file_transfer_core.dart';
+import '../../core/contact_card.dart';
 import '../../core/diagnostic_snapshot.dart';
 import '../../core/delivery.dart';
 import '../../core/identity_crypto.dart';
@@ -107,6 +111,12 @@ final class MeshAppController extends ChangeNotifier {
   List<Contact> contacts = const [];
   List<GroupDefinition> groups = const [];
   List<ConversationMessage> messages = const [];
+  String? preparedFileName;
+  int? preparedFileBytes;
+  int? preparedFileChunks;
+  String? preparedFileSha256;
+  AdaptiveLinkProfile preparedFileProfile = AdaptiveLinkProfile.reliable;
+  String? fileTransferNotice;
   final Map<String, DateTime> _peerLastSeen = <String, DateTime>{};
   final Map<String, String> _peerLabels = <String, String>{};
   final Map<String, Set<String>> _peerCapabilities = <String, Set<String>>{};
@@ -647,6 +657,76 @@ final class MeshAppController extends ChangeNotifier {
     final peer = selectedPeerMmId;
     if (peer == null) return;
     await _core.acknowledge(messageId, peer);
+    notifyListeners();
+  }
+
+  Future<void> addContactCard(String raw) async {
+    final card = ContactCard.parse(raw);
+    await _core.saveContact(
+      Contact(
+        mmId: card.mmId.trim(),
+        displayName: card.displayName.trim(),
+        fingerprint: card.fingerprint?.trim(),
+        meshtasticNodeNum: _parseNodeNum(card.meshtasticNodeId),
+        ep2NodeId: card.radioNodeId,
+      ),
+    );
+    contacts = await _core.contacts();
+    selectedPeerMmId = card.mmId.trim();
+    activeConversation = ConversationRef.direct(selectedPeerMmId!);
+    await _reloadMessages();
+    notifyListeners();
+  }
+
+  Future<void> prepareSmallFile({
+    required String fileName,
+    required String mimeType,
+    required Uint8List bytes,
+  }) async {
+    const maxUiFileBytes = 100 * 1024;
+    if (bytes.isEmpty) {
+      throw ArgumentError('Файл пустой');
+    }
+    if (bytes.length > maxUiFileBytes) {
+      throw ArgumentError('Пока поддерживаются файлы до 100 КБ');
+    }
+
+    final rssi = ep2Rssi10 == null ? null : ep2Rssi10! / 10.0;
+    final decision = AdaptiveLinkPolicy.choose(
+      LinkQualitySample(rssiDbm: rssi),
+      current: preparedFileProfile,
+    );
+    final chunkSize = AdaptiveLinkPolicy.recommendedChunkSize(decision.profile);
+    final transferId = 'f-' +
+        DateTime.now().toUtc().microsecondsSinceEpoch.toRadixString(16);
+    final plan = M05FileTransferCore.createPlan(
+      transferId: transferId,
+      fileName: fileName,
+      mimeType: mimeType,
+      bytes: bytes,
+      chunkSize: chunkSize,
+    );
+
+    preparedFileName = plan.manifest.fileName;
+    preparedFileBytes = plan.manifest.totalBytes;
+    preparedFileChunks = plan.manifest.chunkCount;
+    preparedFileSha256 = plan.manifest.sha256Hex;
+    preparedFileProfile = decision.profile;
+    fileTransferNotice = 'Подготовлено: ' +
+        plan.manifest.chunkCount.toString() +
+        ' блоков по ' +
+        chunkSize.toString() +
+        ' Б · ' +
+        decision.profile.name;
+    notifyListeners();
+  }
+
+  void clearPreparedFile() {
+    preparedFileName = null;
+    preparedFileBytes = null;
+    preparedFileChunks = null;
+    preparedFileSha256 = null;
+    fileTransferNotice = null;
     notifyListeners();
   }
 
