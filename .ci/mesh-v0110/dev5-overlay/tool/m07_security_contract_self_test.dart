@@ -8,12 +8,13 @@ void main() {
   final encrypted = EncryptedApplicationEnvelope(
     formatVersion: 1,
     suiteId: 'provider-suite-v1',
-    logicalMessageId: 'm1',
-    senderMmId: 'mm:a',
-    recipientMmId: 'mm:b',
-    sessionId: 's1',
     ciphertextBase64: 'ciphertext',
   );
+  final wire = encrypted.encode();
+  check(!wire.contains('mm:a') && !wire.contains('mm:b'),
+      'M07 wire must not expose endpoint MM-IDs');
+  check(!wire.contains('sessionId') && !wire.contains('logicalMessageId'),
+      'M07 wire must not expose application/session correlation metadata');
   final internet = TransportPrivacyEnvelope(
     attemptId: 'internet-1',
     opaqueRoutingHandle: 'mailbox-random',
