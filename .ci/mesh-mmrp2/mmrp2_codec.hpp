@@ -61,8 +61,20 @@ struct LinkAck {
   std::uint32_t ack_bitmap{};
 };
 
+struct Packet {
+  Header header{};
+  std::vector<std::uint8_t> payload{};
+  std::vector<std::uint8_t> hop_aead_tag{};
+};
+
 std::vector<std::uint8_t> EncodeHeader(const Header& header);
 Header DecodeHeader(const std::vector<std::uint8_t>& bytes);
+std::vector<std::uint8_t> EncodePacket(
+    const Packet& packet, std::size_t max_frame_bytes = 65535,
+    std::size_t max_payload_bytes = 65535);
+Packet DecodePacket(const std::vector<std::uint8_t>& bytes,
+                    std::size_t max_frame_bytes = 65535,
+                    std::size_t max_payload_bytes = 65535);
 std::array<std::uint8_t, kLinkAckBodyBytes> EncodeLinkAckBody(const LinkAck& ack);
 LinkAck DecodeLinkAckBody(const std::vector<std::uint8_t>& bytes);
 
