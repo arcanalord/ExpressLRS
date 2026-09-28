@@ -3,8 +3,9 @@ import 'dart:typed_data';
 
 import '../lib/core/file_transfer_core.dart';
 import '../lib/core/file_transfer_protocol.dart';
+import '../lib/platform/file1_transport_bridge.dart';
 
-void main() {
+Future<void> main() async {
   final payload = Uint8List.fromList(
     List<int>.generate(211, (index) => (index * 19 + 7) & 0xff),
   );
@@ -77,6 +78,50 @@ void main() {
   final crcVector = File1Codec.crc32('123456789'.codeUnits);
   if (crcVector != 0xcbf43926) {
     throw StateError('CRC32 implementation mismatch');
+  }
+
+  final retryPlan = M05FileTransferCore.createPlan(
+    transferId: 'wire-final-retry',
+    fileName: 'retry.bin',
+    mimeType: 'application/octet-stream',
+    bytes: Uint8List.fromList(
+      List<int>.generate(93, (index) => (index * 13 + 5) & 0xff),
+    ),
+    chunkSize: 32,
+  );
+  var receiverDeliveries = 0;
+  var droppedFirstFinalComplete = false;
+  late File1TransportBridge senderBridge;
+  late File1TransportBridge receiverBridge;
+  senderBridge = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: (bytes) => receiverBridge.handleIncoming(bytes),
+    onReceived: (_) {},
+  );
+  receiverBridge = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: (bytes) async {
+      final response = File1Codec.decode(bytes);
+      if (!droppedFirstFinalComplete &&
+          response.type == File1FrameType.complete) {
+        droppedFirstFinalComplete = true;
+        return;
+      }
+      await senderBridge.handleIncoming(bytes);
+    },
+    onReceived: (_) => receiverDeliveries++,
+  );
+  try {
+    await senderBridge.send(retryPlan).timeout(const Duration(seconds: 3));
+    if (!droppedFirstFinalComplete || receiverDeliveries != 1) {
+      throw StateError(
+        'FILE/1 final COMPLETE retry/idempotence failed: '
+        'dropped=$droppedFirstFinalComplete deliveries=$receiverDeliveries',
+      );
+    }
+  } finally {
+    senderBridge.close();
+    receiverBridge.close();
   }
 
   stdout.writeln('MESH_MESSENGER_FILE1_PROTOCOL_PASS');
