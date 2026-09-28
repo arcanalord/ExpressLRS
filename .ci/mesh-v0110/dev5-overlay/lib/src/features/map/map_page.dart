@@ -138,9 +138,13 @@ class _MapPageState extends State<MapPage> {
                         vertical: 9,
                       ),
                       child: Text(
-                        controller.selectedContact == null
-                            ? 'Карта · выберите контакт в чатах'
-                            : 'Карта · ${controller.selectedContact!.displayName}',
+                        controller.isGeneralChat
+                            ? 'Карта · Общий чат'
+                            : controller.selectedContact != null
+                                ? 'Карта · ${controller.selectedContact!.displayName}'
+                                : controller.isGroupChat
+                                    ? 'Карта · группа · точки пока недоступны'
+                                    : 'Карта · выберите чат',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -201,7 +205,10 @@ class _MapPageState extends State<MapPage> {
     final label = TextEditingController();
     final note = TextEditingController();
     final controller = widget.controller;
-    final canSend = controller.selectedContact != null;
+    final destination = controller.isGeneralChat
+        ? 'Общий чат'
+        : controller.selectedContact?.displayName;
+    final canSend = destination != null;
     final send = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -252,8 +259,10 @@ class _MapPageState extends State<MapPage> {
                 icon: const Icon(Icons.send_outlined),
                 label: Text(
                   canSend
-                      ? 'Отправить ${controller.selectedContact!.displayName}'
-                      : 'Сначала выберите контакт',
+                      ? 'Отправить в $destination'
+                      : controller.isGroupChat
+                          ? 'Точки в группе пока недоступны'
+                          : 'Сначала выберите чат',
                 ),
               ),
             ],
