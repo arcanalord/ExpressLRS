@@ -204,10 +204,10 @@ class _ContactList extends StatelessWidget {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                 ),
-                TextButton.icon(
+                IconButton.filledTonal(
+                  tooltip: 'Мой QR и MM-ID',
                   onPressed: () => showOwnContactCardDialog(context, controller),
-                  icon: const Icon(Icons.qr_code_2, size: 18),
-                  label: const Text('Мой QR'),
+                  icon: const Icon(Icons.qr_code_2),
                 ),
                 IconButton(
                   tooltip: 'Создать группу',
