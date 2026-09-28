@@ -148,6 +148,7 @@ final class Contact {
     this.verified = false,
     this.identityPublicKey,
     this.agreementPublicKey,
+    this.preKeyBundle,
     this.fingerprint,
     this.verifiedAt,
     this.meshtasticNodeNum,
@@ -158,6 +159,7 @@ final class Contact {
   final bool verified;
   final String? identityPublicKey;
   final String? agreementPublicKey;
+  final String? preKeyBundle;
   final String? fingerprint;
   final DateTime? verifiedAt;
   final int? meshtasticNodeNum;
@@ -169,6 +171,7 @@ final class Contact {
     'verified': verified,
     'identityPublicKey': identityPublicKey,
     'agreementPublicKey': agreementPublicKey,
+    'preKeyBundle': preKeyBundle,
     'fingerprint': fingerprint,
     'verifiedAt': verifiedAt?.toIso8601String(),
     'meshtasticNodeNum': meshtasticNodeNum,
@@ -181,6 +184,7 @@ final class Contact {
     verified: json['verified'] as bool? ?? false,
     identityPublicKey: json['identityPublicKey'] as String?,
     agreementPublicKey: json['agreementPublicKey'] as String?,
+    preKeyBundle: json['preKeyBundle'] as String?,
     fingerprint: json['fingerprint'] as String?,
     verifiedAt: json['verifiedAt'] == null
         ? null

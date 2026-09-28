@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../core/delivery.dart';
 import '../core/file_transfer_core.dart';
+import '../core/m07_security.dart';
 import '../core/models.dart';
 import 'android_usb_serial_bridge.dart';
 import 'file1_transport_bridge.dart';
@@ -318,7 +319,8 @@ final class TransparentUartRadioTransport implements MessageTransport {
       );
     }
     if (envelope.messageClass != 'text' &&
-        envelope.messageClass != 'map_point') {
+        envelope.messageClass != 'map_point' &&
+        envelope.messageClass != m07DirectEnvelopeClass) {
       return const TransportSendResult(
         TransportSendStatus.unavailable,
         detail: 'LR24_CLASS_UNSUPPORTED',
