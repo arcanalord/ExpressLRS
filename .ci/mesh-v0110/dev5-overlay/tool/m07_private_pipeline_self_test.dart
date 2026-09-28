@@ -119,19 +119,18 @@ final class _TestM07Provider implements M07CryptoProvider {
     return EncryptedApplicationEnvelope(
       formatVersion: 1,
       suiteId: suiteProfile.ratchetSuite,
-      logicalMessageId: plaintext.logicalMessageId,
-      senderMmId: plaintext.senderMmId,
-      recipientMmId: plaintext.recipientMmId,
-      sessionId: 'session:${plaintext.senderMmId}->${plaintext.recipientMmId}',
       ciphertextBase64: base64UrlEncode(utf8.encode(packed)),
     );
   }
 
   @override
   Future<DirectDecryptResult> decryptDirect(
-    EncryptedApplicationEnvelope envelope,
-  ) async {
-    if (envelope.recipientMmId != mmId) {
+    EncryptedApplicationEnvelope envelope, {
+    required String expectedLogicalMessageId,
+    required String expectedSenderMmId,
+    required String expectedRecipientMmId,
+  }) async {
+    if (expectedRecipientMmId != mmId) {
       return const DirectDecryptRejected('wrong_recipient');
     }
     try {
@@ -140,6 +139,11 @@ final class _TestM07Provider implements M07CryptoProvider {
       );
       if (raw is! Map) return const DirectDecryptRejected('invalid_payload');
       final map = Map<String, dynamic>.from(raw);
+      if (map['logicalMessageId'] != expectedLogicalMessageId ||
+          map['senderMmId'] != expectedSenderMmId ||
+          map['recipientMmId'] != expectedRecipientMmId) {
+        return const DirectDecryptRejected('binding_mismatch');
+      }
       return DirectDecryptSuccess(
         DirectPlaintext(
           logicalMessageId: map['logicalMessageId'] as String,
@@ -264,8 +268,12 @@ Future<void> main() async {
 
     final outer = acceptRoute.sent.single;
     final parsed = EncryptedApplicationEnvelope.decode(outer.payload);
-    check(parsed.logicalMessageId == outer.messageId, 'message id binding');
-    check(parsed.recipientMmId == 'mm:bob', 'recipient binding');
+    check(parsed.suiteId.isNotEmpty, 'suite id required');
+    check(!outer.payload.contains('mm:alice') && !outer.payload.contains('mm:bob'),
+        'M07 wire must not expose MM-IDs');
+    check(!outer.payload.contains('logicalMessageId') &&
+            !outer.payload.contains('sessionId'),
+        'M07 wire must not expose correlation/session metadata');
 
     await bob.receiveEncryptedDirect(
       messageId: outer.messageId,
