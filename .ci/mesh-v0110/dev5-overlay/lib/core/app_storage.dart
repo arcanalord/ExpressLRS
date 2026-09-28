@@ -22,6 +22,9 @@ final class AppStorage {
   }) : _crypto = crypto;
 
   static const _encryptedSchema = 'mesh-messenger-local-storage/v1';
+  static const _contactsPurpose = 'contacts';
+  static const _groupsPurpose = 'groups';
+  static const _groupReceiptsPurpose = 'group_receipts';
   static const _messagesPurpose = 'messages';
   static const _outboxPurpose = 'outbox';
 
@@ -115,27 +118,39 @@ final class AppStorage {
   }
 
   Future<List<Contact>> loadContacts() async =>
-      (await _readList(_contactsFile)).map(Contact.fromJson).toList();
+      (await _readList(
+        _contactsFile,
+        sensitivePurpose: _contactsPurpose,
+      )).map(Contact.fromJson).toList();
 
   Future<void> saveContact(Contact contact) => _serialized(() async {
     final items = {
-      for (final raw in await _readList(_contactsFile))
+      for (final raw in await _readList(
+        _contactsFile,
+        sensitivePurpose: _contactsPurpose,
+      ))
         Contact.fromJson(raw).mmId: Contact.fromJson(raw),
     };
     items[contact.mmId] = contact;
     await _writeList(
       _contactsFile,
       items.values.map((e) => e.toJson()).toList(),
+      sensitivePurpose: _contactsPurpose,
     );
   });
 
-
   Future<List<GroupDefinition>> loadGroups() async =>
-      (await _readList(_groupsFile)).map(GroupDefinition.fromJson).toList();
+      (await _readList(
+        _groupsFile,
+        sensitivePurpose: _groupsPurpose,
+      )).map(GroupDefinition.fromJson).toList();
 
   Future<void> saveGroup(GroupDefinition group) => _serialized(() async {
     final items = {
-      for (final raw in await _readList(_groupsFile))
+      for (final raw in await _readList(
+        _groupsFile,
+        sensitivePurpose: _groupsPurpose,
+      ))
         GroupDefinition.fromJson(raw).groupId: GroupDefinition.fromJson(raw),
     };
     final current = items[group.groupId];
@@ -145,17 +160,24 @@ final class AppStorage {
     await _writeList(
       _groupsFile,
       items.values.map((e) => e.toJson()).toList(),
+      sensitivePurpose: _groupsPurpose,
     );
   });
 
   Future<List<GroupReceiptRecord>> loadGroupReceipts() async =>
-      (await _readList(_groupReceiptsFile))
+      (await _readList(
+        _groupReceiptsFile,
+        sensitivePurpose: _groupReceiptsPurpose,
+      ))
           .map(GroupReceiptRecord.fromJson)
           .toList();
 
   Future<void> saveGroupReceipt(GroupReceiptRecord receipt) =>
       _serialized(() async {
-        final all = (await _readList(_groupReceiptsFile))
+        final all = (await _readList(
+          _groupReceiptsFile,
+          sensitivePurpose: _groupReceiptsPurpose,
+        ))
             .map(GroupReceiptRecord.fromJson)
             .toList();
         final exists = all.any(
@@ -168,6 +190,7 @@ final class AppStorage {
           await _writeList(
             _groupReceiptsFile,
             all.map((e) => e.toJson()).toList(),
+            sensitivePurpose: _groupReceiptsPurpose,
           );
         }
       });
@@ -252,6 +275,9 @@ final class AppStorage {
   });
 
   Future<void> migrateSensitiveStorage() => _serialized(() async {
+    await _migrateSensitiveFile(_contactsFile, _contactsPurpose);
+    await _migrateSensitiveFile(_groupsFile, _groupsPurpose);
+    await _migrateSensitiveFile(_groupReceiptsFile, _groupReceiptsPurpose);
     await _migrateSensitiveFile(_messagesFile, _messagesPurpose);
     await _migrateSensitiveFile(_outboxFile, _outboxPurpose);
   });
