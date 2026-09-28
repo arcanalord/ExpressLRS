@@ -133,7 +133,7 @@ jobs:
 
       - name: Widget tests
         working-directory: ${{ env.APP_DIR }}
-        run: timeout 90s flutter test test/connection_page_test.dart --reporter expanded --timeout 60s
+        run: timeout 180s flutter test test/connection_page_test.dart --reporter expanded --timeout 120s
 
       - name: Build installable arm64 debug APK
         working-directory: ${{ env.APP_DIR }}

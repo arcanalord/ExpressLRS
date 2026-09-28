@@ -13,10 +13,6 @@ void main() {
       storageRoot: root,
       startRuntime: false,
     );
-    addTearDown(() async {
-      controller.dispose();
-      await root.delete(recursive: true);
-    });
 
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpWidget(
@@ -35,5 +31,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Автоматический маршрут'), findsOneWidget);
     expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.binding.setSurfaceSize(null);
+    controller.dispose();
+    if (await root.exists()) {
+      await root.delete(recursive: true);
+    }
   });
 }
