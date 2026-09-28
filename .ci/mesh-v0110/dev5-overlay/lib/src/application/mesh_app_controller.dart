@@ -14,6 +14,7 @@ import '../../core/identity_crypto.dart';
 import '../../core/messenger_core.dart';
 import '../../core/models.dart';
 import '../../core/usb_profile_binding.dart';
+import '../../platform/android_app_storage_crypto.dart';
 import '../../platform/android_local_network_bridge.dart';
 import '../../platform/android_secure_identity_bridge.dart';
 import '../../platform/android_meshtastic_bridge.dart';
@@ -320,7 +321,12 @@ final class MeshAppController extends ChangeNotifier {
       _usbProfileBinding = await _usbProfileBindingStore!.load();
     }
 
-    final storage = AppStorage(root);
+    final storage = AppStorage(
+      root,
+      crypto: Platform.isAndroid ? AndroidAppStorageCrypto() : null,
+      requireEncryption: kReleaseMode,
+    );
+    await storage.migrateSensitiveStorage();
     _appStorage = storage;
     final uiPreferences = await storage.loadUiPreferences();
     advancedMode = uiPreferences['advancedMode'] == true;
