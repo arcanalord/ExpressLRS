@@ -291,6 +291,7 @@ final class DeliveryEnvelope {
     required this.messageId,
     required this.recipientMmId,
     this.deliveryId,
+    this.groupRevision,
     required this.messageClass,
     required this.payload,
     required this.createdAt,
