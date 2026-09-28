@@ -1,0 +1,35 @@
+name: Mesh M07 OpenMLS provider probe
+
+on:
+  push:
+    branches:
+      - security/m07-private-pipeline
+  pull_request:
+    branches:
+      - feature/mesh-lr24-usb
+    paths:
+      - '.ci/mesh-v0110/dev5-overlay/tool/openmls_probe/**'
+      - '.github/workflows/mesh-openmls-probe.yml'
+
+concurrency:
+  group: mesh-openmls-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain
+        run: |
+          rustc --version
+          cargo --version
+      - name: Build and run OpenMLS 0.9 provider probe
+        working-directory: .ci/mesh-v0110/dev5-overlay/tool/openmls_probe
+        run: |
+          cargo run --locked 2>/dev/null || cargo run
+      - name: License metadata snapshot
+        working-directory: .ci/mesh-v0110/dev5-overlay/tool/openmls_probe
+        run: |
+          cargo metadata --format-version 1 --no-deps > /tmp/openmls-metadata.json
+          grep -q '"name":"openmls"' /tmp/openmls-metadata.json
