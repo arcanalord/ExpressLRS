@@ -73,13 +73,56 @@ Future<void> main() async {
   try {
     const secret = 'TOP SECRET LOCAL MESSAGE';
     const pendingSecret = 'PENDING PRIVATE OUTBOX';
+    const contactSecret = 'PRIVATE CONTACT ALICE';
+    const groupSecret = 'PRIVATE GROUP ALPHA';
 
     final legacy = AppStorage(root);
+    await legacy.saveContact(
+      const Contact(
+        mmId: 'mm:alice01',
+        displayName: contactSecret,
+        verified: true,
+      ),
+    );
+    await legacy.saveGroup(
+      GroupDefinition(
+        groupId: 'g-private',
+        displayName: groupSecret,
+        creatorMmId: 'mm:self01',
+        memberMmIds: const <String>['mm:self01', 'mm:alice01'],
+        revision: 1,
+        createdAt: DateTime.utc(2026, 9, 28),
+        updatedAt: DateTime.utc(2026, 9, 28),
+      ),
+    );
+    await legacy.saveGroupReceipt(
+      GroupReceiptRecord(
+        messageId: 'gm1',
+        groupId: 'g-private',
+        memberMmId: 'mm:alice01',
+        receivedAt: DateTime.utc(2026, 9, 28),
+      ),
+    );
     await legacy.appendMessageUnique(_message('m1', secret));
     await legacy.saveOutboxItem(_outbox('o1', pendingSecret));
 
+    final contactFile = File('${root.path}/contacts.json');
+    final groupFile = File('${root.path}/groups.json');
+    final receiptFile = File('${root.path}/group_receipts.json');
     final messageFile = File('${root.path}/messages.json');
     final outboxFile = File('${root.path}/outbox.json');
+    check(
+      (await contactFile.readAsString()).contains(contactSecret),
+      'legacy contact fixture must start as plaintext',
+    );
+    check(
+      (await groupFile.readAsString()).contains(groupSecret),
+      'legacy group fixture must start as plaintext',
+    );
+    check(
+      (await receiptFile.readAsString()).contains('mm:alice01'),
+      'legacy receipt fixture must start as plaintext',
+    );
     check(
       (await messageFile.readAsString()).contains(secret),
       'legacy fixture must start as plaintext',
@@ -96,8 +139,14 @@ Future<void> main() async {
     );
     await secure.migrateSensitiveStorage();
 
+    final encryptedContacts = await contactFile.readAsString();
+    final encryptedGroups = await groupFile.readAsString();
+    final encryptedReceipts = await receiptFile.readAsString();
     final encryptedMessages = await messageFile.readAsString();
     final encryptedOutbox = await outboxFile.readAsString();
+    check(!encryptedContacts.contains(contactSecret), 'contact graph plaintext remains on disk');
+    check(!encryptedGroups.contains(groupSecret), 'group metadata plaintext remains on disk');
+    check(!encryptedReceipts.contains('mm:alice01'), 'group receipt metadata remains on disk');
     check(!encryptedMessages.contains(secret), 'messages plaintext remains on disk');
     check(
       !encryptedOutbox.contains(pendingSecret),
@@ -112,8 +161,26 @@ Future<void> main() async {
       'outbox encrypted envelope missing',
     );
 
+    final restoredContacts = await secure.loadContacts();
+    final restoredGroups = await secure.loadGroups();
+    final restoredReceipts = await secure.loadGroupReceipts();
     final restoredMessages = await secure.loadMessages(peerMmId: 'mm:peer01');
     final restoredOutbox = await secure.loadOutbox();
+    check(
+      restoredContacts.length == 1 &&
+          restoredContacts.single.displayName == contactSecret,
+      'encrypted contact restart/readback failed',
+    );
+    check(
+      restoredGroups.length == 1 &&
+          restoredGroups.single.displayName == groupSecret,
+      'encrypted group restart/readback failed',
+    );
+    check(
+      restoredReceipts.length == 1 &&
+          restoredReceipts.single.memberMmId == 'mm:alice01',
+      'encrypted receipt restart/readback failed',
+    );
     check(
       restoredMessages.length == 1 && restoredMessages.single.text == secret,
       'encrypted message restart/readback failed',
