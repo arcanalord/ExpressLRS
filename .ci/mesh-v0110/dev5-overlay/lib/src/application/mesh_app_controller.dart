@@ -13,6 +13,7 @@ import '../../core/delivery.dart';
 import '../../core/identity_crypto.dart';
 import '../../core/m07_security.dart';
 import '../../core/messenger_core.dart';
+import '../../core/secure_core_policy.dart';
 import '../../core/models.dart';
 import '../../core/usb_profile_binding.dart';
 import '../../platform/android_app_storage_crypto.dart';
@@ -328,10 +329,11 @@ final class MeshAppController extends ChangeNotifier {
       _usbProfileBinding = await _usbProfileBindingStore!.load();
     }
 
+    final securityPolicy = SecureCorePolicy.forBuild(isRelease: kReleaseMode);
     final storage = AppStorage(
       root,
       crypto: Platform.isAndroid ? AndroidAppStorageCrypto() : null,
-      requireEncryption: kReleaseMode,
+      requireEncryption: securityPolicy.requireEncryptedStorage,
     );
     await storage.migrateSensitiveStorage();
     _appStorage = storage;
@@ -430,7 +432,7 @@ final class MeshAppController extends ChangeNotifier {
       ownMmId: ownMmId,
       storage: storage,
       transports: transports,
-      requirePrivateE2ee: kReleaseMode,
+      requirePrivateE2ee: securityPolicy.requirePrivateE2ee,
     );
     await _core.restore();
     _deliverySub = _core.deliveryChanges.listen((_) {
