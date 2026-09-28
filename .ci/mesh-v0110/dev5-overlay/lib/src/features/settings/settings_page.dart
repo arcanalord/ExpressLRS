@@ -96,6 +96,24 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 12),
         _GlassPanel(
+          child: SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: controller.advancedMode,
+            onChanged: controller.setAdvancedMode,
+            secondary: const Icon(Icons.build_circle_outlined),
+            title: const Text(
+              'Расширенный режим',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: const Text(
+              'Показывает тесты 100/1000, подробные логи, BLE/USB диагностику '
+              'и инженерные параметры. Обычный режим оставляет только '
+              'основные действия подключения.',
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _GlassPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [

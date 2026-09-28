@@ -24,6 +24,26 @@ final class AppStorage {
   File get _groupReceiptsFile => File('${root.path}/group_receipts.json');
   File get _outboxFile => File('${root.path}/outbox.json');
   File get _identityFile => File('${root.path}/identity.json');
+  File get _uiPreferencesFile => File('${root.path}/ui_preferences.json');
+
+  Future<Map<String, dynamic>> loadUiPreferences() async {
+    if (!await _uiPreferencesFile.exists()) return <String, dynamic>{};
+    try {
+      final raw = jsonDecode(await _uiPreferencesFile.readAsString());
+      return raw is Map<String, dynamic> ? raw : <String, dynamic>{};
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
+  Future<void> saveUiPreferences(Map<String, Object?> values) =>
+      _serialized(() async {
+        await root.create(recursive: true);
+        await _uiPreferencesFile.writeAsString(
+          const JsonEncoder.withIndent('  ').convert(values),
+          flush: true,
+        );
+      });
 
   Future<AppIdentity> loadOrCreateIdentity() async {
     if (await _identityFile.exists()) {

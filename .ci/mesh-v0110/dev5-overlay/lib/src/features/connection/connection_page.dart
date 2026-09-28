@@ -406,30 +406,37 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               ),
                             ),
                             const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                FilledButton.tonalIcon(
-                                  onPressed: controller.radioHilRunning ||
-                                          !controller.radioHilAvailable ||
-                                          controller.radioHilTargetNode == null
-                                      ? null
-                                      : () => controller.runRadioHil(100),
-                                  icon: const Icon(Icons.science_outlined),
-                                  label: const Text('Тест 100'),
-                                ),
-                                OutlinedButton.icon(
-                                  onPressed: controller.radioHilRunning ||
-                                          !controller.radioHilAvailable ||
-                                          controller.radioHilTargetNode == null
-                                      ? null
-                                      : () => controller.runRadioHil(1000),
-                                  icon: const Icon(Icons.speed_outlined),
-                                  label: const Text('Тест 1000'),
-                                ),
-                              ],
-                            ),
+                            if (controller.advancedMode)
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  FilledButton.tonalIcon(
+                                    onPressed: controller.radioHilRunning ||
+                                            !controller.radioHilAvailable ||
+                                            controller.radioHilTargetNode == null
+                                        ? null
+                                        : () => controller.runRadioHil(100),
+                                    icon: const Icon(Icons.science_outlined),
+                                    label: const Text('Тест 100'),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: controller.radioHilRunning ||
+                                            !controller.radioHilAvailable ||
+                                            controller.radioHilTargetNode == null
+                                        ? null
+                                        : () => controller.runRadioHil(1000),
+                                    icon: const Icon(Icons.speed_outlined),
+                                    label: const Text('Тест 1000'),
+                                  ),
+                                ],
+                              )
+                            else
+                              Text(
+                                'Тесты надёжности скрыты. Включи «Расширенный режим» '
+                                'в настройках для Test 100 / 1000.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                             if (controller.radioHilRunning) ...[
                               const SizedBox(height: 10),
                               LinearProgressIndicator(
@@ -1194,10 +1201,11 @@ class _MeshtasticCard extends StatelessWidget {
                   ),
                 ),
               ],
-              ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                childrenPadding: EdgeInsets.zero,
-                title: const Text('Диагностика BLE'),
+              if (controller.advancedMode)
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  title: const Text('Диагностика BLE'),
                 children: [
                   Align(
                     alignment: Alignment.centerLeft,

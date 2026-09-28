@@ -100,6 +100,8 @@ final class MeshAppController extends ChangeNotifier {
 
   bool initialized = false;
   bool busy = false;
+  bool advancedMode = false;
+  AppStorage? _appStorage;
   ConversationRef activeConversation = const ConversationRef.channel('general');
   String? selectedPeerMmId;
   List<Contact> contacts = const [];
@@ -286,6 +288,9 @@ final class MeshAppController extends ChangeNotifier {
     }
 
     final storage = AppStorage(root);
+    _appStorage = storage;
+    final uiPreferences = await storage.loadUiPreferences();
+    advancedMode = uiPreferences['advancedMode'] == true;
     final legacyIdentity = await storage.loadOrCreateIdentity();
     final seedStore = Platform.isAndroid
         ? AndroidIdentitySeedStore()
@@ -623,6 +628,18 @@ final class MeshAppController extends ChangeNotifier {
     } finally {
       busy = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> setAdvancedMode(bool value) async {
+    if (advancedMode == value) return;
+    advancedMode = value;
+    notifyListeners();
+    final storage = _appStorage;
+    if (storage != null) {
+      await storage.saveUiPreferences(<String, Object?>{
+        'advancedMode': advancedMode,
+      });
     }
   }
 
