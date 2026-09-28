@@ -23,7 +23,7 @@ final class AndroidAppStorageCrypto implements AppStorageCrypto {
       },
     );
     if (raw is! Map) {
-      throw const PlatformException(
+      throw PlatformException(
         code: 'SECURE_STORAGE_FORMAT',
         message: 'encrypt result must be a map',
       );
@@ -32,7 +32,7 @@ final class AndroidAppStorageCrypto implements AppStorageCrypto {
     if (map['purpose'] != purpose ||
         (map['iv'] ?? '').isEmpty ||
         (map['ciphertext'] ?? '').isEmpty) {
-      throw const PlatformException(
+      throw PlatformException(
         code: 'SECURE_STORAGE_FORMAT',
         message: 'encrypt result is incomplete',
       );
@@ -55,7 +55,7 @@ final class AndroidAppStorageCrypto implements AppStorageCrypto {
       },
     );
     if (result == null) {
-      throw const PlatformException(
+      throw PlatformException(
         code: 'SECURE_STORAGE_FORMAT',
         message: 'decrypt result is null',
       );
