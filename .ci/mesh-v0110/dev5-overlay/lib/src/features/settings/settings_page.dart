@@ -96,19 +96,22 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 12),
         _GlassPanel(
-          child: SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            value: controller.advancedMode,
-            onChanged: controller.setAdvancedMode,
-            secondary: const Icon(Icons.build_circle_outlined),
-            title: const Text(
-              'Расширенный режим',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            subtitle: const Text(
-              'Показывает тесты 100/1000, подробные логи, BLE/USB диагностику '
-              'и инженерные параметры. Обычный режим оставляет только '
-              'основные действия подключения.',
+          child: Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: controller.advancedMode,
+              onChanged: controller.setAdvancedMode,
+              secondary: const Icon(Icons.build_circle_outlined),
+              title: const Text(
+                'Расширенный режим',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text(
+                'Показывает тесты 100/1000, подробные логи, BLE/USB диагностику '
+                'и инженерные параметры. Обычный режим оставляет только '
+                'основные действия подключения.',
+              ),
             ),
           ),
         ),
@@ -304,15 +307,18 @@ class _SettingTile extends StatelessWidget {
       if (constraints.isNotEmpty) constraints.join(' · '),
     ].join('\n');
 
-    return ListTile(
-      enabled: enabled,
-      leading: Icon(_iconFor(definition.valueType)),
-      title: Text(definition.label),
-      subtitle: Text(details),
-      isThreeLine: constraints.isNotEmpty,
-      trailing: _ValueTypeBadge(type: definition.valueType),
-      textColor: enabled ? null : scheme.onSurfaceVariant,
-      iconColor: enabled ? null : scheme.onSurfaceVariant,
+    return Material(
+      type: MaterialType.transparency,
+      child: ListTile(
+        enabled: enabled,
+        leading: Icon(_iconFor(definition.valueType)),
+        title: Text(definition.label),
+        subtitle: Text(details),
+        isThreeLine: constraints.isNotEmpty,
+        trailing: _ValueTypeBadge(type: definition.valueType),
+        textColor: enabled ? null : scheme.onSurfaceVariant,
+        iconColor: enabled ? null : scheme.onSurfaceVariant,
+      ),
     );
   }
 
