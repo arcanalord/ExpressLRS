@@ -107,6 +107,10 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: AppShell(controller: controller)));
     await tester.pumpAndSettle();
     expect(controller.isGeneralChat, isTrue);
+    await tester.tap(find.text('Общий чат').first);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Добавить'), findsOneWidget);
+    expect(tester.takeException(), isNull);
 
     for (var round = 0; round < 4; round++) {
       await tester.tap(find.byTooltip('Добавить'));
