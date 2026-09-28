@@ -229,11 +229,6 @@ class _ContactList extends StatelessWidget {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                 ),
-                IconButton.filledTonal(
-                  tooltip: 'Мой QR и MM-ID',
-                  onPressed: () => showOwnContactCardDialog(context, controller),
-                  icon: const Icon(Icons.qr_code_2),
-                ),
                 IconButton(
                   tooltip: 'Создать группу',
                   onPressed: controller.contacts.isEmpty
@@ -260,153 +255,245 @@ Future<void> _showCreateGroup(
   BuildContext context,
   MeshAppController controller,
 ) async {
-  final name = TextEditingController();
-  final selected = <String>{};
-  final accepted = await showDialog<bool>(
+  await showDialog<void>(
     context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: const Text('Новая группа'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: name,
-                onChanged: (_) => setDialogState(() {}),
-                decoration: const InputDecoration(labelText: 'Название группы'),
-              ),
-              const SizedBox(height: 12),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final contact in controller.contacts)
-                      CheckboxListTile(
-                        value: selected.contains(contact.mmId),
-                        title: Text(contact.displayName),
-                        subtitle: Text(contact.mmId),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            if (value == true) {
-                              selected.add(contact.mmId);
-                            } else {
-                              selected.remove(contact.mmId);
-                            }
-                          });
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Отмена'),
-          ),
-          FilledButton(
-            onPressed: selected.isEmpty || name.text.trim().isEmpty
-                ? null
-                : () => Navigator.pop(context, true),
-            child: const Text('Создать'),
-          ),
-        ],
-      ),
-    ),
+    builder: (_) => _CreateGroupDialog(controller: controller),
   );
-  if (accepted == true && context.mounted) {
-    await controller.createGroup(
-      displayName: name.text,
-      memberMmIds: selected,
+}
+
+class _CreateGroupDialog extends StatefulWidget {
+  const _CreateGroupDialog({required this.controller});
+
+  final MeshAppController controller;
+
+  @override
+  State<_CreateGroupDialog> createState() => _CreateGroupDialogState();
+}
+
+class _CreateGroupDialogState extends State<_CreateGroupDialog> {
+  final TextEditingController _name = TextEditingController();
+  final Set<String> _selected = <String>{};
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _create() async {
+    if (_saving || _selected.isEmpty || _name.text.trim().isEmpty) return;
+    setState(() => _saving = true);
+    try {
+      await widget.controller.createGroup(
+        displayName: _name.text,
+        memberMmIds: _selected,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось создать группу: $error')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Новая группа'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _name,
+              enabled: !_saving,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(labelText: 'Название группы'),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final contact in widget.controller.contacts)
+                    CheckboxListTile(
+                      value: _selected.contains(contact.mmId),
+                      title: Text(contact.displayName),
+                      subtitle: Text(contact.mmId),
+                      onChanged: _saving
+                          ? null
+                          : (value) {
+                              setState(() {
+                                if (value == true) {
+                                  _selected.add(contact.mmId);
+                                } else {
+                                  _selected.remove(contact.mmId);
+                                }
+                              });
+                            },
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed:
+              _saving || _selected.isEmpty || _name.text.trim().isEmpty
+                  ? null
+                  : _create,
+          child: _saving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Создать'),
+        ),
+      ],
     );
   }
-  name.dispose();
 }
 
 Future<void> _showContactActions(
   BuildContext context,
   MeshAppController controller,
 ) async {
-  final action = await showModalBottomSheet<String>(
-    context: context,
-    showDragHandle: true,
-    builder: (context) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.qr_code_2),
-            title: const Text('Мой QR и MM-ID'),
-            subtitle: const Text('Чтобы другой телефон добавил этот контакт'),
-            onTap: () => Navigator.pop(context, 'myqr'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.qr_code_scanner),
-            title: const Text('Сканировать QR'),
-            subtitle: const Text('Камера распознает карточку Mesh Messenger'),
-            onTap: () => Navigator.pop(context, 'scan'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.content_paste_go_outlined),
-            title: const Text('Вставить код'),
-            subtitle: const Text('Из буфера обмена'),
-            onTap: () => Navigator.pop(context, 'paste'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.edit_outlined),
-            title: const Text('Ввести вручную'),
-            subtitle: const Text('MM-ID и параметры транспорта'),
-            onTap: () => Navigator.pop(context, 'manual'),
-          ),
-        ],
-      ),
+  await Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => _AddContactPage(controller: controller),
     ),
   );
-  if (!context.mounted || action == null) return;
+}
 
-  try {
-    if (action == 'myqr') {
-      await showOwnContactCardDialog(context, controller);
-      return;
-    }
-    if (action == 'manual') {
-      await _showAddContact(context, controller);
-      return;
-    }
+class _AddContactPage extends StatefulWidget {
+  const _AddContactPage({required this.controller});
 
-    String? raw;
-    if (action == 'paste') {
-      raw = (await Clipboard.getData('text/plain'))?.text;
-      if (raw == null || raw.trim().isEmpty) {
-        throw const FormatException('Буфер обмена пуст');
-      }
-    } else if (action == 'scan') {
-      raw = await Navigator.of(context).push<String>(
-        MaterialPageRoute(builder: (_) => const _ContactQrScannerPage()),
-      );
-      if (raw == null) return;
-    }
+  final MeshAppController controller;
 
-    await controller.addContactCard(raw!);
-    if (context.mounted) {
+  @override
+  State<_AddContactPage> createState() => _AddContactPageState();
+}
+
+class _AddContactPageState extends State<_AddContactPage> {
+  bool _busy = false;
+
+  Future<void> _importContact(String raw) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.controller.addContactCard(raw);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Контакт добавлен')),
       );
-    }
-  } catch (error) {
-    if (context.mounted) {
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _busy = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось добавить контакт: ' + error.toString())),
+        SnackBar(content: Text('Не удалось добавить контакт: $error')),
       );
     }
   }
+
+  Future<void> _scan() async {
+    final raw = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const _ContactQrScannerPage()),
+    );
+    if (!mounted || raw == null) return;
+    await _importContact(raw);
+  }
+
+  Future<void> _paste() async {
+    final raw = (await Clipboard.getData('text/plain'))?.text;
+    if (!mounted) return;
+    if (raw == null || raw.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Буфер обмена пуст')),
+      );
+      return;
+    }
+    await _importContact(raw);
+  }
+
+  Future<void> _manual() async {
+    final added = await _showAddContact(context, widget.controller);
+    if (mounted && added) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Добавить контакт')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (_busy) const LinearProgressIndicator(),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.qr_code_2),
+                  title: const Text('Показать мой QR'),
+                  subtitle: const Text('Другой телефон отсканирует ваш контакт'),
+                  enabled: !_busy,
+                  onTap: _busy
+                      ? null
+                      : () => showOwnContactCardDialog(
+                            context,
+                            widget.controller,
+                          ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.qr_code_scanner),
+                  title: const Text('Сканировать чужой QR'),
+                  subtitle: const Text('Самый быстрый способ добавить контакт'),
+                  enabled: !_busy,
+                  onTap: _busy ? null : _scan,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.content_paste_go_outlined),
+                  title: const Text('Вставить код'),
+                  subtitle: const Text('Если код контакта уже в буфере'),
+                  enabled: !_busy,
+                  onTap: _busy ? null : _paste,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: const Text('Ввести вручную'),
+                  subtitle: const Text('MM-ID и привязка транспорта'),
+                  enabled: !_busy,
+                  onTap: _busy ? null : _manual,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Обычно достаточно QR. Параметры Meshtastic и радиомодуля находятся в ручном вводе.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _ContactQrScannerPage extends StatefulWidget {
+class _ContactQrScannerPage extends StatefulWidgetclass _ContactQrScannerPage extends StatefulWidget {
   const _ContactQrScannerPage();
 
   @override
@@ -481,94 +568,141 @@ class _ContactQrScannerPageState extends State<_ContactQrScannerPage> {
   }
 }
 
-Future<void> _showAddContact(
+Future<bool> _showAddContact(
   BuildContext context,
   MeshAppController controller,
 ) async {
-  final name = TextEditingController();
-  final mmId = TextEditingController();
-  final node = TextEditingController();
-  final ep2Node = TextEditingController();
-  final accepted = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Добавить контакт'),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: name,
-              decoration: const InputDecoration(labelText: 'Имя'),
-            ),
-            TextField(
-              controller: mmId,
-              decoration: const InputDecoration(
-                labelText: 'Код контакта (MM-ID)',
+  return await showDialog<bool>(
+        context: context,
+        builder: (_) => _AddContactDialog(controller: controller),
+      ) ??
+      false;
+}
+
+class _AddContactDialog extends StatefulWidget {
+  const _AddContactDialog({required this.controller});
+
+  final MeshAppController controller;
+
+  @override
+  State<_AddContactDialog> createState() => _AddContactDialogState();
+}
+
+class _AddContactDialogState extends State<_AddContactDialog> {
+  final TextEditingController _name = TextEditingController();
+  final TextEditingController _mmId = TextEditingController();
+  final TextEditingController _node = TextEditingController();
+  final TextEditingController _ep2Node = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _mmId.dispose();
+    _node.dispose();
+    _ep2Node.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    if (_name.text.trim().isEmpty || _mmId.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Укажите имя и MM-ID')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await widget.controller.addLocalContact(
+        mmId: _mmId.text,
+        displayName: _name.text,
+        meshtasticNode: _node.text,
+        ep2Node: _ep2Node.text,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Не удалось сохранить: $error')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Ввести контакт вручную'),
+      content: SingleChildScrollView(
+        child: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _name,
+                enabled: !_saving,
+                decoration: const InputDecoration(labelText: 'Имя'),
               ),
-            ),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              childrenPadding: EdgeInsets.zero,
-              title: const Text('Дополнительно'),
-              subtitle: const Text('Привязка транспорта при ручной настройке'),
-              children: [
-                TextField(
-                  controller: node,
-                  decoration: const InputDecoration(
-                    labelText: 'Meshtastic node ID',
-                    hintText: '!a1b2c3d4',
-                  ),
+              TextField(
+                controller: _mmId,
+                enabled: !_saving,
+                decoration: const InputDecoration(
+                  labelText: 'Код контакта (MM-ID)',
                 ),
-                TextField(
-                  controller: ep2Node,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Узел радиомодуля (1-15)',
-                    hintText: '2',
-                  ),
+              ),
+              ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                title: const Text('Дополнительно'),
+                subtitle: const Text(
+                  'Meshtastic и привязка радиомодуля',
                 ),
-              ],
-            ),
-          ],
+                children: [
+                  TextField(
+                    controller: _node,
+                    enabled: !_saving,
+                    decoration: const InputDecoration(
+                      labelText: 'Meshtastic node ID',
+                      hintText: '!a1b2c3d4',
+                    ),
+                  ),
+                  TextField(
+                    controller: _ep2Node,
+                    enabled: !_saving,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Узел радиомодуля (1-15)',
+                      hintText: '2',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, false),
+          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
           child: const Text('Отмена'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Сохранить'),
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Сохранить'),
         ),
       ],
-    ),
-  );
-  if (accepted == true && context.mounted) {
-    try {
-      await controller.addLocalContact(
-        mmId: mmId.text,
-        displayName: name.text,
-        meshtasticNode: node.text,
-        ep2Node: ep2Node.text,
-      );
-    } catch (error) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Не удалось сохранить: $error')));
-      }
-    }
+    );
   }
-  name.dispose();
-  mmId.dispose();
-  node.dispose();
-  ep2Node.dispose();
 }
 
-class _ConversationPane extends StatelessWidget {
+class _ConversationPane extends StatelessWidgetclass _ConversationPane extends StatelessWidget {
   const _ConversationPane({
     required this.controller,
     required this.composer,
