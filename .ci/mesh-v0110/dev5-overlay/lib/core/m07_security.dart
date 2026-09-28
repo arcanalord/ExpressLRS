@@ -435,8 +435,9 @@ abstract interface class M07CryptoProvider {
   bool verifyIdentityBinding(IdentityPublicMaterial identity);
 
   Future<SecureSessionRef> ensureDirectSession(
-    IdentityPublicMaterial peer,
-  );
+    IdentityPublicMaterial peer, {
+    PortablePreKeyBundle? preKeyBundle,
+  });
 
   /// Advances the secure session exactly once for one logical message/recipient.
   ///
