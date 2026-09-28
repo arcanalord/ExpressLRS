@@ -345,15 +345,6 @@ final class MeshAppController extends ChangeNotifier {
     });
 
     contacts = await _core.contacts();
-    if (contacts.isEmpty) {
-      await _core.saveContact(
-        const Contact(
-          mmId: 'mm:demo-alexey',
-          displayName: '\u0410\u043b\u0435\u043a\u0441\u0435\u0439',
-        ),
-      );
-      contacts = await _core.contacts();
-    }
     lan.setAllowedPeers(
       contacts
           .where((contact) => contact.verified)
