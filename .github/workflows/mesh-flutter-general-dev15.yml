@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: mesh-flutter-v0.1.10-dev.15-channel-r2
+  group: mesh-flutter-v0.1.10-dev.15-channel-r2-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
