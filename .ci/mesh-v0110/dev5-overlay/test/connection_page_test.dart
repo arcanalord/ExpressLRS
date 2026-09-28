@@ -9,9 +9,8 @@ import '../lib/src/features/connection/connection_page.dart';
 void main() {
   testWidgets('connection page fits mobile and desktop', (tester) async {
     final root = await Directory.systemTemp.createTemp('mesh_ui_gate_');
-    final controller = await MeshAppController.create(
+    final controller = await MeshAppController.createForWidgetTest(
       storageRoot: root,
-      startRuntime: false,
     );
 
     await tester.binding.setSurfaceSize(const Size(390, 844));

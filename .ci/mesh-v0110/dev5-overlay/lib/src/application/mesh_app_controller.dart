@@ -205,6 +205,32 @@ final class MeshAppController extends ChangeNotifier {
     return null;
   }
 
+  @visibleForTesting
+  static Future<MeshAppController> createForWidgetTest({
+    required Directory storageRoot,
+  }) async {
+    final controller = MeshAppController._();
+    final storage = AppStorage(storageRoot);
+    controller.ownMmId = 'mm:widget-test';
+    controller.ownDeviceLabel = 'Widget Test';
+    controller.ownFingerprint = 'widget-test';
+    controller.identitySeedStorage = 'test-only';
+    controller._core = MeshMessengerCore(
+      ownMmId: controller.ownMmId,
+      storage: storage,
+      transports: const <MessageTransport>[],
+    );
+    await controller._core.restore();
+    controller.contacts = await controller._core.contacts();
+    controller.activeConversation = const ConversationRef.channel('general');
+    controller.selectedPeerMmId = null;
+    controller.messages = await controller._core.messagesForConversation(
+      controller.activeConversation,
+    );
+    controller.initialized = true;
+    return controller;
+  }
+
   static Future<MeshAppController> create({
     Directory? storageRoot,
     bool startRuntime = true,
