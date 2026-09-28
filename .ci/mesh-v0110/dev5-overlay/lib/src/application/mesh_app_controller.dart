@@ -145,12 +145,18 @@ final class MeshAppController extends ChangeNotifier {
   String ownMmId = '';
   String ownDeviceLabel = '';
   String ownFingerprint = '';
+  String ownIdentityPublicKey = '';
+  String ownAgreementPublicKey = '';
   String identitySeedStorage = '';
 
   String get ownContactCardPayload => ContactCard(
         mmId: ownMmId,
         displayName: ownDeviceLabel.isEmpty ? 'Mesh Messenger' : ownDeviceLabel,
         fingerprint: ownFingerprint.isEmpty ? null : ownFingerprint,
+        identityPublicKey:
+            ownIdentityPublicKey.isEmpty ? null : ownIdentityPublicKey,
+        agreementPublicKey:
+            ownAgreementPublicKey.isEmpty ? null : ownAgreementPublicKey,
         radioNodeId: ep2LocalNode,
       ).encode();
   final Map<String, LanPairingSession> lanPairings =
@@ -337,6 +343,8 @@ final class MeshAppController extends ChangeNotifier {
     ownMmId = _identity.mmId;
     ownDeviceLabel = _identity.label;
     ownFingerprint = _identity.fingerprint;
+    ownIdentityPublicKey = _identity.identityPublicKeyB64;
+    ownAgreementPublicKey = _identity.agreementPublicKeyB64;
     identitySeedStorage = _identity.seedStorage;
     await storage.savePublicIdentityMetadata(
       mmId: ownMmId,
@@ -692,6 +700,8 @@ final class MeshAppController extends ChangeNotifier {
         mmId: card.mmId.trim(),
         displayName: card.displayName.trim(),
         fingerprint: card.fingerprint?.trim(),
+        identityPublicKey: card.identityPublicKey?.trim(),
+        agreementPublicKey: card.agreementPublicKey?.trim(),
         meshtasticNodeNum: _parseNodeNum(card.meshtasticNodeId),
         ep2NodeId: card.radioNodeId,
       ),
