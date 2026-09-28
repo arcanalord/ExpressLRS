@@ -99,10 +99,7 @@ void main() {
     Uint8List.fromList(base)..[1] = Mmrp2Codec.flagFragmented,
     'N4',
   );
-  _expectReject(
-    _hex('26060222010203040506070800000010a1b2c3d400010001'),
-    'N5',
-  );
+  _expectReject(_hex('26060222010203040506070800000010a1b2c3d400010001'), 'N5');
 
   final replay = Mmrp2ReplayWindow();
   _check(replay.accept(100), 'replay first');
