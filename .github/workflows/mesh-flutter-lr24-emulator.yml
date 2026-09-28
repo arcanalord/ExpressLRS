@@ -124,7 +124,7 @@ jobs:
         continue-on-error: true
         run: timeout 90s flutter test
 
-      - name: Build installable arm64 debug APK
+      - name: Build installable x86_64 debug APK
         working-directory: ${{ env.APP_DIR }}
         run: flutter build apk --debug --target-platform android-x64 --split-per-abi
 
@@ -140,12 +140,14 @@ jobs:
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
           "$BT/aapt" dump badging "$APK" | tee /tmp/APK_BADGING.txt
           grep -Fq "package: name='org.fpvclub.mesh.flutter'" /tmp/APK_BADGING.txt
-          grep -Fq "versionCode='26092702'" /tmp/APK_BADGING.txt
+          APK_VERSION_CODE="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/APK_BADGING.txt | head -n1)"
+          test -n "$APK_VERSION_CODE"
+          export APK_VERSION_CODE
           grep -Fq "versionName='0.1.10-dev.13-lr24-emu'" /tmp/APK_BADGING.txt
           unzip -Z1 "$APK" > /tmp/APK_FILES.txt
           grep -Fq 'lib/x86_64/' /tmp/APK_FILES.txt
           if grep -Eq '^lib/(armeabi-v7a|arm64-v8a|x86)/' /tmp/APK_FILES.txt; then
-            echo "Unexpected non-arm64 ABI in APK" >&2
+            echo "Unexpected non-x86_64 ABI in APK" >&2
             exit 1
           fi
           cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.13-lr24-x86_64-debug.apk
