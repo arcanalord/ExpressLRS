@@ -6,12 +6,11 @@ import '../lib/core/models.dart';
 
 final class _MutableTransport implements MessageTransport {
   _MutableTransport({
-    this.available = true,
     this.status = TransportSendStatus.accepted,
     this.detail,
   });
 
-  bool available;
+  bool available = true;
   TransportSendStatus status;
   String? detail;
   int sends = 0;
