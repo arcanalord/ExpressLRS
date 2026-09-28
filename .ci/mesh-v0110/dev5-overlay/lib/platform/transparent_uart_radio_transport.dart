@@ -5,6 +5,7 @@ import '../core/delivery.dart';
 import '../core/models.dart';
 import 'android_usb_serial_bridge.dart';
 import 'mm_serial_codec.dart';
+import 'm05_transport_qos_adapter.dart';
 
 sealed class TransparentUartRadioEvent {
   const TransparentUartRadioEvent();
@@ -165,9 +166,12 @@ final class TransparentUartRadioTransport implements MessageTransport {
     required AndroidUsbSerialBridge bridge,
     required this.ownMmId,
     this.ownLabel = '',
-  }) : _bridge = bridge;
+  }) : _bridge = bridge {
+    _qos = M05TransportQosAdapter(writeRaw: _writeRawFrame);
+  }
 
   final AndroidUsbSerialBridge _bridge;
+  late final M05TransportQosAdapter _qos;
   final String ownMmId;
   final String ownLabel;
   final Set<String> _discoveredPeerMmIds = <String>{};
@@ -429,7 +433,9 @@ final class TransparentUartRadioTransport implements MessageTransport {
     return completer.future;
   }
 
-  Future<void> _writeFrame(Map<String, Object?> frame) async {
+  Future<void> _writeFrame(Map<String, Object?> frame) => _qos.send(frame);
+
+  Future<void> _writeRawFrame(Map<String, Object?> frame) async {
     final bytes = _codec.encode(frame);
     await _bridge.write(bytes);
     txBytes += bytes.length;
