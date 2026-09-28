@@ -62,9 +62,6 @@ final class File1TransportBridge {
       FileTransferReceiverSession.new,
     );
     final responses = receiver.onFrame(frame);
-    for (final response in responses) {
-      await _sendBytes(File1Codec.encode(response));
-    }
     if (receiver.isComplete) {
       final manifest = receiver.manifest;
       final payload = receiver.completedBytes;
@@ -77,6 +74,9 @@ final class File1TransportBridge {
         );
       }
       _receivers.remove(frame.transferId);
+    }
+    for (final response in responses) {
+      await _sendBytes(File1Codec.encode(response));
     }
   }
 
