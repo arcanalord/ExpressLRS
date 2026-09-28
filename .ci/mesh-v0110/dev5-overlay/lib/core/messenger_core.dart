@@ -71,7 +71,7 @@ final class MeshMessengerCore {
       final encrypted = await _encryptPrivate(
         recipientMmId: peerMmId,
         logicalMessageId: messageId,
-        conversationKey: ConversationRef.direct(peerMmId).key,
+        conversationKey: m07DirectSecurityContext(ownMmId, peerMmId),
         messageClass: 'text',
         payloadUtf8: clean,
       );
@@ -369,7 +369,7 @@ final class MeshMessengerCore {
       final encrypted = await _encryptPrivate(
         recipientMmId: peerMmId,
         logicalMessageId: messageId,
-        conversationKey: ConversationRef.direct(peerMmId).key,
+        conversationKey: m07DirectSecurityContext(ownMmId, peerMmId),
         messageClass: 'map_point',
         payloadUtf8: clearPayload,
       );
@@ -544,7 +544,8 @@ final class MeshMessengerCore {
       expectedFromMmId: fromMmId,
       encodedEnvelope: encodedEnvelope,
     );
-    if (plaintext.conversationKey != ConversationRef.direct(fromMmId).key) {
+    if (plaintext.conversationKey !=
+        m07DirectSecurityContext(ownMmId, fromMmId)) {
       throw const FormatException('M07_DIRECT_CONVERSATION_MISMATCH');
     }
     switch (plaintext.messageClass) {
