@@ -126,14 +126,14 @@ jobs:
 
       - name: Build installable arm64 debug APK
         working-directory: ${{ env.APP_DIR }}
-        run: flutter build apk --debug --target-platform android-x64
+        run: flutter build apk --debug --target-platform android-x64 --split-per-abi
 
       - name: Verify and package APK
         working-directory: ${{ env.APP_DIR }}
         shell: bash
         run: |
           set -euo pipefail
-          APK=build/app/outputs/flutter-apk/app-debug.apk
+          APK=build/app/outputs/flutter-apk/app-x86_64-debug.apk
           test -s "$APK"
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
           "$BT/apksigner" verify --verbose "$APK"
@@ -160,3 +160,37 @@ jobs:
             /tmp/SHA256SUM-v0.1.10-dev.13-lr24-emu.txt
           if-no-files-found: error
           retention-days: 14
+
+      - name: Emulator launch smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            APK="$PWD/build/app/outputs/flutter-apk/app-x86_64-debug.apk"
+            adb install -r "$APK"
+            adb logcat -c
+            adb shell monkey -p org.fpvclub.mesh.flutter -c android.intent.category.LAUNCHER 1
+            sleep 8
+            adb shell pidof org.fpvclub.mesh.flutter
+            adb exec-out screencap -p > /tmp/mesh-messenger-emulator.png
+            adb logcat -d > /tmp/mesh-messenger-logcat.txt
+            if grep -E "Failed assertion|_dependents\.isEmpty|FATAL EXCEPTION|E/flutter" /tmp/mesh-messenger-logcat.txt; then
+              echo "Flutter/runtime error detected after launch" >&2
+              exit 1
+            fi
+
+      - name: Upload emulator smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshMessenger-emulator-smoke
+          path: |
+            /tmp/mesh-messenger-emulator.png
+            /tmp/mesh-messenger-logcat.txt
+          if-no-files-found: warn
+          retention-days: 14
+
