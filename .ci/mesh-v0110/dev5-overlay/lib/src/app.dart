@@ -140,6 +140,7 @@ class _AppShellState extends State<AppShell> {
           widget.controller.requestMapFocus(point);
           _selectIndex(1);
         },
+        onOpenMapComposer: () => _selectIndex(1),
       ),
       MapPage(controller: widget.controller),
       ConnectionPage(controller: widget.controller),
@@ -186,12 +187,12 @@ class _AppShellState extends State<AppShell> {
       appBar: AppBar(
         title: const Text('Mesh Messenger'),
         actions: [
-          TextButton.icon(
+          IconButton(
+            tooltip: 'Справка',
             onPressed: () => showHelpSheet(context),
             icon: const Icon(Icons.help_outline),
-            label: const Text('Справка'),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
         ],
       ),
       body: body,

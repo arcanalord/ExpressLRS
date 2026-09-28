@@ -692,7 +692,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       );
                     }),
                   const SizedBox(height: 8),
-                  if (!controller.lr24Active) ...[
+                  if (controller.advancedMode && !controller.lr24Active) ...[
                     Card(
                       margin: EdgeInsets.zero,
                       child: Padding(
@@ -721,7 +721,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       onClear: controller.clearEp2Log,
                     ),
                   ],
-                  if (controller.lr24Active || controller.lr24Log.isNotEmpty)
+                  if (controller.advancedMode &&
+                      (controller.lr24Active || controller.lr24Log.isNotEmpty))
                     _LogExpansion(
                       title: 'Диагностика LR24-F',
                       lines: controller.lr24Log,
@@ -1110,11 +1111,12 @@ class _LanCard extends StatelessWidget {
                 );
               }),
             ],
-            _LogExpansion(
-              title: 'Диагностика LAN',
-              lines: controller.lanLog,
-              onClear: controller.clearLanLog,
-            ),
+            if (controller.advancedMode)
+              _LogExpansion(
+                title: 'Диагностика LAN',
+                lines: controller.lanLog,
+                onClear: controller.clearLanLog,
+              ),
           ],
         ),
       ),

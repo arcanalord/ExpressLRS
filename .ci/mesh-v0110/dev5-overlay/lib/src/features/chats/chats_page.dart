@@ -12,11 +12,13 @@ class ChatsPage extends StatefulWidget {
   const ChatsPage({
     required this.controller,
     required this.onOpenMapPoint,
+    required this.onOpenMapComposer,
     super.key,
   });
 
   final MeshAppController controller;
   final ValueChanged<MapPoint> onOpenMapPoint;
+  final VoidCallback onOpenMapComposer;
 
   @override
   State<ChatsPage> createState() => _ChatsPageState();
@@ -24,6 +26,7 @@ class ChatsPage extends StatefulWidget {
 
 class _ChatsPageState extends State<ChatsPage> {
   final TextEditingController _composer = TextEditingController();
+  bool _mobileConversationOpen = false;
 
   @override
   void initState() {
@@ -68,12 +71,25 @@ class _ChatsPageState extends State<ChatsPage> {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 860;
-    final contacts = _ContactList(controller: widget.controller);
+    final contacts = _ContactList(
+      controller: widget.controller,
+      onOpenConversation: () {
+        if (!wide && mounted) {
+          setState(() => _mobileConversationOpen = true);
+        }
+      },
+    );
     final conversation = _ConversationPane(
       controller: widget.controller,
       composer: _composer,
       stateLabel: stateLabel,
       onOpenMapPoint: widget.onOpenMapPoint,
+      onOpenMapComposer: widget.onOpenMapComposer,
+      onBack: wide
+          ? null
+          : () {
+              if (mounted) setState(() => _mobileConversationOpen = false);
+            },
     );
 
     return Padding(
@@ -87,21 +103,21 @@ class _ChatsPageState extends State<ChatsPage> {
                 Expanded(child: conversation),
               ],
             )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(height: 150, child: contacts),
-                const SizedBox(height: 12),
-                Expanded(child: conversation),
-              ],
-            ),
+          : _mobileConversationOpen
+              ? conversation
+              : contacts,
     );
   }
 }
 
 class _ContactList extends StatelessWidget {
-  const _ContactList({required this.controller});
+  const _ContactList({
+    required this.controller,
+    required this.onOpenConversation,
+  });
+
   final MeshAppController controller;
+  final VoidCallback onOpenConversation;
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +133,10 @@ class _ContactList extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
-        onTap: controller.selectGeneralChat,
+        onTap: () {
+          controller.selectGeneralChat();
+          onOpenConversation();
+        },
       ),
       if (controller.groups.isNotEmpty)
         const Padding(
@@ -138,7 +157,10 @@ class _ContactList extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          onTap: () => controller.selectGroup(group.groupId),
+          onTap: () {
+            controller.selectGroup(group.groupId);
+            onOpenConversation();
+          },
         ),
       if (controller.contacts.isNotEmpty)
         const Padding(
@@ -163,7 +185,10 @@ class _ContactList extends StatelessWidget {
           trailing: contact.verified
               ? const Icon(Icons.verified_user_outlined, size: 18)
               : null,
-          onTap: () => controller.selectContact(contact.mmId),
+          onTap: () {
+            controller.selectContact(contact.mmId);
+            onOpenConversation();
+          },
         ),
       if (controller.nearbyPeerMmIds.isNotEmpty)
         const Padding(
@@ -549,12 +574,16 @@ class _ConversationPane extends StatelessWidget {
     required this.composer,
     required this.stateLabel,
     required this.onOpenMapPoint,
+    required this.onOpenMapComposer,
+    this.onBack,
   });
 
   final MeshAppController controller;
   final TextEditingController composer;
   final String Function(DeliveryState?) stateLabel;
   final ValueChanged<MapPoint> onOpenMapPoint;
+  final VoidCallback onOpenMapComposer;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -573,6 +602,15 @@ class _ConversationPane extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
+          if (onBack != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                tooltip: 'Назад к чатам',
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back),
+              ),
+            ),
           ListTile(
             leading: CircleAvatar(
               child: isGeneral
@@ -592,10 +630,12 @@ class _ConversationPane extends StatelessWidget {
             ),
             subtitle: Text(
               isGeneral
-                  ? 'Все совместимые узлы · в сети: ${controller.generalOnlineCount}'
+                  ? 'Открытый канал · в сети: ${controller.generalOnlineCount}'
                   : isGroup
-                  ? '${group!.memberMmIds.length} участников · LR24: 1→1 транспорт'
-                  : 'Контакт существует независимо от текущего маршрута',
+                  ? '${group!.memberMmIds.length} участников'
+                  : contact!.verified
+                  ? 'Контакт проверен'
+                  : 'Контакт не проверен',
             ),
           ),
           const Divider(height: 1),
@@ -795,50 +835,15 @@ class _ConversationPane extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    tooltip: 'Прикрепить небольшой файл',
+                    tooltip: 'Добавить',
                     onPressed: controller.busy
                         ? null
-                        : () async {
-                            try {
-                              final result = await FilePicker.platform.pickFiles(
-                                allowMultiple: false,
-                                withData: true,
-                              );
-                              final file = result?.files.single;
-                              if (file == null) return;
-                              final bytes = file.bytes;
-                              if (bytes == null) {
-                                throw StateError('Не удалось прочитать выбранный файл');
-                              }
-                              if (bytes.length > 100 * 1024) {
-                                throw ArgumentError('Пока лимит 100 КБ');
-                              }
-                              await controller.prepareSmallFile(
-                                fileName: file.name,
-                                mimeType: 'application/octet-stream',
-                                bytes: bytes,
-                              );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      controller.fileTransferNotice ??
-                                          'Файл подготовлен',
-                                    ),
-                                  ),
-                                );
-                              }
-                            } catch (error) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Файл не выбран: ' + error.toString()),
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                    icon: const Icon(Icons.attach_file),
+                        : () => _showAttachmentMenu(
+                              context,
+                              controller,
+                              onOpenMapComposer,
+                            ),
+                    icon: const Icon(Icons.add_circle_outline),
                   ),
                   const SizedBox(width: 4),
                   IconButton.filled(
@@ -895,3 +900,107 @@ class _ConversationPane extends StatelessWidget {
     );
   }
 }
+
+Future<void> _showAttachmentMenu(
+  BuildContext context,
+  MeshAppController controller,
+  VoidCallback onOpenMapComposer,
+) async {
+  final action = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ListTile(
+            leading: Icon(Icons.mic_none_outlined),
+            title: Text('Голосовое сообщение'),
+            subtitle: Text('Выбор качества · следующий media-блок'),
+            trailing: Chip(label: Text('Скоро')),
+          ),
+          const ListTile(
+            leading: Icon(Icons.photo_camera_outlined),
+            title: Text('Камера'),
+            subtitle: Text('Снимок → preview → выбор качества'),
+            trailing: Chip(label: Text('Скоро')),
+          ),
+          const ListTile(
+            leading: Icon(Icons.photo_library_outlined),
+            title: Text('Фото'),
+            subtitle: Text('Галерея → preview → выбор качества'),
+            trailing: Chip(label: Text('Скоро')),
+          ),
+          ListTile(
+            leading: const Icon(Icons.insert_drive_file_outlined),
+            title: const Text('Файл'),
+            subtitle: const Text('Сейчас: до 100 КБ через M05 / FILE/1'),
+            onTap: () => Navigator.pop(context, 'file'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.location_on_outlined),
+            title: const Text('Местоположение'),
+            subtitle: const Text('Выбрать точку на карте'),
+            onTap: () => Navigator.pop(context, 'location'),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  if (!context.mounted || action == null) return;
+  if (action == 'location') {
+    onOpenMapComposer();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Нажмите место на карте, чтобы отправить точку'),
+        ),
+      );
+    }
+    return;
+  }
+  if (action == 'file') {
+    await _pickSmallFile(context, controller);
+  }
+}
+
+Future<void> _pickSmallFile(
+  BuildContext context,
+  MeshAppController controller,
+) async {
+  try {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      withData: true,
+    );
+    final file = result?.files.single;
+    if (file == null) return;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      throw StateError('Не удалось прочитать выбранный файл');
+    }
+    if (bytes.length > 100 * 1024) {
+      throw ArgumentError('Пока лимит 100 КБ');
+    }
+    await controller.prepareSmallFile(
+      fileName: file.name,
+      mimeType: 'application/octet-stream',
+      bytes: bytes,
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(controller.fileTransferNotice ?? 'Файл подготовлен'),
+        ),
+      );
+    }
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Файл не выбран: ' + error.toString())),
+      );
+    }
+  }
+}
+
