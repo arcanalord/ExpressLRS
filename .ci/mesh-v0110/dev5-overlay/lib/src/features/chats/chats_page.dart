@@ -1061,28 +1061,10 @@ Future<void> _showAttachmentMenu(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const ListTile(
-            leading: Icon(Icons.mic_none_outlined),
-            title: Text('Голосовое сообщение'),
-            subtitle: Text('Выбор качества · следующий media-блок'),
-            trailing: Chip(label: Text('Скоро')),
-          ),
-          const ListTile(
-            leading: Icon(Icons.photo_camera_outlined),
-            title: Text('Камера'),
-            subtitle: Text('Снимок → preview → выбор качества'),
-            trailing: Chip(label: Text('Скоро')),
-          ),
-          const ListTile(
-            leading: Icon(Icons.photo_library_outlined),
-            title: Text('Фото'),
-            subtitle: Text('Галерея → preview → выбор качества'),
-            trailing: Chip(label: Text('Скоро')),
-          ),
           ListTile(
             leading: const Icon(Icons.insert_drive_file_outlined),
             title: const Text('Файл'),
-            subtitle: const Text('Сейчас: до 100 КБ через M05 / FILE/1'),
+            subtitle: const Text('До 100 КБ через M05 / FILE/1'),
             onTap: () => Navigator.pop(context, 'file'),
           ),
           ListTile(
@@ -1090,6 +1072,12 @@ Future<void> _showAttachmentMenu(
             title: const Text('Местоположение'),
             subtitle: const Text('Выбрать точку на карте'),
             onTap: () => Navigator.pop(context, 'location'),
+          ),
+          const Divider(height: 1),
+          const ListTile(
+            leading: Icon(Icons.perm_media_outlined),
+            title: Text('Медиа'),
+            subtitle: Text('Голосовое сообщение · Камера · Фото — скоро'),
           ),
         ],
       ),
