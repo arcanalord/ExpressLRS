@@ -101,6 +101,90 @@ class _ContactList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final items = <Widget>[
+      ListTile(
+        selected: controller.isGeneralChat,
+        leading: const CircleAvatar(
+          child: Icon(Icons.forum_outlined, size: 20),
+        ),
+        title: const Text('Общий чат'),
+        subtitle: Text(
+          'Все совместимые узлы · в сети: ${controller.generalOnlineCount}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        onTap: controller.selectGeneralChat,
+      ),
+      if (controller.groups.isNotEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text('Группы', style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+      for (final group in controller.groups)
+        ListTile(
+          selected:
+              controller.isGroupChat &&
+              controller.activeConversation.id == group.groupId,
+          leading: const CircleAvatar(
+            child: Icon(Icons.groups_2_outlined, size: 20),
+          ),
+          title: Text(group.displayName),
+          subtitle: Text(
+            '${group.memberMmIds.length} участников',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: () => controller.selectGroup(group.groupId),
+        ),
+      if (controller.contacts.isNotEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text('Приватные', style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+      for (final contact in controller.contacts)
+        ListTile(
+          selected:
+              !controller.isGeneralChat &&
+              !controller.isGroupChat &&
+              contact.mmId == controller.selectedPeerMmId,
+          leading: CircleAvatar(
+            child: Text(contact.displayName.characters.first.toUpperCase()),
+          ),
+          title: Text(contact.displayName),
+          subtitle: Text(
+            contact.mmId,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: contact.verified
+              ? const Icon(Icons.verified_user_outlined, size: 18)
+              : null,
+          onTap: () => controller.selectContact(contact.mmId),
+        ),
+      if (controller.nearbyPeerMmIds.isNotEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text('Рядом', style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+      for (final mmId in controller.nearbyPeerMmIds)
+        ListTile(
+          leading: const CircleAvatar(
+            child: Icon(Icons.radar_outlined, size: 20),
+          ),
+          title: Text(controller.displayNameForMmId(mmId)),
+          subtitle: Text(
+            '$mmId · LR24/сеть',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          trailing: IconButton(
+            tooltip: 'Добавить контакт',
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            onPressed: () => controller.addNearbyPeerAsContact(mmId),
+          ),
+        ),
+    ];
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -117,67 +201,95 @@ class _ContactList extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Добавить контакт',
+                  tooltip: 'Создать группу',
+                  onPressed: controller.contacts.isEmpty
+                      ? null
+                      : () => _showCreateGroup(context, controller),
+                  icon: const Icon(Icons.group_add_outlined),
+                ),
+                IconButton(
+                  tooltip: 'Добавить контакт вручную',
                   onPressed: () => _showAddContact(context, controller),
                   icon: const Icon(Icons.person_add_alt_1_outlined),
                 ),
               ],
             ),
           ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: controller.contacts.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return ListTile(
-                    selected: controller.isGeneralChat,
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.forum_outlined, size: 20),
-                    ),
-                    title: const Text('Общий чат'),
-                    subtitle: Text(
-                      'Все совместимые узлы · в сети: ${controller.generalOnlineCount}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: controller.selectGeneralChat,
-                  );
-                }
-                final contact = controller.contacts[index - 1];
-                final selected =
-                    !controller.isGeneralChat &&
-                    contact.mmId == controller.selectedPeerMmId;
-                return ListTile(
-                  selected: selected,
-                  leading: CircleAvatar(
-                    child: Text(
-                      contact.displayName.characters.first.toUpperCase(),
-                    ),
-                  ),
-                  title: Text(contact.displayName),
-                  subtitle: Text(
-                    <String>[
-                      contact.mmId,
-                      if (contact.meshtasticNodeNum != null)
-                        '!${contact.meshtasticNodeNum!.toRadixString(16).padLeft(8, '0')}',
-                      if (contact.ep2NodeId != null)
-                        'Радио:${contact.ep2NodeId}',
-                    ].join(' · '),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: contact.verified
-                      ? const Icon(Icons.verified_user_outlined, size: 18)
-                      : null,
-                  onTap: () => controller.selectContact(contact.mmId),
-                );
-              },
-            ),
-          ),
+          Expanded(child: ListView(children: items)),
         ],
       ),
     );
   }
+}
+
+Future<void> _showCreateGroup(
+  BuildContext context,
+  MeshAppController controller,
+) async {
+  final name = TextEditingController();
+  final selected = <String>{};
+  final accepted = await showDialog<bool>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Новая группа'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Название группы'),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final contact in controller.contacts)
+                      CheckboxListTile(
+                        value: selected.contains(contact.mmId),
+                        title: Text(contact.displayName),
+                        subtitle: Text(contact.mmId),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            if (value == true) {
+                              selected.add(contact.mmId);
+                            } else {
+                              selected.remove(contact.mmId);
+                            }
+                          });
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: selected.isEmpty || name.text.trim().isEmpty
+                ? null
+                : () => Navigator.pop(context, true),
+            child: const Text('Создать'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (accepted == true && context.mounted) {
+    await controller.createGroup(
+      displayName: name.text,
+      memberMmIds: selected,
+    );
+  }
+  name.dispose();
 }
 
 Future<void> _showAddContact(
@@ -283,9 +395,14 @@ class _ConversationPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGeneral = controller.isGeneralChat;
+    final isGroup = controller.isGroupChat;
     final contact = controller.selectedContact;
-    if (!isGeneral && contact == null) {
+    final group = controller.selectedGroup;
+    if (!isGeneral && !isGroup && contact == null) {
       return const Card(child: Center(child: Text('Нет выбранного контакта')));
+    }
+    if (isGroup && group == null) {
+      return const Card(child: Center(child: Text('Группа недоступна')));
     }
 
     return Card(
@@ -296,14 +413,24 @@ class _ConversationPane extends StatelessWidget {
             leading: CircleAvatar(
               child: isGeneral
                   ? const Icon(Icons.forum_outlined, size: 20)
+                  : isGroup
+                  ? const Icon(Icons.groups_2_outlined, size: 20)
                   : Text(
                       contact!.displayName.characters.first.toUpperCase(),
                     ),
             ),
-            title: Text(isGeneral ? 'Общий чат' : contact!.displayName),
+            title: Text(
+              isGeneral
+                  ? 'Общий чат'
+                  : isGroup
+                  ? group!.displayName
+                  : contact!.displayName,
+            ),
             subtitle: Text(
               isGeneral
                   ? 'Все совместимые узлы · в сети: ${controller.generalOnlineCount}'
+                  : isGroup
+                  ? '${group!.memberMmIds.length} участников · LR24: 1→1 транспорт'
                   : 'Контакт существует независимо от текущего маршрута',
             ),
           ),
@@ -338,7 +465,7 @@ class _ConversationPane extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (isGeneral &&
+                              if ((isGeneral || isGroup) &&
                                   !message.outgoing &&
                                   message.senderMmId != null) ...[
                                 Text(
@@ -411,13 +538,17 @@ class _ConversationPane extends StatelessWidget {
                                   if (message.outgoing) ...[
                                     const SizedBox(width: 8),
                                     Text(
-                                      isGeneral &&
-                                              state ==
-                                                  DeliveryState.broadcasted &&
-                                              controller.channelReceiptCountFor(
-                                                    message.messageId,
-                                                  ) >
-                                                  0
+                                      isGroup
+                                          ? controller.groupDeliveryLabelFor(
+                                              message.messageId,
+                                            )
+                                          : isGeneral &&
+                                                state ==
+                                                    DeliveryState.broadcasted &&
+                                                controller.channelReceiptCountFor(
+                                                      message.messageId,
+                                                    ) >
+                                                    0
                                           ? 'Получено: ${controller.channelReceiptCountFor(message.messageId)}'
                                           : stateLabel(state),
                                       style: Theme.of(context)
@@ -425,6 +556,7 @@ class _ConversationPane extends StatelessWidget {
                                           .labelSmall,
                                     ),
                                     if (!isGeneral &&
+                                        !isGroup &&
                                         state == DeliveryState.waitingAck) ...[
                                       const SizedBox(width: 4),
                                       IconButton(

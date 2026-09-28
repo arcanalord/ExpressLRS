@@ -103,9 +103,11 @@ final class MeshAppController extends ChangeNotifier {
   ConversationRef activeConversation = const ConversationRef.channel('general');
   String? selectedPeerMmId;
   List<Contact> contacts = const [];
+  List<GroupDefinition> groups = const [];
   List<ConversationMessage> messages = const [];
   final Map<String, DateTime> _peerLastSeen = <String, DateTime>{};
   final Map<String, Set<String>> _channelReceipts = <String, Set<String>>{};
+  final Map<String, Set<String>> _groupReceipts = <String, Set<String>>{};
   MapPoint? requestedMapFocus;
   int mapFocusSerial = 0;
 
@@ -222,6 +224,12 @@ final class MeshAppController extends ChangeNotifier {
     );
     await controller._core.restore();
     controller.contacts = await controller._core.contacts();
+    controller.groups = await controller._core.groups();
+    for (final receipt in await controller._core.groupReceipts()) {
+      controller._groupReceipts
+          .putIfAbsent(receipt.messageId, () => <String>{})
+          .add(receipt.memberMmId);
+    }
     controller.activeConversation = const ConversationRef.channel('general');
     controller.selectedPeerMmId = null;
     controller.messages = await controller._core.messagesForConversation(
@@ -373,6 +381,12 @@ final class MeshAppController extends ChangeNotifier {
     });
 
     contacts = await _core.contacts();
+    groups = await _core.groups();
+    for (final receipt in await _core.groupReceipts()) {
+      _groupReceipts
+          .putIfAbsent(receipt.messageId, () => <String>{})
+          .add(receipt.memberMmId);
+    }
     lan.setAllowedPeers(
       contacts
           .where((contact) => contact.verified)
@@ -408,6 +422,44 @@ final class MeshAppController extends ChangeNotifier {
   bool get isGeneralChat =>
       activeConversation.kind == ConversationKind.channel &&
       activeConversation.id == 'general';
+
+  GroupDefinition? get selectedGroup {
+    if (activeConversation.kind != ConversationKind.group) return null;
+    return groups.where((g) => g.groupId == activeConversation.id).firstOrNull;
+  }
+
+  bool get isGroupChat => activeConversation.kind == ConversationKind.group;
+
+  List<String> get nearbyPeerMmIds {
+    final cutoff = DateTime.now().toUtc().subtract(const Duration(seconds: 30));
+    final saved = contacts.map((c) => c.mmId).toSet();
+    return _peerLastSeen.entries
+        .where(
+          (entry) =>
+              entry.key != ownMmId &&
+              entry.value.isAfter(cutoff) &&
+              !saved.contains(entry.key),
+        )
+        .map((entry) => entry.key)
+        .toList(growable: false)
+      ..sort();
+  }
+
+  String groupDeliveryLabelFor(String messageId) {
+    final group = selectedGroup;
+    if (group == null) return 'Сохранено';
+    final remoteCount =
+        group.memberMmIds.where((mmId) => mmId != ownMmId).length;
+    if (remoteCount == 0) return 'Сохранено';
+    final delivered = _groupReceipts[messageId]?.length ?? 0;
+    final pending = _core.delivery.legsForMessage(messageId)
+        .where((leg) => leg.isGroup && !leg.state.isTerminal)
+        .length;
+    if (delivered >= remoteCount) return 'Доставлено $delivered/$remoteCount';
+    if (delivered > 0) return 'Доставлено $delivered/$remoteCount';
+    if (pending > 0) return 'Ожидает $pending/$remoteCount';
+    return 'Отправлено 0/$remoteCount';
+  }
 
   int get generalOnlineCount {
     final cutoff = DateTime.now().toUtc().subtract(const Duration(seconds: 30));
@@ -494,6 +546,28 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> selectGroup(String groupId) async {
+    activeConversation = ConversationRef.group(groupId);
+    selectedPeerMmId = null;
+    await _reloadMessages();
+    notifyListeners();
+  }
+
+  Future<void> createGroup({
+    required String displayName,
+    required Iterable<String> memberMmIds,
+  }) async {
+    final group = await _core.createGroup(
+      displayName: displayName,
+      memberMmIds: memberMmIds,
+    );
+    groups = await _core.groups();
+    activeConversation = ConversationRef.group(group.groupId);
+    selectedPeerMmId = null;
+    await _reloadMessages();
+    notifyListeners();
+  }
+
   Future<void> sendText(String text) async {
     if (text.trim().isEmpty || busy) return;
     busy = true;
@@ -502,6 +576,11 @@ final class MeshAppController extends ChangeNotifier {
       if (activeConversation.kind == ConversationKind.channel) {
         await _core.sendChannelText(
           channelId: activeConversation.id,
+          text: text,
+        );
+      } else if (activeConversation.kind == ConversationKind.group) {
+        await _core.sendGroupText(
+          groupId: activeConversation.id,
           text: text,
         );
       } else {
@@ -549,6 +628,23 @@ final class MeshAppController extends ChangeNotifier {
           .map((contact) => contact.mmId),
     );
     selectedPeerMmId = cleanId;
+    await _reloadMessages();
+    notifyListeners();
+  }
+
+
+  Future<void> addNearbyPeerAsContact(String mmId) async {
+    final cleanId = mmId.trim();
+    if (cleanId.isEmpty || hasContact(cleanId)) return;
+    await _core.saveContact(
+      Contact(
+        mmId: cleanId,
+        displayName: displayNameForMmId(cleanId),
+      ),
+    );
+    contacts = await _core.contacts();
+    selectedPeerMmId = cleanId;
+    activeConversation = ConversationRef.direct(cleanId);
     await _reloadMessages();
     notifyListeners();
   }
@@ -1948,6 +2044,62 @@ final class MeshAppController extends ChangeNotifier {
       if (isGeneralChat) await _reloadMessages();
       lastRadioNotice =
           'Общий чат · ${displayNameForMmId(event.fromMmId)}';
+      notifyListeners();
+      return;
+    }
+
+    if (event is TransparentUartGroupReceipt) {
+      _markPeerSeen(event.fromMmId);
+      final result = await _core.receiveGroupReceipt(
+        messageId: event.messageId,
+        fromMmId: event.fromMmId,
+        groupId: event.groupId,
+      );
+      if (result != null) {
+        _groupReceipts
+            .putIfAbsent(event.messageId, () => <String>{})
+            .add(event.fromMmId);
+      }
+      _addLr24Log(
+        'GROUP RECEIPT ${event.groupId} ${event.messageId} <- ${event.fromMmId}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is TransparentUartIncomingGroupMessage) {
+      _markPeerSeen(event.fromMmId);
+      if (event.messageClass != 'text') {
+        _addLr24Log(
+          'DROP group class=${event.messageClass} id=${event.messageId}',
+        );
+        return;
+      }
+      final accepted = await _core.receiveGroupText(
+        messageId: event.messageId,
+        fromMmId: event.fromMmId,
+        groupId: event.groupId,
+        membershipRevision: event.membershipRevision,
+        text: event.payload,
+      );
+      if (!accepted) {
+        _addLr24Log(
+          'DROP group=${event.groupId} peer=${event.fromMmId} id=${event.messageId}',
+        );
+        return;
+      }
+      await _lr24?.acknowledgeGroupIncoming(
+        messageId: event.messageId,
+        groupId: event.groupId,
+        toMmId: event.fromMmId,
+      );
+      if (isGroupChat && activeConversation.id == event.groupId) {
+        await _reloadMessages();
+      }
+      final groupName =
+          groups.where((g) => g.groupId == event.groupId).firstOrNull?.displayName ??
+          'Группа';
+      lastRadioNotice =
+          '$groupName · ${displayNameForMmId(event.fromMmId)}';
       notifyListeners();
       return;
     }

@@ -43,7 +43,11 @@ final class DeliveryManager {
   Stream<DeliveryEnvelope> get changes => _changes.stream;
   List<DeliveryEnvelope> get pending =>
       List.unmodifiable(_items.values.where((e) => !e.state.isTerminal));
-  DeliveryEnvelope? byId(String id) => _items[id];
+  DeliveryEnvelope? byId(String id) =>
+      _items[id] ?? _items.values.where((e) => e.messageId == id).firstOrNull;
+  List<DeliveryEnvelope> legsForMessage(String messageId) => _items.values
+      .where((e) => e.messageId == messageId)
+      .toList(growable: false);
 
   Future<void> restore() async {
     final loaded = await _storage.loadOutbox();
@@ -59,7 +63,7 @@ final class DeliveryManager {
         ),
         _ => original,
       };
-      _items[restored.messageId] = restored;
+      _items[restored.effectiveDeliveryId] = restored;
       if (!identical(restored, original)) {
         await _storage.saveOutboxItem(restored);
       }
@@ -83,13 +87,18 @@ final class DeliveryManager {
     required String payload,
     Duration ttl = const Duration(days: 7),
     int priority = 0,
+    String? messageId,
+    String? deliveryId,
   }) async {
     if (pending.length >= maxPending) {
       throw StateError('outbox capacity exceeded');
     }
     final now = _now();
+    final logicalMessageId =
+        messageId ?? 'm-${now.microsecondsSinceEpoch}-${++_idCounter}';
     final envelope = DeliveryEnvelope(
-      messageId: 'm-${now.microsecondsSinceEpoch}-${++_idCounter}',
+      messageId: logicalMessageId,
+      deliveryId: deliveryId,
       recipientMmId: recipientMmId,
       messageClass: messageClass,
       payload: payload,
@@ -99,11 +108,11 @@ final class DeliveryManager {
       state: DeliveryState.queued,
     );
     await _save(envelope);
-    return await dispatch(envelope.messageId) ?? envelope;
+    return await dispatch(envelope.effectiveDeliveryId) ?? envelope;
   }
 
-  Future<DeliveryEnvelope?> dispatch(String messageId) async {
-    final current = _items[messageId];
+  Future<DeliveryEnvelope?> dispatch(String deliveryId) async {
+    final current = _items[deliveryId];
     if (current == null || current.state.isTerminal) return current;
     if (!_now().isBefore(current.expiresAt)) {
       return _save(current.copyWith(state: DeliveryState.expired));
@@ -130,13 +139,13 @@ final class DeliveryManager {
     String? lastDetail;
     var allUnavailable = true;
     for (final transport in candidates) {
-      latest = (_items[messageId] ?? latest).copyWith(
+      latest = (_items[deliveryId] ?? latest).copyWith(
         state: DeliveryState.sending,
         selectedTransportId: transport.id,
       );
       await _save(latest);
       final result = await transport.send(latest);
-      latest = _items[messageId] ?? latest;
+      latest = _items[deliveryId] ?? latest;
       if (result.status == TransportSendStatus.accepted) {
         allUnavailable = false;
         // Channel sends have no single final recipient. Transport acceptance
@@ -192,10 +201,13 @@ final class DeliveryManager {
     required bool ok,
     String? detail,
   }) async {
-    final current = _items[messageId];
+    final current = _items.values.where((item) {
+      if (item.messageId != messageId) return false;
+      if (item.isGroup) return item.groupMemberMmId == fromMmId;
+      return item.recipientMmId == fromMmId;
+    }).firstOrNull;
     if (current == null || current.state.isTerminal) return current;
     if (current.isChannel) return current;
-    if (current.recipientMmId != fromMmId) return current;
     if (ok) return _save(current.copyWith(state: DeliveryState.delivered));
     if (current.attempts >= maxAttempts) {
       return _save(
@@ -228,7 +240,7 @@ final class DeliveryManager {
             clearSelectedTransport: true,
           ),
         );
-        redispatch.add(item.messageId);
+        redispatch.add(item.effectiveDeliveryId);
       } else if (item.state == DeliveryState.noRoute &&
           _transports.any((t) => t.isAvailable)) {
         await _save(
@@ -237,7 +249,7 @@ final class DeliveryManager {
             clearSelectedTransport: true,
           ),
         );
-        redispatch.add(item.messageId);
+        redispatch.add(item.effectiveDeliveryId);
       }
     }
     for (final messageId in redispatch) {
@@ -246,9 +258,9 @@ final class DeliveryManager {
   }
 
   Future<DeliveryEnvelope> _save(DeliveryEnvelope item) async {
-    _items[item.messageId] = item;
+    _items[item.effectiveDeliveryId] = item;
     if (item.state.isTerminal) {
-      await _storage.removeOutboxItem(item.messageId);
+      await _storage.removeOutboxItem(item.effectiveDeliveryId);
     } else {
       await _storage.saveOutboxItem(item);
     }

@@ -20,6 +20,8 @@ final class AppStorage {
 
   File get _contactsFile => File('${root.path}/contacts.json');
   File get _messagesFile => File('${root.path}/messages.json');
+  File get _groupsFile => File('${root.path}/groups.json');
+  File get _groupReceiptsFile => File('${root.path}/group_receipts.json');
   File get _outboxFile => File('${root.path}/outbox.json');
   File get _identityFile => File('${root.path}/identity.json');
 
@@ -95,6 +97,49 @@ final class AppStorage {
     );
   });
 
+
+  Future<List<GroupDefinition>> loadGroups() async =>
+      (await _readList(_groupsFile)).map(GroupDefinition.fromJson).toList();
+
+  Future<void> saveGroup(GroupDefinition group) => _serialized(() async {
+    final items = {
+      for (final raw in await _readList(_groupsFile))
+        GroupDefinition.fromJson(raw).groupId: GroupDefinition.fromJson(raw),
+    };
+    final current = items[group.groupId];
+    if (current == null || group.revision >= current.revision) {
+      items[group.groupId] = group;
+    }
+    await _writeList(
+      _groupsFile,
+      items.values.map((e) => e.toJson()).toList(),
+    );
+  });
+
+  Future<List<GroupReceiptRecord>> loadGroupReceipts() async =>
+      (await _readList(_groupReceiptsFile))
+          .map(GroupReceiptRecord.fromJson)
+          .toList();
+
+  Future<void> saveGroupReceipt(GroupReceiptRecord receipt) =>
+      _serialized(() async {
+        final all = (await _readList(_groupReceiptsFile))
+            .map(GroupReceiptRecord.fromJson)
+            .toList();
+        final exists = all.any(
+          (item) =>
+              item.messageId == receipt.messageId &&
+              item.memberMmId == receipt.memberMmId,
+        );
+        if (!exists) {
+          all.add(receipt);
+          await _writeList(
+            _groupReceiptsFile,
+            all.map((e) => e.toJson()).toList(),
+          );
+        }
+      });
+
   Future<List<ConversationMessage>> loadMessages({
     String? peerMmId,
     String? conversationKey,
@@ -133,18 +178,17 @@ final class AppStorage {
   Future<void> saveOutboxItem(DeliveryEnvelope item) => _serialized(() async {
     final items = {
       for (final raw in await _readList(_outboxFile))
-        DeliveryEnvelope.fromJson(raw).messageId: DeliveryEnvelope.fromJson(
-          raw,
-        ),
+        DeliveryEnvelope.fromJson(raw).effectiveDeliveryId:
+            DeliveryEnvelope.fromJson(raw),
     };
     items[item.messageId] = item;
     await _writeList(_outboxFile, items.values.map((e) => e.toJson()).toList());
   });
 
-  Future<void> removeOutboxItem(String messageId) => _serialized(() async {
+  Future<void> removeOutboxItem(String deliveryId) => _serialized(() async {
     final items = (await _readList(_outboxFile))
         .map(DeliveryEnvelope.fromJson)
-        .where((e) => e.messageId != messageId);
+        .where((e) => e.effectiveDeliveryId != deliveryId);
     await _writeList(_outboxFile, items.map((e) => e.toJson()).toList());
   });
 

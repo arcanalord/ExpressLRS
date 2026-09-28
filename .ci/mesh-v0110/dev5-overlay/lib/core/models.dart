@@ -22,11 +22,12 @@ extension DeliveryStateX on DeliveryState {
   };
 }
 
-enum ConversationKind { channel, direct }
+enum ConversationKind { channel, direct, group }
 
 final class ConversationRef {
   const ConversationRef.channel(this.id) : kind = ConversationKind.channel;
   const ConversationRef.direct(this.id) : kind = ConversationKind.direct;
+  const ConversationRef.group(this.id) : kind = ConversationKind.group;
 
   final ConversationKind kind;
   final String id;
@@ -40,6 +41,9 @@ final class ConversationRef {
     if (key.startsWith('direct:')) {
       return ConversationRef.direct(key.substring('direct:'.length));
     }
+    if (key.startsWith('group:')) {
+      return ConversationRef.group(key.substring('group:'.length));
+    }
     throw FormatException('Unknown conversation key: $key');
   }
 }
@@ -48,6 +52,94 @@ String channelTargetKey(String channelId) => 'channel:$channelId';
 bool isChannelTargetKey(String value) => value.startsWith('channel:');
 String? channelIdFromTargetKey(String value) =>
     isChannelTargetKey(value) ? value.substring('channel:'.length) : null;
+
+
+String groupTargetKey(String groupId, String memberMmId) =>
+    'group:$groupId@$memberMmId';
+bool isGroupTargetKey(String value) => value.startsWith('group:') && value.contains('@');
+String? groupIdFromTargetKey(String value) {
+  if (!isGroupTargetKey(value)) return null;
+  final body = value.substring('group:'.length);
+  return body.substring(0, body.indexOf('@'));
+}
+String? groupMemberFromTargetKey(String value) {
+  if (!isGroupTargetKey(value)) return null;
+  final body = value.substring('group:'.length);
+  return body.substring(body.indexOf('@') + 1);
+}
+
+final class GroupDefinition {
+  const GroupDefinition({
+    required this.groupId,
+    required this.displayName,
+    required this.creatorMmId,
+    required this.memberMmIds,
+    required this.revision,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String groupId;
+  final String displayName;
+  final String creatorMmId;
+  final List<String> memberMmIds;
+  final int revision;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  bool contains(String mmId) => memberMmIds.contains(mmId);
+
+  Map<String, Object?> toJson() => {
+    'groupId': groupId,
+    'displayName': displayName,
+    'creatorMmId': creatorMmId,
+    'memberMmIds': memberMmIds,
+    'revision': revision,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
+
+  factory GroupDefinition.fromJson(Map<String, dynamic> json) => GroupDefinition(
+    groupId: json['groupId'] as String,
+    displayName: json['displayName'] as String,
+    creatorMmId: json['creatorMmId'] as String,
+    memberMmIds: (json['memberMmIds'] as List? ?? const [])
+        .map((e) => e.toString())
+        .toList(growable: false),
+    revision: (json['revision'] as num?)?.toInt() ?? 1,
+    createdAt: DateTime.parse(json['createdAt'] as String),
+    updatedAt: DateTime.parse(json['updatedAt'] as String),
+  );
+}
+
+final class GroupReceiptRecord {
+  const GroupReceiptRecord({
+    required this.messageId,
+    required this.groupId,
+    required this.memberMmId,
+    required this.receivedAt,
+  });
+
+  final String messageId;
+  final String groupId;
+  final String memberMmId;
+  final DateTime receivedAt;
+
+  Map<String, Object?> toJson() => {
+    'messageId': messageId,
+    'groupId': groupId,
+    'memberMmId': memberMmId,
+    'receivedAt': receivedAt.toIso8601String(),
+  };
+
+  factory GroupReceiptRecord.fromJson(Map<String, dynamic> json) =>
+      GroupReceiptRecord(
+        messageId: json['messageId'] as String,
+        groupId: json['groupId'] as String,
+        memberMmId: json['memberMmId'] as String,
+        receivedAt: DateTime.parse(json['receivedAt'] as String),
+      );
+}
 
 final class Contact {
   const Contact({
@@ -198,6 +290,7 @@ final class DeliveryEnvelope {
   const DeliveryEnvelope({
     required this.messageId,
     required this.recipientMmId,
+    this.deliveryId,
     required this.messageClass,
     required this.payload,
     required this.createdAt,
@@ -212,10 +305,15 @@ final class DeliveryEnvelope {
 
   final String messageId;
   final String recipientMmId;
+  final String? deliveryId;
+  String get effectiveDeliveryId => deliveryId ?? messageId;
   final String messageClass;
 
   bool get isChannel => isChannelTargetKey(recipientMmId);
   String? get channelId => channelIdFromTargetKey(recipientMmId);
+  bool get isGroup => isGroupTargetKey(recipientMmId);
+  String? get groupId => groupIdFromTargetKey(recipientMmId);
+  String? get groupMemberMmId => groupMemberFromTargetKey(recipientMmId);
   final String payload;
   final DateTime createdAt;
   final DateTime expiresAt;
@@ -228,6 +326,7 @@ final class DeliveryEnvelope {
 
   Map<String, Object?> toJson() => {
     'messageId': messageId,
+    'deliveryId': effectiveDeliveryId,
     'recipientMmId': recipientMmId,
     'messageClass': messageClass,
     'payload': payload,
@@ -244,6 +343,7 @@ final class DeliveryEnvelope {
   factory DeliveryEnvelope.fromJson(Map<String, dynamic> json) =>
       DeliveryEnvelope(
         messageId: json['messageId'] as String,
+        deliveryId: json['deliveryId'] as String?,
         recipientMmId: json['recipientMmId'] as String,
         messageClass: json['messageClass'] as String,
         payload: json['payload'] as String,
@@ -270,6 +370,7 @@ final class DeliveryEnvelope {
     bool clearNextRetryAt = false,
   }) => DeliveryEnvelope(
     messageId: messageId,
+    deliveryId: deliveryId,
     recipientMmId: recipientMmId,
     messageClass: messageClass,
     payload: payload,

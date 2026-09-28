@@ -69,6 +69,38 @@ final class TransparentUartChannelReceipt extends TransparentUartRadioEvent {
   final String channelId;
 }
 
+
+final class TransparentUartIncomingGroupMessage
+    extends TransparentUartRadioEvent {
+  const TransparentUartIncomingGroupMessage({
+    required this.messageId,
+    required this.fromMmId,
+    required this.groupId,
+    required this.membershipRevision,
+    required this.messageClass,
+    required this.payload,
+  });
+
+  final String messageId;
+  final String fromMmId;
+  final String groupId;
+  final int membershipRevision;
+  final String messageClass;
+  final String payload;
+}
+
+final class TransparentUartGroupReceipt extends TransparentUartRadioEvent {
+  const TransparentUartGroupReceipt({
+    required this.messageId,
+    required this.fromMmId,
+    required this.groupId,
+  });
+
+  final String messageId;
+  final String fromMmId;
+  final String groupId;
+}
+
 final class TransparentUartProbeResult extends TransparentUartRadioEvent {
   const TransparentUartProbeResult({
     required this.peerMmId,
@@ -204,6 +236,20 @@ final class TransparentUartRadioTransport implements MessageTransport {
             'q': envelope.priority,
             'payload': envelope.payload,
           }
+        : envelope.isGroup
+        ? <String, Object?>{
+            'v': 1,
+            'p': 'MMRP/1',
+            'k': 'group_data',
+            'id': envelope.messageId,
+            'from': ownMmId,
+            'to': envelope.groupMemberMmId,
+            'group': envelope.groupId,
+            'rev': 1,
+            'class': envelope.messageClass,
+            'q': envelope.priority,
+            'payload': envelope.payload,
+          }
         : <String, Object?>{
             'v': 1,
             'p': 'MMRP/1',
@@ -257,6 +303,21 @@ final class TransparentUartRadioTransport implements MessageTransport {
       'channel': channelId,
     });
   }
+
+
+  Future<void> acknowledgeGroupIncoming({
+    required String messageId,
+    required String groupId,
+    required String toMmId,
+  }) => _writeFrame(<String, Object?>{
+    'v': 1,
+    'p': 'MMRP/1',
+    'k': 'group_receipt',
+    'id': messageId,
+    'from': ownMmId,
+    'to': toMmId,
+    'group': groupId,
+  });
 
   Future<Duration> probe(
     String peerMmId, {
@@ -403,6 +464,40 @@ final class TransparentUartRadioTransport implements MessageTransport {
               messageId: id,
               fromMmId: from,
               channelId: channelId,
+            ),
+          );
+        }
+
+      case 'group_data':
+        final id = (frame['id'] ?? '').toString().trim();
+        final groupId = (frame['group'] ?? '').toString().trim();
+        final revision = (frame['rev'] as num?)?.toInt() ?? 1;
+        final messageClass = (frame['class'] ?? '').toString().trim();
+        final payload = frame['payload'];
+        if (id.isNotEmpty &&
+            groupId.isNotEmpty &&
+            messageClass.isNotEmpty &&
+            payload is String) {
+          _events.add(
+            TransparentUartIncomingGroupMessage(
+              messageId: id,
+              fromMmId: from,
+              groupId: groupId,
+              membershipRevision: revision,
+              messageClass: messageClass,
+              payload: payload,
+            ),
+          );
+        }
+      case 'group_receipt':
+        final id = (frame['id'] ?? '').toString().trim();
+        final groupId = (frame['group'] ?? '').toString().trim();
+        if (id.isNotEmpty && groupId.isNotEmpty) {
+          _events.add(
+            TransparentUartGroupReceipt(
+              messageId: id,
+              fromMmId: from,
+              groupId: groupId,
             ),
           );
         }

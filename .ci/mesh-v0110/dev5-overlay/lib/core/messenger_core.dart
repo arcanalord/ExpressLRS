@@ -30,6 +30,10 @@ final class MeshMessengerCore {
   Future<void> restore() => delivery.restore();
   Future<List<Contact>> contacts() => _storage.loadContacts();
   Future<void> saveContact(Contact contact) => _storage.saveContact(contact);
+  Future<List<GroupDefinition>> groups() => _storage.loadGroups();
+  Future<void> saveGroup(GroupDefinition group) => _storage.saveGroup(group);
+  Future<List<GroupReceiptRecord>> groupReceipts() =>
+      _storage.loadGroupReceipts();
   Future<List<ConversationMessage>> messagesFor(String peerMmId) =>
       _storage.loadMessages(peerMmId: peerMmId);
 
@@ -87,6 +91,118 @@ final class MeshMessengerCore {
       ),
     );
     return result;
+  }
+
+
+  Future<GroupDefinition> createGroup({
+    required String displayName,
+    required Iterable<String> memberMmIds,
+  }) async {
+    final cleanName = displayName.trim();
+    if (cleanName.isEmpty) throw ArgumentError('group name must not be empty');
+    final now = _now();
+    final members = <String>{ownMmId, ...memberMmIds.map((e) => e.trim())}
+      ..removeWhere((e) => e.isEmpty);
+    if (members.length < 2) {
+      throw ArgumentError('group requires at least one remote member');
+    }
+    final group = GroupDefinition(
+      groupId: 'g-${now.microsecondsSinceEpoch}',
+      displayName: cleanName,
+      creatorMmId: ownMmId,
+      memberMmIds: members.toList(growable: false)..sort(),
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await _storage.saveGroup(group);
+    return group;
+  }
+
+  Future<List<DeliveryEnvelope>> sendGroupText({
+    required String groupId,
+    required String text,
+  }) async {
+    final clean = text.trim();
+    if (clean.isEmpty) throw ArgumentError('text must not be empty');
+    final group = (await groups()).where((g) => g.groupId == groupId).firstOrNull;
+    if (group == null) throw StateError('GROUP_NOT_FOUND');
+    if (!group.contains(ownMmId)) throw StateError('GROUP_NOT_MEMBER');
+    final now = _now();
+    final messageId = 'gm-${now.microsecondsSinceEpoch}';
+    final legs = <DeliveryEnvelope>[];
+    for (final member in group.memberMmIds) {
+      if (member == ownMmId) continue;
+      final legId = '$messageId@$member';
+      legs.add(
+        await delivery.enqueue(
+          recipientMmId: groupTargetKey(groupId, member),
+          messageClass: 'text',
+          payload: clean,
+          messageId: messageId,
+          deliveryId: legId,
+        ),
+      );
+    }
+    await _storage.appendMessageUnique(
+      ConversationMessage(
+        messageId: messageId,
+        peerMmId: 'group:$groupId',
+        text: clean,
+        outgoing: true,
+        createdAt: now,
+        conversationKey: ConversationRef.group(groupId).key,
+        senderMmId: ownMmId,
+      ),
+    );
+    return legs;
+  }
+
+  Future<bool> receiveGroupText({
+    required String messageId,
+    required String fromMmId,
+    required String groupId,
+    required int membershipRevision,
+    required String text,
+  }) async {
+    final group = (await groups()).where((g) => g.groupId == groupId).firstOrNull;
+    if (group == null || !group.contains(ownMmId) || !group.contains(fromMmId)) {
+      return false;
+    }
+    if (membershipRevision > group.revision) return false;
+    return _storage.appendMessageUnique(
+      ConversationMessage(
+        messageId: messageId,
+        peerMmId: 'group:$groupId',
+        text: text,
+        outgoing: false,
+        createdAt: _now(),
+        conversationKey: ConversationRef.group(groupId).key,
+        senderMmId: fromMmId,
+      ),
+    );
+  }
+
+  Future<DeliveryEnvelope?> receiveGroupReceipt({
+    required String messageId,
+    required String fromMmId,
+    required String groupId,
+  }) async {
+    final group = (await groups()).where((g) => g.groupId == groupId).firstOrNull;
+    if (group == null || !group.contains(fromMmId)) return null;
+    await _storage.saveGroupReceipt(
+      GroupReceiptRecord(
+        messageId: messageId,
+        groupId: groupId,
+        memberMmId: fromMmId,
+        receivedAt: _now(),
+      ),
+    );
+    return delivery.recipientResult(
+      messageId: messageId,
+      fromMmId: fromMmId,
+      ok: true,
+    );
   }
 
   Future<bool> receiveText({
