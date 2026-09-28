@@ -10,10 +10,12 @@ on:
       - '.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_protocol.dart'
       - '.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart'
       - '.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_persistence.dart'
+      - '.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_qos.dart'
       - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_core_self_test.dart'
       - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_protocol_self_test.dart'
       - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_session_self_test.dart'
       - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_persistence_self_test.dart'
+      - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_qos_self_test.dart'
   workflow_dispatch:
 
 concurrency:
@@ -27,7 +29,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Reconstruct Flutter source
         shell: bash
         run: |
@@ -41,22 +42,18 @@ jobs:
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
-
       - name: Setup Flutter 3.47.2
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
-
       - name: Dependencies
         working-directory: ${{ env.APP_DIR }}
         run: flutter pub get
-
       - name: Normalize M05 formatting
         working-directory: ${{ env.APP_DIR }}
-        run: dart format lib/core/file_transfer_core.dart lib/core/file_transfer_protocol.dart lib/core/file_transfer_session.dart lib/core/file_transfer_persistence.dart tool/file_transfer_core_self_test.dart tool/file_transfer_protocol_self_test.dart tool/file_transfer_session_self_test.dart tool/file_transfer_persistence_self_test.dart
-
+        run: dart format lib/core/file_transfer_core.dart lib/core/file_transfer_protocol.dart lib/core/file_transfer_session.dart lib/core/file_transfer_persistence.dart lib/core/file_transfer_qos.dart tool/file_transfer_core_self_test.dart tool/file_transfer_protocol_self_test.dart tool/file_transfer_session_self_test.dart tool/file_transfer_persistence_self_test.dart tool/file_transfer_qos_self_test.dart
       - name: Analyze M05 core
         working-directory: ${{ env.APP_DIR }}
         run: |
@@ -64,11 +61,12 @@ jobs:
           dart analyze lib/core/file_transfer_protocol.dart
           dart analyze lib/core/file_transfer_session.dart
           dart analyze lib/core/file_transfer_persistence.dart
+          dart analyze lib/core/file_transfer_qos.dart
           dart analyze tool/file_transfer_core_self_test.dart
           dart analyze tool/file_transfer_protocol_self_test.dart
           dart analyze tool/file_transfer_session_self_test.dart
           dart analyze tool/file_transfer_persistence_self_test.dart
-
+          dart analyze tool/file_transfer_qos_self_test.dart
       - name: M05 file transfer self tests
         working-directory: ${{ env.APP_DIR }}
         run: |
@@ -76,3 +74,4 @@ jobs:
           dart run tool/file_transfer_protocol_self_test.dart
           dart run tool/file_transfer_session_self_test.dart
           dart run tool/file_transfer_persistence_self_test.dart
+          dart run tool/file_transfer_qos_self_test.dart
