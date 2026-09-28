@@ -67,6 +67,9 @@ Future<void> main() async {
   final blockedRoot = Directory.systemTemp.createTempSync(
     'mesh-storage-blocked-',
   );
+  final backupOnlyRoot = Directory.systemTemp.createTempSync(
+    'mesh-storage-backup-only-',
+  );
   try {
     const secret = 'TOP SECRET LOCAL MESSAGE';
     const pendingSecret = 'PENDING PRIVATE OUTBOX';
@@ -150,9 +153,36 @@ Future<void> main() async {
       'failed secure write left a plaintext messages file',
     );
 
+    const backupSecret = 'RECOVERED FROM BACKUP ONLY';
+    final backupOnlyLegacy = AppStorage(backupOnlyRoot);
+    await backupOnlyLegacy.appendMessageUnique(
+      _message('backup-only', backupSecret),
+    );
+    final backupMain = File('${backupOnlyRoot.path}/messages.json');
+    final backupFile = File('${backupOnlyRoot.path}/messages.json.bak');
+    await backupMain.rename(backupFile.path);
+    check(!backupMain.existsSync() && backupFile.existsSync(),
+        'backup-only fixture not created');
+
+    final backupOnlySecure = AppStorage(
+      backupOnlyRoot,
+      crypto: _TestStorageCrypto(),
+      requireEncryption: true,
+    );
+    await backupOnlySecure.migrateSensitiveStorage();
+    check(backupMain.existsSync(), 'encrypted main not restored from backup-only state');
+    check(!backupFile.existsSync(), 'backup should be removed only after successful migration');
+    final migratedBackupText = await backupMain.readAsString();
+    check(!migratedBackupText.contains(backupSecret),
+        'backup-only migration leaked plaintext into main');
+    final recovered = await backupOnlySecure.loadMessages();
+    check(recovered.length == 1 && recovered.single.text == backupSecret,
+        'backup-only encrypted migration did not preserve message');
+
     stdout.writeln('LOCAL_STORAGE_ENCRYPTION_SELF_TEST_PASS');
   } finally {
     if (root.existsSync()) root.deleteSync(recursive: true);
     if (blockedRoot.existsSync()) blockedRoot.deleteSync(recursive: true);
+    if (backupOnlyRoot.existsSync()) backupOnlyRoot.deleteSync(recursive: true);
   }
 }
