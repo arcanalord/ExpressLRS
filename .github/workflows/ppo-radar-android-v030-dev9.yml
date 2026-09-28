@@ -72,6 +72,8 @@ jobs:
         run: |
           set -euo pipefail
           node "$RECOVERY_DIR/tools/apply-runtime-recovery.mjs" "$ANDROID_DIR/app/src/main/assets/web"
+          cp ppo-radar-ci/dev9/map-adapter-v1.js "$ANDROID_DIR/app/src/main/assets/web/src/map-adapter.js"
+          cp ppo-radar-ci/dev9/map-adapter-v1-contract.test.js "$ANDROID_DIR/app/src/main/assets/web/tests/map-adapter-v1-contract.test.js"
           node --test "$RECOVERY_DIR/tests/"*.test.js
           python3 - <<'PY'
           from pathlib import Path
