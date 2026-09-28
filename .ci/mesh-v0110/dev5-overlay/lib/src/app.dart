@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'application/mesh_app_controller.dart';
@@ -60,12 +62,33 @@ class _Bootstrap extends StatefulWidget {
 }
 
 class _BootstrapState extends State<_Bootstrap> {
-  late final Future<MeshAppController> _future = MeshAppController.create();
+  late final Future<MeshAppController> _future;
   MeshAppController? _controller;
+  bool _disposed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = MeshAppController.create().then((controller) {
+      if (_disposed) {
+        unawaited(controller.shutdown());
+        controller.dispose();
+      } else {
+        _controller = controller;
+      }
+      return controller;
+    });
+  }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _disposed = true;
+    final controller = _controller;
+    if (controller != null) {
+      unawaited(controller.shutdown());
+      controller.dispose();
+      _controller = null;
+    }
     super.dispose();
   }
 
@@ -85,7 +108,6 @@ class _BootstrapState extends State<_Bootstrap> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        _controller ??= controller;
         return AppShell(controller: controller);
       },
     );
@@ -104,6 +126,11 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int index = 0;
 
+  void _selectIndex(int value) {
+    if (!mounted || value == index || value < 0 || value > 3) return;
+    setState(() => index = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
@@ -111,7 +138,7 @@ class _AppShellState extends State<AppShell> {
         controller: widget.controller,
         onOpenMapPoint: (point) {
           widget.controller.requestMapFocus(point);
-          setState(() => index = 1);
+          _selectIndex(1);
         },
       ),
       MapPage(controller: widget.controller),
@@ -124,7 +151,7 @@ class _AppShellState extends State<AppShell> {
         if (wide)
           NavigationRail(
             selectedIndex: index,
-            onDestinationSelected: (value) => setState(() => index = value),
+            onDestinationSelected: _selectIndex,
             labelType: NavigationRailLabelType.all,
             destinations: const [
               NavigationRailDestination(
@@ -145,7 +172,13 @@ class _AppShellState extends State<AppShell> {
               ),
             ],
           ),
-        Expanded(child: pages[index]),
+        Expanded(
+          child: IndexedStack(
+            index: index,
+            sizing: StackFit.expand,
+            children: pages,
+          ),
+        ),
       ],
     );
 
@@ -166,7 +199,7 @@ class _AppShellState extends State<AppShell> {
           ? null
           : NavigationBar(
               selectedIndex: index,
-              onDestinationSelected: (value) => setState(() => index = value),
+              onDestinationSelected: _selectIndex,
               destinations: const [
                 NavigationDestination(
                   icon: Icon(Icons.chat_bubble_outline),
