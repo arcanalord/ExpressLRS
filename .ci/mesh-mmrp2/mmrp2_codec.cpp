@@ -203,6 +203,75 @@ Header DecodeHeader(const std::vector<std::uint8_t>& bytes) {
   return header;
 }
 
+std::vector<std::uint8_t> EncodePacket(const Packet& packet,
+                                       std::size_t max_frame_bytes,
+                                       std::size_t max_payload_bytes) {
+  if (max_frame_bytes < kBaseHeaderBytes) {
+    throw std::invalid_argument("max_frame_bytes too small");
+  }
+  if (packet.payload.size() > max_payload_bytes) {
+    throw std::invalid_argument("MMRP/2 payload exceeds negotiated limit");
+  }
+
+  const auto header = EncodeHeader(packet.header);
+  const bool hop_aead = (packet.header.flags & kFlagHopAead) != 0;
+  if (hop_aead) {
+    if (packet.hop_aead_tag.size() != kHopAeadTagBytes) {
+      throw std::invalid_argument("HOP_AEAD requires an exact 16-byte tag");
+    }
+  } else if (!packet.hop_aead_tag.empty()) {
+    throw std::invalid_argument("Hop AEAD tag present without HOP_AEAD flag");
+  }
+
+  const std::size_t total =
+      header.size() + packet.payload.size() + packet.hop_aead_tag.size();
+  if (total > max_frame_bytes) {
+    throw std::invalid_argument("MMRP/2 frame exceeds negotiated max_frame_bytes");
+  }
+
+  std::vector<std::uint8_t> out;
+  out.reserve(total);
+  out.insert(out.end(), header.begin(), header.end());
+  out.insert(out.end(), packet.payload.begin(), packet.payload.end());
+  out.insert(out.end(), packet.hop_aead_tag.begin(), packet.hop_aead_tag.end());
+  return out;
+}
+
+Packet DecodePacket(const std::vector<std::uint8_t>& bytes,
+                    std::size_t max_frame_bytes,
+                    std::size_t max_payload_bytes) {
+  if (bytes.size() > max_frame_bytes) {
+    throw std::invalid_argument("MMRP/2 frame exceeds negotiated max_frame_bytes");
+  }
+
+  Packet packet{};
+  packet.header = DecodeHeader(bytes);
+  const std::size_t header_bytes =
+      packet.header.fragmented ? kBaseHeaderBytes + kFragmentExtensionBytes
+                               : kBaseHeaderBytes;
+  const bool hop_aead = (packet.header.flags & kFlagHopAead) != 0;
+  const std::size_t tag_bytes = hop_aead ? kHopAeadTagBytes : 0;
+  if (bytes.size() < header_bytes + tag_bytes) {
+    throw std::invalid_argument("Truncated MMRP/2 frame/tag");
+  }
+
+  const std::size_t payload_end = bytes.size() - tag_bytes;
+  packet.payload.assign(bytes.begin() + static_cast<std::ptrdiff_t>(header_bytes),
+                        bytes.begin() + static_cast<std::ptrdiff_t>(payload_end));
+  if (packet.payload.size() > max_payload_bytes) {
+    throw std::invalid_argument("MMRP/2 payload exceeds negotiated limit");
+  }
+  if (packet.header.frame_class == FrameClass::kLinkAck &&
+      packet.payload.size() != kLinkAckBodyBytes) {
+    throw std::invalid_argument("LINK_ACK payload must be exactly 8 bytes");
+  }
+  if (hop_aead) {
+    packet.hop_aead_tag.assign(
+        bytes.begin() + static_cast<std::ptrdiff_t>(payload_end), bytes.end());
+  }
+  return packet;
+}
+
 std::array<std::uint8_t, kLinkAckBodyBytes> EncodeLinkAckBody(
     const LinkAck& ack) {
   std::vector<std::uint8_t> tmp(kLinkAckBodyBytes, 0);
