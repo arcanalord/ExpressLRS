@@ -87,7 +87,7 @@ Future<void> main() async {
     bytes: Uint8List.fromList(
       List<int>.generate(93, (index) => (index * 13 + 5) & 0xff),
     ),
-    chunkSize: 32,
+    chunkSize: 64,
   );
   var receiverDeliveries = 0;
   var droppedFirstFinalComplete = false;
