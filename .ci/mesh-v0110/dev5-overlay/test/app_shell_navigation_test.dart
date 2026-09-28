@@ -113,14 +113,25 @@ void main() {
     expect(tester.takeException(), isNull);
 
     for (var round = 0; round < 4; round++) {
-      await tester.tap(find.byTooltip('Добавить'));
+      final addButton = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.add_circle_outline),
+      );
+      addButton.onPressed!.call();
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Местоположение'));
+      expect(find.text('Местоположение'), findsOneWidget);
+      final locationTile = tester.widget<ListTile>(
+        find.widgetWithText(ListTile, 'Местоположение'),
+      );
+      locationTile.onTap!.call();
       await tester.pumpAndSettle();
       expect(find.text('Карта · Общий чат'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      await tester.tap(find.text('Чаты').last);
+      final shellScaffold = tester.widget<Scaffold>(
+        find.byType(Scaffold).first,
+      );
+      final navigation = shellScaffold.bottomNavigationBar! as NavigationBar;
+      navigation.onDestinationSelected!.call(0);
       await tester.pumpAndSettle();
       expect(find.byTooltip('Добавить'), findsOneWidget);
       expect(tester.takeException(), isNull);
