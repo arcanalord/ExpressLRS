@@ -49,6 +49,9 @@ final class File1TransportBridge {
   final Map<String, _SenderState> _senders = <String, _SenderState>{};
   final Map<String, FileTransferReceiverSession> _receivers =
       <String, FileTransferReceiverSession>{};
+  final Map<String, int> _completedReceiverAtMs = <String, int>{};
+  static const int _completedReceiverRetentionMs = 5 * 60 * 1000;
+  static const int _maxCompletedReceiverIds = 64;
   Timer? _timer;
   bool _driving = false;
 
@@ -98,6 +101,18 @@ final class File1TransportBridge {
       return;
     }
 
+    final now = _nowMs();
+    _pruneCompletedReceivers(now);
+    if (frame.type == File1FrameType.manifest) {
+      _completedReceiverAtMs.remove(frame.transferId);
+    } else if (frame.type == File1FrameType.complete &&
+        _completedReceiverAtMs.containsKey(frame.transferId)) {
+      await _sendBytes(
+        File1Codec.encode(File1Codec.complete(frame.transferId)),
+      );
+      return;
+    }
+
     if (frame.type == File1FrameType.error) {
       _receivers.remove(frame.transferId);
       return;
@@ -109,6 +124,7 @@ final class File1TransportBridge {
     );
     final responses = receiver.onFrame(frame);
     if (receiver.isComplete) {
+      _rememberCompletedReceiver(frame.transferId, now);
       final manifest = receiver.manifest;
       final payload = receiver.completedBytes;
       if (manifest != null && payload != null) {
@@ -214,6 +230,21 @@ final class File1TransportBridge {
 
   int _nowMs() => DateTime.now().millisecondsSinceEpoch;
 
+  void _rememberCompletedReceiver(String transferId, int nowMs) {
+    _completedReceiverAtMs[transferId] = nowMs;
+    _pruneCompletedReceivers(nowMs);
+    while (_completedReceiverAtMs.length > _maxCompletedReceiverIds) {
+      _completedReceiverAtMs.remove(_completedReceiverAtMs.keys.first);
+    }
+  }
+
+  void _pruneCompletedReceivers(int nowMs) {
+    _completedReceiverAtMs.removeWhere(
+      (_, completedAtMs) =>
+          nowMs - completedAtMs > _completedReceiverRetentionMs,
+    );
+  }
+
   void close() {
     _timer?.cancel();
     _timer = null;
@@ -227,6 +258,7 @@ final class File1TransportBridge {
     }
     _senders.clear();
     _receivers.clear();
+    _completedReceiverAtMs.clear();
   }
 }
 
