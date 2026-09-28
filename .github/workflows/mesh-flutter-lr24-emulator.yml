@@ -171,19 +171,14 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -eu
-            APK="$PWD/build/app/outputs/flutter-apk/app-x86_64-debug.apk"
-            adb install -r "$APK"
+            adb install -r "${{ env.APP_DIR }}/build/app/outputs/flutter-apk/app-x86_64-debug.apk"
             adb logcat -c
             adb shell monkey -p org.fpvclub.mesh.flutter -c android.intent.category.LAUNCHER 1
             sleep 8
             adb shell pidof org.fpvclub.mesh.flutter
             adb exec-out screencap -p > /tmp/mesh-messenger-emulator.png
             adb logcat -d > /tmp/mesh-messenger-logcat.txt
-            if grep -E "Failed assertion|_dependents\.isEmpty|FATAL EXCEPTION|E/flutter" /tmp/mesh-messenger-logcat.txt; then
-              echo "Flutter/runtime error detected after launch" >&2
-              exit 1
-            fi
+            ! grep -E "Failed assertion|_dependents\.isEmpty|FATAL EXCEPTION|E/flutter" /tmp/mesh-messenger-logcat.txt || { echo "Flutter/runtime error detected after launch" >&2; exit 1; }
 
       - name: Upload emulator smoke evidence
         if: always()
