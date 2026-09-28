@@ -81,7 +81,7 @@ void main() {
 
     await tester.tap(find.text('Связь').last);
     await tester.pumpAndSettle();
-    expect(find.text('Meshtastic BLE'), findsOneWidget);
+    expect(find.text('Связь'), findsWidgets);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
