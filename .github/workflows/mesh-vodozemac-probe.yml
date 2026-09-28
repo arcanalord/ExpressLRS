@@ -1,0 +1,42 @@
+name: Mesh M07 vodozemac direct provider probe
+
+on:
+  push:
+    branches:
+      - security/m07-private-pipeline
+    paths:
+      - '.ci/mesh-v0110/dev5-overlay/tool/vodozemac_probe/**'
+      - '.github/workflows/mesh-vodozemac-probe.yml'
+  pull_request:
+    branches:
+      - feature/mesh-lr24-usb
+    paths:
+      - '.ci/mesh-v0110/dev5-overlay/tool/vodozemac_probe/**'
+      - '.github/workflows/mesh-vodozemac-probe.yml'
+
+concurrency:
+  group: mesh-vodozemac-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain
+        run: |
+          rustc --version
+          cargo --version
+      - name: Build and run vodozemac 0.11 direct probe
+        working-directory: .ci/mesh-v0110/dev5-overlay/tool/vodozemac_probe
+        run: cargo run
+      - name: Android arm64 compile check
+        working-directory: .ci/mesh-v0110/dev5-overlay/tool/vodozemac_probe
+        run: |
+          rustup target add aarch64-linux-android
+          cargo check --target aarch64-linux-android
+      - name: Dependency metadata snapshot
+        working-directory: .ci/mesh-v0110/dev5-overlay/tool/vodozemac_probe
+        run: |
+          cargo metadata --format-version 1 --no-deps > /tmp/vodozemac-metadata.json
+          grep -q '"name":"vodozemac"' /tmp/vodozemac-metadata.json
