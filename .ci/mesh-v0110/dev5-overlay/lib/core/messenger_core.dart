@@ -520,11 +520,6 @@ final class MeshMessengerCore {
         payloadUtf8: payloadUtf8,
       ),
     );
-    if (encrypted.logicalMessageId != logicalMessageId ||
-        encrypted.senderMmId != ownMmId ||
-        encrypted.recipientMmId != recipientMmId) {
-      throw StateError('M07_PROVIDER_ENVELOPE_MISMATCH');
-    }
     return encrypted;
   }
 
@@ -536,12 +531,12 @@ final class MeshMessengerCore {
     final provider = _cryptoProvider;
     if (provider == null) throw StateError('M07_PRIVATE_E2EE_REQUIRED');
     final envelope = EncryptedApplicationEnvelope.decode(encodedEnvelope);
-    if (envelope.logicalMessageId != expectedMessageId ||
-        envelope.senderMmId != expectedFromMmId ||
-        envelope.recipientMmId != ownMmId) {
-      throw const FormatException('M07_ENVELOPE_BINDING_MISMATCH');
-    }
-    final result = await provider.decryptDirect(envelope);
+    final result = await provider.decryptDirect(
+      envelope,
+      expectedLogicalMessageId: expectedMessageId,
+      expectedSenderMmId: expectedFromMmId,
+      expectedRecipientMmId: ownMmId,
+    );
     if (result is! DirectDecryptSuccess) {
       throw const FormatException('M07_DECRYPT_REJECTED');
     }
