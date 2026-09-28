@@ -493,7 +493,7 @@ class _AddContactPageState extends State<_AddContactPage> {
   }
 }
 
-class _ContactQrScannerPage extends StatefulWidgetclass _ContactQrScannerPage extends StatefulWidget {
+class _ContactQrScannerPage extends StatefulWidget {
   const _ContactQrScannerPage();
 
   @override
@@ -702,7 +702,7 @@ class _AddContactDialogState extends State<_AddContactDialog> {
   }
 }
 
-class _ConversationPane extends StatelessWidgetclass _ConversationPane extends StatelessWidget {
+class _ConversationPane extends StatelessWidget {
   const _ConversationPane({
     required this.controller,
     required this.composer,
