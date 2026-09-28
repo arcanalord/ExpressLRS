@@ -368,21 +368,17 @@ class _GlassPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surface.withValues(alpha: 0.56),
+    return Material(
+      color: scheme.surface.withValues(alpha: 0.56),
+      elevation: 3,
+      shadowColor: Colors.black.withValues(alpha: 0.18),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
+        side: BorderSide(
           color: scheme.outlineVariant.withValues(alpha: 0.45),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: padding,
         child: child,
