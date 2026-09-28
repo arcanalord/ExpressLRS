@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../../core/app_storage.dart';
+import '../../core/diagnostic_snapshot.dart';
 import '../../core/delivery.dart';
 import '../../core/identity_crypto.dart';
 import '../../core/messenger_core.dart';
@@ -1111,6 +1112,52 @@ final class MeshAppController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+
+  Map<String, dynamic> buildDiagnosticSnapshot() {
+    return DiagnosticSnapshot.build(
+      appVersion: '0.1.10-dev.15-channel-r2',
+      ownMmId: ownMmId,
+      activeConversation: activeConversation.key,
+      transport: <String, dynamic>{
+        'lanState': lanState,
+        'meshtasticState': radioState,
+        'ep2State': ep2State,
+        'lr24State': lr24State,
+        'lr24Connected': lr24Connected,
+        'lr24PeerMmId': lr24PeerMmId,
+        'lr24Baud': lr24Baud,
+        'externalRadioFamily': externalRadioFamily,
+        'externalBoardId': externalBoardId,
+        'externalRadioSupportsMmrp': externalRadioSupportsMmrp,
+      },
+      counters: <String, dynamic>{
+        'lr24TxBytes': lr24TxBytes,
+        'lr24RxBytes': lr24RxBytes,
+        'lr24TxFrames': lr24TxFrames,
+        'lr24RxFrames': lr24RxFrames,
+        'lr24BadFrames': lr24BadFrames,
+        'lr24RttMs': lr24RttMs,
+        'ep2TxCount': ep2TxCount,
+        'ep2RxCount': ep2RxCount,
+        'ep2LossCount': ep2LossCount,
+        'ep2RetryCount': ep2RetryCount,
+        'generalOnlineCount': generalOnlineCount,
+      },
+      extra: <String, dynamic>{
+        'selectedUsbProfile':
+            _usbProfileBinding?.toJson() ?? const <String, dynamic>{},
+        'radioDiagnostics': radioDiagnostics,
+        'lastRadioNotice': lastRadioNotice,
+        'radioError': radioError,
+        'ep2Error': ep2Error,
+        'lr24Error': lr24Error,
+      },
+    );
+  }
+
+  String diagnosticSnapshotJson() =>
+      DiagnosticSnapshot.encode(buildDiagnosticSnapshot());
 
   Future<void> refreshRadioDiagnostics() async {
     final bridge = _androidBridge;
