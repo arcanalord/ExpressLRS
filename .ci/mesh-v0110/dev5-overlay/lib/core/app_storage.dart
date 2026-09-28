@@ -379,8 +379,12 @@ final class AppStorage {
     final tmp = File('${file.path}.tmp');
     final backup = File('${file.path}.bak');
     await tmp.writeAsString(text, flush: true);
-    if (await backup.exists()) await backup.delete();
-    if (await file.exists()) await file.rename(backup.path);
+    if (await file.exists()) {
+      if (await backup.exists()) await backup.delete();
+      await file.rename(backup.path);
+    }
+    // If the main file is already missing but a recovery .bak exists, keep
+    // that backup until the new encrypted main file is durably renamed.
     try {
       await tmp.rename(file.path);
       if (await backup.exists()) await backup.delete();
