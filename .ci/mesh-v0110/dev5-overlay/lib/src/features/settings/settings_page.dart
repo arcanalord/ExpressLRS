@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/settings_registry.dart';
 import '../../application/mesh_app_controller.dart';
+import '../contacts/contact_share_dialog.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({required this.controller, super.key});
@@ -13,12 +15,20 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String _transportId = 'meshtastic';
+  String _transportId = 'lr24';
 
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_refresh);
+    final controller = widget.controller;
+    if (controller.lr24Connected) {
+      _transportId = 'lr24';
+    } else if (controller.ep2Connected) {
+      _transportId = 'm03';
+    } else if (controller.radioConnected) {
+      _transportId = 'meshtastic';
+    }
+    controller.addListener(_refresh);
   }
 
   @override
@@ -43,7 +53,6 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    final scheme = Theme.of(context).colorScheme;
     final definitions = settingsRegistry.definitions
         .where((item) => item.supportedTransports.contains(_transportId))
         .toList(growable: false);
@@ -60,40 +69,8 @@ class _SettingsPageState extends State<SettingsPage> {
           'Настройки',
           style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Тёмная основа · полупрозрачные панели · настройки из общего Registry',
-          style: TextStyle(color: scheme.onSurfaceVariant),
-        ),
-        const SizedBox(height: 16),
-        _GlassPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Интерфейс',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Прозрачность используется для панелей и навигации. '
-                'Текст и поля ввода остаются контрастными; постоянный blur '
-                'на всём экране не используется, чтобы не нагружать телефон.',
-                style: TextStyle(color: scheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: const [
-                  _InfoChip(icon: Icons.dark_mode_outlined, label: 'Dark'),
-                  _InfoChip(icon: Icons.layers_outlined, label: 'Glass panels'),
-                  _InfoChip(icon: Icons.speed_outlined, label: 'Low overhead'),
-                ],
-              ),
-            ],
-          ),
-        ),
+        const SizedBox(height: 14),
+        _IdentityPanel(controller: controller),
         const SizedBox(height: 12),
         _GlassPanel(
           child: Material(
@@ -108,9 +85,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: const Text(
-                'Показывает тесты 100/1000, подробные логи, BLE/USB диагностику '
-                'и инженерные параметры. Обычный режим оставляет только '
-                'основные действия подключения.',
+                'Тесты, подробная диагностика и инженерные параметры.',
               ),
             ),
           ),
@@ -121,16 +96,16 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Модуль',
+                'Настройки связи',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 10),
               SegmentedButton<String>(
                 segments: const [
                   ButtonSegment(
-                    value: 'meshtastic',
-                    icon: Icon(Icons.bluetooth),
-                    label: Text('Meshtastic'),
+                    value: 'lr24',
+                    icon: Icon(Icons.cable_outlined),
+                    label: Text('LR24'),
                   ),
                   ButtonSegment(
                     value: 'm03',
@@ -138,9 +113,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     label: Text('M03'),
                   ),
                   ButtonSegment(
-                    value: 'lr24',
-                    icon: Icon(Icons.cable_outlined),
-                    label: Text('LR24'),
+                    value: 'meshtastic',
+                    icon: Icon(Icons.bluetooth),
+                    label: Text('Meshtastic'),
                   ),
                 ],
                 selected: {_transportId},
@@ -158,35 +133,179 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         const SizedBox(height: 12),
+        const _PlannedSettingsPanel(),
+        const SizedBox(height: 12),
         for (final entry in groups.entries) ...[
           _SettingsGroup(
             title: entry.key,
             definitions: entry.value,
             deviceBindingReady: false,
+            showTechnicalDetails: controller.advancedMode,
           ),
           const SizedBox(height: 10),
         ],
-        if (_transportId == 'meshtastic')
-          _GlassPanel(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(Icons.info_outline, color: scheme.primary),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Схема настроек уже подключена к Registry. '
-                    'Редактирование реального устройства останется заблокировано, '
-                    'пока существующий BLE bridge не будет связан с '
-                    'Config/ModuleConfig adapter. Значения здесь не подменяются '
-                    'локальными фиктивными данными.',
-                    style: TextStyle(color: scheme.onSurfaceVariant),
+      ],
+    );
+  }
+}
+
+class _IdentityPanel extends StatelessWidget {
+  const _IdentityPanel({required this.controller});
+
+  final MeshAppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = controller.ownDeviceLabel.trim().isEmpty
+        ? 'Mesh Messenger'
+        : controller.ownDeviceLabel.trim();
+
+    return _GlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_circle_outlined),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-      ],
+          const SizedBox(height: 10),
+          const Text(
+            'MM-ID',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(controller.ownMmId),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.tonalIcon(
+                onPressed: () => showOwnContactCardDialog(context, controller),
+                icon: const Icon(Icons.qr_code_2),
+                label: const Text('Показать QR'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await Clipboard.setData(
+                    ClipboardData(text: controller.ownMmId),
+                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('MM-ID скопирован')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.copy),
+                label: const Text('Копировать MM-ID'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlannedSettingsPanel extends StatelessWidget {
+  const _PlannedSettingsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      padding: EdgeInsets.zero,
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        title: const Text(
+          'Планируемые разделы',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: const Text('Будут включаться по мере готовности'),
+        childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+        children: const [
+          _PlannedSettingTile(
+            icon: Icons.notifications_outlined,
+            label: 'Уведомления',
+          ),
+          _PlannedSettingTile(
+            icon: Icons.photo_outlined,
+            label: 'Файлы и медиа',
+          ),
+          _PlannedSettingTile(
+            icon: Icons.security_outlined,
+            label: 'Конфиденциальность и безопасность',
+          ),
+          _PlannedSettingTile(
+            icon: Icons.public_outlined,
+            label: 'Интернет и ретрансляция',
+          ),
+          _PlannedSettingTile(
+            icon: Icons.storage_outlined,
+            label: 'Хранилище',
+          ),
+          _PlannedSettingTile(
+            icon: Icons.palette_outlined,
+            label: 'Внешний вид',
+          ),
+          _PlannedSettingTile(
+            icon: Icons.backup_outlined,
+            label: 'Резервная копия и перенос',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlannedSettingTile extends StatelessWidget {
+  const _PlannedSettingTile({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      leading: Icon(icon),
+      title: Text(label),
+      trailing: const _StatusPill(label: 'Скоро'),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall,
+      ),
     );
   }
 }
@@ -231,7 +350,7 @@ class _TransportStatus extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            '$label · ${ready ? 'подключено' : detail}',
+            label + ' · ' + (ready ? 'подключено' : detail),
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w600,
@@ -248,31 +367,33 @@ class _SettingsGroup extends StatelessWidget {
     required this.title,
     required this.definitions,
     required this.deviceBindingReady,
+    required this.showTechnicalDetails,
   });
 
   final String title;
   final List<SettingDefinition> definitions;
   final bool deviceBindingReady;
+  final bool showTechnicalDetails;
 
   @override
   Widget build(BuildContext context) {
     return _GlassPanel(
       padding: EdgeInsets.zero,
       child: ExpansionTile(
-        initiallyExpanded:
-            title == 'Device' || title == 'Radio' || title == 'LoRa',
+        initiallyExpanded: false,
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
         title: Text(
-          title,
+          _friendlyGroupTitle(title),
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-        subtitle: Text('${definitions.length} параметров'),
+        subtitle: Text(definitions.length.toString() + ' параметров'),
         children: [
           for (final definition in definitions)
             _SettingTile(
               definition: definition,
               enabled: deviceBindingReady,
+              showTechnicalDetails: showTechnicalDetails,
             ),
         ],
       ),
@@ -280,29 +401,41 @@ class _SettingsGroup extends StatelessWidget {
   }
 }
 
+String _friendlyGroupTitle(String title) => switch (title) {
+      'Device' => 'Устройство',
+      'Radio' => 'Радио',
+      'LoRa' => 'LoRa',
+      'Bluetooth' => 'Bluetooth',
+      'Network' => 'Сеть',
+      'Power' => 'Питание',
+      _ => title,
+    };
+
 class _SettingTile extends StatelessWidget {
   const _SettingTile({
     required this.definition,
     required this.enabled,
+    required this.showTechnicalDetails,
   });
 
   final SettingDefinition definition;
   final bool enabled;
+  final bool showTechnicalDetails;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final constraints = <String>[
-      if (definition.minimum != null) 'min ${definition.minimum}',
-      if (definition.maximum != null) 'max ${definition.maximum}',
+      if (definition.minimum != null) 'min ' + definition.minimum.toString(),
+      if (definition.maximum != null) 'max ' + definition.maximum.toString(),
       if (definition.sinceFirmware != null)
-        'fw ≥ ${definition.sinceFirmware}',
+        'fw ≥ ' + definition.sinceFirmware.toString(),
       if (definition.untilFirmware != null)
-        'fw ≤ ${definition.untilFirmware}',
+        'fw ≤ ' + definition.untilFirmware.toString(),
       if (definition.requiresCapability != null)
-        'cap: ${definition.requiresCapability}',
+        'cap: ' + definition.requiresCapability.toString(),
     ];
-    final details = [
+    final details = <String>[
       definition.fieldPath,
       if (constraints.isNotEmpty) constraints.join(' · '),
     ].join('\n');
@@ -313,9 +446,11 @@ class _SettingTile extends StatelessWidget {
         enabled: enabled,
         leading: Icon(_iconFor(definition.valueType)),
         title: Text(definition.label),
-        subtitle: Text(details),
-        isThreeLine: constraints.isNotEmpty,
-        trailing: _ValueTypeBadge(type: definition.valueType),
+        subtitle: showTechnicalDetails ? Text(details) : null,
+        isThreeLine: showTechnicalDetails && constraints.isNotEmpty,
+        trailing: showTechnicalDetails
+            ? _ValueTypeBadge(type: definition.valueType)
+            : const Icon(Icons.lock_outline, size: 18),
         textColor: enabled ? null : scheme.onSurfaceVariant,
         iconColor: enabled ? null : scheme.onSurfaceVariant,
       ),
@@ -389,22 +524,6 @@ class _GlassPanel extends StatelessWidget {
         padding: padding,
         child: child,
       ),
-    );
-  }
-}
-
-class _InfoChip extends StatelessWidget {
-  const _InfoChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      avatar: Icon(icon, size: 17),
-      label: Text(label),
-      visualDensity: VisualDensity.compact,
     );
   }
 }

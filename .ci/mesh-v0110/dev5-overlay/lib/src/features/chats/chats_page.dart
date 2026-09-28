@@ -2,11 +2,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/models.dart';
 
 import '../../application/mesh_app_controller.dart';
+import '../contacts/contact_share_dialog.dart';
 
 class ChatsPage extends StatefulWidget {
   const ChatsPage({
@@ -204,10 +204,10 @@ class _ContactList extends StatelessWidget {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Мой QR и MM-ID',
-                  onPressed: () => _showOwnContactCard(context, controller),
-                  icon: const Icon(Icons.qr_code_2),
+                TextButton.icon(
+                  onPressed: () => showOwnContactCardDialog(context, controller),
+                  icon: const Icon(Icons.qr_code_2, size: 18),
+                  label: const Text('Мой QR'),
                 ),
                 IconButton(
                   tooltip: 'Создать группу',
@@ -302,82 +302,6 @@ Future<void> _showCreateGroup(
   name.dispose();
 }
 
-Future<void> _showOwnContactCard(
-  BuildContext context,
-  MeshAppController controller,
-) async {
-  final payload = controller.ownContactCardPayload;
-  await showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Мой контакт'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              color: Colors.white,
-              child: QrImageView(
-                data: payload,
-                size: 220,
-                backgroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              controller.ownDeviceLabel,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            SelectableText(
-              controller.ownMmId,
-              textAlign: TextAlign.center,
-            ),
-            if (controller.ownFingerprint.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Fingerprint: ' + controller.ownFingerprint,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton.icon(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: controller.ownMmId));
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('MM-ID скопирован')),
-              );
-            }
-          },
-          icon: const Icon(Icons.copy),
-          label: const Text('Копировать MM-ID'),
-        ),
-        TextButton.icon(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: payload));
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Код контакта скопирован')),
-              );
-            }
-          },
-          icon: const Icon(Icons.content_copy),
-          label: const Text('Копировать код'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Готово'),
-        ),
-      ],
-    ),
-  );
-}
-
 Future<void> _showContactActions(
   BuildContext context,
   MeshAppController controller,
@@ -391,7 +315,7 @@ Future<void> _showContactActions(
         children: [
           ListTile(
             leading: const Icon(Icons.qr_code_2),
-            title: const Text('Показать мой QR'),
+            title: const Text('Мой QR и MM-ID'),
             subtitle: const Text('Чтобы другой телефон добавил этот контакт'),
             onTap: () => Navigator.pop(context, 'myqr'),
           ),
@@ -421,7 +345,7 @@ Future<void> _showContactActions(
 
   try {
     if (action == 'myqr') {
-      await _showOwnContactCard(context, controller);
+      await showOwnContactCardDialog(context, controller);
       return;
     }
     if (action == 'manual') {
