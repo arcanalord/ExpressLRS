@@ -91,8 +91,9 @@ final class _TestM07Provider implements M07CryptoProvider {
 
   @override
   Future<SecureSessionRef> ensureDirectSession(
-    IdentityPublicMaterial peer,
-  ) async =>
+    IdentityPublicMaterial peer, {
+    PortablePreKeyBundle? preKeyBundle,
+  }) async =>
       SecureSessionRef(
         sessionId: 'session:$mmId->${peer.mmId}',
         peerMmId: peer.mmId,
