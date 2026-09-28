@@ -265,6 +265,62 @@ final class MeshMessengerCore {
     ),
   );
 
+  Future<DeliveryEnvelope> sendChannelMapPoint({
+    required String channelId,
+    required MapPoint point,
+  }) async {
+    final target = channelTargetKey(channelId);
+    final result = await delivery.enqueue(
+      recipientMmId: target,
+      messageClass: 'map_point',
+      payload: jsonEncode(point.toJson()),
+    );
+    await _storage.appendMessageUnique(
+      ConversationMessage(
+        messageId: result.messageId,
+        peerMmId: target,
+        text: point.label.isEmpty ? 'Точка на карте' : point.label,
+        outgoing: true,
+        createdAt: _now(),
+        messageClass: 'map_point',
+        mapPoint: point,
+        conversationKey: ConversationRef.channel(channelId).key,
+        senderMmId: ownMmId,
+      ),
+    );
+    return result;
+  }
+
+  Future<bool> receiveChannelMapPoint({
+    required String messageId,
+    required String fromMmId,
+    required String channelId,
+    required String payload,
+  }) async {
+    final raw = jsonDecode(payload);
+    if (raw is! Map) throw const FormatException('MAP_POINT_INVALID');
+    final point = MapPoint.fromJson(raw.cast<String, dynamic>());
+    if (point.latitude < -90 ||
+        point.latitude > 90 ||
+        point.longitude < -180 ||
+        point.longitude > 180) {
+      throw const FormatException('MAP_POINT_COORDINATES_INVALID');
+    }
+    return _storage.appendMessageUnique(
+      ConversationMessage(
+        messageId: messageId,
+        peerMmId: channelTargetKey(channelId),
+        text: point.label.isEmpty ? 'Точка на карте' : point.label,
+        outgoing: false,
+        createdAt: _now(),
+        messageClass: 'map_point',
+        mapPoint: point,
+        conversationKey: ConversationRef.channel(channelId).key,
+        senderMmId: fromMmId,
+      ),
+    );
+  }
+
   Future<DeliveryEnvelope> sendMapPoint({
     required String peerMmId,
     required MapPoint point,
