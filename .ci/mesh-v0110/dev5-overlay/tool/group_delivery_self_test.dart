@@ -42,9 +42,61 @@ Future<void> main() async {
         !group.contains('mm:c')) {
       throw StateError('Group membership invalid');
     }
+    await core.saveContact(
+      const Contact(mmId: 'mm:b', displayName: 'Node B'),
+    );
+
+    final remoteDescriptor = GroupDefinition(
+      groupId: 'g-remote',
+      displayName: 'Remote Team',
+      creatorMmId: 'mm:b',
+      memberMmIds: const ['mm:self', 'mm:b'],
+      revision: 3,
+      createdAt: DateTime.utc(2026, 9, 28),
+      updatedAt: DateTime.utc(2026, 9, 28),
+    );
+    if (!await core.upsertGroupDescriptor(
+      descriptor: remoteDescriptor,
+      fromMmId: 'mm:b',
+    )) {
+      throw StateError('Valid remote group descriptor rejected');
+    }
+    final staleDescriptor = GroupDefinition(
+      groupId: 'g-remote',
+      displayName: 'Remote Team stale',
+      creatorMmId: 'mm:b',
+      memberMmIds: const ['mm:self', 'mm:b'],
+      revision: 2,
+      createdAt: DateTime.utc(2026, 9, 28),
+      updatedAt: DateTime.utc(2026, 9, 28),
+    );
+    if (await core.upsertGroupDescriptor(
+      descriptor: staleDescriptor,
+      fromMmId: 'mm:b',
+    )) {
+      throw StateError('Stale group descriptor accepted');
+    }
+
+    final unknownDescriptor = GroupDefinition(
+      groupId: 'g-unknown',
+      displayName: 'Unknown Team',
+      creatorMmId: 'mm:unknown',
+      memberMmIds: const ['mm:self', 'mm:unknown'],
+      revision: 1,
+      createdAt: DateTime.utc(2026, 9, 28),
+      updatedAt: DateTime.utc(2026, 9, 28),
+    );
+    if (await core.upsertGroupDescriptor(
+      descriptor: unknownDescriptor,
+      fromMmId: 'mm:unknown',
+    )) {
+      throw StateError('Unknown creator group descriptor accepted');
+    }
+
     final storedGroups = await core.groups();
-    if (storedGroups.length != 1 ||
-        storedGroups.single.groupId != group.groupId) {
+    if (storedGroups.length != 2 ||
+        !storedGroups.any((item) => item.groupId == group.groupId) ||
+        !storedGroups.any((item) => item.groupId == remoteDescriptor.groupId)) {
       throw StateError('Group persistence failed');
     }
 
@@ -61,7 +113,10 @@ Future<void> main() async {
     if (deliveryIds.length != 2) {
       throw StateError('Group delivery legs need unique deliveryId');
     }
-    if (legs.any((e) => !e.isGroup || e.state != DeliveryState.waitingAck)) {
+    if (legs.any((e) =>
+        !e.isGroup ||
+        e.groupRevision != group.revision ||
+        e.state != DeliveryState.waitingAck)) {
       throw StateError('Group legs must wait for member receipts');
     }
     final members = legs.map((e) => e.groupMemberMmId).toSet();

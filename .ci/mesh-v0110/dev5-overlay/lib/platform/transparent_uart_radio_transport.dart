@@ -70,6 +70,29 @@ final class TransparentUartChannelReceipt extends TransparentUartRadioEvent {
 }
 
 
+
+final class TransparentUartPeerDiscovered extends TransparentUartRadioEvent {
+  const TransparentUartPeerDiscovered({
+    required this.peerMmId,
+    required this.label,
+    required this.capabilities,
+  });
+
+  final String peerMmId;
+  final String label;
+  final Set<String> capabilities;
+}
+
+final class TransparentUartGroupDescriptor extends TransparentUartRadioEvent {
+  const TransparentUartGroupDescriptor({
+    required this.descriptor,
+    required this.fromMmId,
+  });
+
+  final GroupDefinition descriptor;
+  final String fromMmId;
+}
+
 final class TransparentUartIncomingGroupMessage
     extends TransparentUartRadioEvent {
   const TransparentUartIncomingGroupMessage({
@@ -141,10 +164,13 @@ final class TransparentUartRadioTransport implements MessageTransport {
   TransparentUartRadioTransport({
     required AndroidUsbSerialBridge bridge,
     required this.ownMmId,
+    this.ownLabel = '',
   }) : _bridge = bridge;
 
   final AndroidUsbSerialBridge _bridge;
   final String ownMmId;
+  final String ownLabel;
+  final Set<String> _discoveredPeerMmIds = <String>{};
   final MmSerialCodec _codec = MmSerialCodec();
   final StreamController<TransparentUartRadioEvent> _events =
       StreamController<TransparentUartRadioEvent>.broadcast();
@@ -216,6 +242,17 @@ final class TransparentUartRadioTransport implements MessageTransport {
         detail: 'LR24_NOT_READY',
       );
     }
+    final targetMmId =
+        envelope.isGroup ? envelope.groupMemberMmId : envelope.recipientMmId;
+    if (!envelope.isChannel &&
+        targetMmId != null &&
+        _discoveredPeerMmIds.isNotEmpty &&
+        !_discoveredPeerMmIds.contains(targetMmId)) {
+      return const TransportSendResult(
+        TransportSendStatus.unavailable,
+        detail: 'LR24_PEER_NOT_REACHABLE',
+      );
+    }
     if (envelope.messageClass != 'text' &&
         envelope.messageClass != 'map_point') {
       return const TransportSendResult(
@@ -245,7 +282,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
             'from': ownMmId,
             'to': envelope.groupMemberMmId,
             'group': envelope.groupId,
-            'rev': 1,
+            'rev': envelope.groupRevision ?? 1,
             'class': envelope.messageClass,
             'q': envelope.priority,
             'payload': envelope.payload,
@@ -270,6 +307,41 @@ final class TransparentUartRadioTransport implements MessageTransport {
         detail: 'LR24_WRITE_FAILED:' + error.toString(),
       );
     }
+  }
+
+
+  Future<void> discoverPeers() async {
+    if (!isAvailable) return;
+    await _writeFrame(<String, Object?>{
+      'v': 1,
+      'p': 'MMRP/1',
+      'k': 'hello',
+      'from': ownMmId,
+      'to': '*',
+      'label': ownLabel,
+      'caps': const <String>['DIRECT/1', 'CHANNEL/1', 'GROUP/1'],
+    });
+  }
+
+  Future<void> sendGroupDescriptor({
+    required GroupDefinition descriptor,
+    required String toMmId,
+  }) async {
+    if (!isAvailable) return;
+    await _writeFrame(<String, Object?>{
+      'v': 1,
+      'p': 'MMRP/1',
+      'k': 'group_descriptor',
+      'from': ownMmId,
+      'to': toMmId,
+      'group': descriptor.groupId,
+      'name': descriptor.displayName,
+      'creator': descriptor.creatorMmId,
+      'members': descriptor.memberMmIds,
+      'rev': descriptor.revision,
+      'createdAt': descriptor.createdAt.toIso8601String(),
+      'updatedAt': descriptor.updatedAt.toIso8601String(),
+    });
   }
 
   Future<void> acknowledgeIncoming({
@@ -413,6 +485,82 @@ final class TransparentUartRadioTransport implements MessageTransport {
     final kind = (frame['k'] ?? '').toString().trim();
 
     switch (kind) {
+
+      case 'hello':
+        _discoveredPeerMmIds.add(from);
+        final label = (frame['label'] ?? '').toString().trim();
+        final rawCaps = frame['caps'];
+        final caps = rawCaps is List
+            ? rawCaps.map((e) => e.toString()).toSet()
+            : <String>{};
+        _events.add(
+          TransparentUartPeerDiscovered(
+            peerMmId: from,
+            label: label,
+            capabilities: caps,
+          ),
+        );
+        unawaited(
+          _writeFrame(<String, Object?>{
+            'v': 1,
+            'p': 'MMRP/1',
+            'k': 'hello_reply',
+            'from': ownMmId,
+            'to': from,
+            'label': ownLabel,
+            'caps': const <String>['DIRECT/1', 'CHANNEL/1', 'GROUP/1'],
+          }),
+        );
+      case 'hello_reply':
+        _discoveredPeerMmIds.add(from);
+        final label = (frame['label'] ?? '').toString().trim();
+        final rawCaps = frame['caps'];
+        final caps = rawCaps is List
+            ? rawCaps.map((e) => e.toString()).toSet()
+            : <String>{};
+        _events.add(
+          TransparentUartPeerDiscovered(
+            peerMmId: from,
+            label: label,
+            capabilities: caps,
+          ),
+        );
+      case 'group_descriptor':
+        final groupId = (frame['group'] ?? '').toString().trim();
+        final name = (frame['name'] ?? '').toString().trim();
+        final creator = (frame['creator'] ?? '').toString().trim();
+        final rawMembers = frame['members'];
+        final revision = (frame['rev'] as num?)?.toInt() ?? 0;
+        final createdAt = DateTime.tryParse(
+          (frame['createdAt'] ?? '').toString(),
+        );
+        final updatedAt = DateTime.tryParse(
+          (frame['updatedAt'] ?? '').toString(),
+        );
+        if (groupId.isNotEmpty &&
+            name.isNotEmpty &&
+            creator.isNotEmpty &&
+            rawMembers is List &&
+            revision > 0 &&
+            createdAt != null &&
+            updatedAt != null) {
+          _events.add(
+            TransparentUartGroupDescriptor(
+              fromMmId: from,
+              descriptor: GroupDefinition(
+                groupId: groupId,
+                displayName: name,
+                creatorMmId: creator,
+                memberMmIds: rawMembers
+                    .map((e) => e.toString())
+                    .toList(growable: false),
+                revision: revision,
+                createdAt: createdAt.toUtc(),
+                updatedAt: updatedAt.toUtc(),
+              ),
+            ),
+          );
+        }
       case 'ack':
         final id = (frame['id'] ?? '').toString().trim();
         if (id.isNotEmpty) {

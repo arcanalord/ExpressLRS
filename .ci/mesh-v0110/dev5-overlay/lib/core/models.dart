@@ -306,6 +306,7 @@ final class DeliveryEnvelope {
   final String messageId;
   final String recipientMmId;
   final String? deliveryId;
+  final int? groupRevision;
   String get effectiveDeliveryId => deliveryId ?? messageId;
   final String messageClass;
 
@@ -327,6 +328,7 @@ final class DeliveryEnvelope {
   Map<String, Object?> toJson() => {
     'messageId': messageId,
     'deliveryId': effectiveDeliveryId,
+    'groupRevision': groupRevision,
     'recipientMmId': recipientMmId,
     'messageClass': messageClass,
     'payload': payload,
@@ -344,6 +346,7 @@ final class DeliveryEnvelope {
       DeliveryEnvelope(
         messageId: json['messageId'] as String,
         deliveryId: json['deliveryId'] as String?,
+        groupRevision: (json['groupRevision'] as num?)?.toInt(),
         recipientMmId: json['recipientMmId'] as String,
         messageClass: json['messageClass'] as String,
         payload: json['payload'] as String,
@@ -371,6 +374,7 @@ final class DeliveryEnvelope {
   }) => DeliveryEnvelope(
     messageId: messageId,
     deliveryId: deliveryId,
+    groupRevision: groupRevision,
     recipientMmId: recipientMmId,
     messageClass: messageClass,
     payload: payload,

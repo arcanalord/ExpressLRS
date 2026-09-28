@@ -240,6 +240,7 @@ Future<void> _showCreateGroup(
             children: [
               TextField(
                 controller: name,
+                onChanged: (_) => setDialogState(() {}),
                 decoration: const InputDecoration(labelText: 'Название группы'),
               ),
               const SizedBox(height: 12),

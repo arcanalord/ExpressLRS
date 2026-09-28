@@ -31,6 +31,43 @@ void main() {
   expectThat(decoded.length == 1, 'partial reassembly');
   expectThat(decoded.single['payload'] == 'Привет LR24', 'payload roundtrip');
 
+  final hello = <String, Object?>{
+    'v': 1,
+    'p': 'MMRP/1',
+    'k': 'hello',
+    'from': 'mm:a',
+    'to': '*',
+    'label': 'Node A',
+    'caps': const <String>['DIRECT/1', 'CHANNEL/1', 'GROUP/1'],
+  };
+  final helloDecoded = codec.feed(codec.encode(hello)).single;
+  expectThat(helloDecoded['k'] == 'hello', 'hello kind roundtrip');
+  expectThat(
+    (helloDecoded['caps'] as List).contains('GROUP/1'),
+    'hello capabilities roundtrip',
+  );
+
+  final descriptor = <String, Object?>{
+    'v': 1,
+    'p': 'MMRP/1',
+    'k': 'group_descriptor',
+    'from': 'mm:a',
+    'to': 'mm:b',
+    'group': 'g-1',
+    'name': 'Field Team',
+    'creator': 'mm:a',
+    'members': const <String>['mm:a', 'mm:b'],
+    'rev': 3,
+    'createdAt': '2026-09-28T00:00:00.000Z',
+    'updatedAt': '2026-09-28T00:00:01.000Z',
+  };
+  final descriptorDecoded = codec.feed(codec.encode(descriptor)).single;
+  expectThat(
+    descriptorDecoded['k'] == 'group_descriptor' &&
+        descriptorDecoded['rev'] == 3,
+    'group descriptor roundtrip',
+  );
+
   final two = Uint8List.fromList(<int>[...encoded, ...encoded]);
   final decodedTwo = codec.feed(two);
   expectThat(decodedTwo.length == 2, 'multiple frames per read');

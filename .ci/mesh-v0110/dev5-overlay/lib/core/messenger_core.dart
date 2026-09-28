@@ -119,6 +119,32 @@ final class MeshMessengerCore {
     return group;
   }
 
+
+  Future<bool> upsertGroupDescriptor({
+    required GroupDefinition descriptor,
+    required String fromMmId,
+  }) async {
+    if (descriptor.groupId.trim().isEmpty ||
+        descriptor.displayName.trim().isEmpty ||
+        descriptor.creatorMmId != fromMmId ||
+        !descriptor.contains(ownMmId) ||
+        !descriptor.contains(fromMmId)) {
+      return false;
+    }
+    final knownCreator = (await contacts()).any((c) => c.mmId == fromMmId);
+    if (!knownCreator) return false;
+    final existing =
+        (await groups()).where((g) => g.groupId == descriptor.groupId).firstOrNull;
+    if (existing != null) {
+      if (existing.creatorMmId != descriptor.creatorMmId ||
+          descriptor.revision <= existing.revision) {
+        return false;
+      }
+    }
+    await _storage.saveGroup(descriptor);
+    return true;
+  }
+
   Future<List<DeliveryEnvelope>> sendGroupText({
     required String groupId,
     required String text,
@@ -141,6 +167,7 @@ final class MeshMessengerCore {
           payload: clean,
           messageId: messageId,
           deliveryId: legId,
+          groupRevision: group.revision,
         ),
       );
     }

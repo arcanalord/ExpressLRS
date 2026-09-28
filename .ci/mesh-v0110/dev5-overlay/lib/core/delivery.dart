@@ -89,6 +89,7 @@ final class DeliveryManager {
     int priority = 0,
     String? messageId,
     String? deliveryId,
+    int? groupRevision,
   }) async {
     if (pending.length >= maxPending) {
       throw StateError('outbox capacity exceeded');
@@ -99,6 +100,7 @@ final class DeliveryManager {
     final envelope = DeliveryEnvelope(
       messageId: logicalMessageId,
       deliveryId: deliveryId,
+      groupRevision: groupRevision,
       recipientMmId: recipientMmId,
       messageClass: messageClass,
       payload: payload,

@@ -130,6 +130,10 @@ jobs:
           grep -q "ConversationRef.channel" lib/core/models.dart
           grep -q "ConversationRef.group" lib/core/models.dart
           grep -q "group_data" lib/platform/transparent_uart_radio_transport.dart
+          grep -q "group_descriptor" lib/platform/transparent_uart_radio_transport.dart
+          grep -q "discoverPeers" lib/platform/transparent_uart_radio_transport.dart
+          grep -q "LR24_PEER_NOT_REACHABLE" lib/platform/transparent_uart_radio_transport.dart
+          grep -q "groupRevision" lib/core/models.dart
           grep -q "Новая группа" lib/src/features/chats/chats_page.dart
           grep -q "MESH_MESSENGER_GROUP_DELIVERY_SELF_TEST_PASS" tool/group_delivery_self_test.dart
           grep -q "channel_data" lib/platform/transparent_uart_radio_transport.dart

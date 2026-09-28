@@ -106,6 +106,8 @@ final class MeshAppController extends ChangeNotifier {
   List<GroupDefinition> groups = const [];
   List<ConversationMessage> messages = const [];
   final Map<String, DateTime> _peerLastSeen = <String, DateTime>{};
+  final Map<String, String> _peerLabels = <String, String>{};
+  final Map<String, Set<String>> _peerCapabilities = <String, Set<String>>{};
   final Map<String, Set<String>> _channelReceipts = <String, Set<String>>{};
   final Map<String, Set<String>> _groupReceipts = <String, Set<String>>{};
   MapPoint? requestedMapFocus;
@@ -328,6 +330,7 @@ final class MeshAppController extends ChangeNotifier {
       final lr24 = TransparentUartRadioTransport(
         bridge: usbBridge,
         ownMmId: ownMmId,
+        ownLabel: ownDeviceLabel,
       );
       _lr24 = lr24;
       transports.add(lr24);
@@ -472,9 +475,14 @@ final class MeshAppController extends ChangeNotifier {
   String displayNameForMmId(String mmId) {
     final contact = contacts.where((c) => c.mmId == mmId).firstOrNull;
     if (contact != null) return contact.displayName;
+    final advertised = _peerLabels[mmId]?.trim();
+    if (advertised != null && advertised.isNotEmpty) return advertised;
     final compact = mmId.length <= 12 ? mmId : mmId.substring(0, 12);
     return 'Узел $compact';
   }
+
+  Set<String> capabilitiesForMmId(String mmId) =>
+      Set.unmodifiable(_peerCapabilities[mmId] ?? const <String>{});
 
   void _markPeerSeen(String mmId) {
     if (mmId.isEmpty || mmId == ownMmId) return;
@@ -562,6 +570,18 @@ final class MeshAppController extends ChangeNotifier {
       memberMmIds: memberMmIds,
     );
     groups = await _core.groups();
+    final lr24 = _lr24;
+    final peer = lr24PeerMmId;
+    if (lr24?.isAvailable == true &&
+        peer != null &&
+        group.contains(peer)) {
+      unawaited(
+        lr24!.sendGroupDescriptor(
+          descriptor: group,
+          toMmId: peer,
+        ),
+      );
+    }
     activeConversation = ConversationRef.group(group.groupId);
     selectedPeerMmId = null;
     await _reloadMessages();
@@ -579,6 +599,17 @@ final class MeshAppController extends ChangeNotifier {
           text: text,
         );
       } else if (activeConversation.kind == ConversationKind.group) {
+        final group = selectedGroup;
+        final peer = lr24PeerMmId;
+        if (group != null &&
+            peer != null &&
+            group.contains(peer) &&
+            _lr24?.isAvailable == true) {
+          await _lr24!.sendGroupDescriptor(
+            descriptor: group,
+            toMmId: peer,
+          );
+        }
         await _core.sendGroupText(
           groupId: activeConversation.id,
           text: text,
@@ -1963,6 +1994,44 @@ final class MeshAppController extends ChangeNotifier {
       _addLr24Log(
         'STATE ${event.state}${event.error == null ? '' : ' | ${event.error}'}',
       );
+      if (event.state == 'ready') {
+        unawaited(_lr24?.discoverPeers());
+      }
+      notifyListeners();
+      return;
+    }
+    if (event is TransparentUartPeerDiscovered) {
+      _markPeerSeen(event.peerMmId);
+      final label = event.label.trim();
+      if (label.isNotEmpty) _peerLabels[event.peerMmId] = label;
+      _peerCapabilities[event.peerMmId] = event.capabilities;
+      lr24PeerMmId = event.peerMmId;
+      _addLr24Log(
+        'DISCOVER ${event.peerMmId} caps=${event.capabilities.join(',')}',
+      );
+      notifyListeners();
+      return;
+    }
+    if (event is TransparentUartGroupDescriptor) {
+      _markPeerSeen(event.fromMmId);
+      final accepted = await _core.upsertGroupDescriptor(
+        descriptor: event.descriptor,
+        fromMmId: event.fromMmId,
+      );
+      if (accepted) {
+        groups = await _core.groups();
+        _addLr24Log(
+          'GROUP DESCRIPTOR ${event.descriptor.groupId} '
+          'rev=${event.descriptor.revision} <- ${event.fromMmId}',
+        );
+        lastRadioNotice =
+            'Добавлена группа «${event.descriptor.displayName}»';
+      } else {
+        _addLr24Log(
+          'DROP GROUP DESCRIPTOR ${event.descriptor.groupId} '
+          'rev=${event.descriptor.revision} <- ${event.fromMmId}',
+        );
+      }
       notifyListeners();
       return;
     }
