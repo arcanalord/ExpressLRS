@@ -39,7 +39,7 @@ void main() {
     hopAeadTag: Uint8List.fromList(List<int>.generate(16, (i) => i)),
   );
   final bDecoded = Mmrp2Codec.decodePacket(Mmrp2Codec.encodePacket(bPacket));
-  _expectHex(Uint8List.fromList(bDecoded.payload), 'deadbeef', 'vector B payload');
+  _expectHex(\n    Uint8List.fromList(bDecoded.payload),\n    'deadbeef',\n    'vector B payload',\n  );
 
   final vectorC = Mmrp2Header(
     flags: Mmrp2Codec.flagFragmented | Mmrp2Codec.flagHopAead,
