@@ -37,4 +37,59 @@ void main() {
     controller.dispose();
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
+
+  testWidgets('contact add QR and manual routes survive repeated open close',
+      (tester) async {
+    final root = Directory.systemTemp.createTempSync('mesh_contact_route_gate_');
+    late MeshAppController controller;
+    await tester.runAsync(() async {
+      controller = await MeshAppController.createForWidgetTest(
+        storageRoot: root,
+      );
+    });
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(MaterialApp(home: AppShell(controller: controller)));
+    await tester.pumpAndSettle();
+
+    for (var round = 0; round < 4; round++) {
+      await tester.tap(find.byTooltip('Добавить контакт'));
+      await tester.pumpAndSettle();
+      expect(find.text('Добавить контакт'), findsWidgets);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Показать мой QR'));
+      await tester.pumpAndSettle();
+      expect(find.text('Мой QR и MM-ID'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Готово'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Ввести вручную'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ввести контакт вручную'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Отмена'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+
+    await tester.tap(find.text('Связь').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Meshtastic BLE'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.binding.setSurfaceSize(null);
+    await tester.runAsync(() => controller.shutdown());
+    controller.dispose();
+    if (root.existsSync()) root.deleteSync(recursive: true);
+  });
+
 }
