@@ -28,6 +28,12 @@ jobs:
         working-directory: .ci/mesh-v0110/dev5-overlay/tool/openmls_probe
         run: |
           cargo run --locked 2>/dev/null || cargo run
+      - name: Android arm64 compile check
+        working-directory: .ci/mesh-v0110/dev5-overlay/tool/openmls_probe
+        run: |
+          rustup target add aarch64-linux-android
+          cargo check --target aarch64-linux-android
+
       - name: License metadata snapshot
         working-directory: .ci/mesh-v0110/dev5-overlay/tool/openmls_probe
         run: |
