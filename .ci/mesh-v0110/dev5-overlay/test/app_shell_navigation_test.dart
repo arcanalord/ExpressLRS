@@ -131,12 +131,9 @@ void main() {
       expect(find.text('Карта · Общий чат'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      final shellScaffold = tester.widget<Scaffold>(
-        find.byType(Scaffold).first,
-      );
-      final bottomNavigation = shellScaffold.bottomNavigationBar;
-      expect(bottomNavigation, isA<NavigationBar>());
-      final navigation = bottomNavigation as NavigationBar;
+      final navigationFinder = find.byType(NavigationBar);
+      expect(navigationFinder, findsOneWidget);
+      final navigation = tester.widget<NavigationBar>(navigationFinder);
       final selectDestination = navigation.onDestinationSelected;
       expect(selectDestination, isNotNull);
       selectDestination?.call(0);
