@@ -131,9 +131,8 @@ jobs:
           grep -q "MESH_MESSENGER_GENERAL_CHANNEL_SELF_TEST_PASS" tool/general_channel_self_test.dart
           ! grep -q "mm:demo-alexey" lib/src/application/mesh_app_controller.dart
 
-      - name: Widget tests (diagnostic, non-blocking for device test APK)
+      - name: Widget tests
         working-directory: ${{ env.APP_DIR }}
-        continue-on-error: true
         run: timeout 90s flutter test test/connection_page_test.dart --reporter expanded --timeout 60s
 
       - name: Build installable arm64 debug APK
@@ -161,8 +160,8 @@ jobs:
             exit 1
           fi
           cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.15-channel-r2.txt
-          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-arm64-debug.apk | awk '{print $1}')"
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.15-channel-r2.txt
+          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk | awk '{print $1}')"
           export APK_SHA256
           python3 - <<'PY'
           import json
@@ -181,7 +180,7 @@ jobs:
                   "runId": os.environ["GITHUB_RUN_ID"],
               },
               "artifact": {
-                  "file": "MeshMessenger-Flutter-v0.1.10-dev.15-channel-arm64-debug.apk",
+                  "file": "MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk",
                   "sha256": os.environ["APK_SHA256"],
               },
               "gates": {
@@ -207,10 +206,10 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.10-dev.15-channel-arm64-debug
+          name: MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-arm64-debug.apk
-            /tmp/SHA256SUM-v0.1.10-dev.15-channel.txt
+            /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk
+            /tmp/SHA256SUM-v0.1.10-dev.15-channel-r2.txt
             /tmp/mesh-messenger-release-manifest-v1.json
           if-no-files-found: error
           retention-days: 14
