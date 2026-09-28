@@ -68,7 +68,9 @@ final class Mmrp2Codec {
         ? baseHeaderBytes + fragmentExtensionBytes
         : baseHeaderBytes;
     if (headerBytes != expectedHeaderBytes) {
-      throw const FormatException(\n        'Unknown or malformed MMRP/2 header extension',\n      );
+      throw const FormatException(
+        'Unknown or malformed MMRP/2 header extension',
+      );
     }
 
     final classTraffic = bytes[2];
@@ -141,7 +143,11 @@ final class Mmrp2Codec {
     }
     return Uint8List(total)
       ..setRange(0, header.length, header)
-      ..setRange(\n        header.length,\n        header.length + packet.payload.length,\n        packet.payload,\n      )
+      ..setRange(
+        header.length,
+        header.length + packet.payload.length,
+        packet.payload,
+      )
       ..setRange(
         header.length + packet.payload.length,
         total,
