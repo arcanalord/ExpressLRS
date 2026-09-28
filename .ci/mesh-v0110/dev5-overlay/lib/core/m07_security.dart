@@ -7,6 +7,14 @@ void _require(bool condition, String message) {
 
 const String m07DirectEnvelopeClass = 'm07_direct';
 
+String m07DirectSecurityContext(String firstMmId, String secondMmId) {
+  _require(firstMmId.startsWith('mm:'), 'firstMmId must start with mm:');
+  _require(secondMmId.startsWith('mm:'), 'secondMmId must start with mm:');
+  _require(firstMmId != secondMmId, 'direct peers must be distinct');
+  final ids = <String>[firstMmId, secondMmId]..sort();
+  return 'direct-security:v1:${ids[0]}|${ids[1]}';
+}
+
 final class M07SuiteProfile {
   M07SuiteProfile({
     required this.identityAuthSuite,
