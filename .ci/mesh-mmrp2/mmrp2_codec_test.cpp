@@ -1,5 +1,6 @@
 #include "mmrp2_codec.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <iomanip>
