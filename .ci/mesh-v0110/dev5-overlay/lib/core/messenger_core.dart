@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'app_storage.dart';
 import 'delivery.dart';
+import 'm07_security.dart';
 import 'models.dart';
 
 final class MeshMessengerCore {
@@ -10,8 +11,11 @@ final class MeshMessengerCore {
     required this.ownMmId,
     required AppStorage storage,
     required List<MessageTransport> transports,
+    M07CryptoProvider? cryptoProvider,
+    this.requirePrivateE2ee = false,
     DateTime Function()? now,
   }) : _storage = storage,
+       _cryptoProvider = cryptoProvider,
        _now = now ?? (() => DateTime.now().toUtc()),
        delivery = DeliveryManager(
          storage: storage,
@@ -21,8 +25,11 @@ final class MeshMessengerCore {
 
   final String ownMmId;
   final AppStorage _storage;
+  final M07CryptoProvider? _cryptoProvider;
+  final bool requirePrivateE2ee;
   final DateTime Function() _now;
   final DeliveryManager delivery;
+  int _secureIdCounter = 0;
 
   Stream<DeliveryEnvelope> get deliveryChanges => delivery.changes;
   List<DeliveryEnvelope> get pending => delivery.pending;
@@ -49,10 +56,32 @@ final class MeshMessengerCore {
   }) async {
     final clean = text.trim();
     if (clean.isEmpty) throw ArgumentError('text must not be empty');
-    final result = await delivery.sendText(
-      recipientMmId: peerMmId,
-      text: clean,
-    );
+    final messageId = _newLogicalMessageId('m');
+    final provider = _cryptoProvider;
+    final DeliveryEnvelope result;
+    if (provider == null) {
+      if (requirePrivateE2ee) throw StateError('M07_PRIVATE_E2EE_REQUIRED');
+      result = await delivery.enqueue(
+        recipientMmId: peerMmId,
+        messageClass: 'text',
+        payload: clean,
+        messageId: messageId,
+      );
+    } else {
+      final encrypted = await _encryptPrivate(
+        recipientMmId: peerMmId,
+        logicalMessageId: messageId,
+        conversationKey: ConversationRef.direct(peerMmId).key,
+        messageClass: 'text',
+        payloadUtf8: clean,
+      );
+      result = await delivery.enqueue(
+        recipientMmId: peerMmId,
+        messageClass: m07DirectEnvelopeClass,
+        payload: encrypted.encode(),
+        messageId: messageId,
+      );
+    }
     await _storage.appendMessageUnique(
       ConversationMessage(
         messageId: result.messageId,
@@ -155,16 +184,36 @@ final class MeshMessengerCore {
     if (group == null) throw StateError('GROUP_NOT_FOUND');
     if (!group.contains(ownMmId)) throw StateError('GROUP_NOT_MEMBER');
     final now = _now();
-    final messageId = 'gm-${now.microsecondsSinceEpoch}';
+    final messageId = _newLogicalMessageId('gm');
+    final provider = _cryptoProvider;
+    if (provider == null && requirePrivateE2ee) {
+      throw StateError('M07_PRIVATE_E2EE_REQUIRED');
+    }
     final legs = <DeliveryEnvelope>[];
     for (final member in group.memberMmIds) {
       if (member == ownMmId) continue;
       final legId = '$messageId@$member';
+      final String messageClass;
+      final String payload;
+      if (provider == null) {
+        messageClass = 'text';
+        payload = clean;
+      } else {
+        final encrypted = await _encryptPrivate(
+          recipientMmId: member,
+          logicalMessageId: messageId,
+          conversationKey: ConversationRef.group(groupId).key,
+          messageClass: 'text',
+          payloadUtf8: clean,
+        );
+        messageClass = m07DirectEnvelopeClass;
+        payload = encrypted.encode();
+      }
       legs.add(
         await delivery.enqueue(
           recipientMmId: groupTargetKey(groupId, member),
-          messageClass: 'text',
-          payload: clean,
+          messageClass: messageClass,
+          payload: payload,
           messageId: messageId,
           deliveryId: legId,
           groupRevision: group.revision,
@@ -184,6 +233,7 @@ final class MeshMessengerCore {
     );
     return legs;
   }
+
 
   Future<bool> receiveGroupText({
     required String messageId,
@@ -269,11 +319,33 @@ final class MeshMessengerCore {
     required String peerMmId,
     required MapPoint point,
   }) async {
-    final result = await delivery.enqueue(
-      recipientMmId: peerMmId,
-      messageClass: 'map_point',
-      payload: jsonEncode(point.toJson()),
-    );
+    final messageId = _newLogicalMessageId('m');
+    final clearPayload = jsonEncode(point.toJson());
+    final provider = _cryptoProvider;
+    final DeliveryEnvelope result;
+    if (provider == null) {
+      if (requirePrivateE2ee) throw StateError('M07_PRIVATE_E2EE_REQUIRED');
+      result = await delivery.enqueue(
+        recipientMmId: peerMmId,
+        messageClass: 'map_point',
+        payload: clearPayload,
+        messageId: messageId,
+      );
+    } else {
+      final encrypted = await _encryptPrivate(
+        recipientMmId: peerMmId,
+        logicalMessageId: messageId,
+        conversationKey: ConversationRef.direct(peerMmId).key,
+        messageClass: 'map_point',
+        payloadUtf8: clearPayload,
+      );
+      result = await delivery.enqueue(
+        recipientMmId: peerMmId,
+        messageClass: m07DirectEnvelopeClass,
+        payload: encrypted.encode(),
+        messageId: messageId,
+      );
+    }
     await _storage.appendMessageUnique(
       ConversationMessage(
         messageId: result.messageId,
@@ -333,6 +405,143 @@ final class MeshMessengerCore {
     ok: ok,
     detail: detail,
   );
+
+  String _newLogicalMessageId(String prefix) {
+    final now = _now();
+    return '$prefix-${now.microsecondsSinceEpoch}-${++_secureIdCounter}';
+  }
+
+  Future<IdentityPublicMaterial> _peerIdentity(String peerMmId) async {
+    final contact = (await contacts()).where((c) => c.mmId == peerMmId).firstOrNull;
+    if (contact == null) throw StateError('M07_CONTACT_REQUIRED');
+    final identityKey = contact.identityPublicKey?.trim() ?? '';
+    final fingerprint = contact.fingerprint?.trim() ?? '';
+    if (identityKey.isEmpty || fingerprint.isEmpty) {
+      throw StateError('M07_PEER_IDENTITY_REQUIRED');
+    }
+    return IdentityPublicMaterial(
+      formatVersion: 1,
+      mmId: contact.mmId,
+      fingerprint: fingerprint,
+      identityPublicKey: identityKey,
+    );
+  }
+
+  Future<EncryptedApplicationEnvelope> _encryptPrivate({
+    required String recipientMmId,
+    required String logicalMessageId,
+    required String conversationKey,
+    required String messageClass,
+    required String payloadUtf8,
+  }) async {
+    final provider = _cryptoProvider;
+    if (provider == null) throw StateError('M07_PRIVATE_E2EE_REQUIRED');
+    final peer = await _peerIdentity(recipientMmId);
+    if (!provider.verifyIdentityBinding(peer)) {
+      throw StateError('M07_IDENTITY_BINDING_REJECTED');
+    }
+    await provider.ensureDirectSession(peer);
+    final encrypted = await provider.encryptDirect(
+      DirectPlaintext(
+        logicalMessageId: logicalMessageId,
+        senderMmId: ownMmId,
+        recipientMmId: recipientMmId,
+        conversationKey: conversationKey,
+        messageClass: messageClass,
+        payloadUtf8: payloadUtf8,
+      ),
+    );
+    if (encrypted.logicalMessageId != logicalMessageId ||
+        encrypted.senderMmId != ownMmId ||
+        encrypted.recipientMmId != recipientMmId) {
+      throw StateError('M07_PROVIDER_ENVELOPE_MISMATCH');
+    }
+    return encrypted;
+  }
+
+  Future<DirectPlaintext> _decryptPrivate({
+    required String expectedMessageId,
+    required String expectedFromMmId,
+    required String encodedEnvelope,
+  }) async {
+    final provider = _cryptoProvider;
+    if (provider == null) throw StateError('M07_PRIVATE_E2EE_REQUIRED');
+    final envelope = EncryptedApplicationEnvelope.decode(encodedEnvelope);
+    if (envelope.logicalMessageId != expectedMessageId ||
+        envelope.senderMmId != expectedFromMmId ||
+        envelope.recipientMmId != ownMmId) {
+      throw const FormatException('M07_ENVELOPE_BINDING_MISMATCH');
+    }
+    final result = await provider.decryptDirect(envelope);
+    if (result is! DirectDecryptSuccess) {
+      throw const FormatException('M07_DECRYPT_REJECTED');
+    }
+    final plaintext = result.plaintext;
+    if (plaintext.logicalMessageId != expectedMessageId ||
+        plaintext.senderMmId != expectedFromMmId ||
+        plaintext.recipientMmId != ownMmId) {
+      throw const FormatException('M07_PLAINTEXT_BINDING_MISMATCH');
+    }
+    return plaintext;
+  }
+
+  Future<bool> receiveEncryptedDirect({
+    required String messageId,
+    required String fromMmId,
+    required String encodedEnvelope,
+  }) async {
+    final plaintext = await _decryptPrivate(
+      expectedMessageId: messageId,
+      expectedFromMmId: fromMmId,
+      encodedEnvelope: encodedEnvelope,
+    );
+    if (plaintext.conversationKey != ConversationRef.direct(fromMmId).key) {
+      throw const FormatException('M07_DIRECT_CONVERSATION_MISMATCH');
+    }
+    switch (plaintext.messageClass) {
+      case 'text':
+        return receiveText(
+          messageId: messageId,
+          fromMmId: fromMmId,
+          text: plaintext.payloadUtf8,
+        );
+      case 'map_point':
+        return receiveMapPoint(
+          messageId: messageId,
+          fromMmId: fromMmId,
+          payload: plaintext.payloadUtf8,
+        );
+      default:
+        throw const FormatException('M07_MESSAGE_CLASS_UNSUPPORTED');
+    }
+  }
+
+  Future<bool> receiveEncryptedGroup({
+    required String messageId,
+    required String fromMmId,
+    required String groupId,
+    required int membershipRevision,
+    required String encodedEnvelope,
+  }) async {
+    final plaintext = await _decryptPrivate(
+      expectedMessageId: messageId,
+      expectedFromMmId: fromMmId,
+      encodedEnvelope: encodedEnvelope,
+    );
+    if (plaintext.conversationKey != ConversationRef.group(groupId).key) {
+      throw const FormatException('M07_GROUP_CONVERSATION_MISMATCH');
+    }
+    if (plaintext.messageClass != 'text') {
+      throw const FormatException('M07_GROUP_CLASS_UNSUPPORTED');
+    }
+    return receiveGroupText(
+      messageId: messageId,
+      fromMmId: fromMmId,
+      groupId: groupId,
+      membershipRevision: membershipRevision,
+      text: plaintext.payloadUtf8,
+    );
+  }
 
   Future<void> close() => delivery.close();
 }
