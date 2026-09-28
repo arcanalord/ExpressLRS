@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'file_transfer_qos.dart';
+import '../lib/core/file_transfer_qos.dart';
 
 void main() {
   final q = M05QosScheduler<String>(maxFileBurst: 3, fileStarvationGuard: 5);
