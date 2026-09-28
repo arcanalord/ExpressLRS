@@ -1,0 +1,24 @@
+name: Mesh Messenger MMRP2 Dart Codec
+
+on:
+  pull_request:
+    paths:
+      - '.ci/mesh-v0110/dev5-overlay/lib/platform/mmrp2_codec.dart'
+      - '.ci/mesh-v0110/dev5-overlay/tool/mmrp2_codec_self_test.dart'
+      - '.github/workflows/mesh-mmrp2-codec.yml'
+  workflow_dispatch:
+
+jobs:
+  mmrp2-dart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Format gate
+        run: dart format --output=none --set-exit-if-changed .ci/mesh-v0110/dev5-overlay/lib/platform/mmrp2_codec.dart .ci/mesh-v0110/dev5-overlay/tool/mmrp2_codec_self_test.dart
+      - name: MMRP2 golden vectors
+        working-directory: .ci/mesh-v0110/dev5-overlay
+        run: dart run tool/mmrp2_codec_self_test.dart
