@@ -6,7 +6,7 @@ import '../core/file_transfer_qos.dart';
 final class M05TransportQosAdapter {
   M05TransportQosAdapter({
     required Future<void> Function(Map<String, Object?> frame) writeRaw,
-    required Future<void> Function(Uint8List payload) writeRawFile1,
+    Future<void> Function(Uint8List payload)? writeRawFile1,
     int maxFileBurst = 4,
     int fileStarvationGuard = 16,
   })  : _writeRaw = writeRaw,
@@ -17,7 +17,7 @@ final class M05TransportQosAdapter {
         );
 
   final Future<void> Function(Map<String, Object?> frame) _writeRaw;
-  final Future<void> Function(Uint8List payload) _writeRawFile1;
+  final Future<void> Function(Uint8List payload)? _writeRawFile1;
   final M05QosScheduler<_PendingOutbound> _scheduler;
   bool _pumping = false;
 
@@ -80,7 +80,11 @@ final class M05TransportQosAdapter {
         final pending = next.value;
         try {
           if (pending.file1Payload != null) {
-            await _writeRawFile1(pending.file1Payload!);
+            final writer = _writeRawFile1;
+            if (writer == null) {
+              throw StateError('FILE/1 writer is not configured');
+            }
+            await writer(pending.file1Payload!);
           } else {
             await _writeRaw(pending.frame!);
           }
