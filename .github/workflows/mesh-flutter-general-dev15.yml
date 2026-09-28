@@ -162,7 +162,7 @@ jobs:
           grep -q "File1TransportProgress" lib/platform/file1_transport_bridge.dart
           grep -q "Повторить передачу" lib/src/features/chats/chats_page.dart
           grep -q "Мой QR" lib/src/features/chats/chats_page.dart
-          grep -q "Сканировать QR" lib/src/features/chats/chats_page.dart
+          grep -q "Сканировать чужой QR" lib/src/features/chats/chats_page.dart\n          grep -q "contact add QR and manual routes survive repeated open close" test/app_shell_navigation_test.dart
           grep -q "Планируемые разделы" lib/src/features/settings/settings_page.dart
           grep -q "android.permission.CAMERA" android/app/src/debug/AndroidManifest.xml
           test -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
