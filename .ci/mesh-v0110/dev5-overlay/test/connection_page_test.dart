@@ -35,6 +35,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await tester.binding.setSurfaceSize(null);
+    await controller.shutdown();
     controller.dispose();
     if (await root.exists()) {
       await root.delete(recursive: true);

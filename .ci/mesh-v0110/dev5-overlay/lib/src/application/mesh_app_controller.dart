@@ -93,6 +93,7 @@ final class MeshAppController extends ChangeNotifier {
   StreamSubscription<MmUartMessageTransportEvent>? _externalRadioSub;
   StreamSubscription<ExternalRadioSessionEvent>? _externalSessionSub;
   Timer? _maintenanceTimer;
+  Future<void>? _shutdownFuture;
   bool _maintenanceBusy = false;
   bool _usbMaintenanceBusy = false;
   int _usbMaintenanceTick = 0;
@@ -2180,27 +2181,35 @@ final class MeshAppController extends ChangeNotifier {
     messages = await _core.messagesForConversation(activeConversation);
   }
 
+  Future<void> shutdown() =>
+      _shutdownFuture ??= _shutdownResources();
+
+  Future<void> _shutdownResources() async {
+    _maintenanceTimer?.cancel();
+    _maintenanceTimer = null;
+    await _deliverySub?.cancel();
+    await _lanSub?.cancel();
+    await _meshtasticSub?.cancel();
+    await _androidSub?.cancel();
+    await _ep2Sub?.cancel();
+    await _externalRadioSub?.cancel();
+    await _externalSessionSub?.cancel();
+    await _lr24Sub?.cancel();
+    await _radioHilBench?.close();
+    await _lr24?.close();
+    await _externalRadio?.close();
+    await _externalRadioSession?.close();
+    await _lan?.close();
+    await _meshtastic?.close();
+    await _ep2?.close();
+    await _androidBridge?.close();
+    await _usbBridge?.close();
+    await _core.close();
+  }
+
   @override
   void dispose() {
-    _maintenanceTimer?.cancel();
-    _deliverySub?.cancel();
-    _lanSub?.cancel();
-    _meshtasticSub?.cancel();
-    _androidSub?.cancel();
-    _ep2Sub?.cancel();
-    _externalRadioSub?.cancel();
-    _externalSessionSub?.cancel();
-    _lr24Sub?.cancel();
-    _radioHilBench?.close();
-    _lr24?.close();
-    _externalRadio?.close();
-    _externalRadioSession?.close();
-    _lan?.close();
-    _meshtastic?.close();
-    _ep2?.close();
-    _androidBridge?.close();
-    _usbBridge?.close();
-    _core.close();
+    unawaited(shutdown());
     super.dispose();
   }
 }
