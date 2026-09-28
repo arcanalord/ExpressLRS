@@ -18,7 +18,10 @@ jobs:
         with:
           sdk: stable
       - name: Format gate
-        run: dart format --output=none --set-exit-if-changed .ci/mesh-v0110/dev5-overlay/lib/platform/mmrp2_codec.dart .ci/mesh-v0110/dev5-overlay/tool/mmrp2_codec_self_test.dart
+        run: |
+          dart format .ci/mesh-v0110/dev5-overlay/lib/platform/mmrp2_codec.dart .ci/mesh-v0110/dev5-overlay/tool/mmrp2_codec_self_test.dart
+          git diff -- .ci/mesh-v0110/dev5-overlay/lib/platform/mmrp2_codec.dart .ci/mesh-v0110/dev5-overlay/tool/mmrp2_codec_self_test.dart
+          git diff --exit-code -- .ci/mesh-v0110/dev5-overlay/lib/platform/mmrp2_codec.dart .ci/mesh-v0110/dev5-overlay/tool/mmrp2_codec_self_test.dart
       - name: MMRP2 Dart golden vectors
         working-directory: .ci/mesh-v0110/dev5-overlay
         run: dart run tool/mmrp2_codec_self_test.dart
