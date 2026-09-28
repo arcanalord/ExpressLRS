@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../core/delivery.dart';
+import '../core/m07_security.dart';
 import '../core/models.dart';
 
 const int meshLanPort = 45841;
@@ -529,7 +530,8 @@ final class LanTransport implements MessageTransport {
       );
     }
     if (envelope.messageClass != 'text' &&
-        envelope.messageClass != 'map_point') {
+        envelope.messageClass != 'map_point' &&
+        envelope.messageClass != m07DirectEnvelopeClass) {
       return const TransportSendResult(
         TransportSendStatus.rejected,
         detail: 'LAN_MESSAGE_CLASS_UNSUPPORTED',
