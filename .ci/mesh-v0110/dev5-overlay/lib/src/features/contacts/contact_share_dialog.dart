@@ -17,47 +17,55 @@ Future<void> showOwnContactCardDialog(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Мой QR и MM-ID'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                color: Colors.white,
-                child: QrImageView(
-                  data: payload,
-                  size: 220,
-                  backgroundColor: Colors.white,
+      content: SizedBox(
+        width: 300,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 244,
+                  height: 244,
+                  padding: const EdgeInsets.all(12),
+                  color: Colors.white,
+                  child: SizedBox.square(
+                    dimension: 220,
+                    child: QrImageView(
+                      data: payload,
+                      size: 220,
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'MM-ID',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            SelectableText(
-              controller.ownMmId,
-              textAlign: TextAlign.center,
-            ),
-            if (controller.ownFingerprint.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Text(
-                'Fingerprint: ' + controller.ownFingerprint,
+                label,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.titleMedium,
               ),
+              const SizedBox(height: 12),
+              const Text(
+                'MM-ID',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                controller.ownMmId,
+                textAlign: TextAlign.center,
+              ),
+              if (controller.ownFingerprint.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Fingerprint: ' + controller.ownFingerprint,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
       actions: [
