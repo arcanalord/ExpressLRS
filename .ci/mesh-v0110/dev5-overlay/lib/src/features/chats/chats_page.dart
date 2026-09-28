@@ -373,7 +373,16 @@ class _ContactQrScannerPage extends StatefulWidget {
 }
 
 class _ContactQrScannerPageState extends State<_ContactQrScannerPage> {
+  final MobileScannerController _scannerController = MobileScannerController(
+    formats: const [BarcodeFormat.qrCode],
+  );
   bool _done = false;
+
+  @override
+  void dispose() {
+    _scannerController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -383,7 +392,7 @@ class _ContactQrScannerPageState extends State<_ContactQrScannerPage> {
         fit: StackFit.expand,
         children: [
           MobileScanner(
-            formats: const [BarcodeFormat.qrCode],
+            controller: _scannerController,
             onDetect: (capture) {
               if (_done) return;
               for (final barcode in capture.barcodes) {
@@ -770,7 +779,7 @@ class _ConversationPane extends StatelessWidget {
                         ? null
                         : () async {
                             try {
-                              final file = await FilePicker.platform.pickFile();
+                              final file = await FilePicker.pickFile();
                               if (file == null) return;
                               final length = file.lengthSync() ?? await file.length();
                               if (length == null) {
