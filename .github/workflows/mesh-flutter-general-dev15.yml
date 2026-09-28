@@ -172,7 +172,9 @@ jobs:
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
           "$BT/aapt" dump badging "$APK" | tee /tmp/APK_BADGING.txt
           grep -Fq "package: name='org.fpvclub.mesh.flutter'" /tmp/APK_BADGING.txt
-          grep -Fq "versionCode='26092801'" /tmp/APK_BADGING.txt
+          APK_VERSION_CODE="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/APK_BADGING.txt | head -n1)"
+          test -n "$APK_VERSION_CODE"
+          export APK_VERSION_CODE
           grep -Fq "versionName='0.1.10-dev.15-channel-r2'" /tmp/APK_BADGING.txt
           unzip -Z1 "$APK" > /tmp/APK_FILES.txt
           grep -Fq 'lib/arm64-v8a/' /tmp/APK_FILES.txt
@@ -190,7 +192,7 @@ jobs:
           manifest = {
               "schema": "mesh-messenger-release-manifest/v1",
               "version": "0.1.10-dev.15-channel-r2",
-              "versionCode": 26092801,
+              "versionCode": int(os.environ["APK_VERSION_CODE"]),
               "applicationId": "org.fpvclub.mesh.flutter",
               "abi": ["arm64-v8a"],
               "git": {
