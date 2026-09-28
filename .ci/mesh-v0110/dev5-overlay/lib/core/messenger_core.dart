@@ -460,9 +460,13 @@ final class MeshMessengerCore {
     return '$prefix-${now.microsecondsSinceEpoch}-${++_secureIdCounter}';
   }
 
-  Future<IdentityPublicMaterial> _peerIdentity(String peerMmId) async {
+  Future<Contact> _peerContact(String peerMmId) async {
     final contact = (await contacts()).where((c) => c.mmId == peerMmId).firstOrNull;
     if (contact == null) throw StateError('M07_CONTACT_REQUIRED');
+    return contact;
+  }
+
+  IdentityPublicMaterial _peerIdentity(Contact contact) {
     final identityKey = contact.identityPublicKey?.trim() ?? '';
     final fingerprint = contact.fingerprint?.trim() ?? '';
     if (identityKey.isEmpty || fingerprint.isEmpty) {
@@ -473,6 +477,9 @@ final class MeshMessengerCore {
       mmId: contact.mmId,
       fingerprint: fingerprint,
       identityPublicKey: identityKey,
+      devicePublicKey: contact.agreementPublicKey?.trim().isNotEmpty == true
+          ? contact.agreementPublicKey!.trim()
+          : null,
     );
   }
 
@@ -485,11 +492,24 @@ final class MeshMessengerCore {
   }) async {
     final provider = _cryptoProvider;
     if (provider == null) throw StateError('M07_PRIVATE_E2EE_REQUIRED');
-    final peer = await _peerIdentity(recipientMmId);
+    final contact = await _peerContact(recipientMmId);
+    final peer = _peerIdentity(contact);
     if (!provider.verifyIdentityBinding(peer)) {
       throw StateError('M07_IDENTITY_BINDING_REJECTED');
     }
-    await provider.ensureDirectSession(peer);
+    PortablePreKeyBundle? preKeyBundle;
+    final rawBundle = contact.preKeyBundle?.trim() ?? '';
+    if (rawBundle.isNotEmpty) {
+      preKeyBundle = PortablePreKeyBundle.decode(rawBundle);
+      if (preKeyBundle.mmId != recipientMmId ||
+          preKeyBundle.identityPublicKey != peer.identityPublicKey) {
+        throw StateError('M07_PREKEY_BINDING_REJECTED');
+      }
+    }
+    await provider.ensureDirectSession(
+      peer,
+      preKeyBundle: preKeyBundle,
+    );
     final encrypted = await provider.encryptDirect(
       DirectPlaintext(
         logicalMessageId: logicalMessageId,
