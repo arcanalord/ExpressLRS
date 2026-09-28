@@ -545,8 +545,11 @@ final class MeshAppController extends ChangeNotifier {
     String label = '',
     String note = '',
   }) async {
-    final peer = selectedPeerMmId;
-    if (peer == null || busy) return;
+    if (busy) return;
+    final conversation = activeConversation;
+    if (conversation.kind == ConversationKind.group) {
+      throw StateError('GROUP_MAP_POINT_NOT_SUPPORTED');
+    }
     if (latitude < -90 ||
         latitude > 90 ||
         longitude < -180 ||
@@ -569,7 +572,14 @@ final class MeshAppController extends ChangeNotifier {
             : cleanLabel,
         note: cleanNote.length > 160 ? cleanNote.substring(0, 160) : cleanNote,
       );
-      await _core.sendMapPoint(peerMmId: peer, point: point);
+      if (conversation.kind == ConversationKind.channel) {
+        await _core.sendChannelMapPoint(
+          channelId: conversation.id,
+          point: point,
+        );
+      } else {
+        await _core.sendMapPoint(peerMmId: conversation.id, point: point);
+      }
       await _reloadMessages();
       requestMapFocus(point);
     } finally {
@@ -2340,19 +2350,29 @@ final class MeshAppController extends ChangeNotifier {
         );
         return;
       }
-      if (event.messageClass != 'text') {
+      if (event.messageClass != 'text' &&
+          event.messageClass != 'map_point') {
         _addLr24Log(
           'DROP channel class=${event.messageClass} id=${event.messageId}',
         );
         return;
       }
       try {
-        await _core.receiveChannelText(
-          messageId: event.messageId,
-          fromMmId: event.fromMmId,
-          channelId: event.channelId,
-          text: event.payload,
-        );
+        if (event.messageClass == 'map_point') {
+          await _core.receiveChannelMapPoint(
+            messageId: event.messageId,
+            fromMmId: event.fromMmId,
+            channelId: event.channelId,
+            payload: event.payload,
+          );
+        } else {
+          await _core.receiveChannelText(
+            messageId: event.messageId,
+            fromMmId: event.fromMmId,
+            channelId: event.channelId,
+            text: event.payload,
+          );
+        }
         unawaited(
           _lr24?.acknowledgeChannelIncoming(
             messageId: event.messageId,
