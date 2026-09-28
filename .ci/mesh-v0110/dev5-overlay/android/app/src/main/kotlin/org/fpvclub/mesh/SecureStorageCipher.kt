@@ -24,7 +24,13 @@ class SecureStorageCipher {
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
         private const val B64_FLAGS = Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
-        private val ALLOWED_PURPOSES = setOf("messages", "outbox")
+        private val ALLOWED_PURPOSES = setOf(
+            "contacts",
+            "groups",
+            "group_receipts",
+            "messages",
+            "outbox",
+        )
     }
 
     private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
