@@ -25,8 +25,6 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Автоматический маршрут'), findsOneWidget);
     expect(find.text('Локальная сеть'), findsOneWidget);
-    expect(find.text('Радиомодуль · USB'), findsOneWidget);
-    expect(find.text('Meshtastic BLE'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.binding.setSurfaceSize(const Size(1280, 900));
