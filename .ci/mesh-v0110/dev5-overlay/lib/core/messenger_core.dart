@@ -383,11 +383,13 @@ final class MeshMessengerCore {
     required String fromMmId,
     required bool ok,
     String? detail,
+    bool hardFailure = false,
   }) => delivery.recipientResult(
     messageId: messageId,
     fromMmId: fromMmId,
     ok: ok,
     detail: detail,
+    hardFailure: hardFailure,
   );
 
   Future<void> close() => delivery.close();

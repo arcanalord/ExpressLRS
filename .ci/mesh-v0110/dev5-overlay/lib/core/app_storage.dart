@@ -201,7 +201,7 @@ final class AppStorage {
         DeliveryEnvelope.fromJson(raw).effectiveDeliveryId:
             DeliveryEnvelope.fromJson(raw),
     };
-    items[item.messageId] = item;
+    items[item.effectiveDeliveryId] = item;
     await _writeList(_outboxFile, items.values.map((e) => e.toJson()).toList());
   });
 

@@ -3,7 +3,7 @@ import 'dart:async';
 import 'app_storage.dart';
 import 'models.dart';
 
-enum TransportSendStatus { accepted, rejected, unavailable }
+enum TransportSendStatus { accepted, rejected, unavailable, hardRejected }
 
 final class TransportSendResult {
   const TransportSendResult(this.status, {this.detail});
@@ -23,6 +23,7 @@ final class DeliveryManager {
     required List<MessageTransport> transports,
     DateTime Function()? now,
     this.retryDelay = const Duration(seconds: 5),
+    this.maxRetryDelay = const Duration(minutes: 5),
     this.maxAttempts = 5,
     this.maxPending = 512,
   }) : _storage = storage,
@@ -33,6 +34,9 @@ final class DeliveryManager {
   final List<MessageTransport> _transports;
   final DateTime Function() _now;
   final Duration retryDelay;
+  final Duration maxRetryDelay;
+  // Caps exponential backoff growth. Retryable delivery failures do not
+  // become terminal just because this count is reached.
   final int maxAttempts;
   final int maxPending;
   final Map<String, DeliveryEnvelope> _items = {};
@@ -139,6 +143,7 @@ final class DeliveryManager {
     await _save(latest);
 
     String? lastDetail;
+    String? hardFailureDetail;
     var allUnavailable = true;
     for (final transport in candidates) {
       latest = (_items[deliveryId] ?? latest).copyWith(
@@ -163,6 +168,9 @@ final class DeliveryManager {
       if (result.status != TransportSendStatus.unavailable) {
         allUnavailable = false;
       }
+      if (result.status == TransportSendStatus.hardRejected) {
+        hardFailureDetail = result.detail ?? 'HARD_REJECTED';
+      }
       lastDetail = result.detail;
     }
 
@@ -170,24 +178,26 @@ final class DeliveryManager {
       return _save(
         latest.copyWith(
           state: DeliveryState.retryWait,
-          attempts: current.attempts,
           lastError: lastDetail,
-          nextRetryAt: _now().add(retryDelay),
+          nextRetryAt: _now().add(_retryDelayFor(latest)),
           clearSelectedTransport: true,
         ),
       );
     }
 
-    if (latest.attempts >= maxAttempts) {
+    if (hardFailureDetail != null) {
       return _save(
-        latest.copyWith(state: DeliveryState.failed, lastError: lastDetail),
+        latest.copyWith(
+          state: DeliveryState.failed,
+          lastError: hardFailureDetail,
+        ),
       );
     }
     return _save(
       latest.copyWith(
         state: DeliveryState.retryWait,
         lastError: lastDetail,
-        nextRetryAt: _now().add(retryDelay),
+        nextRetryAt: _now().add(_retryDelayFor(latest)),
       ),
     );
   }
@@ -202,6 +212,7 @@ final class DeliveryManager {
     required String fromMmId,
     required bool ok,
     String? detail,
+    bool hardFailure = false,
   }) async {
     final current = _items.values.where((item) {
       if (item.messageId != messageId) return false;
@@ -211,16 +222,18 @@ final class DeliveryManager {
     if (current == null || current.state.isTerminal) return current;
     if (current.isChannel) return current;
     if (ok) return _save(current.copyWith(state: DeliveryState.delivered));
-    if (current.attempts >= maxAttempts) {
+    if (hardFailure) {
       return _save(
         current.copyWith(state: DeliveryState.failed, lastError: detail),
       );
     }
+    final retrying = current.copyWith(
+      state: DeliveryState.retryWait,
+      lastError: detail,
+    );
     return _save(
-      current.copyWith(
-        state: DeliveryState.retryWait,
-        lastError: detail,
-        nextRetryAt: _now().add(retryDelay),
+      retrying.copyWith(
+        nextRetryAt: _now().add(_retryDelayFor(retrying)),
       ),
     );
   }
@@ -257,6 +270,36 @@ final class DeliveryManager {
     for (final messageId in redispatch) {
       await dispatch(messageId);
     }
+  }
+
+  Duration _retryDelayFor(DeliveryEnvelope item) {
+    var delayMs = retryDelay.inMilliseconds;
+    final capMs = maxRetryDelay.inMilliseconds > 0
+        ? maxRetryDelay.inMilliseconds
+        : delayMs;
+    var steps = item.attempts > 1 ? item.attempts - 1 : 0;
+    final maxSteps = maxAttempts > 1 ? maxAttempts - 1 : 0;
+    if (steps > maxSteps) steps = maxSteps;
+    for (var i = 0; i < steps; i++) {
+      if (delayMs >= capMs) break;
+      delayMs *= 2;
+      if (delayMs > capMs) delayMs = capMs;
+    }
+    final jitterPermille = 900 +
+        (_stableHash('${item.effectiveDeliveryId}:${item.attempts}') % 201);
+    delayMs = delayMs * jitterPermille ~/ 1000;
+    if (delayMs > capMs) delayMs = capMs;
+    if (delayMs < 1) delayMs = 1;
+    return Duration(milliseconds: delayMs);
+  }
+
+  int _stableHash(String value) {
+    var hash = 0x811c9dc5;
+    for (final codeUnit in value.codeUnits) {
+      hash ^= codeUnit;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    return hash & 0x7fffffff;
   }
 
   Future<DeliveryEnvelope> _save(DeliveryEnvelope item) async {

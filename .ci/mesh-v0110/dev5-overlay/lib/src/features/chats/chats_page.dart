@@ -57,11 +57,11 @@ class _ChatsPageState extends State<ChatsPage> {
   String stateLabel(DeliveryState? state) => switch (state) {
     DeliveryState.queued => 'В очереди',
     DeliveryState.sending => 'Отправка',
-    DeliveryState.waitingAck => 'Ждём ACK',
+    DeliveryState.waitingAck => 'Ожидает подтверждения',
     DeliveryState.delivered => 'Доставлено',
     DeliveryState.broadcasted => 'Отправлено',
     DeliveryState.noRoute => 'Нет маршрута',
-    DeliveryState.retryWait => 'Повтор',
+    DeliveryState.retryWait => 'Повторная отправка',
     DeliveryState.expired => 'Истёк TTL',
     DeliveryState.failed => 'Ошибка',
     DeliveryState.cancelled => 'Отменено',
@@ -893,22 +893,6 @@ class _ConversationPane extends StatelessWidget {
                                           .textTheme
                                           .labelSmall,
                                     ),
-                                    if (!isGeneral &&
-                                        !isGroup &&
-                                        state == DeliveryState.waitingAck) ...[
-                                      const SizedBox(width: 4),
-                                      IconButton(
-                                        visualDensity: VisualDensity.compact,
-                                        tooltip: 'Тестовый ACK',
-                                        onPressed: () => controller.acknowledge(
-                                          message.messageId,
-                                        ),
-                                        icon: const Icon(
-                                          Icons.done_all,
-                                          size: 16,
-                                        ),
-                                      ),
-                                    ],
                                   ],
                                 ],
                               ),
