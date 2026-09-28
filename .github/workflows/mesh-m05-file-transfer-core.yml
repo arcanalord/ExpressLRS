@@ -9,9 +9,11 @@ on:
       - '.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_core.dart'
       - '.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_protocol.dart'
       - '.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart'
+      - '.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_persistence.dart'
       - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_core_self_test.dart'
       - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_protocol_self_test.dart'
       - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_session_self_test.dart'
+      - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_persistence_self_test.dart'
   workflow_dispatch:
 
 concurrency:
@@ -53,7 +55,7 @@ jobs:
 
       - name: Normalize M05 formatting
         working-directory: ${{ env.APP_DIR }}
-        run: dart format lib/core/file_transfer_core.dart lib/core/file_transfer_protocol.dart lib/core/file_transfer_session.dart tool/file_transfer_core_self_test.dart tool/file_transfer_protocol_self_test.dart tool/file_transfer_session_self_test.dart
+        run: dart format lib/core/file_transfer_core.dart lib/core/file_transfer_protocol.dart lib/core/file_transfer_session.dart lib/core/file_transfer_persistence.dart tool/file_transfer_core_self_test.dart tool/file_transfer_protocol_self_test.dart tool/file_transfer_session_self_test.dart tool/file_transfer_persistence_self_test.dart
 
       - name: Analyze M05 core
         working-directory: ${{ env.APP_DIR }}
@@ -61,9 +63,11 @@ jobs:
           dart analyze lib/core/file_transfer_core.dart
           dart analyze lib/core/file_transfer_protocol.dart
           dart analyze lib/core/file_transfer_session.dart
+          dart analyze lib/core/file_transfer_persistence.dart
           dart analyze tool/file_transfer_core_self_test.dart
           dart analyze tool/file_transfer_protocol_self_test.dart
           dart analyze tool/file_transfer_session_self_test.dart
+          dart analyze tool/file_transfer_persistence_self_test.dart
 
       - name: M05 file transfer self tests
         working-directory: ${{ env.APP_DIR }}
@@ -71,3 +75,4 @@ jobs:
           dart run tool/file_transfer_core_self_test.dart
           dart run tool/file_transfer_protocol_self_test.dart
           dart run tool/file_transfer_session_self_test.dart
+          dart run tool/file_transfer_persistence_self_test.dart
