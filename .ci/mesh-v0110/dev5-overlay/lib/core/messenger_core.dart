@@ -241,6 +241,25 @@ final class MeshMessengerCore {
     required String groupId,
     required int membershipRevision,
     required String text,
+  }) {
+    if (requirePrivateE2ee) {
+      throw StateError('M07_PLAINTEXT_INGRESS_REJECTED');
+    }
+    return _storeReceivedGroupText(
+      messageId: messageId,
+      fromMmId: fromMmId,
+      groupId: groupId,
+      membershipRevision: membershipRevision,
+      text: text,
+    );
+  }
+
+  Future<bool> _storeReceivedGroupText({
+    required String messageId,
+    required String fromMmId,
+    required String groupId,
+    required int membershipRevision,
+    required String text,
   }) async {
     final group = (await groups()).where((g) => g.groupId == groupId).firstOrNull;
     if (group == null || !group.contains(ownMmId) || !group.contains(fromMmId)) {
@@ -283,6 +302,21 @@ final class MeshMessengerCore {
   }
 
   Future<bool> receiveText({
+    required String messageId,
+    required String fromMmId,
+    required String text,
+  }) {
+    if (requirePrivateE2ee) {
+      throw StateError('M07_PLAINTEXT_INGRESS_REJECTED');
+    }
+    return _storeReceivedText(
+      messageId: messageId,
+      fromMmId: fromMmId,
+      text: text,
+    );
+  }
+
+  Future<bool> _storeReceivedText({
     required String messageId,
     required String fromMmId,
     required String text,
@@ -363,6 +397,21 @@ final class MeshMessengerCore {
   }
 
   Future<bool> receiveMapPoint({
+    required String messageId,
+    required String fromMmId,
+    required String payload,
+  }) {
+    if (requirePrivateE2ee) {
+      throw StateError('M07_PLAINTEXT_INGRESS_REJECTED');
+    }
+    return _storeReceivedMapPoint(
+      messageId: messageId,
+      fromMmId: fromMmId,
+      payload: payload,
+    );
+  }
+
+  Future<bool> _storeReceivedMapPoint({
     required String messageId,
     required String fromMmId,
     required String payload,
@@ -500,13 +549,13 @@ final class MeshMessengerCore {
     }
     switch (plaintext.messageClass) {
       case 'text':
-        return receiveText(
+        return _storeReceivedText(
           messageId: messageId,
           fromMmId: fromMmId,
           text: plaintext.payloadUtf8,
         );
       case 'map_point':
-        return receiveMapPoint(
+        return _storeReceivedMapPoint(
           messageId: messageId,
           fromMmId: fromMmId,
           payload: plaintext.payloadUtf8,
@@ -534,7 +583,7 @@ final class MeshMessengerCore {
     if (plaintext.messageClass != 'text') {
       throw const FormatException('M07_GROUP_CLASS_UNSUPPORTED');
     }
-    return receiveGroupText(
+    return _storeReceivedGroupText(
       messageId: messageId,
       fromMmId: fromMmId,
       groupId: groupId,
