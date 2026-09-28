@@ -116,13 +116,17 @@ void main() {
       final addButton = tester.widget<IconButton>(
         find.widgetWithIcon(IconButton, Icons.add_circle_outline),
       );
-      addButton.onPressed!.call();
+      final addAction = addButton.onPressed;
+      expect(addAction, isNotNull);
+      addAction?.call();
       await tester.pumpAndSettle();
       expect(find.text('Местоположение'), findsOneWidget);
       final locationTile = tester.widget<ListTile>(
         find.widgetWithText(ListTile, 'Местоположение'),
       );
-      locationTile.onTap!.call();
+      final locationAction = locationTile.onTap;
+      expect(locationAction, isNotNull);
+      locationAction?.call();
       await tester.pumpAndSettle();
       expect(find.text('Карта · Общий чат'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -130,8 +134,12 @@ void main() {
       final shellScaffold = tester.widget<Scaffold>(
         find.byType(Scaffold).first,
       );
-      final navigation = shellScaffold.bottomNavigationBar! as NavigationBar;
-      navigation.onDestinationSelected!.call(0);
+      final bottomNavigation = shellScaffold.bottomNavigationBar;
+      expect(bottomNavigation, isA<NavigationBar>());
+      final navigation = bottomNavigation as NavigationBar;
+      final selectDestination = navigation.onDestinationSelected;
+      expect(selectDestination, isNotNull);
+      selectDestination?.call(0);
       await tester.pumpAndSettle();
       expect(find.byTooltip('Добавить'), findsOneWidget);
       expect(tester.takeException(), isNull);
