@@ -1,21 +1,30 @@
 import 'dart:convert';
 
+import 'm07_security.dart';
+
 final class ContactCard {
   const ContactCard({
     required this.mmId,
     required this.displayName,
     this.fingerprint,
+    this.identityPublicKey,
+    this.agreementPublicKey,
+    this.preKeyBundle,
     this.meshtasticNodeId,
     this.radioNodeId,
   });
 
   static const scheme = 'mesh';
   static const host = 'contact';
-  static const version = 1;
+  static const version = 2;
+  static const legacyVersion = 1;
 
   final String mmId;
   final String displayName;
   final String? fingerprint;
+  final String? identityPublicKey;
+  final String? agreementPublicKey;
+  final String? preKeyBundle;
   final String? meshtasticNodeId;
   final int? radioNodeId;
 
@@ -28,6 +37,12 @@ final class ContactCard {
         'mm': mmId.trim(),
         'name': displayName.trim(),
         if (fingerprint?.trim().isNotEmpty == true) 'fp': fingerprint!.trim(),
+        if (identityPublicKey?.trim().isNotEmpty == true)
+          'ik': identityPublicKey!.trim(),
+        if (agreementPublicKey?.trim().isNotEmpty == true)
+          'ak': agreementPublicKey!.trim(),
+        if (preKeyBundle?.trim().isNotEmpty == true)
+          'pkb': preKeyBundle!.trim(),
         if (meshtasticNodeId?.trim().isNotEmpty == true)
           'mesh': meshtasticNodeId!.trim(),
         if (radioNodeId != null) 'radio': radioNodeId.toString(),
@@ -37,11 +52,17 @@ final class ContactCard {
   }
 
   String encodeJson() => jsonEncode(<String, Object?>{
-        'schema': 'mesh-messenger-contact/v1',
+        'schema': 'mesh-messenger-contact/v2',
         'mmId': mmId.trim(),
         'displayName': displayName.trim(),
         if (fingerprint?.trim().isNotEmpty == true)
           'fingerprint': fingerprint!.trim(),
+        if (identityPublicKey?.trim().isNotEmpty == true)
+          'identityPublicKey': identityPublicKey!.trim(),
+        if (agreementPublicKey?.trim().isNotEmpty == true)
+          'agreementPublicKey': agreementPublicKey!.trim(),
+        if (preKeyBundle?.trim().isNotEmpty == true)
+          'preKeyBundle': preKeyBundle!.trim(),
         if (meshtasticNodeId?.trim().isNotEmpty == true)
           'meshtasticNodeId': meshtasticNodeId!.trim(),
         if (radioNodeId != null) 'radioNodeId': radioNodeId,
@@ -53,8 +74,12 @@ final class ContactCard {
 
     if (text.startsWith('{')) {
       final decoded = jsonDecode(text);
-      if (decoded is! Map<String, dynamic> ||
-          decoded['schema'] != 'mesh-messenger-contact/v1') {
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Unsupported contact card JSON');
+      }
+      final schema = decoded['schema'];
+      if (schema != 'mesh-messenger-contact/v1' &&
+          schema != 'mesh-messenger-contact/v2') {
         throw const FormatException('Unsupported contact card JSON');
       }
       return _validated(
@@ -62,6 +87,9 @@ final class ContactCard {
           mmId: decoded['mmId'] as String? ?? '',
           displayName: decoded['displayName'] as String? ?? '',
           fingerprint: decoded['fingerprint'] as String?,
+          identityPublicKey: decoded['identityPublicKey'] as String?,
+          agreementPublicKey: decoded['agreementPublicKey'] as String?,
+          preKeyBundle: decoded['preKeyBundle'] as String?,
           meshtasticNodeId: decoded['meshtasticNodeId'] as String?,
           radioNodeId: (decoded['radioNodeId'] as num?)?.toInt(),
         ),
@@ -73,7 +101,8 @@ final class ContactCard {
       throw const FormatException('Unsupported contact card');
     }
     final q = uri.queryParameters;
-    if (q['v'] != version.toString()) {
+    final parsedVersion = int.tryParse(q['v'] ?? '');
+    if (parsedVersion != legacyVersion && parsedVersion != version) {
       throw const FormatException('Unsupported contact card version');
     }
     return _validated(
@@ -81,6 +110,9 @@ final class ContactCard {
         mmId: q['mm'] ?? '',
         displayName: q['name'] ?? '',
         fingerprint: q['fp'],
+        identityPublicKey: q['ik'],
+        agreementPublicKey: q['ak'],
+        preKeyBundle: q['pkb'],
         meshtasticNodeId: q['mesh'],
         radioNodeId: int.tryParse(q['radio'] ?? ''),
       ),
@@ -93,6 +125,22 @@ final class ContactCard {
     }
     if (card.displayName.trim().isEmpty || card.displayName.length > 80) {
       throw const FormatException('Invalid contact name');
+    }
+    final identityKey = card.identityPublicKey?.trim() ?? '';
+    final agreementKey = card.agreementPublicKey?.trim() ?? '';
+    if ((identityKey.isEmpty) != (agreementKey.isEmpty)) {
+      throw const FormatException('Identity/agreement public keys must appear together');
+    }
+    final bundle = card.preKeyBundle?.trim() ?? '';
+    if (bundle.isNotEmpty) {
+      final parsed = PortablePreKeyBundle.decode(bundle);
+      if (parsed.mmId != card.mmId.trim()) {
+        throw const FormatException('Prekey bundle MM-ID mismatch');
+      }
+      if (identityKey.isNotEmpty &&
+          parsed.identityPublicKey != identityKey) {
+        throw const FormatException('Prekey bundle identity mismatch');
+      }
     }
     final node = card.radioNodeId;
     if (node != null && (node < 1 || node > 255)) {
