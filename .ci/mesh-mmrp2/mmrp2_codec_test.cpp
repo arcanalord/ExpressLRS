@@ -81,6 +81,25 @@ int main() {
   Check(Hex(EncodeHeader(b)) == "2404011188776655443322110000002a",
         "vector B");
 
+  Packet b_packet{};
+  b_packet.header = b;
+  b_packet.payload = {0xde, 0xad, 0xbe, 0xef};
+  b_packet.hop_aead_tag =
+      {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+       0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+  const auto b_encoded = EncodePacket(b_packet);
+  const auto b_decoded = DecodePacket(b_encoded);
+  Check(Hex(b_decoded.payload) == "deadbeef", "vector B payload");
+  Check(Hex(b_decoded.hop_aead_tag) ==
+            "000102030405060708090a0b0c0d0e0f",
+        "vector B tag");
+  ExpectReject([&]() { EncodePacket(Packet{b, {0x01}, {}}); },
+               "missing HOP_AEAD tag");
+  ExpectReject([&]() { DecodePacket(b_encoded, b_encoded.size() - 1); },
+               "max frame bound");
+  ExpectReject([&]() { DecodePacket(b_encoded, 65535, 3); },
+               "max payload bound");
+
   Header c{};
   c.flags = static_cast<std::uint8_t>(kFlagFragmented | kFlagHopAead);
   c.frame_class = FrameClass::kData;
