@@ -1,0 +1,62 @@
+name: Mesh Messenger M05 File Transfer Core
+
+on:
+  push:
+    branches:
+      - feature/mesh-lr24-usb
+    paths:
+      - '.github/workflows/mesh-m05-file-transfer-core.yml'
+      - '.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_core.dart'
+      - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_core_self_test.dart'
+  workflow_dispatch:
+
+concurrency:
+  group: mesh-m05-file-transfer-core
+  cancel-in-progress: true
+
+jobs:
+  m05-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct Flutter source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mesh-m05
+          base64 -d .ci/mesh-v0110/source_v0110_dev3.zip.b64 > /tmp/mesh-m05/source.zip
+          echo '38a92c9c3873239c7db9c472800e4229d60a8a539bbb964b057e03029eebcda4  /tmp/mesh-m05/source.zip' | sha256sum -c -
+          unzip -q /tmp/mesh-m05/source.zip -d /tmp/mesh-m05/unpacked
+          ROOT="$(find /tmp/mesh-m05/unpacked -maxdepth 1 -mindepth 1 -type d -name 'mesh_messenger_flutter_*' -print -quit)"
+          test -n "$ROOT"
+          APP_DIR="$ROOT/flutter_app"
+          cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+
+      - name: Setup Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Dependencies
+        working-directory: ${{ env.APP_DIR }}
+        run: flutter pub get
+
+      - name: Format gate
+        working-directory: ${{ env.APP_DIR }}
+        run: dart format --output=none --set-exit-if-changed lib/core/file_transfer_core.dart tool/file_transfer_core_self_test.dart
+
+      - name: Analyze M05 core
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          dart analyze lib/core/file_transfer_core.dart
+          dart analyze tool/file_transfer_core_self_test.dart
+
+      - name: M05 file transfer self test
+        working-directory: ${{ env.APP_DIR }}
+        run: dart run tool/file_transfer_core_self_test.dart
