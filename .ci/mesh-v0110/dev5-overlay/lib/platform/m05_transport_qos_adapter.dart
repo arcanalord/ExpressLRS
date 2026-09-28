@@ -1,19 +1,23 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import '../core/file_transfer_qos.dart';
 
 final class M05TransportQosAdapter {
   M05TransportQosAdapter({
     required Future<void> Function(Map<String, Object?> frame) writeRaw,
+    required Future<void> Function(Uint8List payload) writeRawFile1,
     int maxFileBurst = 4,
     int fileStarvationGuard = 16,
   })  : _writeRaw = writeRaw,
+        _writeRawFile1 = writeRawFile1,
         _scheduler = M05QosScheduler<_PendingOutbound>(
           maxFileBurst: maxFileBurst,
           fileStarvationGuard: fileStarvationGuard,
         );
 
   final Future<void> Function(Map<String, Object?> frame) _writeRaw;
+  final Future<void> Function(Uint8List payload) _writeRawFile1;
   final M05QosScheduler<_PendingOutbound> _scheduler;
   bool _pumping = false;
 
@@ -25,6 +29,13 @@ final class M05TransportQosAdapter {
   Future<void> send(Map<String, Object?> frame) {
     final pending = _PendingOutbound(Map<String, Object?>.unmodifiable(frame));
     _scheduler.enqueue(classify(frame), pending);
+    _ensurePump();
+    return pending.completer.future;
+  }
+
+  Future<void> sendFile1(Uint8List payload) {
+    final pending = _PendingOutbound.file1(Uint8List.fromList(payload));
+    _scheduler.enqueue(M05TrafficClass.file, pending);
     _ensurePump();
     return pending.completer.future;
   }
@@ -68,7 +79,11 @@ final class M05TransportQosAdapter {
         if (next == null) break;
         final pending = next.value;
         try {
-          await _writeRaw(pending.frame);
+          if (pending.file1Payload != null) {
+            await _writeRawFile1(pending.file1Payload!);
+          } else {
+            await _writeRaw(pending.frame!);
+          }
           if (!pending.completer.isCompleted) pending.completer.complete();
         } catch (error, stackTrace) {
           if (!pending.completer.isCompleted) {
@@ -84,8 +99,15 @@ final class M05TransportQosAdapter {
 }
 
 final class _PendingOutbound {
-  _PendingOutbound(this.frame);
+  _PendingOutbound(Map<String, Object?> frame)
+      : frame = frame,
+        file1Payload = null;
 
-  final Map<String, Object?> frame;
+  _PendingOutbound.file1(Uint8List payload)
+      : frame = null,
+        file1Payload = payload;
+
+  final Map<String, Object?>? frame;
+  final Uint8List? file1Payload;
   final Completer<void> completer = Completer<void>();
 }

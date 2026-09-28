@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import '../core/delivery.dart';
+import '../core/file_transfer_core.dart';
 import '../core/models.dart';
 import 'android_usb_serial_bridge.dart';
+import 'file1_transport_bridge.dart';
 import 'mm_serial_codec.dart';
 import 'm05_transport_qos_adapter.dart';
 
@@ -135,6 +137,20 @@ final class TransparentUartProbeResult extends TransparentUartRadioEvent {
   final int rttMillis;
 }
 
+final class TransparentUartFileReceived extends TransparentUartRadioEvent {
+  const TransparentUartFileReceived({
+    required this.transferId,
+    required this.fileName,
+    required this.mimeType,
+    required this.bytes,
+  });
+
+  final String transferId;
+  final String fileName;
+  final String mimeType;
+  final Uint8List bytes;
+}
+
 final class TransparentUartStatsEvent extends TransparentUartRadioEvent {
   const TransparentUartStatsEvent({
     required this.txBytes,
@@ -167,11 +183,28 @@ final class TransparentUartRadioTransport implements MessageTransport {
     required this.ownMmId,
     this.ownLabel = '',
   }) : _bridge = bridge {
-    _qos = M05TransportQosAdapter(writeRaw: _writeRawFrame);
+    _qos = M05TransportQosAdapter(
+      writeRaw: _writeRawFrame,
+      writeRawFile1: _writeRawFile1,
+    );
+    _file1 = File1TransportBridge(
+      sendBytes: _qos.sendFile1,
+      onReceived: (received) {
+        _events.add(
+          TransparentUartFileReceived(
+            transferId: received.manifest.transferId,
+            fileName: received.manifest.fileName,
+            mimeType: received.manifest.mimeType,
+            bytes: received.bytes,
+          ),
+        );
+      },
+    );
   }
 
   final AndroidUsbSerialBridge _bridge;
   late final M05TransportQosAdapter _qos;
+  late final File1TransportBridge _file1;
   final String ownMmId;
   final String ownLabel;
   final Set<String> _discoveredPeerMmIds = <String>{};
@@ -314,6 +347,13 @@ final class TransparentUartRadioTransport implements MessageTransport {
   }
 
 
+  Future<void> sendFilePlan(FileTransferPlan plan) {
+    if (!isAvailable) {
+      return Future<void>.error(StateError('LR24_NOT_READY'));
+    }
+    return _file1.send(plan);
+  }
+
   Future<void> discoverPeers() async {
     if (!isAvailable) return;
     await _writeFrame(<String, Object?>{
@@ -443,6 +483,17 @@ final class TransparentUartRadioTransport implements MessageTransport {
     _emitStats();
   }
 
+  Future<void> _writeRawFile1(Uint8List payload) async {
+    final bytes = _codec.encodeBinary(
+      payload,
+      tag: MmSerialCodec.file1BinaryTag,
+    );
+    await _bridge.write(bytes);
+    txBytes += bytes.length;
+    txFrames++;
+    _emitStats();
+  }
+
   void _onBridgeEvent(AndroidUsbSerialEvent event) {
     if (event is AndroidUsbSerialState) {
       final next = (event.status['state'] ?? '').toString().trim().toLowerCase();
@@ -472,11 +523,16 @@ final class TransparentUartRadioTransport implements MessageTransport {
     if (event is AndroidUsbSerialBytes) {
       rxBytes += event.bytes.length;
       final beforeBad = _codec.badFrames;
-      final frames = _codec.feed(Uint8List.fromList(event.bytes));
+      final packets = _codec.feedPackets(Uint8List.fromList(event.bytes));
       if (_codec.badFrames != beforeBad) _emitStats();
-      for (final frame in frames) {
+      for (final packet in packets) {
         rxFrames++;
-        _handleFrame(frame);
+        if (packet is MmSerialJsonPacket) {
+          _handleFrame(packet.frame);
+        } else if (packet is MmSerialBinaryPacket &&
+            packet.tag == MmSerialCodec.file1BinaryTag) {
+          unawaited(_file1.handleIncoming(packet.payload));
+        }
       }
       _emitStats();
     }
@@ -714,6 +770,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
     await _subscription?.cancel();
     _subscription = null;
     _failProbes(StateError('LR24 transport closed'));
+    _file1.close();
     await _events.close();
   }
 }

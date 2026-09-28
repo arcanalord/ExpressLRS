@@ -18,6 +18,10 @@ on:
       - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_persistence_self_test.dart'
       - '.ci/mesh-v0110/dev5-overlay/tool/file_transfer_qos_self_test.dart'
       - '.ci/mesh-v0110/dev5-overlay/tool/m05_transport_qos_adapter_self_test.dart'
+      - '.ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart'
+      - '.ci/mesh-v0110/dev5-overlay/lib/platform/transparent_uart_radio_transport.dart'
+      - '.ci/mesh-v0110/dev5-overlay/lib/platform/mm_serial_codec.dart'
+      - '.ci/mesh-v0110/dev5-overlay/lib/platform/file1_transport_bridge.dart'
   workflow_dispatch:
 
 concurrency:
@@ -55,7 +59,7 @@ jobs:
         run: flutter pub get
       - name: Normalize M05 formatting
         working-directory: ${{ env.APP_DIR }}
-        run: dart format lib/core/file_transfer_core.dart lib/core/file_transfer_protocol.dart lib/core/file_transfer_session.dart lib/core/file_transfer_persistence.dart lib/core/file_transfer_qos.dart lib/platform/m05_transport_qos_adapter.dart tool/file_transfer_core_self_test.dart tool/file_transfer_protocol_self_test.dart tool/file_transfer_session_self_test.dart tool/file_transfer_persistence_self_test.dart tool/file_transfer_qos_self_test.dart tool/m05_transport_qos_adapter_self_test.dart
+        run: dart format lib/core/file_transfer_core.dart lib/core/file_transfer_protocol.dart lib/core/file_transfer_session.dart lib/core/file_transfer_persistence.dart lib/core/file_transfer_qos.dart lib/platform/m05_transport_qos_adapter.dart tool/file_transfer_core_self_test.dart tool/file_transfer_protocol_self_test.dart tool/file_transfer_session_self_test.dart tool/file_transfer_persistence_self_test.dart tool/file_transfer_qos_self_test.dart tool/m05_transport_qos_adapter_self_test.dart lib/platform/file1_transport_bridge.dart lib/platform/mm_serial_codec.dart lib/platform/transparent_uart_radio_transport.dart tool/file1_transport_loopback_self_test.dart
       - name: Analyze M05 core
         working-directory: ${{ env.APP_DIR }}
         run: |
@@ -65,12 +69,16 @@ jobs:
           dart analyze lib/core/file_transfer_persistence.dart
           dart analyze lib/core/file_transfer_qos.dart
           dart analyze lib/platform/m05_transport_qos_adapter.dart
+          dart analyze lib/platform/file1_transport_bridge.dart
+          dart analyze lib/platform/mm_serial_codec.dart
+          dart analyze lib/platform/transparent_uart_radio_transport.dart
           dart analyze tool/file_transfer_core_self_test.dart
           dart analyze tool/file_transfer_protocol_self_test.dart
           dart analyze tool/file_transfer_session_self_test.dart
           dart analyze tool/file_transfer_persistence_self_test.dart
           dart analyze tool/file_transfer_qos_self_test.dart
           dart analyze tool/m05_transport_qos_adapter_self_test.dart
+          dart analyze tool/file1_transport_loopback_self_test.dart
       - name: M05 file transfer self tests
         working-directory: ${{ env.APP_DIR }}
         run: |
@@ -80,3 +88,4 @@ jobs:
           dart run tool/file_transfer_persistence_self_test.dart
           dart run tool/file_transfer_qos_self_test.dart
           dart run tool/m05_transport_qos_adapter_self_test.dart
+          dart run tool/file1_transport_loopback_self_test.dart
