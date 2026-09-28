@@ -221,32 +221,26 @@ final class SecureSessionRef {
   final String suiteId;
 }
 
+/// Transport-visible M07 envelope.
+///
+/// This wire object deliberately excludes MM-IDs, conversation identifiers,
+/// session identifiers and logical message identifiers. Those values belong
+/// inside the provider-authenticated payload and/or trusted local receive
+/// context. A relay or alternate transport must not learn them from M07.
 final class EncryptedApplicationEnvelope {
   EncryptedApplicationEnvelope({
     required this.formatVersion,
     required this.suiteId,
-    required this.logicalMessageId,
-    required this.senderMmId,
-    required this.recipientMmId,
-    required this.sessionId,
     required this.ciphertextBase64,
   }) {
     _require(formatVersion > 0, 'formatVersion must be positive');
     _require(suiteId.isNotEmpty, 'suiteId must not be empty');
-    _require(logicalMessageId.isNotEmpty, 'logicalMessageId must not be empty');
-    _require(senderMmId.startsWith('mm:'), 'senderMmId must start with mm:');
-    _require(recipientMmId.startsWith('mm:'), 'recipientMmId must start with mm:');
-    _require(sessionId.isNotEmpty, 'sessionId must not be empty');
     _require(ciphertextBase64.isNotEmpty, 'ciphertextBase64 must not be empty');
   }
 
   Map<String, Object?> toJson() => {
     'formatVersion': formatVersion,
     'suiteId': suiteId,
-    'logicalMessageId': logicalMessageId,
-    'senderMmId': senderMmId,
-    'recipientMmId': recipientMmId,
-    'sessionId': sessionId,
     'ciphertextBase64': ciphertextBase64,
   };
 
@@ -256,10 +250,6 @@ final class EncryptedApplicationEnvelope {
       EncryptedApplicationEnvelope(
         formatVersion: (json['formatVersion'] as num?)?.toInt() ?? 0,
         suiteId: json['suiteId'] as String? ?? '',
-        logicalMessageId: json['logicalMessageId'] as String? ?? '',
-        senderMmId: json['senderMmId'] as String? ?? '',
-        recipientMmId: json['recipientMmId'] as String? ?? '',
-        sessionId: json['sessionId'] as String? ?? '',
         ciphertextBase64: json['ciphertextBase64'] as String? ?? '',
       );
 
@@ -268,17 +258,28 @@ final class EncryptedApplicationEnvelope {
     if (decoded is! Map) {
       throw const FormatException('M07_ENVELOPE_INVALID');
     }
-    return EncryptedApplicationEnvelope.fromJson(
-      Map<String, dynamic>.from(decoded),
-    );
+    final map = Map<String, dynamic>.from(decoded);
+    const forbidden = <String>{
+      'senderMmId',
+      'recipientMmId',
+      'sessionId',
+      'logicalMessageId',
+      'conversationKey',
+      'peerMmId',
+      'groupId',
+    };
+    if (map.keys.any(forbidden.contains)) {
+      throw const FormatException('M07_WIRE_METADATA_FORBIDDEN');
+    }
+    return EncryptedApplicationEnvelope.fromJson(map);
   }
 
   final int formatVersion;
   final String suiteId;
-  final String logicalMessageId;
-  final String senderMmId;
-  final String recipientMmId;
-  final String sessionId;
+
+  /// Opaque provider message. It may contain provider ratchet/header material
+  /// required by the selected suite, but application identity/session metadata
+  /// MUST NOT be serialized beside it in the M07 wire envelope.
   final String ciphertextBase64;
 }
 
@@ -447,8 +448,11 @@ abstract interface class M07CryptoProvider {
   );
 
   Future<DirectDecryptResult> decryptDirect(
-    EncryptedApplicationEnvelope envelope,
-  );
+    EncryptedApplicationEnvelope envelope, {
+    required String expectedLogicalMessageId,
+    required String expectedSenderMmId,
+    required String expectedRecipientMmId,
+  });
 
   /// Creates an attachment secret inside the provider.
   ///
