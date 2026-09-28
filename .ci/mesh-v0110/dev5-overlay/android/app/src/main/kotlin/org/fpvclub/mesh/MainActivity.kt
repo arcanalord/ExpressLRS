@@ -18,6 +18,7 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val secureIdentity: SecureIdentityStore by lazy { SecureIdentityStore(applicationContext) }
+    private val secureStorage: SecureStorageCipher by lazy { SecureStorageCipher() }
     private val main = Handler(Looper.getMainLooper())
     private val ble: MeshtasticBleClient by lazy {
         MeshtasticBleClient(applicationContext).also { client ->
@@ -82,6 +83,55 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "loadOrCreate" -> runAsync(result) { secureIdentity.loadOrCreate() }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "org.fpvclub.mesh/securestorage",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "encrypt" -> {
+                    val purpose = call.argument<String>("purpose")
+                        ?: return@setMethodCallHandler result.error(
+                            "BAD_ARGUMENT",
+                            "purpose required",
+                            null,
+                        )
+                    val plaintext = call.argument<String>("plaintext")
+                        ?: return@setMethodCallHandler result.error(
+                            "BAD_ARGUMENT",
+                            "plaintext required",
+                            null,
+                        )
+                    runAsync(result, "SECURE_STORAGE") {
+                        secureStorage.encrypt(purpose, plaintext)
+                    }
+                }
+                "decrypt" -> {
+                    val purpose = call.argument<String>("purpose")
+                        ?: return@setMethodCallHandler result.error(
+                            "BAD_ARGUMENT",
+                            "purpose required",
+                            null,
+                        )
+                    val iv = call.argument<String>("iv")
+                        ?: return@setMethodCallHandler result.error(
+                            "BAD_ARGUMENT",
+                            "iv required",
+                            null,
+                        )
+                    val ciphertext = call.argument<String>("ciphertext")
+                        ?: return@setMethodCallHandler result.error(
+                            "BAD_ARGUMENT",
+                            "ciphertext required",
+                            null,
+                        )
+                    runAsync(result, "SECURE_STORAGE") {
+                        secureStorage.decrypt(purpose, iv, ciphertext)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
