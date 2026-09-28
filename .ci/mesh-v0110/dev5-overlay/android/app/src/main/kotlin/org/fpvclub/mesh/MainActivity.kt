@@ -301,13 +301,17 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun runAsync(result: MethodChannel.Result, block: () -> Any?) {
+    private fun runAsync(
+        result: MethodChannel.Result,
+        errorCode: String = "MESHTASTIC",
+        block: () -> Any?,
+    ) {
         executor.execute {
             try {
                 val value = block()
                 main.post { result.success(value) }
             } catch (t: Throwable) {
-                main.post { result.error("MESHTASTIC", t.message ?: t.toString(), null) }
+                main.post { result.error(errorCode, t.message ?: t.toString(), null) }
             }
         }
     }
