@@ -116,8 +116,14 @@ void main() {
       expect(find.text('Карта · Общий чат'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      await tester.tap(find.text('Чаты').last);
+      final chatDestination = find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('Чаты'),
+      );
+      expect(chatDestination, findsOneWidget);
+      await tester.tap(chatDestination);
       await tester.pumpAndSettle();
+      expect(find.byTooltip('Добавить'), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
 
