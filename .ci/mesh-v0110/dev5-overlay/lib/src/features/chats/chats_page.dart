@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/models.dart';
 
@@ -204,6 +205,11 @@ class _ContactList extends StatelessWidget {
                   ),
                 ),
                 IconButton(
+                  tooltip: 'Мой QR и MM-ID',
+                  onPressed: () => _showOwnContactCard(context, controller),
+                  icon: const Icon(Icons.qr_code_2),
+                ),
+                IconButton(
                   tooltip: 'Создать группу',
                   onPressed: controller.contacts.isEmpty
                       ? null
@@ -296,6 +302,82 @@ Future<void> _showCreateGroup(
   name.dispose();
 }
 
+Future<void> _showOwnContactCard(
+  BuildContext context,
+  MeshAppController controller,
+) async {
+  final payload = controller.ownContactCardPayload;
+  await showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Мой контакт'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              color: Colors.white,
+              child: QrImageView(
+                data: payload,
+                size: 220,
+                backgroundColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              controller.ownDeviceLabel,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              controller.ownMmId,
+              textAlign: TextAlign.center,
+            ),
+            if (controller.ownFingerprint.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Fingerprint: ' + controller.ownFingerprint,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: controller.ownMmId));
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('MM-ID скопирован')),
+              );
+            }
+          },
+          icon: const Icon(Icons.copy),
+          label: const Text('Копировать MM-ID'),
+        ),
+        TextButton.icon(
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: payload));
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Код контакта скопирован')),
+              );
+            }
+          },
+          icon: const Icon(Icons.content_copy),
+          label: const Text('Копировать код'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Готово'),
+        ),
+      ],
+    ),
+  );
+}
+
 Future<void> _showContactActions(
   BuildContext context,
   MeshAppController controller,
@@ -307,6 +389,12 @@ Future<void> _showContactActions(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ListTile(
+            leading: const Icon(Icons.qr_code_2),
+            title: const Text('Показать мой QR'),
+            subtitle: const Text('Чтобы другой телефон добавил этот контакт'),
+            onTap: () => Navigator.pop(context, 'myqr'),
+          ),
           ListTile(
             leading: const Icon(Icons.qr_code_scanner),
             title: const Text('Сканировать QR'),
@@ -332,6 +420,10 @@ Future<void> _showContactActions(
   if (!context.mounted || action == null) return;
 
   try {
+    if (action == 'myqr') {
+      await _showOwnContactCard(context, controller);
+      return;
+    }
     if (action == 'manual') {
       await _showAddContact(context, controller);
       return;
@@ -744,11 +836,16 @@ class _ConversationPane extends StatelessWidget {
                         ' блоков · ' +
                         controller.preparedFileProfile.name,
                   ),
-                  trailing: IconButton(
-                    tooltip: 'Убрать',
-                    onPressed: controller.clearPreparedFile,
-                    icon: const Icon(Icons.close),
-                  ),
+                  trailing: controller.fileTransferSending
+                      ? const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : IconButton(
+                          tooltip: 'Убрать',
+                          onPressed: controller.clearPreparedFile,
+                          icon: const Icon(Icons.close),
+                        ),
                 ),
               ),
             ),
@@ -821,14 +918,42 @@ class _ConversationPane extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   IconButton.filled(
-                    tooltip: 'Отправить',
+                    tooltip: controller.preparedFileName != null
+                        ? 'Отправить файл'
+                        : 'Отправить',
                     onPressed: controller.busy
                         ? null
                         : () async {
-                            final text = composer.text;
-                            if (text.trim().isEmpty) return;
-                            composer.clear();
-                            await controller.sendText(text);
+                            try {
+                              if (controller.preparedFileName != null) {
+                                await controller.sendPreparedSmallFile();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        controller.fileTransferNotice ??
+                                            'Файл отправлен',
+                                      ),
+                                    ),
+                                  );
+                                }
+                                return;
+                              }
+                              final text = composer.text;
+                              if (text.trim().isEmpty) return;
+                              composer.clear();
+                              await controller.sendText(text);
+                            } catch (error) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Ошибка отправки: ' + error.toString(),
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
                           },
                     icon: controller.busy
                         ? const SizedBox.square(

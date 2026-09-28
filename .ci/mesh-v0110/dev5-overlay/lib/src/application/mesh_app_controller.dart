@@ -116,6 +116,10 @@ final class MeshAppController extends ChangeNotifier {
   String? preparedFileSha256;
   AdaptiveLinkProfile preparedFileProfile = AdaptiveLinkProfile.reliable;
   String? fileTransferNotice;
+  FileTransferPlan? _preparedFilePlan;
+  bool fileTransferSending = false;
+  String? lastReceivedFileName;
+  String? lastReceivedFilePath;
   final Map<String, DateTime> _peerLastSeen = <String, DateTime>{};
   final Map<String, String> _peerLabels = <String, String>{};
   final Map<String, Set<String>> _peerCapabilities = <String, Set<String>>{};
@@ -128,6 +132,13 @@ final class MeshAppController extends ChangeNotifier {
   String ownDeviceLabel = '';
   String ownFingerprint = '';
   String identitySeedStorage = '';
+
+  String get ownContactCardPayload => ContactCard(
+        mmId: ownMmId,
+        displayName: ownDeviceLabel.isEmpty ? 'Mesh Messenger' : ownDeviceLabel,
+        fingerprint: ownFingerprint.isEmpty ? null : ownFingerprint,
+        radioNodeId: ep2LocalNode,
+      ).encode();
   final Map<String, LanPairingSession> lanPairings =
       <String, LanPairingSession>{};
   String lanState = 'offline';
@@ -711,6 +722,7 @@ final class MeshAppController extends ChangeNotifier {
     preparedFileChunks = plan.manifest.chunkCount;
     preparedFileSha256 = plan.manifest.sha256Hex;
     preparedFileProfile = decision.profile;
+    _preparedFilePlan = plan;
     fileTransferNotice = 'Подготовлено: ' +
         plan.manifest.chunkCount.toString() +
         ' блоков по ' +
@@ -720,13 +732,54 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearPreparedFile() {
+  Future<void> sendPreparedSmallFile() async {
+    final plan = _preparedFilePlan;
+    if (plan == null || fileTransferSending || busy) return;
+    final lr24 = _lr24;
+    if (lr24 == null || !lr24.isAvailable) {
+      throw StateError('LR24 не подключён');
+    }
+
+    busy = true;
+    fileTransferSending = true;
+    fileTransferNotice =
+        'Отправка ' + plan.manifest.fileName + ': ' +
+        plan.manifest.chunkCount.toString() + ' блоков…';
+    notifyListeners();
+    try {
+      await lr24.sendFilePlan(plan);
+      fileTransferNotice = 'Файл отправлен: ' +
+          plan.manifest.fileName + ' · ' +
+          plan.manifest.totalBytes.toString() + ' Б';
+      _addLr24Log(
+        'FILE SENT ' + plan.manifest.transferId + ' ' +
+        plan.manifest.fileName + ' ' +
+        plan.manifest.totalBytes.toString() + 'B',
+      );
+      clearPreparedFile(notify: false);
+    } catch (error) {
+      fileTransferNotice = 'Ошибка передачи файла: ' + error.toString();
+      _addLr24Log(
+        'FILE SEND ERROR ' + plan.manifest.transferId + ' | ' + error.toString(),
+      );
+      rethrow;
+    } finally {
+      busy = false;
+      fileTransferSending = false;
+      notifyListeners();
+    }
+  }
+
+  void clearPreparedFile({bool notify = true}) {
     preparedFileName = null;
     preparedFileBytes = null;
     preparedFileChunks = null;
     preparedFileSha256 = null;
-    fileTransferNotice = null;
-    notifyListeners();
+    _preparedFilePlan = null;
+    if (notify) {
+      fileTransferNotice = null;
+      notifyListeners();
+    }
   }
 
   Future<void> addLocalContact({
@@ -2126,6 +2179,38 @@ final class MeshAppController extends ChangeNotifier {
         _addLr24Log(
           'DROP GROUP DESCRIPTOR ${event.descriptor.groupId} '
           'rev=${event.descriptor.revision} <- ${event.fromMmId}',
+        );
+      }
+      notifyListeners();
+      return;
+    }
+    if (event is TransparentUartFileReceived) {
+      try {
+        final storage = _appStorage;
+        if (storage == null) throw StateError('storage unavailable');
+        final inbox = Directory(storage.root.path + '/received_files');
+        await inbox.create(recursive: true);
+        final safeName = event.fileName
+            .replaceAll(RegExp(r'[^0-9A-Za-zА-Яа-я._ -]'), '_')
+            .trim();
+        final name = safeName.isEmpty ? 'file.bin' : safeName;
+        final stamp = DateTime.now().millisecondsSinceEpoch;
+        final output = File(inbox.path + '/' + stamp.toString() + '_' + name);
+        await output.writeAsBytes(event.bytes, flush: true);
+        lastReceivedFileName = name;
+        lastReceivedFilePath = output.path;
+        fileTransferNotice =
+            'Получен файл: ' + name + ' · ' + event.bytes.length.toString() + ' Б';
+        _addLr24Log(
+          'FILE RECEIVED ' + event.transferId + ' ' + name + ' ' +
+          event.bytes.length.toString() + 'B',
+        );
+      } catch (error) {
+        fileTransferNotice =
+            'Ошибка сохранения полученного файла: ' + error.toString();
+        _addLr24Log(
+          'FILE RECEIVE STORE ERROR ' + event.transferId + ' | ' +
+          error.toString(),
         );
       }
       notifyListeners();
