@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter Android v0.1.10-dev.15-channel
+name: Mesh Messenger Flutter Android v0.1.10-dev.15-channel-r2
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: mesh-flutter-v0.1.10-dev.15-channel
+  group: mesh-flutter-v0.1.10-dev.15-channel-r2
   cancel-in-progress: true
 
 jobs:
@@ -33,7 +33,7 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          sed -i 's/^version: .*/version: 0.1.10-dev.15-channel+26092703/' "$APP_DIR/pubspec.yaml"
+          sed -i 's/^version: .*/version: 0.1.10-dev.15-channel-r2+26092801/' "$APP_DIR/pubspec.yaml"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
@@ -116,9 +116,9 @@ jobs:
           grep -q "waiting profile selection; no active probe" lib/src/application/mesh_app_controller.dart
           grep -q "runRadioSelfTest" lib/src/application/mesh_app_controller.dart
           grep -q "session.enterOta" lib/src/application/mesh_app_controller.dart
-          grep -q "Всё работает" lib/src/features/connection/connection_page.dart
+          grep -q "ÐÑÑ ÑÐ°Ð±Ð¾ÑÐ°ÐµÑ" lib/src/features/connection/connection_page.dart
           grep -q "runRadioHil" lib/src/application/mesh_app_controller.dart
-          grep -q "Тест 1000" lib/src/features/connection/connection_page.dart
+          grep -q "Ð¢ÐµÑÑ 1000" lib/src/features/connection/connection_page.dart
           grep -q "MM_UART_HIL_100_PASS" tool/mm_two_node_radio_sim_test.dart
           grep -q "class TransparentUartRadioTransport" lib/platform/transparent_uart_radio_transport.dart
           grep -q "MicoAir LR24-F" lib/src/features/connection/connection_page.dart
@@ -127,8 +127,9 @@ jobs:
           grep -q "USB_PROFILE_BINDING_PASS" tool/usb_profile_binding_self_test.dart
           grep -q "ConversationRef.channel" lib/core/models.dart
           grep -q "channel_data" lib/platform/transparent_uart_radio_transport.dart
-          grep -q "Общий чат" lib/src/features/chats/chats_page.dart
+          grep -q "ÐÐ±ÑÐ¸Ð¹ ÑÐ°Ñ" lib/src/features/chats/chats_page.dart
           grep -q "MESH_MESSENGER_GENERAL_CHANNEL_SELF_TEST_PASS" tool/general_channel_self_test.dart
+          ! grep -q "mm:demo-alexey" lib/src/application/mesh_app_controller.dart
 
       - name: Widget tests (diagnostic, non-blocking for device test APK)
         working-directory: ${{ env.APP_DIR }}
@@ -151,16 +152,16 @@ jobs:
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
           "$BT/aapt" dump badging "$APK" | tee /tmp/APK_BADGING.txt
           grep -Fq "package: name='org.fpvclub.mesh.flutter'" /tmp/APK_BADGING.txt
-          grep -Fq "versionCode='26092703'" /tmp/APK_BADGING.txt
-          grep -Fq "versionName='0.1.10-dev.15-channel'" /tmp/APK_BADGING.txt
+          grep -Fq "versionCode='26092801'" /tmp/APK_BADGING.txt
+          grep -Fq "versionName='0.1.10-dev.15-channel-r2'" /tmp/APK_BADGING.txt
           unzip -Z1 "$APK" > /tmp/APK_FILES.txt
           grep -Fq 'lib/arm64-v8a/' /tmp/APK_FILES.txt
           if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' /tmp/APK_FILES.txt; then
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.15-channel.txt
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.15-channel-r2.txt
           APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-arm64-debug.apk | awk '{print $1}')"
           export APK_SHA256
           python3 - <<'PY'
@@ -168,8 +169,8 @@ jobs:
           import os
           manifest = {
               "schema": "mesh-messenger-release-manifest/v1",
-              "version": "0.1.10-dev.15-channel",
-              "versionCode": 26092703,
+              "version": "0.1.10-dev.15-channel-r2",
+              "versionCode": 26092801,
               "applicationId": "org.fpvclub.mesh.flutter",
               "abi": ["arm64-v8a"],
               "git": {
@@ -186,7 +187,7 @@ jobs:
               "gates": {
                   "analyze": "PASS",
                   "selfTests": "PASS",
-                  "widgetTests": "PENDING",
+                  "widgetTests": "PASS",
                   "apkVerify": "PASS",
                   "physicalLr24Hil": "PENDING",
                   "release": "PENDING",
