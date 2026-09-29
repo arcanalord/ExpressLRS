@@ -16,6 +16,7 @@ Future<void> main() async {
   await _runExactFourChunksWithDroppedFinalComplete();
   await _runProactiveFinalCompleteWithoutSenderFinalRequest();
   await _runCancellation();
+  stdout.writeln('MESH_MESSENGER_FILE1_VERIFIED_FINAL_ACK_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_TRANSIENT_FINALIZE_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_TRANSPORT_LOOPBACK_PASS');
 }
@@ -138,7 +139,7 @@ Future<void> _runFinalizeWriteFailureScenario({
   late final File1TransportBridge bridgeB;
   Uint8List? received;
   var senderCompleteWriteFailed = false;
-  var receiverCompleteWriteFailed = false;
+  var receiverVerifiedAckWriteFailed = false;
   final progress = <File1TransportProgress>[];
 
   bridgeA = File1TransportBridge(
@@ -159,10 +160,12 @@ Future<void> _runFinalizeWriteFailureScenario({
     tickInterval: const Duration(milliseconds: 5),
     sendBytes: (payload) async {
       final frame = File1Codec.decode(payload);
-      if (frame.type == File1FrameType.complete &&
-          !receiverCompleteWriteFailed) {
-        receiverCompleteWriteFailed = true;
-        throw StateError('simulated transient receiver COMPLETE write');
+      if (frame.type == File1FrameType.ack &&
+          File1Codec.decodeAck(frame) ==
+              File1Codec.verifiedCompleteAckIndex &&
+          !receiverVerifiedAckWriteFailed) {
+        receiverVerifiedAckWriteFailed = true;
+        throw StateError('simulated transient receiver verified ACK write');
       }
       await bridgeA.handleIncoming(payload);
     },
@@ -190,8 +193,8 @@ Future<void> _runFinalizeWriteFailureScenario({
 
   await bridgeA.send(plan).timeout(const Duration(seconds: 8));
 
-  if (!senderCompleteWriteFailed || !receiverCompleteWriteFailed) {
-    throw StateError('Transient COMPLETE write failures were not exercised');
+  if (!senderCompleteWriteFailed || !receiverVerifiedAckWriteFailed) {
+    throw StateError('Transient final-control write failures were not exercised');
   }
   final result = received;
   if (result == null || !_same(payload, result)) {
@@ -266,7 +269,7 @@ Future<void> _runExactFourChunksWithDroppedFinalComplete() async {
   final codecB = MmSerialCodec();
   late final File1TransportBridge bridgeA;
   late final File1TransportBridge bridgeB;
-  var dropFirstFinalComplete = true;
+  var dropFirstVerifiedAck = true;
   Uint8List? received;
   final progress = <File1TransportProgress>[];
 
@@ -275,13 +278,15 @@ Future<void> _runExactFourChunksWithDroppedFinalComplete() async {
     MmSerialCodec decoder,
     File1TransportBridge target,
     Uint8List payload, {
-    bool dropFinalCompleteResponse = false,
+    bool dropVerifiedAckResponse = false,
   }) async {
     final decoded = File1Codec.decode(payload);
-    if (dropFinalCompleteResponse &&
-        decoded.type == File1FrameType.complete &&
-        dropFirstFinalComplete) {
-      dropFirstFinalComplete = false;
+    if (dropVerifiedAckResponse &&
+        decoded.type == File1FrameType.ack &&
+        File1Codec.decodeAck(decoded) ==
+            File1Codec.verifiedCompleteAckIndex &&
+        dropFirstVerifiedAck) {
+      dropFirstVerifiedAck = false;
       return;
     }
     final wire = encoder.encodeBinary(
@@ -312,7 +317,7 @@ Future<void> _runExactFourChunksWithDroppedFinalComplete() async {
       codecA,
       bridgeA,
       payload,
-      dropFinalCompleteResponse: true,
+      dropVerifiedAckResponse: true,
     ),
   );
 
@@ -346,8 +351,8 @@ Future<void> _runExactFourChunksWithDroppedFinalComplete() async {
   }
 
   await bridgeA.send(plan).timeout(const Duration(seconds: 10));
-  if (dropFirstFinalComplete) {
-    throw StateError('final COMPLETE response was not dropped');
+  if (dropFirstVerifiedAck) {
+    throw StateError('verified final ACK response was not dropped');
   }
   final result = received;
   if (result == null || !_same(payload, result)) {
