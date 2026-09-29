@@ -74,6 +74,7 @@ final class FileTransferSenderSession {
       if (_acked.contains(index) || _lastSentAtMs.containsKey(index)) continue;
       final attempts = (_attempts[index] ?? 0) + 1;
       if (attempts > maxRetries + 1) {
+        failureReason = 'chunk-retry-exhausted:' + index.toString();
         state = FileTransferSessionState.failed;
         return frames;
       }
@@ -89,7 +90,7 @@ final class FileTransferSenderSession {
       if (shouldSendComplete) {
         final attempts = _completeAttempts + 1;
         if (attempts > maxRetries + 1) {
-          failureReason = 'chunk-retry-exhausted:' + index.toString();
+          failureReason = 'final-confirmation-timeout';
           state = FileTransferSessionState.failed;
           return frames;
         }
