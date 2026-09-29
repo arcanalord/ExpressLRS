@@ -2,6 +2,12 @@ name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc1
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - security/secure-core-v1-integration
+    paths:
+      - '.github/workflows/mesh-flutter-general-dev15.yml'
+      - '.ci/mesh-v0110/dev5-overlay/**'
 
 concurrency:
   group: mesh-flutter-v0.6.0-secure-core-rc1
