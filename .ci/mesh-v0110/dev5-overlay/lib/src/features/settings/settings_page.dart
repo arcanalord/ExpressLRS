@@ -5,6 +5,15 @@ import '../../../core/settings_registry.dart';
 import '../../application/mesh_app_controller.dart';
 import '../contacts/contact_share_dialog.dart';
 
+const _meshAppVersion = String.fromEnvironment(
+  'APP_VERSION',
+  defaultValue: '0.6.0-secure-core-rc2',
+);
+const _meshAppBuild = String.fromEnvironment(
+  'APP_BUILD',
+  defaultValue: '26092902',
+);
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({required this.controller, super.key});
 
@@ -135,6 +144,8 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 12),
         const _PlannedSettingsPanel(),
         const SizedBox(height: 12),
+        const _AboutPanel(),
+        const SizedBox(height: 12),
         for (final entry in groups.entries) ...[
           _SettingsGroup(
             title: entry.key,
@@ -213,6 +224,22 @@ class _IdentityPanel extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AboutPanel extends StatelessWidget {
+  const _AboutPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    return const _GlassPanel(
+      padding: EdgeInsets.zero,
+      child: ListTile(
+        leading: Icon(Icons.info_outline),
+        title: Text('О приложении', style: TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text('Версия $_meshAppVersion ($_meshAppBuild)'),
       ),
     );
   }
