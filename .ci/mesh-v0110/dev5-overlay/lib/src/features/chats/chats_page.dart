@@ -183,25 +183,36 @@ class _ContactList extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          trailing: contact.verified
-              ? const Icon(Icons.verified_user_outlined, size: 18)
-              : null,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (contact.verified)
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: Icon(Icons.verified_user_outlined, size: 18),
+                ),
+              IconButton(
+                tooltip: 'Переименовать контакт',
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                onPressed: () async {
+                  final name = await _promptContactName(
+                    context,
+                    initialName: contact.displayName,
+                    title: 'Переименовать контакт',
+                    subtitle: contact.mmId,
+                  );
+                  if (name == null || name == contact.displayName) return;
+                  await controller.renameContact(
+                    mmId: contact.mmId,
+                    displayName: name,
+                  );
+                },
+              ),
+            ],
+          ),
           onTap: () {
             controller.selectContact(contact.mmId);
             onOpenConversation();
-          },
-          onLongPress: () async {
-            final name = await _promptContactName(
-              context,
-              initialName: contact.displayName,
-              title: 'Переименовать контакт',
-              subtitle: contact.mmId,
-            );
-            if (name == null || name == contact.displayName) return;
-            await controller.renameContact(
-              mmId: contact.mmId,
-              displayName: name,
-            );
           },
         ),
       if (controller.nearbyPeerMmIds.isNotEmpty)
@@ -418,9 +429,13 @@ class _AddContactPageState extends State<_AddContactPage> {
     try {
       final card = ContactCard.parse(raw);
       if (!mounted) return;
-      final existing = widget.controller.contacts
-          .where((contact) => contact.mmId == card.mmId.trim())
-          .firstOrNull;
+      Contact? existing;
+      for (final contact in widget.controller.contacts) {
+        if (contact.mmId == card.mmId.trim()) {
+          existing = contact;
+          break;
+        }
+      }
       final name = await _promptContactName(
         context,
         initialName: existing?.displayName ?? card.displayName,
