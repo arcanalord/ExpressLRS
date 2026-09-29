@@ -148,11 +148,11 @@ jobs:
           class Main
           EOF
 
-      - name: Warm dependency graph and validate Android compile
+      - name: Validate Android compile and warm real dependency graph
         working-directory: warmup
         run: |
           set -o pipefail
-          gradle --no-daemon --stacktrace warmAllDependencies test assembleDebug 2>&1 | tee ../dependency-warmup.log
+          gradle --no-daemon --stacktrace test assembleDebug 2>&1 | tee ../dependency-warmup.log
 
       - name: Pack offline Gradle cache
         if: always()
