@@ -148,6 +148,14 @@ jobs:
           class Main
           EOF
 
+          cat > warmup/gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
+          org.gradle.workers.max=2
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          EOF
+
       - name: Validate Android compile and warm real dependency graph
         working-directory: warmup
         run: |
