@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'local_storage_crypto.dart';
 import 'models.dart';
 
 /// One small storage owner for the current prototype.
@@ -14,8 +15,22 @@ final class AppIdentity {
 }
 
 final class AppStorage {
-  AppStorage(this.root);
+  AppStorage(
+    this.root, {
+    AppStorageCrypto? crypto,
+    this.requireEncryption = false,
+  }) : _crypto = crypto;
+
+  static const _encryptedSchema = 'mesh-messenger-local-storage/v1';
+  static const _contactsPurpose = 'contacts';
+  static const _groupsPurpose = 'groups';
+  static const _groupReceiptsPurpose = 'group_receipts';
+  static const _messagesPurpose = 'messages';
+  static const _outboxPurpose = 'outbox';
+
   final Directory root;
+  final AppStorageCrypto? _crypto;
+  final bool requireEncryption;
   Future<void> _mutationTail = Future<void>.value();
 
   File get _contactsFile => File('${root.path}/contacts.json');
@@ -103,27 +118,39 @@ final class AppStorage {
   }
 
   Future<List<Contact>> loadContacts() async =>
-      (await _readList(_contactsFile)).map(Contact.fromJson).toList();
+      (await _readList(
+        _contactsFile,
+        sensitivePurpose: _contactsPurpose,
+      )).map(Contact.fromJson).toList();
 
   Future<void> saveContact(Contact contact) => _serialized(() async {
     final items = {
-      for (final raw in await _readList(_contactsFile))
+      for (final raw in await _readList(
+        _contactsFile,
+        sensitivePurpose: _contactsPurpose,
+      ))
         Contact.fromJson(raw).mmId: Contact.fromJson(raw),
     };
     items[contact.mmId] = contact;
     await _writeList(
       _contactsFile,
       items.values.map((e) => e.toJson()).toList(),
+      sensitivePurpose: _contactsPurpose,
     );
   });
 
-
   Future<List<GroupDefinition>> loadGroups() async =>
-      (await _readList(_groupsFile)).map(GroupDefinition.fromJson).toList();
+      (await _readList(
+        _groupsFile,
+        sensitivePurpose: _groupsPurpose,
+      )).map(GroupDefinition.fromJson).toList();
 
   Future<void> saveGroup(GroupDefinition group) => _serialized(() async {
     final items = {
-      for (final raw in await _readList(_groupsFile))
+      for (final raw in await _readList(
+        _groupsFile,
+        sensitivePurpose: _groupsPurpose,
+      ))
         GroupDefinition.fromJson(raw).groupId: GroupDefinition.fromJson(raw),
     };
     final current = items[group.groupId];
@@ -133,17 +160,24 @@ final class AppStorage {
     await _writeList(
       _groupsFile,
       items.values.map((e) => e.toJson()).toList(),
+      sensitivePurpose: _groupsPurpose,
     );
   });
 
   Future<List<GroupReceiptRecord>> loadGroupReceipts() async =>
-      (await _readList(_groupReceiptsFile))
+      (await _readList(
+        _groupReceiptsFile,
+        sensitivePurpose: _groupReceiptsPurpose,
+      ))
           .map(GroupReceiptRecord.fromJson)
           .toList();
 
   Future<void> saveGroupReceipt(GroupReceiptRecord receipt) =>
       _serialized(() async {
-        final all = (await _readList(_groupReceiptsFile))
+        final all = (await _readList(
+          _groupReceiptsFile,
+          sensitivePurpose: _groupReceiptsPurpose,
+        ))
             .map(GroupReceiptRecord.fromJson)
             .toList();
         final exists = all.any(
@@ -156,6 +190,7 @@ final class AppStorage {
           await _writeList(
             _groupReceiptsFile,
             all.map((e) => e.toJson()).toList(),
+            sensitivePurpose: _groupReceiptsPurpose,
           );
         }
       });
@@ -164,7 +199,10 @@ final class AppStorage {
     String? peerMmId,
     String? conversationKey,
   }) async {
-    final all = (await _readList(_messagesFile))
+    final all = (await _readList(
+      _messagesFile,
+      sensitivePurpose: _messagesPurpose,
+    ))
         .map(ConversationMessage.fromJson)
         .toList();
     if (conversationKey != null) {
@@ -182,37 +220,102 @@ final class AppStorage {
 
   Future<bool> appendMessageUnique(ConversationMessage message) => _serialized(
     () async {
-      final all = (await _readList(_messagesFile))
+      final all = (await _readList(
+        _messagesFile,
+        sensitivePurpose: _messagesPurpose,
+      ))
           .map(ConversationMessage.fromJson)
           .toList();
       if (all.any((item) => item.messageId == message.messageId)) return false;
       all.add(message);
-      await _writeList(_messagesFile, all.map((e) => e.toJson()).toList());
+      await _writeList(
+        _messagesFile,
+        all.map((e) => e.toJson()).toList(),
+        sensitivePurpose: _messagesPurpose,
+      );
       return true;
     },
   );
 
   Future<List<DeliveryEnvelope>> loadOutbox() async =>
-      (await _readList(_outboxFile)).map(DeliveryEnvelope.fromJson).toList();
+      (await _readList(
+        _outboxFile,
+        sensitivePurpose: _outboxPurpose,
+      )).map(DeliveryEnvelope.fromJson).toList();
 
   Future<void> saveOutboxItem(DeliveryEnvelope item) => _serialized(() async {
     final items = {
-      for (final raw in await _readList(_outboxFile))
+      for (final raw in await _readList(
+        _outboxFile,
+        sensitivePurpose: _outboxPurpose,
+      ))
         DeliveryEnvelope.fromJson(raw).effectiveDeliveryId:
             DeliveryEnvelope.fromJson(raw),
     };
     items[item.effectiveDeliveryId] = item;
-    await _writeList(_outboxFile, items.values.map((e) => e.toJson()).toList());
+    await _writeList(
+      _outboxFile,
+      items.values.map((e) => e.toJson()).toList(),
+      sensitivePurpose: _outboxPurpose,
+    );
   });
 
   Future<void> removeOutboxItem(String deliveryId) => _serialized(() async {
-    final items = (await _readList(_outboxFile))
+    final items = (await _readList(
+      _outboxFile,
+      sensitivePurpose: _outboxPurpose,
+    ))
         .map(DeliveryEnvelope.fromJson)
         .where((e) => e.effectiveDeliveryId != deliveryId);
-    await _writeList(_outboxFile, items.map((e) => e.toJson()).toList());
+    await _writeList(
+      _outboxFile,
+      items.map((e) => e.toJson()).toList(),
+      sensitivePurpose: _outboxPurpose,
+    );
   });
 
-  Future<List<Map<String, dynamic>>> _readList(File file) async {
+  Future<void> migrateSensitiveStorage() => _serialized(() async {
+    await _migrateSensitiveFile(_contactsFile, _contactsPurpose);
+    await _migrateSensitiveFile(_groupsFile, _groupsPurpose);
+    await _migrateSensitiveFile(_groupReceiptsFile, _groupReceiptsPurpose);
+    await _migrateSensitiveFile(_messagesFile, _messagesPurpose);
+    await _migrateSensitiveFile(_outboxFile, _outboxPurpose);
+  });
+
+  Future<void> _migrateSensitiveFile(File file, String purpose) async {
+    File? source;
+    if (await file.exists()) {
+      source = file;
+    } else {
+      final backup = File('${file.path}.bak');
+      if (await backup.exists()) source = backup;
+    }
+    if (source == null) return;
+
+    final text = await source.readAsString();
+    if (text.trim().isEmpty) return;
+    final decoded = jsonDecode(text);
+    if (_isEncryptedEnvelope(decoded)) return;
+    if (decoded is! List) {
+      throw FormatException('${file.path} has unsupported storage format');
+    }
+    if (_crypto == null) {
+      if (requireEncryption) {
+        throw StateError('LOCAL_STORAGE_ENCRYPTION_REQUIRED:$purpose');
+      }
+      return;
+    }
+    await _writeList(
+      file,
+      decoded.cast<Map<String, dynamic>>(),
+      sensitivePurpose: purpose,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _readList(
+    File file, {
+    String? sensitivePurpose,
+  }) async {
     File source = file;
     if (!await source.exists()) {
       final backup = File('${file.path}.bak');
@@ -222,21 +325,92 @@ final class AppStorage {
     final text = await source.readAsString();
     if (text.trim().isEmpty) return [];
     final decoded = jsonDecode(text);
-    if (decoded is! List)
+
+    Object? clear = decoded;
+    if (sensitivePurpose != null && _isEncryptedEnvelope(decoded)) {
+      final envelope = Map<String, dynamic>.from(decoded as Map);
+      final purpose = envelope['purpose'];
+      if (purpose != sensitivePurpose) {
+        throw const FormatException('LOCAL_STORAGE_PURPOSE_MISMATCH');
+      }
+      final crypto = _crypto;
+      if (crypto == null) {
+        throw StateError('LOCAL_STORAGE_CRYPTO_UNAVAILABLE:$sensitivePurpose');
+      }
+      final iv = envelope['iv'];
+      final ciphertext = envelope['ciphertext'];
+      if (iv is! String || ciphertext is! String) {
+        throw const FormatException('LOCAL_STORAGE_ENVELOPE_INVALID');
+      }
+      final plaintext = await crypto.decrypt(
+        purpose: sensitivePurpose,
+        iv: iv,
+        ciphertext: ciphertext,
+      );
+      clear = jsonDecode(plaintext);
+    } else if (sensitivePurpose != null && requireEncryption && decoded is List) {
+      throw StateError('LOCAL_STORAGE_PLAINTEXT_REQUIRES_MIGRATION:$sensitivePurpose');
+    }
+
+    if (clear is! List) {
       throw FormatException('${file.path} must contain a JSON list');
-    return decoded.cast<Map<String, dynamic>>();
+    }
+    return clear.cast<Map<String, dynamic>>();
   }
 
-  Future<void> _writeList(File file, List<Map<String, Object?>> data) async {
+  bool _isEncryptedEnvelope(Object? value) =>
+      value is Map && value['schema'] == _encryptedSchema;
+
+  Future<void> _writeList(
+    File file,
+    List<Map<String, Object?>> data, {
+    String? sensitivePurpose,
+  }) async {
+    final clearText = const JsonEncoder.withIndent('  ').convert(data);
+    String diskText = clearText;
+    if (sensitivePurpose != null) {
+      final crypto = _crypto;
+      if (crypto == null) {
+        if (requireEncryption) {
+          throw StateError('LOCAL_STORAGE_ENCRYPTION_REQUIRED:$sensitivePurpose');
+        }
+      } else {
+        final encrypted = await crypto.encrypt(
+          purpose: sensitivePurpose,
+          plaintext: clearText,
+        );
+        final purpose = encrypted['purpose'];
+        final iv = encrypted['iv'];
+        final ciphertext = encrypted['ciphertext'];
+        if (purpose != sensitivePurpose ||
+            iv == null ||
+            iv.isEmpty ||
+            ciphertext == null ||
+            ciphertext.isEmpty) {
+          throw const FormatException('LOCAL_STORAGE_ENCRYPT_RESULT_INVALID');
+        }
+        diskText = const JsonEncoder.withIndent('  ').convert({
+          'schema': _encryptedSchema,
+          'purpose': sensitivePurpose,
+          'iv': iv,
+          'ciphertext': ciphertext,
+        });
+      }
+    }
+    await _writeTextAtomically(file, diskText);
+  }
+
+  Future<void> _writeTextAtomically(File file, String text) async {
     await root.create(recursive: true);
     final tmp = File('${file.path}.tmp');
     final backup = File('${file.path}.bak');
-    await tmp.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(data),
-      flush: true,
-    );
-    if (await backup.exists()) await backup.delete();
-    if (await file.exists()) await file.rename(backup.path);
+    await tmp.writeAsString(text, flush: true);
+    if (await file.exists()) {
+      if (await backup.exists()) await backup.delete();
+      await file.rename(backup.path);
+    }
+    // If the main file is already missing but a recovery .bak exists, keep
+    // that backup until the new encrypted main file is durably renamed.
     try {
       await tmp.rename(file.path);
       if (await backup.exists()) await backup.delete();
