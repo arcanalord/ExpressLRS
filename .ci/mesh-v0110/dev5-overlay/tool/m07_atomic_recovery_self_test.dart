@@ -41,7 +41,7 @@ final class _AtomicTestProvider implements M07AtomicCryptoProvider {
   );
 
   @override
-  IdentityPublicMaterial localIdentity() => IdentityPublicMaterial(
+  Future<IdentityPublicMaterial> localIdentity() async => IdentityPublicMaterial(
     formatVersion: 1,
     mmId: mmId,
     fingerprint: 'fp-$mmId',
