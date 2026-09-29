@@ -207,8 +207,19 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
+    const expectedVersion = String.fromEnvironment(
+      'APP_VERSION',
+      defaultValue: 'dev',
+    );
+    const expectedBuild = String.fromEnvironment(
+      'APP_BUILD',
+      defaultValue: 'local',
+    );
     expect(find.text('О приложении'), findsOneWidget);
-    expect(find.text('Версия 0.6.0-secure-core-rc3 (26092903)'), findsOneWidget);
+    expect(
+      find.text('Версия $expectedVersion ($expectedBuild)'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
