@@ -38,6 +38,7 @@ final class FileTransferSenderSession {
   bool _manifestAcked = false;
   bool _completeSent = false;
   int _completeAttempts = 0;
+  String? failureReason;
   int _lastCompleteSentAtMs = -0x7fffffff;
   final Queue<int> _pending = Queue<int>();
   final Set<int> _acked = <int>{};
@@ -73,6 +74,7 @@ final class FileTransferSenderSession {
       if (_acked.contains(index) || _lastSentAtMs.containsKey(index)) continue;
       final attempts = (_attempts[index] ?? 0) + 1;
       if (attempts > maxRetries + 1) {
+        failureReason = 'chunk-retry-exhausted:' + index.toString();
         state = FileTransferSessionState.failed;
         return frames;
       }
@@ -88,6 +90,7 @@ final class FileTransferSenderSession {
       if (shouldSendComplete) {
         final attempts = _completeAttempts + 1;
         if (attempts > maxRetries + 1) {
+          failureReason = 'final-confirmation-timeout';
           state = FileTransferSessionState.failed;
           return frames;
         }
@@ -139,8 +142,10 @@ final class FileTransferSenderSession {
           state = FileTransferSessionState.sending;
         }
       case File1FrameType.complete:
+        failureReason = null;
         state = FileTransferSessionState.completed;
       case File1FrameType.error:
+        failureReason = File1Codec.decodeError(frame);
         state = FileTransferSessionState.failed;
       case File1FrameType.manifest:
       case File1FrameType.chunk:
@@ -149,7 +154,10 @@ final class FileTransferSenderSession {
   }
 
   void cancel() {
-    if (!isTerminal) state = FileTransferSessionState.cancelled;
+    if (!isTerminal) {
+      failureReason = 'cancelled';
+      state = FileTransferSessionState.cancelled;
+    }
   }
 
   void _requeueTimedOut(int nowMs) {
@@ -162,6 +170,7 @@ final class FileTransferSenderSession {
     for (final index in expired) {
       _lastSentAtMs.remove(index);
       if ((_attempts[index] ?? 0) > maxRetries) {
+        failureReason = 'chunk-retry-exhausted:' + index.toString();
         state = FileTransferSessionState.failed;
         return;
       }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../lib/core/file_transfer_core.dart';
+import '../lib/core/file_transfer_protocol.dart';
 import '../lib/core/file_transfer_session.dart';
 import '../lib/platform/file1_transport_bridge.dart';
 import '../lib/platform/m05_transport_qos_adapter.dart';
@@ -11,6 +12,7 @@ import '../lib/platform/mm_serial_codec.dart';
 Future<void> main() async {
   await _runLoopback(bytes: 20 * 1024, chunkSize: 512);
   await _runLoopback(bytes: 100 * 1024, chunkSize: 1024);
+  await _runExactFourChunksWithDroppedFinalComplete();
   await _runCancellation();
   stdout.writeln('MESH_MESSENGER_FILE1_TRANSPORT_LOOPBACK_PASS');
 }
@@ -156,4 +158,107 @@ bool _same(Uint8List a, Uint8List b) {
     if (a[i] != b[i]) return false;
   }
   return true;
+}
+
+
+Future<void> _runExactFourChunksWithDroppedFinalComplete() async {
+  final codecA = MmSerialCodec();
+  final codecB = MmSerialCodec();
+  late final File1TransportBridge bridgeA;
+  late final File1TransportBridge bridgeB;
+  var dropFirstFinalComplete = true;
+  Uint8List? received;
+  final progress = <File1TransportProgress>[];
+
+  Future<void> deliver(
+    MmSerialCodec encoder,
+    MmSerialCodec decoder,
+    File1TransportBridge target,
+    Uint8List payload, {
+    bool dropFinalCompleteResponse = false,
+  }) async {
+    final decoded = File1Codec.decode(payload);
+    if (dropFinalCompleteResponse &&
+        decoded.type == File1FrameType.complete &&
+        dropFirstFinalComplete) {
+      dropFirstFinalComplete = false;
+      return;
+    }
+    final wire = encoder.encodeBinary(
+      payload,
+      tag: MmSerialCodec.file1BinaryTag,
+    );
+    final packets = decoder.feedPackets(wire);
+    for (final packet in packets) {
+      if (packet is! MmSerialBinaryPacket ||
+          packet.tag != MmSerialCodec.file1BinaryTag) {
+        throw StateError('unexpected MM-SERIAL packet');
+      }
+      await target.handleIncoming(packet.payload);
+    }
+  }
+
+  late final M05TransportQosAdapter qosA;
+  late final M05TransportQosAdapter qosB;
+  qosA = M05TransportQosAdapter(
+    writeRaw: (_) async {},
+    writeRawFile1: (payload) =>
+        deliver(codecA, codecB, bridgeB, payload),
+  );
+  qosB = M05TransportQosAdapter(
+    writeRaw: (_) async {},
+    writeRawFile1: (payload) => deliver(
+      codecB,
+      codecA,
+      bridgeA,
+      payload,
+      dropFinalCompleteResponse: true,
+    ),
+  );
+
+  bridgeA = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: qosA.sendFile1,
+    onReceived: (_) {},
+    onProgress: progress.add,
+  );
+  bridgeB = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: qosB.sendFile1,
+    onReceived: (event) {
+      received = Uint8List.fromList(event.bytes);
+    },
+  );
+
+  const chunkSize = 512;
+  final payload = Uint8List.fromList(
+    List<int>.generate(chunkSize * 4, (index) => (index * 17 + 3) & 0xff),
+  );
+  final plan = M05FileTransferCore.createPlan(
+    transferId: 'exact-four-final-retry',
+    fileName: 'four-chunks.bin',
+    mimeType: 'application/octet-stream',
+    bytes: payload,
+    chunkSize: chunkSize,
+  );
+  if (plan.manifest.chunkCount != 4) {
+    throw StateError('regression fixture must contain exactly 4 chunks');
+  }
+
+  await bridgeA.send(plan).timeout(const Duration(seconds: 10));
+  if (dropFirstFinalComplete) {
+    throw StateError('final COMPLETE response was not dropped');
+  }
+  final result = received;
+  if (result == null || !_same(payload, result)) {
+    throw StateError('exact-four receiver payload mismatch');
+  }
+  if (progress.isEmpty ||
+      progress.last.state != FileTransferSessionState.completed ||
+      progress.last.ackedChunks != 4) {
+    throw StateError('exact-four sender did not complete after 4/4 ACKs');
+  }
+
+  bridgeA.close();
+  bridgeB.close();
 }

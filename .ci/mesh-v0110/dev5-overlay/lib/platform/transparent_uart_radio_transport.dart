@@ -158,12 +158,14 @@ final class TransparentUartFileProgress extends TransparentUartRadioEvent {
     required this.state,
     required this.ackedChunks,
     required this.totalChunks,
+    this.failureReason,
   });
 
   final String transferId;
   final String state;
   final int ackedChunks;
   final int totalChunks;
+  final String? failureReason;
 
   double get fraction =>
       totalChunks == 0 ? 1 : ackedChunks / totalChunks;
@@ -224,6 +226,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
             state: progress.state.name,
             ackedChunks: progress.ackedChunks,
             totalChunks: progress.totalChunks,
+            failureReason: progress.failureReason,
           ),
         );
       },

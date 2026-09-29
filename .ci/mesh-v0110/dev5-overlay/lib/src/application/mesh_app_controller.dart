@@ -2383,7 +2383,10 @@ final class MeshAppController extends ChangeNotifier {
             fileTransferNotice =
                 'Доставлено: ${event.totalChunks}/${event.totalChunks} блоков';
           case 'failed':
-            fileTransferNotice = 'Ошибка передачи';
+            final reason = event.failureReason?.trim();
+            fileTransferNotice = reason == null || reason.isEmpty
+                ? 'Ошибка передачи'
+                : 'Ошибка передачи: ' + reason;
           case 'cancelled':
             fileTransferNotice = 'Передача отменена';
           default:
