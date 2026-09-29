@@ -1,16 +1,10 @@
-name: Mesh Messenger Flutter Android v0.1.10-dev.15-channel-r2
+name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc1
 
 on:
-  push:
-    branches:
-      - feature/mesh-lr24-usb
-    paths:
-      - '.github/workflows/mesh-flutter-general-dev15.yml'
-      - '.ci/mesh-v0110/dev5-overlay/**'
   workflow_dispatch:
 
 concurrency:
-  group: mesh-flutter-v0.1.10-dev.15-channel-r2
+  group: mesh-flutter-v0.6.0-secure-core-rc1
   cancel-in-progress: true
 
 jobs:
@@ -33,7 +27,7 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          sed -i 's/^version: .*/version: 0.1.10-dev.15-channel-r2+26092801/' "$APP_DIR/pubspec.yaml"
+          sed -i 's/^version: .*/version: 0.6.0-secure-core-rc1+26092901/' "$APP_DIR/pubspec.yaml"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
@@ -208,7 +202,7 @@ jobs:
         working-directory: ${{ env.APP_DIR }}
         run: timeout 180s flutter test test/connection_page_test.dart test/app_shell_navigation_test.dart --reporter expanded --timeout 90s
 
-      - name: Build installable arm64 debug APK
+      - name: Build installable arm64 test APK
         working-directory: ${{ env.APP_DIR }}
         run: flutter build apk --debug --target-platform android-arm64 --split-per-abi
 
@@ -234,9 +228,9 @@ jobs:
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk | tee /tmp/SHA256SUM-v0.1.10-dev.15-channel-r2.txt
-          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk | awk '{print $1}')"
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk | tee /tmp/SHA256SUM-v0.6.0-secure-core-rc1.txt
+          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk | awk '{print $1}')"
           export APK_SHA256
           python3 - <<'PY'
           import json
@@ -249,13 +243,13 @@ jobs:
               "abi": ["arm64-v8a"],
               "git": {
                   "repository": "arcanalord/ExpressLRS",
-                  "branch": "feature/mesh-lr24-usb",
+                  "branch": os.environ.get("GITHUB_REF_NAME", "security/secure-core-v1-integration"),
                   "commit": os.environ["GITHUB_SHA"],
                   "workflow": "mesh-flutter-general-dev15.yml",
                   "runId": os.environ["GITHUB_RUN_ID"],
               },
               "artifact": {
-                  "file": "MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk",
+                  "file": "MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk",
                   "sha256": os.environ["APK_SHA256"],
               },
               "gates": {
@@ -264,9 +258,11 @@ jobs:
                   "widgetTests": "PASS",
                   "apkVerify": "PASS",
                   "physicalLr24Hil": "PENDING",
-                  "release": "PENDING",
+                  "release": "BLOCKED_UNTIL_PRODUCTION_M07_PROVIDER",
               },
               "limitations": [
+                  "This is a debug/test APK, not a production release.",
+                  "Production private E2EE remains blocked until a concrete crash-atomic M07 provider is wired.",
                   "Physical two-phone/two-LR24-F general-channel RF HIL is still required.",
                   "Multi-hop and additional logical channels are architecture-ready but not physically validated in this build.",
                   "LR24-F TX power control is not claimed.",
@@ -281,10 +277,10 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug
+          name: MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.1.10-dev.15-channel-r2-arm64-debug.apk
-            /tmp/SHA256SUM-v0.1.10-dev.15-channel-r2.txt
+            /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk
+            /tmp/SHA256SUM-v0.6.0-secure-core-rc1.txt
             /tmp/mesh-messenger-release-manifest-v1.json
           if-no-files-found: error
           retention-days: 14
