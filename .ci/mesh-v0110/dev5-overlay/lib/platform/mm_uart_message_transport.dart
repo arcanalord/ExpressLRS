@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import '../core/delivery.dart';
+import '../core/m07_security.dart';
 import '../core/models.dart';
 import 'mm_uart_external_radio_session.dart';
 
@@ -73,6 +74,8 @@ final class MmUartMessageTransport implements MessageTransport {
     switch (envelope.messageClass) {
       case 'text':
         payload = {'text': envelope.payload};
+      case m07DirectEnvelopeClass:
+        payload = {'envelope': envelope.payload};
       case 'map_point':
         try {
           final decoded = jsonDecode(envelope.payload);
