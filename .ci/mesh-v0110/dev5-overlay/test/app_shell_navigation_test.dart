@@ -138,6 +138,56 @@ void main() {
     }
   });
 
+  test('QR re-import drops verification when identity material changes', () async {
+    final root = Directory.systemTemp.createTempSync('mesh_contact_rekey_gate_');
+    final controller = await MeshAppController.createForWidgetTest(
+      storageRoot: root,
+    );
+    try {
+      await controller.addContactCard(
+        const ContactCard(
+          mmId: 'mm:peer-rekey',
+          displayName: 'Peer',
+          fingerprint: 'fp-old',
+          identityPublicKey: 'ik-old',
+          agreementPublicKey: 'ak-old',
+        ).encode(),
+        displayNameOverride: 'Мой контакт',
+      );
+      final original = controller.contacts.singleWhere(
+        (item) => item.mmId == 'mm:peer-rekey',
+      );
+      await controller.addLocalContact(
+        mmId: original.mmId,
+        displayName: original.displayName,
+      );
+
+      await controller.addContactCard(
+        const ContactCard(
+          mmId: 'mm:peer-rekey',
+          displayName: 'Peer renamed remotely',
+          fingerprint: 'fp-new',
+          identityPublicKey: 'ik-new',
+          agreementPublicKey: 'ak-new',
+        ).encode(),
+        displayNameOverride: 'Мой контакт',
+      );
+      final changed = controller.contacts.singleWhere(
+        (item) => item.mmId == 'mm:peer-rekey',
+      );
+      expect(changed.displayName, 'Мой контакт');
+      expect(changed.fingerprint, 'fp-new');
+      expect(changed.identityPublicKey, 'ik-new');
+      expect(changed.agreementPublicKey, 'ak-new');
+      expect(changed.verified, isFalse);
+      expect(changed.verifiedAt, isNull);
+    } finally {
+      await controller.shutdown();
+      controller.dispose();
+      if (root.existsSync()) root.deleteSync(recursive: true);
+    }
+  });
+
   testWidgets('general location handoff opens map without contact assertion',
       (tester) async {
     final root = Directory.systemTemp.createTempSync('mesh_general_map_gate_');
