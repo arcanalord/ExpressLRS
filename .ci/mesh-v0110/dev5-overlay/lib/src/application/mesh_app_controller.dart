@@ -711,23 +711,66 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addContactCard(String raw) async {
+  Future<void> addContactCard(
+    String raw, {
+    String? displayNameOverride,
+  }) async {
     final card = ContactCard.parse(raw);
+    final cleanId = card.mmId.trim();
+    final existing =
+        contacts.where((contact) => contact.mmId == cleanId).firstOrNull;
+    final overrideName = displayNameOverride?.trim();
+    final cleanName = overrideName != null && overrideName.isNotEmpty
+        ? overrideName
+        : existing?.displayName.trim().isNotEmpty == true
+        ? existing!.displayName.trim()
+        : card.displayName.trim();
+    if (cleanName.isEmpty || cleanName.length > 80) {
+      throw const FormatException('Invalid local contact name');
+    }
+
+    final incomingFingerprint = card.fingerprint?.trim() ?? '';
+    final incomingIdentityKey = card.identityPublicKey?.trim() ?? '';
+    final incomingAgreementKey = card.agreementPublicKey?.trim() ?? '';
+    final identityChanged = existing != null &&
+        ((incomingFingerprint.isNotEmpty &&
+                (existing.fingerprint?.trim().isNotEmpty ?? false) &&
+                incomingFingerprint != existing.fingerprint!.trim()) ||
+            (incomingIdentityKey.isNotEmpty &&
+                (existing.identityPublicKey?.trim().isNotEmpty ?? false) &&
+                incomingIdentityKey != existing.identityPublicKey!.trim()) ||
+            (incomingAgreementKey.isNotEmpty &&
+                (existing.agreementPublicKey?.trim().isNotEmpty ?? false) &&
+                incomingAgreementKey != existing.agreementPublicKey!.trim()));
+    final preserveVerification = existing?.verified == true && !identityChanged;
+
     await _core.saveContact(
       Contact(
-        mmId: card.mmId.trim(),
-        displayName: card.displayName.trim(),
-        fingerprint: card.fingerprint?.trim(),
-        identityPublicKey: card.identityPublicKey?.trim(),
-        agreementPublicKey: card.agreementPublicKey?.trim(),
-        preKeyBundle: card.preKeyBundle?.trim(),
-        meshtasticNodeNum: _parseNodeNum(card.meshtasticNodeId),
-        ep2NodeId: card.radioNodeId,
+        mmId: cleanId,
+        displayName: cleanName,
+        verified: preserveVerification,
+        fingerprint: incomingFingerprint.isEmpty
+            ? existing?.fingerprint
+            : incomingFingerprint,
+        identityPublicKey: incomingIdentityKey.isEmpty
+            ? existing?.identityPublicKey
+            : incomingIdentityKey,
+        agreementPublicKey: incomingAgreementKey.isEmpty
+            ? existing?.agreementPublicKey
+            : incomingAgreementKey,
+        preKeyBundle: card.preKeyBundle?.trim().isNotEmpty == true
+            ? card.preKeyBundle!.trim()
+            : existing?.preKeyBundle,
+        verifiedAt: preserveVerification ? existing?.verifiedAt : null,
+        meshtasticNodeNum: card.meshtasticNodeId == null
+            ? existing?.meshtasticNodeNum
+            : _parseNodeNum(card.meshtasticNodeId),
+        ep2NodeId: card.radioNodeId ?? existing?.ep2NodeId,
       ),
     );
     contacts = await _core.contacts();
-    selectedPeerMmId = card.mmId.trim();
-    activeConversation = ConversationRef.direct(selectedPeerMmId!);
+    selectedPeerMmId = cleanId;
+    activeConversation = ConversationRef.direct(cleanId);
     await _reloadMessages();
     notifyListeners();
   }
@@ -888,13 +931,52 @@ final class MeshAppController extends ChangeNotifier {
   }
 
 
-  Future<void> addNearbyPeerAsContact(String mmId) async {
+  Future<void> renameContact({
+    required String mmId,
+    required String displayName,
+  }) async {
+    final cleanId = mmId.trim();
+    final cleanName = displayName.trim();
+    if (cleanName.isEmpty || cleanName.length > 80) {
+      throw const FormatException('Invalid local contact name');
+    }
+    final existing =
+        contacts.where((contact) => contact.mmId == cleanId).firstOrNull;
+    if (existing == null) throw StateError('CONTACT_NOT_FOUND');
+    await _core.saveContact(
+      Contact(
+        mmId: existing.mmId,
+        displayName: cleanName,
+        verified: existing.verified,
+        identityPublicKey: existing.identityPublicKey,
+        agreementPublicKey: existing.agreementPublicKey,
+        preKeyBundle: existing.preKeyBundle,
+        fingerprint: existing.fingerprint,
+        verifiedAt: existing.verifiedAt,
+        meshtasticNodeNum: existing.meshtasticNodeNum,
+        ep2NodeId: existing.ep2NodeId,
+      ),
+    );
+    contacts = await _core.contacts();
+    notifyListeners();
+  }
+
+  Future<void> addNearbyPeerAsContact(
+    String mmId, {
+    String? displayName,
+  }) async {
     final cleanId = mmId.trim();
     if (cleanId.isEmpty || hasContact(cleanId)) return;
+    final cleanName = displayName?.trim().isNotEmpty == true
+        ? displayName!.trim()
+        : displayNameForMmId(cleanId);
+    if (cleanName.isEmpty || cleanName.length > 80) {
+      throw const FormatException('Invalid local contact name');
+    }
     await _core.saveContact(
       Contact(
         mmId: cleanId,
-        displayName: displayNameForMmId(cleanId),
+        displayName: cleanName,
       ),
     );
     contacts = await _core.contacts();
