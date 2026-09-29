@@ -1,0 +1,11 @@
+analyzer:
+  exclude:
+    - build/**
+  errors:
+    dead_code: warning
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_print
+    - prefer_final_locals
