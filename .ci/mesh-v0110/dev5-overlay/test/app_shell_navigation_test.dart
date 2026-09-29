@@ -208,7 +208,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('О приложении'), findsOneWidget);
-    expect(find.text('Версия 0.6.0-secure-core-rc2 (26092902)'), findsOneWidget);
+    expect(find.text('Версия 0.6.0-secure-core-rc3 (26092903)'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
