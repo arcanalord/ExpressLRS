@@ -253,7 +253,32 @@ final class FileTransferReceiverSession {
           ];
         }
         _chunks.putIfAbsent(chunk.index, () => chunk);
-        return <File1Frame>[File1Codec.ack(frame.transferId, chunk.index)];
+        final ack = File1Codec.ack(frame.transferId, chunk.index);
+        final missingAfterChunk = M05FileTransferCore.missingChunkIndexes(
+          manifest: current,
+          receivedIndexes: _chunks.keys,
+        );
+        if (missingAfterChunk.isNotEmpty) {
+          return <File1Frame>[ack];
+        }
+        try {
+          completedBytes = M05FileTransferCore.reassemble(
+            manifest: current,
+            chunks: _chunks.values,
+          );
+        } on Object {
+          return <File1Frame>[
+            ack,
+            File1Codec.error(frame.transferId, 'integrity'),
+          ];
+        }
+        // Proactive final confirmation: once the last chunk is present and
+        // SHA-256 passes, confirm completion immediately. The sender's
+        // explicit COMPLETE request remains as a fallback/retry path.
+        return <File1Frame>[
+          ack,
+          File1Codec.complete(frame.transferId),
+        ];
       case File1FrameType.complete:
         final current = manifest;
         if (current == null) {
