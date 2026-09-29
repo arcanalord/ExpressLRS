@@ -14,12 +14,21 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Show hosted Android SDK
+      - name: Install Android platform 37 archive
         run: |
           set -euxo pipefail
           echo "ANDROID_HOME=$ANDROID_HOME"
-          ls "$ANDROID_HOME/platforms"
-          ls "$ANDROID_HOME/build-tools"
+          curl --fail --location --retry 3 \
+            https://dl.google.com/android/repository/platform-37.0_r01.zip \
+            -o /tmp/platform-37.0_r01.zip
+          mkdir -p "$ANDROID_HOME/platforms/android-37"
+          unzip -q /tmp/platform-37.0_r01.zip -d /tmp/android-platform-37
+          PLATFORM_DIR="$(find /tmp/android-platform-37 -type f -name android.jar -printf '%h\n' | head -n 1)"
+          test -n "$PLATFORM_DIR"
+          rm -rf "$ANDROID_HOME/platforms/android-37"
+          cp -a "$PLATFORM_DIR" "$ANDROID_HOME/platforms/android-37"
+          test -f "$ANDROID_HOME/platforms/android-37/android.jar"
+          ls -lh "$ANDROID_HOME/platforms/android-37/android.jar"
 
       - name: Setup Gradle 9.6.0
         uses: gradle/actions/setup-gradle@v4
@@ -71,12 +80,12 @@ jobs:
 
           android {
               namespace = "org.fpvclub.cache"
-              compileSdk = 35
+              compileSdk = 37
 
               defaultConfig {
                   applicationId = "org.fpvclub.cache"
                   minSdk = 26
-                  targetSdk = 35
+                  targetSdk = 36
                   versionCode = 1
                   versionName = "0.0.1"
               }
@@ -139,11 +148,11 @@ jobs:
           class Main
           EOF
 
-      - name: Warm dependency graph
+      - name: Warm dependency graph and validate Android compile
         working-directory: warmup
         run: |
           set -o pipefail
-          gradle --no-daemon --stacktrace warmAllDependencies 2>&1 | tee ../dependency-warmup.log
+          gradle --no-daemon --stacktrace warmAllDependencies test assembleDebug 2>&1 | tee ../dependency-warmup.log
 
       - name: Pack offline Gradle cache
         if: always()
