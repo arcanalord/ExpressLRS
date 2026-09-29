@@ -102,6 +102,18 @@ Future<void> main() async {
     check(second.inboundCommits.single.plaintext.payloadUtf8 == 'secret',
         'inbound recovery plaintext must roundtrip inside encrypted state');
 
+    final readOnlyGeneration = (await store.load()).generation;
+    final readOnlyValue = await store.transaction<String>((current) async =>
+        M07ProviderTransactionResult<String>.readOnly(
+          current: current,
+          value: 'unchanged',
+        ));
+    check(readOnlyValue == 'unchanged', 'read-only transaction value must return');
+    check(
+      (await store.load()).generation == readOnlyGeneration,
+      'read-only transaction must not advance generation',
+    );
+
     var rejected = false;
     try {
       await store.transaction<void>((current) async =>
