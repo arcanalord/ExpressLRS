@@ -14,16 +14,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android 37 SDK pieces
+      - name: Show hosted Android SDK
         run: |
           set -euxo pipefail
           echo "ANDROID_HOME=$ANDROID_HOME"
-          SDKMANAGER="$(command -v sdkmanager || true)"
-          if [ -z "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
-          fi
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platforms;android-37" "build-tools;37.0.0" "platform-tools"
+          ls "$ANDROID_HOME/platforms"
+          ls "$ANDROID_HOME/build-tools"
 
       - name: Setup Gradle 9.6.0
         uses: gradle/actions/setup-gradle@v4
@@ -76,12 +72,12 @@ jobs:
 
           android {
               namespace = "org.fpvclub.cache"
-              compileSdk = 37
+              compileSdk = 35
 
               defaultConfig {
                   applicationId = "org.fpvclub.cache"
                   minSdk = 26
-                  targetSdk = 36
+                  targetSdk = 35
                   versionCode = 1
                   versionName = "0.0.1"
               }
