@@ -155,13 +155,7 @@ final class M07AtomicProvider implements M07AtomicCryptoProvider {
   }
 
   @override
-  IdentityPublicMaterial localIdentity() {
-    throw StateError(
-      'M07_ASYNC_IDENTITY_REQUIRED: initialize provider before sync identity read',
-    );
-  }
-
-  Future<IdentityPublicMaterial> localIdentityAsync() async =>
+  Future<IdentityPublicMaterial> localIdentity() async =>
       _engine.localIdentityFromState((await _state()).providerOpaqueJson);
 
   @override
