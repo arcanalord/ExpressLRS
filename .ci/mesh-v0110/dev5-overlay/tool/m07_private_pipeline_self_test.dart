@@ -54,7 +54,7 @@ final class _TestM07Provider implements M07CryptoProvider {
   );
 
   @override
-  IdentityPublicMaterial localIdentity() => IdentityPublicMaterial(
+  Future<IdentityPublicMaterial> localIdentity() async => IdentityPublicMaterial(
     formatVersion: 1,
     mmId: mmId,
     fingerprint: 'fp-$mmId',
