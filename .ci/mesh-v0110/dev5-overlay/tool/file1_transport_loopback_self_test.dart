@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../lib/core/file_transfer_core.dart';
+import '../lib/core/file_transfer_protocol.dart';
 import '../lib/core/file_transfer_session.dart';
 import '../lib/platform/file1_transport_bridge.dart';
 import '../lib/platform/m05_transport_qos_adapter.dart';
