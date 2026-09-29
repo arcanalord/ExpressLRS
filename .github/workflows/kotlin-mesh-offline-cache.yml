@@ -14,13 +14,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android 37 SDK pieces
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-37" "build-tools;37.0.0" "platform-tools"
+          set -euxo pipefail
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKMANAGER="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-37" "build-tools;37.0.0" "platform-tools"
 
       - name: Setup Gradle 9.6.0
         uses: gradle/actions/setup-gradle@v4
@@ -140,7 +143,11 @@ jobs:
         if: always()
         run: |
           set -euxo pipefail
-          tar -C "$HOME" -czf kotlin-gradle-user-home-cache.tar.gz .gradle/caches .gradle/wrapper
+          test -d "$HOME/.gradle/caches"
+          tar -C "$HOME" -czf kotlin-gradle-user-home-cache.tar.gz .gradle/caches
+          if [ -d "$HOME/.gradle/wrapper" ]; then
+            tar -C "$HOME" -rzf kotlin-gradle-user-home-cache.tar.gz .gradle/wrapper || true
+          fi
           sha256sum kotlin-gradle-user-home-cache.tar.gz | tee kotlin-gradle-user-home-cache.sha256
 
       - name: Upload offline cache and manifest
