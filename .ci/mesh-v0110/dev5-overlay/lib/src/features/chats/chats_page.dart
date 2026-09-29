@@ -189,6 +189,19 @@ class _ContactList extends StatelessWidget {
             controller.selectContact(contact.mmId);
             onOpenConversation();
           },
+          onLongPress: () async {
+            final name = await _promptContactName(
+              context,
+              initialName: contact.displayName,
+              title: 'Переименовать контакт',
+              subtitle: contact.mmId,
+            );
+            if (name == null || name == contact.displayName) return;
+            await controller.renameContact(
+              mmId: contact.mmId,
+              displayName: name,
+            );
+          },
         ),
       if (controller.nearbyPeerMmIds.isNotEmpty)
         const Padding(
@@ -209,7 +222,19 @@ class _ContactList extends StatelessWidget {
           trailing: IconButton(
             tooltip: 'Добавить контакт',
             icon: const Icon(Icons.person_add_alt_1_outlined),
-            onPressed: () => controller.addNearbyPeerAsContact(mmId),
+            onPressed: () async {
+              final name = await _promptContactName(
+                context,
+                initialName: controller.displayNameForMmId(mmId),
+                title: 'Добавить контакт',
+                subtitle: mmId,
+              );
+              if (name == null) return;
+              await controller.addNearbyPeerAsContact(
+                mmId,
+                displayName: name,
+              );
+            },
           ),
         ),
     ];
@@ -389,12 +414,33 @@ class _AddContactPageState extends State<_AddContactPage> {
 
   Future<void> _importContact(String raw) async {
     if (_busy) return;
-    setState(() => _busy = true);
     try {
-      await widget.controller.addContactCard(raw);
+      final card = ContactCard.parse(raw);
+      if (!mounted) return;
+      final existing = widget.controller.contacts
+          .where((contact) => contact.mmId == card.mmId.trim())
+          .firstOrNull;
+      final name = await _promptContactName(
+        context,
+        initialName: existing?.displayName ?? card.displayName,
+        title: existing == null ? 'Сохранить контакт' : 'Обновить контакт',
+        subtitle: card.mmId.trim(),
+        helperText: existing == null
+            ? 'Имя хранится только у вас и не меняет MM-ID или ключи.'
+            : 'Ключевые данные обновятся из карточки, локальное имя останется вашим.',
+      );
+      if (!mounted || name == null) return;
+
+      setState(() => _busy = true);
+      await widget.controller.addContactCard(
+        raw,
+        displayNameOverride: name,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Контакт добавлен')),
+        SnackBar(
+          content: Text(existing == null ? 'Контакт добавлен' : 'Контакт обновлён'),
+        ),
       );
       Navigator.of(context).pop();
     } catch (error) {
@@ -459,7 +505,7 @@ class _AddContactPageState extends State<_AddContactPage> {
                 ListTile(
                   leading: const Icon(Icons.qr_code_scanner),
                   title: const Text('Сканировать чужой QR'),
-                  subtitle: const Text('Самый быстрый способ добавить контакт'),
+                  subtitle: const Text('Сканировать карточку и выбрать имя'),
                   enabled: !_busy,
                   onTap: _busy ? null : _scan,
                 ),
@@ -467,7 +513,7 @@ class _AddContactPageState extends State<_AddContactPage> {
                 ListTile(
                   leading: const Icon(Icons.content_paste_go_outlined),
                   title: const Text('Вставить код'),
-                  subtitle: const Text('Если код контакта уже в буфере'),
+                  subtitle: const Text('Проверить карточку и выбрать имя'),
                   enabled: !_busy,
                   onTap: _busy ? null : _paste,
                 ),
@@ -490,6 +536,75 @@ class _AddContactPageState extends State<_AddContactPage> {
         ],
       ),
     );
+  }
+}
+
+Future<String?> _promptContactName(
+  BuildContext context, {
+  required String initialName,
+  required String title,
+  required String subtitle,
+  String? helperText,
+}) async {
+  final controller = TextEditingController(text: initialName.trim());
+  try {
+    return await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          final clean = controller.text.trim();
+          return AlertDialog(
+            title: Text(title),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    maxLength: 80,
+                    textInputAction: TextInputAction.done,
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) {
+                      final value = controller.text.trim();
+                      if (value.isNotEmpty) Navigator.of(dialogContext).pop(value);
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Имя контакта',
+                      helperText: helperText,
+                      helperMaxLines: 3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: clean.isEmpty
+                    ? null
+                    : () => Navigator.of(dialogContext).pop(clean),
+                child: const Text('Сохранить'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  } finally {
+    controller.dispose();
   }
 }
 
