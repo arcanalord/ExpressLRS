@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../lib/core/file_transfer_core.dart';
+import '../lib/core/file_transfer_protocol.dart';
 import '../lib/core/file_transfer_session.dart';
 import '../lib/platform/file1_transport_bridge.dart';
 import '../lib/platform/m05_transport_qos_adapter.dart';
@@ -11,7 +12,9 @@ import '../lib/platform/mm_serial_codec.dart';
 Future<void> main() async {
   await _runLoopback(bytes: 20 * 1024, chunkSize: 512);
   await _runLoopback(bytes: 100 * 1024, chunkSize: 1024);
+  await _runTransientFinalizeWriteFailure();
   await _runCancellation();
+  stdout.writeln('MESH_MESSENGER_FILE1_TRANSIENT_FINALIZE_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_TRANSPORT_LOOPBACK_PASS');
 }
 
@@ -104,6 +107,78 @@ Future<void> _runLoopback({
     }
     lastAcked = event.ackedChunks;
   }
+  bridgeA.close();
+  bridgeB.close();
+}
+
+Future<void> _runTransientFinalizeWriteFailure() async {
+  late final File1TransportBridge bridgeA;
+  late final File1TransportBridge bridgeB;
+  Uint8List? received;
+  var senderCompleteWriteFailed = false;
+  var receiverCompleteWriteFailed = false;
+  final progress = <File1TransportProgress>[];
+
+  bridgeA = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: (payload) async {
+      final frame = File1Codec.decode(payload);
+      if (frame.type == File1FrameType.complete &&
+          !senderCompleteWriteFailed) {
+        senderCompleteWriteFailed = true;
+        throw StateError('simulated transient sender COMPLETE write');
+      }
+      await bridgeB.handleIncoming(payload);
+    },
+    onReceived: (_) {},
+    onProgress: progress.add,
+  );
+  bridgeB = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: (payload) async {
+      final frame = File1Codec.decode(payload);
+      if (frame.type == File1FrameType.complete &&
+          !receiverCompleteWriteFailed) {
+        receiverCompleteWriteFailed = true;
+        throw StateError('simulated transient receiver COMPLETE write');
+      }
+      await bridgeA.handleIncoming(payload);
+    },
+    onReceived: (event) {
+      received = Uint8List.fromList(event.bytes);
+    },
+  );
+
+  final payload = Uint8List.fromList(
+    List<int>.generate(100 * 1024, (index) => (index * 17 + 11) & 0xff),
+  );
+  final plan = M05FileTransferCore.createPlan(
+    transferId: 'transient-finalize-100k-4chunks',
+    fileName: '100k-4chunks.bin',
+    mimeType: 'application/octet-stream',
+    bytes: payload,
+    chunkSize: 25 * 1024,
+  );
+  if (plan.manifest.chunkCount != 4) {
+    throw StateError('Expected exact 4-chunk regression fixture');
+  }
+
+  await bridgeA.send(plan).timeout(const Duration(seconds: 6));
+
+  if (!senderCompleteWriteFailed || !receiverCompleteWriteFailed) {
+    throw StateError('Transient COMPLETE write failures were not exercised');
+  }
+  final result = received;
+  if (result == null || !_same(payload, result)) {
+    throw StateError('100 KiB / 4-chunk payload mismatch after retry');
+  }
+  if (progress.isEmpty ||
+      progress.last.state != FileTransferSessionState.completed ||
+      progress.last.ackedChunks != 4 ||
+      progress.last.totalChunks != 4) {
+    throw StateError('4/4 transfer did not recover to completed');
+  }
+
   bridgeA.close();
   bridgeB.close();
 }
