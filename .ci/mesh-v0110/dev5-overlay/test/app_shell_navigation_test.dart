@@ -201,6 +201,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Настройки').last);
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('О приложении'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
     expect(find.text('О приложении'), findsOneWidget);
     expect(find.text('Версия 0.6.0-secure-core-rc2 (26092902)'), findsOneWidget);
     expect(tester.takeException(), isNull);
