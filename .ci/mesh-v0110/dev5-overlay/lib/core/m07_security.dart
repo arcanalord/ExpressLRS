@@ -419,7 +419,7 @@ final class TransportPrivacyEnvelope {
 /// UI, M02, M05, M12 and transport adapters must not implement their own
 /// Signal/PQXDH/ratchet logic.
 abstract interface class M07CryptoProvider {
-  IdentityPublicMaterial localIdentity();
+  Future<IdentityPublicMaterial> localIdentity();
 
   M07SuiteProfile get suiteProfile;
 
