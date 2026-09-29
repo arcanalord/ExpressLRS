@@ -1,0 +1,68 @@
+name: Mesh Messenger Best v1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - best/greenfield-v1
+    paths:
+      - '.github/workflows/mesh-best-v1.yml'
+      - '.ci/mesh-best-v1/**'
+
+concurrency:
+  group: mesh-best-v1
+  cancel-in-progress: true
+
+jobs:
+  verify-best-v1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: .ci/mesh-best-v1/flutter_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Unit and widget tests
+        run: flutter test --reporter expanded
+
+      - name: Create Android platform scaffold
+        run: flutter create --platforms=android --project-name mesh_messenger_best_v1 .
+
+      - name: Build arm64 debug APK
+        run: flutter build apk --debug --target-platform android-arm64 --split-per-abi
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
+          test -s "$APK"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
+          "$BT/apksigner" verify --verbose "$APK"
+          "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
+          sha256sum "$APK" | tee /tmp/mesh-best-v1-sha256.txt
+          cp "$APK" /tmp/MeshMessenger-Best-v1-arm64-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeshMessenger-Best-v1-arm64-debug
+          path: |
+            /tmp/MeshMessenger-Best-v1-arm64-debug.apk
+            /tmp/mesh-best-v1-sha256.txt
+          retention-days: 14
