@@ -474,3 +474,96 @@ abstract interface class M07CryptoProvider {
     Uint8List ciphertext,
   );
 }
+
+/// Crash-safe provider extension required for production/private mode.
+///
+/// The provider owns its ratchet/account state and a tiny encrypted local
+/// recovery journal. Session bootstrap + ratchet advancement + the immutable
+/// M07 ciphertext MUST be committed atomically before [encryptDirectAtomic]
+/// returns. Likewise, successful decrypt ratchet advancement + recovered
+/// plaintext MUST be committed before [decryptDirectAtomic] returns.
+///
+/// M02/M12 never inspect provider state. They only persist/use the immutable
+/// envelope after the provider has durably committed it.
+abstract interface class M07AtomicCryptoProvider implements M07CryptoProvider {
+  Future<M07AtomicOutboundCommit> encryptDirectAtomic({
+    required IdentityPublicMaterial peer,
+    PortablePreKeyBundle? preKeyBundle,
+    required DirectPlaintext plaintext,
+    required String recoveryContextJson,
+  });
+
+  /// Returns outbound commits that were durably advanced by M07 but were not
+  /// yet confirmed as persisted into the application outbox.
+  Future<List<M07AtomicOutboundCommit>> pendingOutboundCommits();
+
+  /// Called only after the exact ciphertext is durably present in M02 outbox
+  /// (and any local message recovery record has been persisted).
+  Future<void> markOutboundCommitPersisted(String commitId);
+
+  Future<M07AtomicDecryptOutcome> decryptDirectAtomic({
+    required IdentityPublicMaterial peer,
+    required EncryptedApplicationEnvelope envelope,
+    required String expectedLogicalMessageId,
+    required String expectedSenderMmId,
+    required String expectedRecipientMmId,
+    required String recoveryContextJson,
+  });
+
+  /// Returns successful inbound decrypt commits whose provider ratchet state
+  /// is already durable but whose application message was not yet confirmed as
+  /// stored. Replaying the wire message is not required for recovery.
+  Future<List<M07AtomicInboundCommit>> pendingInboundCommits();
+
+  Future<void> markInboundCommitPersisted(String commitId);
+}
+
+final class M07AtomicOutboundCommit {
+  M07AtomicOutboundCommit({
+    required this.commitId,
+    required this.envelope,
+    required this.recoveryContextJson,
+  }) {
+    _require(commitId.isNotEmpty, 'commitId must not be empty');
+    _require(
+      recoveryContextJson.isNotEmpty,
+      'recoveryContextJson must not be empty',
+    );
+  }
+
+  final String commitId;
+  final EncryptedApplicationEnvelope envelope;
+
+  /// Opaque to the crypto provider. It is encrypted at rest together with the
+  /// provider state and is returned verbatim for app-level crash recovery.
+  final String recoveryContextJson;
+}
+
+sealed class M07AtomicDecryptOutcome {
+  const M07AtomicDecryptOutcome();
+}
+
+final class M07AtomicDecryptRejected extends M07AtomicDecryptOutcome {
+  const M07AtomicDecryptRejected(this.rejection);
+
+  final DirectDecryptRejected rejection;
+}
+
+final class M07AtomicInboundCommit extends M07AtomicDecryptOutcome {
+  M07AtomicInboundCommit({
+    required this.commitId,
+    required this.plaintext,
+    required this.recoveryContextJson,
+  }) {
+    _require(commitId.isNotEmpty, 'commitId must not be empty');
+    _require(
+      recoveryContextJson.isNotEmpty,
+      'recoveryContextJson must not be empty',
+    );
+  }
+
+  final String commitId;
+  final DirectPlaintext plaintext;
+  final String recoveryContextJson;
+}
+
