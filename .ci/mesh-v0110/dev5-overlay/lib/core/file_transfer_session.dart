@@ -281,10 +281,13 @@ final class FileTransferReceiverSession {
             File1Codec.error(frame.transferId, 'integrity'),
           ];
         }
-        // Proactive final confirmation: once the last chunk is present and
-        // SHA-256 passes, confirm completion immediately. The sender's
-        // explicit COMPLETE request remains as a fallback/retry path.
+        // Always acknowledge the final chunk itself, then send the verified
+        // final sentinel. If the sentinel is lost, the sender still reaches
+        // N/N and can use its explicit COMPLETE fallback against the receiver
+        // tombstone. This avoids retransmitting the last chunk into a closed
+        // receiver session and getting a misleading manifest-required error.
         return <File1Frame>[
+          ack,
           File1Codec.verifiedCompleteAck(frame.transferId),
         ];
       case File1FrameType.complete:
