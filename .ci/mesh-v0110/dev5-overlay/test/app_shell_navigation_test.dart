@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/core/contact_card.dart';
 import '../lib/src/app.dart';
 import '../lib/src/application/mesh_app_controller.dart';
 
@@ -92,6 +93,50 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
+
+  test('QR import keeps a user-selected local name and safe rename preserves identity', () async {
+    final root = Directory.systemTemp.createTempSync('mesh_contact_alias_gate_');
+    final controller = await MeshAppController.createForWidgetTest(
+      storageRoot: root,
+    );
+    try {
+      final raw = const ContactCard(
+        mmId: 'mm:peer-alpha',
+        displayName: 'Remote advertised name',
+        fingerprint: 'fp-001',
+        identityPublicKey: 'ik-001',
+        agreementPublicKey: 'ak-001',
+      ).encode();
+
+      await controller.addContactCard(
+        raw,
+        displayNameOverride: 'Мой Алексей',
+      );
+      var contact = controller.contacts.singleWhere(
+        (item) => item.mmId == 'mm:peer-alpha',
+      );
+      expect(contact.displayName, 'Мой Алексей');
+      expect(contact.fingerprint, 'fp-001');
+      expect(contact.identityPublicKey, 'ik-001');
+      expect(contact.agreementPublicKey, 'ak-001');
+
+      await controller.renameContact(
+        mmId: 'mm:peer-alpha',
+        displayName: 'Алексей работа',
+      );
+      contact = controller.contacts.singleWhere(
+        (item) => item.mmId == 'mm:peer-alpha',
+      );
+      expect(contact.displayName, 'Алексей работа');
+      expect(contact.fingerprint, 'fp-001');
+      expect(contact.identityPublicKey, 'ik-001');
+      expect(contact.agreementPublicKey, 'ak-001');
+    } finally {
+      await controller.shutdown();
+      controller.dispose();
+      if (root.existsSync()) root.deleteSync(recursive: true);
+    }
+  });
 
   testWidgets('general location handoff opens map without contact assertion',
       (tester) async {
