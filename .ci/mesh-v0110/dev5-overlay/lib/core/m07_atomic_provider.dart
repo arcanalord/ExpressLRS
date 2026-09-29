@@ -291,8 +291,8 @@ final class M07AtomicProvider implements M07AtomicCryptoProvider {
           expectedRecipientMmId: expectedRecipientMmId,
         );
         if (transition is M07EngineDecryptRejected) {
-          return M07ProviderTransactionResult<M07AtomicDecryptOutcome>(
-            next: current.next(providerOpaqueJson: opaque),
+          return M07ProviderTransactionResult<M07AtomicDecryptOutcome>.readOnly(
+            current: current,
             value: M07AtomicDecryptRejected(
               DirectDecryptRejected(transition.reason),
             ),
