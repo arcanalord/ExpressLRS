@@ -11,9 +11,12 @@ import '../../core/contact_card.dart';
 import '../../core/diagnostic_snapshot.dart';
 import '../../core/delivery.dart';
 import '../../core/identity_crypto.dart';
+import '../../core/m07_security.dart';
 import '../../core/messenger_core.dart';
+import '../../core/secure_core_policy.dart';
 import '../../core/models.dart';
 import '../../core/usb_profile_binding.dart';
+import '../../platform/android_app_storage_crypto.dart';
 import '../../platform/android_local_network_bridge.dart';
 import '../../platform/android_secure_identity_bridge.dart';
 import '../../platform/android_meshtastic_bridge.dart';
@@ -144,12 +147,18 @@ final class MeshAppController extends ChangeNotifier {
   String ownMmId = '';
   String ownDeviceLabel = '';
   String ownFingerprint = '';
+  String ownIdentityPublicKey = '';
+  String ownAgreementPublicKey = '';
   String identitySeedStorage = '';
 
   String get ownContactCardPayload => ContactCard(
         mmId: ownMmId,
         displayName: ownDeviceLabel.isEmpty ? 'Mesh Messenger' : ownDeviceLabel,
         fingerprint: ownFingerprint.isEmpty ? null : ownFingerprint,
+        identityPublicKey:
+            ownIdentityPublicKey.isEmpty ? null : ownIdentityPublicKey,
+        agreementPublicKey:
+            ownAgreementPublicKey.isEmpty ? null : ownAgreementPublicKey,
         radioNodeId: ep2LocalNode,
       ).encode();
   final Map<String, LanPairingSession> lanPairings =
@@ -320,7 +329,13 @@ final class MeshAppController extends ChangeNotifier {
       _usbProfileBinding = await _usbProfileBindingStore!.load();
     }
 
-    final storage = AppStorage(root);
+    final securityPolicy = SecureCorePolicy.forBuild(isRelease: kReleaseMode);
+    final storage = AppStorage(
+      root,
+      crypto: Platform.isAndroid ? AndroidAppStorageCrypto() : null,
+      requireEncryption: securityPolicy.requireEncryptedStorage,
+    );
+    await storage.migrateSensitiveStorage();
     _appStorage = storage;
     final uiPreferences = await storage.loadUiPreferences();
     advancedMode = uiPreferences['advancedMode'] == true;
@@ -336,6 +351,8 @@ final class MeshAppController extends ChangeNotifier {
     ownMmId = _identity.mmId;
     ownDeviceLabel = _identity.label;
     ownFingerprint = _identity.fingerprint;
+    ownIdentityPublicKey = _identity.identityPublicKeyB64;
+    ownAgreementPublicKey = _identity.agreementPublicKeyB64;
     identitySeedStorage = _identity.seedStorage;
     await storage.savePublicIdentityMetadata(
       mmId: ownMmId,
@@ -415,6 +432,7 @@ final class MeshAppController extends ChangeNotifier {
       ownMmId: ownMmId,
       storage: storage,
       transports: transports,
+      requirePrivateE2ee: securityPolicy.requirePrivateE2ee,
     );
     await _core.restore();
     _deliverySub = _core.deliveryChanges.listen((_) {
@@ -700,6 +718,9 @@ final class MeshAppController extends ChangeNotifier {
         mmId: card.mmId.trim(),
         displayName: card.displayName.trim(),
         fingerprint: card.fingerprint?.trim(),
+        identityPublicKey: card.identityPublicKey?.trim(),
+        agreementPublicKey: card.agreementPublicKey?.trim(),
+        preKeyBundle: card.preKeyBundle?.trim(),
         meshtasticNodeNum: _parseNodeNum(card.meshtasticNodeId),
         ep2NodeId: card.radioNodeId,
       ),
@@ -980,6 +1001,7 @@ final class MeshAppController extends ChangeNotifier {
         verified: true,
         identityPublicKey: base64UrlEncode(session.identityPublicKey),
         agreementPublicKey: base64UrlEncode(session.agreementPublicKey),
+        preKeyBundle: existing?.preKeyBundle,
         fingerprint: session.fingerprint,
         verifiedAt: DateTime.now().toUtc(),
         meshtasticNodeNum: existing?.meshtasticNodeNum,
@@ -1316,16 +1338,25 @@ final class MeshAppController extends ChangeNotifier {
         _addLanLog('DROP UNKNOWN DATA ${event.messageId} <- ${event.fromMmId}');
         return;
       }
-      if (event.messageClass != 'map_point') {
+      if (event.messageClass != 'map_point' &&
+          event.messageClass != m07DirectEnvelopeClass) {
         _addLanLog('DROP CLASS ${event.messageClass} ${event.messageId}');
         return;
       }
       try {
-        await _core.receiveMapPoint(
-          messageId: event.messageId,
-          fromMmId: event.fromMmId,
-          payload: event.payload,
-        );
+        if (event.messageClass == m07DirectEnvelopeClass) {
+          await _core.receiveEncryptedDirect(
+            messageId: event.messageId,
+            fromMmId: event.fromMmId,
+            encodedEnvelope: event.payload,
+          );
+        } else {
+          await _core.receiveMapPoint(
+            messageId: event.messageId,
+            fromMmId: event.fromMmId,
+            payload: event.payload,
+          );
+        }
         _lan?.acknowledgeIncoming(
           sourceAddress: event.sourceAddress,
           messageId: event.messageId,
@@ -2134,6 +2165,19 @@ final class MeshAppController extends ChangeNotifier {
               fromMmId: contact.mmId,
               text: text,
             );
+          case m07DirectEnvelopeClass:
+            final payload = event.payload;
+            final encoded = payload is Map
+                ? '${payload['envelope'] ?? ''}'
+                : '$payload';
+            if (encoded.trim().isEmpty) {
+              throw const FormatException('M07_ENVELOPE_EMPTY');
+            }
+            await _core.receiveEncryptedDirect(
+              messageId: event.messageId,
+              fromMmId: contact.mmId,
+              encodedEnvelope: encoded,
+            );
           case 'map_point':
             final payload = event.payload;
             if (payload is! Map) throw const FormatException('MAP_POINT_INVALID');
@@ -2411,19 +2455,28 @@ final class MeshAppController extends ChangeNotifier {
     }
     if (event is TransparentUartIncomingGroupMessage) {
       _markPeerSeen(event.fromMmId);
-      if (event.messageClass != 'text') {
+      if (event.messageClass != 'text' &&
+          event.messageClass != m07DirectEnvelopeClass) {
         _addLr24Log(
           'DROP group class=${event.messageClass} id=${event.messageId}',
         );
         return;
       }
-      final accepted = await _core.receiveGroupText(
-        messageId: event.messageId,
-        fromMmId: event.fromMmId,
-        groupId: event.groupId,
-        membershipRevision: event.membershipRevision,
-        text: event.payload,
-      );
+      final accepted = event.messageClass == m07DirectEnvelopeClass
+          ? await _core.receiveEncryptedGroup(
+              messageId: event.messageId,
+              fromMmId: event.fromMmId,
+              groupId: event.groupId,
+              membershipRevision: event.membershipRevision,
+              encodedEnvelope: event.payload,
+            )
+          : await _core.receiveGroupText(
+              messageId: event.messageId,
+              fromMmId: event.fromMmId,
+              groupId: event.groupId,
+              membershipRevision: event.membershipRevision,
+              text: event.payload,
+            );
       if (!accepted) {
         _addLr24Log(
           'DROP group=${event.groupId} peer=${event.fromMmId} id=${event.messageId}',
@@ -2458,6 +2511,12 @@ final class MeshAppController extends ChangeNotifier {
       }
       try {
         switch (event.messageClass) {
+          case m07DirectEnvelopeClass:
+            await _core.receiveEncryptedDirect(
+              messageId: event.messageId,
+              fromMmId: event.fromMmId,
+              encodedEnvelope: event.payload,
+            );
           case 'text':
             await _core.receiveText(
               messageId: event.messageId,
