@@ -53,6 +53,15 @@ Future<void> main() async {
     throw StateError('FILE/1 ACK mismatch');
   }
 
+  final verifiedAck = File1Codec.decodeAck(
+    File1Codec.decode(
+      File1Codec.encode(File1Codec.verifiedCompleteAck('wire-1')),
+    ),
+  );
+  if (verifiedAck != File1Codec.verifiedCompleteAckIndex) {
+    throw StateError('FILE/1 verified COMPLETE ACK mismatch');
+  }
+
   final errorText = File1Codec.decodeError(
     File1Codec.decode(
       File1Codec.encode(File1Codec.error('wire-1', 'retry later')),
@@ -90,7 +99,7 @@ Future<void> main() async {
     chunkSize: 64,
   );
   var receiverDeliveries = 0;
-  var droppedFirstFinalComplete = false;
+  var droppedFirstVerifiedAck = false;
   late File1TransportBridge senderBridge;
   late File1TransportBridge receiverBridge;
   senderBridge = File1TransportBridge(
@@ -102,9 +111,11 @@ Future<void> main() async {
     tickInterval: const Duration(milliseconds: 5),
     sendBytes: (bytes) async {
       final response = File1Codec.decode(bytes);
-      if (!droppedFirstFinalComplete &&
-          response.type == File1FrameType.complete) {
-        droppedFirstFinalComplete = true;
+      if (!droppedFirstVerifiedAck &&
+          response.type == File1FrameType.ack &&
+          File1Codec.decodeAck(response) ==
+              File1Codec.verifiedCompleteAckIndex) {
+        droppedFirstVerifiedAck = true;
         return;
       }
       await senderBridge.handleIncoming(bytes);
@@ -113,10 +124,10 @@ Future<void> main() async {
   );
   try {
     await senderBridge.send(retryPlan).timeout(const Duration(seconds: 3));
-    if (!droppedFirstFinalComplete || receiverDeliveries != 1) {
+    if (!droppedFirstVerifiedAck || receiverDeliveries != 1) {
       throw StateError(
-        'FILE/1 final COMPLETE retry/idempotence failed: '
-        'dropped=$droppedFirstFinalComplete deliveries=$receiverDeliveries',
+        'FILE/1 verified-final ACK fallback/idempotence failed: '
+        'dropped=$droppedFirstVerifiedAck deliveries=$receiverDeliveries',
       );
     }
   } finally {
