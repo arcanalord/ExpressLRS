@@ -40,6 +40,8 @@ final class File1Codec {
   static const List<int> magic = <int>[0x4d, 0x46, 0x31]; // MF1
   static const int maxTransferIdBytes = 96;
   static const int maxPayloadBytes = 64 * 1024;
+  static const int manifestAckIndex = 0xffffffff;
+  static const int verifiedCompleteAckIndex = 0xfffffffe;
 
   static Uint8List encode(File1Frame frame) {
     final transferIdBytes = utf8.encode(frame.transferId);
@@ -151,6 +153,9 @@ final class File1Codec {
         transferId: transferId,
         payload: Uint8List.fromList(_u32(index)),
       );
+
+  static File1Frame verifiedCompleteAck(String transferId) =>
+      ack(transferId, verifiedCompleteAckIndex);
 
   static int decodeAck(File1Frame frame) {
     _expect(frame, File1FrameType.ack);
