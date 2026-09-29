@@ -210,10 +210,14 @@ Future<void> main() async {
   final root = Directory.systemTemp.createTempSync('m07-provider-adapter-');
   final bobRoot = Directory.systemTemp.createTempSync('m07-provider-bob-');
   try {
+    final store = M07ProviderStateStore(
+      root: root,
+      crypto: _FakeCrypto(),
+    );
     final provider = M07AtomicProvider(
       localMmId: 'mm:alice',
       engine: _FakeEngine(),
-      store: M07ProviderStateStore(root: root, crypto: _FakeCrypto()),
+      store: store,
     );
     final peer = IdentityPublicMaterial(
       formatVersion: 1,
