@@ -76,10 +76,18 @@ final class M07ProviderTransactionResult<T> {
   const M07ProviderTransactionResult({
     required this.next,
     required this.value,
+    this.persist = true,
   });
+
+  const M07ProviderTransactionResult.readOnly({
+    required M07ProviderStateSnapshot current,
+    required this.value,
+  })  : next = current,
+        persist = false;
 
   final M07ProviderStateSnapshot next;
   final T value;
+  final bool persist;
 }
 
 /// One encrypted, crash-recoverable provider state file.
@@ -110,6 +118,12 @@ final class M07ProviderStateStore {
   ) => _serialized(() async {
     final current = await _loadUnlocked();
     final result = await mutate(current);
+    if (!result.persist) {
+      if (result.next.generation != current.generation) {
+        throw StateError('M07_PROVIDER_STATE_READONLY_MUTATED');
+      }
+      return result.value;
+    }
     if (result.next.generation <= current.generation) {
       throw StateError('M07_PROVIDER_STATE_GENERATION_NOT_ADVANCED');
     }
