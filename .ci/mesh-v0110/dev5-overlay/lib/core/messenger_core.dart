@@ -62,6 +62,8 @@ final class MeshMessengerCore {
     final messageId = _newLogicalMessageId('m');
     final provider = _cryptoProvider;
     final DeliveryEnvelope result;
+    M07AtomicCryptoProvider? atomicProviderToAck;
+    String? atomicCommitIdToAck;
     if (provider == null) {
       if (requirePrivateE2ee) throw StateError('M07_PRIVATE_E2EE_REQUIRED');
       result = await delivery.enqueue(
@@ -108,7 +110,8 @@ final class MeshMessengerCore {
           payload: commit.envelope.encode(),
           messageId: messageId,
         );
-        await atomic.markOutboundCommitPersisted(commit.commitId);
+        atomicProviderToAck = atomic;
+        atomicCommitIdToAck = commit.commitId;
       }
     }
     await _storage.appendMessageUnique(
@@ -122,6 +125,11 @@ final class MeshMessengerCore {
         senderMmId: ownMmId,
       ),
     );
+    if (atomicProviderToAck != null && atomicCommitIdToAck != null) {
+      await atomicProviderToAck.markOutboundCommitPersisted(
+        atomicCommitIdToAck,
+      );
+    }
     return result;
   }
 
@@ -442,6 +450,8 @@ final class MeshMessengerCore {
     final clearPayload = jsonEncode(point.toJson());
     final provider = _cryptoProvider;
     final DeliveryEnvelope result;
+    M07AtomicCryptoProvider? atomicProviderToAck;
+    String? atomicCommitIdToAck;
     if (provider == null) {
       if (requirePrivateE2ee) throw StateError('M07_PRIVATE_E2EE_REQUIRED');
       result = await delivery.enqueue(
@@ -488,7 +498,8 @@ final class MeshMessengerCore {
           payload: commit.envelope.encode(),
           messageId: messageId,
         );
-        await atomic.markOutboundCommitPersisted(commit.commitId);
+        atomicProviderToAck = atomic;
+        atomicCommitIdToAck = commit.commitId;
       }
     }
     await _storage.appendMessageUnique(
@@ -504,6 +515,11 @@ final class MeshMessengerCore {
         senderMmId: ownMmId,
       ),
     );
+    if (atomicProviderToAck != null && atomicCommitIdToAck != null) {
+      await atomicProviderToAck.markOutboundCommitPersisted(
+        atomicCommitIdToAck,
+      );
+    }
     return result;
   }
 
