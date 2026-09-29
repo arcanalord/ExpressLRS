@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter Android v0.6.0-m05fix1
+name: Mesh Messenger Flutter Android v0.6.0-m05fix2
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
       - '.ci/mesh-v0110/dev5-overlay/**'
 
 concurrency:
-  group: mesh-flutter-v0.6.0-m05fix1
+  group: mesh-flutter-v0.6.0-m05fix2
   cancel-in-progress: true
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          grep -Fqx 'version: 0.6.0-m05fix1+26092902' "$APP_DIR/pubspec.yaml"
+          grep -Fqx 'version: 0.6.0-m05fix2+26092903' "$APP_DIR/pubspec.yaml"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
@@ -235,23 +235,23 @@ jobs:
           APK_VERSION_CODE="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/APK_BADGING.txt | head -n1)"
           test -n "$APK_VERSION_CODE"
           export APK_VERSION_CODE
-          grep -Fq "versionName='0.6.0-m05fix1'" /tmp/APK_BADGING.txt
+          grep -Fq "versionName='0.6.0-m05fix2'" /tmp/APK_BADGING.txt
           unzip -Z1 "$APK" > /tmp/APK_FILES.txt
           grep -Fq 'lib/arm64-v8a/' /tmp/APK_FILES.txt
           if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' /tmp/APK_FILES.txt; then
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.6.0-m05fix1-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-m05fix1-arm64-debug.apk | tee /tmp/SHA256SUM-v0.6.0-m05fix1.txt
-          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-m05fix1-arm64-debug.apk | awk '{print $1}')"
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.6.0-m05fix2-arm64-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-m05fix2-arm64-debug.apk | tee /tmp/SHA256SUM-v0.6.0-m05fix2.txt
+          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-m05fix2-arm64-debug.apk | awk '{print $1}')"
           export APK_SHA256
           python3 - <<'PY'
           import json
           import os
           manifest = {
               "schema": "mesh-messenger-release-manifest/v1",
-              "version": "0.6.0-m05fix1",
+              "version": "0.6.0-m05fix2",
               "versionCode": int(os.environ["APK_VERSION_CODE"]),
               "applicationId": "org.fpvclub.mesh.flutter",
               "abi": ["arm64-v8a"],
@@ -263,7 +263,7 @@ jobs:
                   "runId": os.environ["GITHUB_RUN_ID"],
               },
               "artifact": {
-                  "file": "MeshMessenger-Flutter-v0.6.0-m05fix1-arm64-debug.apk",
+                  "file": "MeshMessenger-Flutter-v0.6.0-m05fix2-arm64-debug.apk",
                   "sha256": os.environ["APK_SHA256"],
               },
               "gates": {
@@ -291,10 +291,10 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.6.0-m05fix1-arm64-debug
+          name: MeshMessenger-Flutter-v0.6.0-m05fix2-arm64-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.6.0-m05fix1-arm64-debug.apk
-            /tmp/SHA256SUM-v0.6.0-m05fix1.txt
+            /tmp/MeshMessenger-Flutter-v0.6.0-m05fix2-arm64-debug.apk
+            /tmp/SHA256SUM-v0.6.0-m05fix2.txt
             /tmp/mesh-messenger-release-manifest-v1.json
           if-no-files-found: error
           retention-days: 14
