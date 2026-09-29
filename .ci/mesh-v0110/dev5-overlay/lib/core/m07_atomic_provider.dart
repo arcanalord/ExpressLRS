@@ -37,6 +37,17 @@ final class M07EngineDecryptSuccess extends M07EngineDecryptTransition {
   final DirectPlaintext plaintext;
 }
 
+
+final class M07EngineStateTransition<T> {
+  const M07EngineStateTransition({
+    required this.nextProviderOpaqueJson,
+    required this.value,
+  });
+
+  final String nextProviderOpaqueJson;
+  final T value;
+}
+
 /// Snapshot-oriented engine port for a maintained crypto implementation.
 ///
 /// The key property is that encrypt/decrypt are pure state transitions:
@@ -54,18 +65,19 @@ abstract interface class M07DirectRatchetEngine {
     String providerOpaqueJson,
   );
 
-  Future<PortablePreKeyBundle> localPreKeyBundleFromState(
+  Future<M07EngineStateTransition<PortablePreKeyBundle>>
+      localPreKeyBundleFromState(
     String providerOpaqueJson,
   );
 
-  Future<String> importPeerPreKeyBundle({
+  Future<M07EngineStateTransition<void>> importPeerPreKeyBundle({
     required String providerOpaqueJson,
     required PortablePreKeyBundle bundle,
   });
 
   bool verifyIdentityBinding(IdentityPublicMaterial identity);
 
-  Future<SecureSessionRef> ensureDirectSession({
+  Future<M07EngineStateTransition<SecureSessionRef>> ensureDirectSession({
     required String providerOpaqueJson,
     required IdentityPublicMaterial peer,
     PortablePreKeyBundle? preKeyBundle,
@@ -137,8 +149,8 @@ final class M07AtomicProvider implements M07AtomicCryptoProvider {
     );
     await _store.transaction<void>((snapshot) async {
       if (snapshot.providerOpaqueJson.isNotEmpty) {
-        return M07ProviderTransactionResult<void>(
-          next: snapshot.next(),
+        return M07ProviderTransactionResult<void>.readOnly(
+          current: snapshot,
           value: null,
         );
       }
@@ -159,10 +171,19 @@ final class M07AtomicProvider implements M07AtomicCryptoProvider {
       _engine.localIdentityFromState((await _state()).providerOpaqueJson);
 
   @override
-  Future<PortablePreKeyBundle> localPreKeyBundle() async =>
-      _engine.localPreKeyBundleFromState(
-        (await _state()).providerOpaqueJson,
-      );
+  Future<PortablePreKeyBundle> localPreKeyBundle() =>
+      _store.transaction<PortablePreKeyBundle>((current) async {
+        final opaque = current.providerOpaqueJson.isEmpty
+            ? await _engine.createInitialProviderState(localMmId: localMmId)
+            : current.providerOpaqueJson;
+        final transition = await _engine.localPreKeyBundleFromState(opaque);
+        return M07ProviderTransactionResult<PortablePreKeyBundle>(
+          next: current.next(
+            providerOpaqueJson: transition.nextProviderOpaqueJson,
+          ),
+          value: transition.value,
+        );
+      });
 
   @override
   Future<void> importPeerPreKeyBundle(PortablePreKeyBundle bundle) async {
@@ -170,13 +191,15 @@ final class M07AtomicProvider implements M07AtomicCryptoProvider {
       final opaque = current.providerOpaqueJson.isEmpty
           ? await _engine.createInitialProviderState(localMmId: localMmId)
           : current.providerOpaqueJson;
-      final next = await _engine.importPeerPreKeyBundle(
+      final transition = await _engine.importPeerPreKeyBundle(
         providerOpaqueJson: opaque,
         bundle: bundle,
       );
       return M07ProviderTransactionResult<void>(
-        next: current.next(providerOpaqueJson: next),
-        value: null,
+        next: current.next(
+          providerOpaqueJson: transition.nextProviderOpaqueJson,
+        ),
+        value: transition.value,
       );
     });
   }
@@ -189,14 +212,23 @@ final class M07AtomicProvider implements M07AtomicCryptoProvider {
   Future<SecureSessionRef> ensureDirectSession(
     IdentityPublicMaterial peer, {
     PortablePreKeyBundle? preKeyBundle,
-  }) async {
-    final current = await _state();
-    return _engine.ensureDirectSession(
-      providerOpaqueJson: current.providerOpaqueJson,
-      peer: peer,
-      preKeyBundle: preKeyBundle,
-    );
-  }
+  }) =>
+      _store.transaction<SecureSessionRef>((current) async {
+        final opaque = current.providerOpaqueJson.isEmpty
+            ? await _engine.createInitialProviderState(localMmId: localMmId)
+            : current.providerOpaqueJson;
+        final transition = await _engine.ensureDirectSession(
+          providerOpaqueJson: opaque,
+          peer: peer,
+          preKeyBundle: preKeyBundle,
+        );
+        return M07ProviderTransactionResult<SecureSessionRef>(
+          next: current.next(
+            providerOpaqueJson: transition.nextProviderOpaqueJson,
+          ),
+          value: transition.value,
+        );
+      });
 
   @override
   Future<EncryptedApplicationEnvelope> encryptDirect(
