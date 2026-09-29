@@ -21,12 +21,14 @@ final class File1TransportProgress {
     required this.state,
     required this.ackedChunks,
     required this.totalChunks,
+    this.failureReason,
   });
 
   final String transferId;
   final FileTransferSessionState state;
   final int ackedChunks;
   final int totalChunks;
+  final String? failureReason;
 
   double get fraction =>
       totalChunks == 0 ? 1 : ackedChunks / totalChunks;
@@ -203,6 +205,7 @@ final class File1TransportBridge {
         state: session.state,
         ackedChunks: session.ackedChunkCount,
         totalChunks: session.totalChunkCount,
+        failureReason: session.failureReason,
       ),
     );
   }
@@ -217,7 +220,12 @@ final class File1TransportBridge {
       _emitProgress(id, state, force: true);
       if (!state.completer.isCompleted) {
         state.completer.completeError(
-          StateError('FILE/1 transfer ended: ${state.session.state.name}'),
+          StateError(
+            'FILE/1 transfer ended: ${state.session.state.name}' +
+                (state.session.failureReason == null
+                    ? ''
+                    : ' (${state.session.failureReason})'),
+          ),
         );
       }
       _senders.remove(id);
