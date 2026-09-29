@@ -112,6 +112,26 @@ Future<void> _runLoopback({
 }
 
 Future<void> _runTransientFinalizeWriteFailure() async {
+  await _runFinalizeWriteFailureScenario(
+    bytes: 64 * 1024,
+    chunkSize: 16 * 1024,
+    expectedChunks: 4,
+    transferId: 'transient-finalize-4chunks',
+  );
+  await _runFinalizeWriteFailureScenario(
+    bytes: 100 * 1024,
+    chunkSize: 16 * 1024,
+    expectedChunks: 7,
+    transferId: 'transient-finalize-100k',
+  );
+}
+
+Future<void> _runFinalizeWriteFailureScenario({
+  required int bytes,
+  required int chunkSize,
+  required int expectedChunks,
+  required String transferId,
+}) async {
   late final File1TransportBridge bridgeA;
   late final File1TransportBridge bridgeB;
   Uint8List? received;
@@ -150,33 +170,38 @@ Future<void> _runTransientFinalizeWriteFailure() async {
   );
 
   final payload = Uint8List.fromList(
-    List<int>.generate(100 * 1024, (index) => (index * 17 + 11) & 0xff),
+    List<int>.generate(bytes, (index) => (index * 17 + 11) & 0xff),
   );
   final plan = M05FileTransferCore.createPlan(
-    transferId: 'transient-finalize-100k-4chunks',
-    fileName: '100k-4chunks.bin',
+    transferId: transferId,
+    fileName: '$transferId.bin',
     mimeType: 'application/octet-stream',
     bytes: payload,
-    chunkSize: 25 * 1024,
+    chunkSize: chunkSize,
   );
-  if (plan.manifest.chunkCount != 4) {
-    throw StateError('Expected exact 4-chunk regression fixture');
+  if (plan.manifest.chunkCount != expectedChunks) {
+    throw StateError(
+      'Unexpected regression fixture chunk count: '
+      '${plan.manifest.chunkCount} != $expectedChunks',
+    );
   }
 
-  await bridgeA.send(plan).timeout(const Duration(seconds: 6));
+  await bridgeA.send(plan).timeout(const Duration(seconds: 8));
 
   if (!senderCompleteWriteFailed || !receiverCompleteWriteFailed) {
     throw StateError('Transient COMPLETE write failures were not exercised');
   }
   final result = received;
   if (result == null || !_same(payload, result)) {
-    throw StateError('100 KiB / 4-chunk payload mismatch after retry');
+    throw StateError('Payload mismatch after final COMPLETE retry');
   }
   if (progress.isEmpty ||
       progress.last.state != FileTransferSessionState.completed ||
-      progress.last.ackedChunks != 4 ||
-      progress.last.totalChunks != 4) {
-    throw StateError('4/4 transfer did not recover to completed');
+      progress.last.ackedChunks != expectedChunks ||
+      progress.last.totalChunks != expectedChunks) {
+    throw StateError(
+      '$expectedChunks/$expectedChunks transfer did not recover to completed',
+    );
   }
 
   bridgeA.close();
