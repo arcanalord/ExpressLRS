@@ -34,7 +34,10 @@ final class MeshMessengerCore {
   Stream<DeliveryEnvelope> get deliveryChanges => delivery.changes;
   List<DeliveryEnvelope> get pending => delivery.pending;
 
-  Future<void> restore() => delivery.restore();
+  Future<void> restore() async {
+    await delivery.restore();
+    await _recoverAtomicCryptoCommits();
+  }
   Future<List<Contact>> contacts() => _storage.loadContacts();
   Future<void> saveContact(Contact contact) => _storage.saveContact(contact);
   Future<List<GroupDefinition>> groups() => _storage.loadGroups();
@@ -68,19 +71,45 @@ final class MeshMessengerCore {
         messageId: messageId,
       );
     } else {
-      final encrypted = await _encryptPrivate(
-        recipientMmId: peerMmId,
-        logicalMessageId: messageId,
-        conversationKey: m07DirectSecurityContext(ownMmId, peerMmId),
-        messageClass: 'text',
-        payloadUtf8: clean,
-      );
-      result = await delivery.enqueue(
-        recipientMmId: peerMmId,
-        messageClass: m07DirectEnvelopeClass,
-        payload: encrypted.encode(),
-        messageId: messageId,
-      );
+      final atomic = provider is M07AtomicCryptoProvider ? provider : null;
+      if (atomic == null) {
+        final encrypted = await _encryptPrivate(
+          recipientMmId: peerMmId,
+          logicalMessageId: messageId,
+          conversationKey: m07DirectSecurityContext(ownMmId, peerMmId),
+          messageClass: 'text',
+          payloadUtf8: clean,
+        );
+        result = await delivery.enqueue(
+          recipientMmId: peerMmId,
+          messageClass: m07DirectEnvelopeClass,
+          payload: encrypted.encode(),
+          messageId: messageId,
+        );
+      } else {
+        final commit = await _encryptPrivateAtomic(
+          provider: atomic,
+          recipientMmId: peerMmId,
+          logicalMessageId: messageId,
+          conversationKey: m07DirectSecurityContext(ownMmId, peerMmId),
+          messageClass: 'text',
+          payloadUtf8: clean,
+          recoveryContext: <String, Object?>{
+            'kind': 'direct_text_out',
+            'messageId': messageId,
+            'peerMmId': peerMmId,
+            'text': clean,
+            'createdAt': _now().toIso8601String(),
+          },
+        );
+        result = await delivery.enqueue(
+          recipientMmId: peerMmId,
+          messageClass: m07DirectEnvelopeClass,
+          payload: commit.envelope.encode(),
+          messageId: messageId,
+        );
+        await atomic.markOutboundCommitPersisted(commit.commitId);
+      }
     }
     await _storage.appendMessageUnique(
       ConversationMessage(
@@ -422,19 +451,45 @@ final class MeshMessengerCore {
         messageId: messageId,
       );
     } else {
-      final encrypted = await _encryptPrivate(
-        recipientMmId: peerMmId,
-        logicalMessageId: messageId,
-        conversationKey: m07DirectSecurityContext(ownMmId, peerMmId),
-        messageClass: 'map_point',
-        payloadUtf8: clearPayload,
-      );
-      result = await delivery.enqueue(
-        recipientMmId: peerMmId,
-        messageClass: m07DirectEnvelopeClass,
-        payload: encrypted.encode(),
-        messageId: messageId,
-      );
+      final atomic = provider is M07AtomicCryptoProvider ? provider : null;
+      if (atomic == null) {
+        final encrypted = await _encryptPrivate(
+          recipientMmId: peerMmId,
+          logicalMessageId: messageId,
+          conversationKey: m07DirectSecurityContext(ownMmId, peerMmId),
+          messageClass: 'map_point',
+          payloadUtf8: clearPayload,
+        );
+        result = await delivery.enqueue(
+          recipientMmId: peerMmId,
+          messageClass: m07DirectEnvelopeClass,
+          payload: encrypted.encode(),
+          messageId: messageId,
+        );
+      } else {
+        final commit = await _encryptPrivateAtomic(
+          provider: atomic,
+          recipientMmId: peerMmId,
+          logicalMessageId: messageId,
+          conversationKey: m07DirectSecurityContext(ownMmId, peerMmId),
+          messageClass: 'map_point',
+          payloadUtf8: clearPayload,
+          recoveryContext: <String, Object?>{
+            'kind': 'direct_map_out',
+            'messageId': messageId,
+            'peerMmId': peerMmId,
+            'point': point.toJson(),
+            'createdAt': _now().toIso8601String(),
+          },
+        );
+        result = await delivery.enqueue(
+          recipientMmId: peerMmId,
+          messageClass: m07DirectEnvelopeClass,
+          payload: commit.envelope.encode(),
+          messageId: messageId,
+        );
+        await atomic.markOutboundCommitPersisted(commit.commitId);
+      }
     }
     await _storage.appendMessageUnique(
       ConversationMessage(
@@ -612,11 +667,101 @@ final class MeshMessengerCore {
     required String fromMmId,
     required String encodedEnvelope,
   }) async {
-    final plaintext = await _decryptPrivate(
-      expectedMessageId: messageId,
-      expectedFromMmId: fromMmId,
-      encodedEnvelope: encodedEnvelope,
+    final provider = _cryptoProvider;
+    final atomic = provider is M07AtomicCryptoProvider ? provider : null;
+    if (atomic == null) {
+      final plaintext = await _decryptPrivate(
+        expectedMessageId: messageId,
+        expectedFromMmId: fromMmId,
+        encodedEnvelope: encodedEnvelope,
+      );
+      return _storeValidatedDirectPlaintext(
+        messageId: messageId,
+        fromMmId: fromMmId,
+        plaintext: plaintext,
+      );
+    }
+
+    final contact = await _peerContact(fromMmId);
+    final peer = _peerIdentity(contact);
+    if (!atomic.verifyIdentityBinding(peer)) {
+      throw StateError('M07_IDENTITY_BINDING_REJECTED');
+    }
+    final outcome = await atomic.decryptDirectAtomic(
+      peer: peer,
+      envelope: EncryptedApplicationEnvelope.decode(encodedEnvelope),
+      expectedLogicalMessageId: messageId,
+      expectedSenderMmId: fromMmId,
+      expectedRecipientMmId: ownMmId,
+      recoveryContextJson: jsonEncode(<String, Object?>{
+        'kind': 'direct_in',
+        'messageId': messageId,
+        'fromMmId': fromMmId,
+      }),
     );
+    if (outcome is M07AtomicDecryptRejected) {
+      throw FormatException(
+        'M07_DECRYPT_REJECTED:${outcome.rejection.reason}',
+      );
+    }
+    final commit = outcome as M07AtomicInboundCommit;
+    final stored = await _storeValidatedDirectPlaintext(
+      messageId: messageId,
+      fromMmId: fromMmId,
+      plaintext: commit.plaintext,
+    );
+    await atomic.markInboundCommitPersisted(commit.commitId);
+    return stored;
+  }
+
+  Future<M07AtomicOutboundCommit> _encryptPrivateAtomic({
+    required M07AtomicCryptoProvider provider,
+    required String recipientMmId,
+    required String logicalMessageId,
+    required String conversationKey,
+    required String messageClass,
+    required String payloadUtf8,
+    required Map<String, Object?> recoveryContext,
+  }) async {
+    final contact = await _peerContact(recipientMmId);
+    final peer = _peerIdentity(contact);
+    if (!provider.verifyIdentityBinding(peer)) {
+      throw StateError('M07_IDENTITY_BINDING_REJECTED');
+    }
+    PortablePreKeyBundle? preKeyBundle;
+    final rawBundle = contact.preKeyBundle?.trim() ?? '';
+    if (rawBundle.isNotEmpty) {
+      preKeyBundle = PortablePreKeyBundle.decode(rawBundle);
+      if (preKeyBundle.mmId != recipientMmId ||
+          preKeyBundle.identityPublicKey != peer.identityPublicKey) {
+        throw StateError('M07_PREKEY_BINDING_REJECTED');
+      }
+    }
+    return provider.encryptDirectAtomic(
+      peer: peer,
+      preKeyBundle: preKeyBundle,
+      plaintext: DirectPlaintext(
+        logicalMessageId: logicalMessageId,
+        senderMmId: ownMmId,
+        recipientMmId: recipientMmId,
+        conversationKey: conversationKey,
+        messageClass: messageClass,
+        payloadUtf8: payloadUtf8,
+      ),
+      recoveryContextJson: jsonEncode(recoveryContext),
+    );
+  }
+
+  Future<bool> _storeValidatedDirectPlaintext({
+    required String messageId,
+    required String fromMmId,
+    required DirectPlaintext plaintext,
+  }) {
+    if (plaintext.logicalMessageId != messageId ||
+        plaintext.senderMmId != fromMmId ||
+        plaintext.recipientMmId != ownMmId) {
+      throw const FormatException('M07_PLAINTEXT_BINDING_MISMATCH');
+    }
     if (plaintext.conversationKey !=
         m07DirectSecurityContext(ownMmId, fromMmId)) {
       throw const FormatException('M07_DIRECT_CONVERSATION_MISMATCH');
@@ -636,6 +781,94 @@ final class MeshMessengerCore {
         );
       default:
         throw const FormatException('M07_MESSAGE_CLASS_UNSUPPORTED');
+    }
+  }
+
+  Future<void> _recoverAtomicCryptoCommits() async {
+    final provider = _cryptoProvider;
+    if (provider is! M07AtomicCryptoProvider) return;
+
+    for (final commit in await provider.pendingOutboundCommits()) {
+      final raw = jsonDecode(commit.recoveryContextJson);
+      if (raw is! Map) {
+        throw const FormatException('M07_RECOVERY_CONTEXT_INVALID');
+      }
+      final context = Map<String, dynamic>.from(raw);
+      final kind = context['kind'];
+      final messageId = context['messageId'] as String? ?? '';
+      final peerMmId = context['peerMmId'] as String? ?? '';
+      if (messageId.isEmpty || peerMmId.isEmpty) {
+        throw const FormatException('M07_RECOVERY_CONTEXT_INVALID');
+      }
+      if (delivery.byId(messageId) == null) {
+        await delivery.enqueue(
+          recipientMmId: peerMmId,
+          messageClass: m07DirectEnvelopeClass,
+          payload: commit.envelope.encode(),
+          messageId: messageId,
+        );
+      }
+      if (kind == 'direct_text_out') {
+        await _storage.appendMessageUnique(
+          ConversationMessage(
+            messageId: messageId,
+            peerMmId: peerMmId,
+            text: context['text'] as String? ?? '',
+            outgoing: true,
+            createdAt:
+                DateTime.tryParse(context['createdAt'] as String? ?? '') ??
+                _now(),
+            conversationKey: ConversationRef.direct(peerMmId).key,
+            senderMmId: ownMmId,
+          ),
+        );
+      } else if (kind == 'direct_map_out') {
+        final pointRaw = context['point'];
+        if (pointRaw is! Map) {
+          throw const FormatException('M07_RECOVERY_MAP_INVALID');
+        }
+        final point = MapPoint.fromJson(Map<String, dynamic>.from(pointRaw));
+        await _storage.appendMessageUnique(
+          ConversationMessage(
+            messageId: messageId,
+            peerMmId: peerMmId,
+            text: point.label.isEmpty ? 'Точка на карте' : point.label,
+            outgoing: true,
+            createdAt:
+                DateTime.tryParse(context['createdAt'] as String? ?? '') ??
+                _now(),
+            messageClass: 'map_point',
+            mapPoint: point,
+            conversationKey: ConversationRef.direct(peerMmId).key,
+            senderMmId: ownMmId,
+          ),
+        );
+      } else {
+        throw const FormatException('M07_RECOVERY_KIND_UNSUPPORTED');
+      }
+      await provider.markOutboundCommitPersisted(commit.commitId);
+    }
+
+    for (final commit in await provider.pendingInboundCommits()) {
+      final raw = jsonDecode(commit.recoveryContextJson);
+      if (raw is! Map) {
+        throw const FormatException('M07_RECOVERY_CONTEXT_INVALID');
+      }
+      final context = Map<String, dynamic>.from(raw);
+      if (context['kind'] != 'direct_in') {
+        throw const FormatException('M07_RECOVERY_KIND_UNSUPPORTED');
+      }
+      final messageId = context['messageId'] as String? ?? '';
+      final fromMmId = context['fromMmId'] as String? ?? '';
+      if (messageId.isEmpty || fromMmId.isEmpty) {
+        throw const FormatException('M07_RECOVERY_CONTEXT_INVALID');
+      }
+      await _storeValidatedDirectPlaintext(
+        messageId: messageId,
+        fromMmId: fromMmId,
+        plaintext: commit.plaintext,
+      );
+      await provider.markInboundCommitPersisted(commit.commitId);
     }
   }
 
