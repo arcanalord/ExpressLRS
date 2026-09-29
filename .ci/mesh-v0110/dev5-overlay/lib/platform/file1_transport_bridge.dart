@@ -109,9 +109,13 @@ final class File1TransportBridge {
       _completedReceiverAtMs.remove(frame.transferId);
     } else if (frame.type == File1FrameType.complete &&
         _completedReceiverAtMs.containsKey(frame.transferId)) {
-      await _sendBytes(
-        File1Codec.encode(File1Codec.complete(frame.transferId)),
-      );
+      try {
+        await _sendBytes(
+          File1Codec.encode(File1Codec.complete(frame.transferId)),
+        );
+      } catch (_) {
+        // Sender retries COMPLETE; keep the tombstone for idempotent recovery.
+      }
       return;
     }
 
@@ -140,7 +144,11 @@ final class File1TransportBridge {
       _receivers.remove(frame.transferId);
     }
     for (final response in responses) {
-      await _sendBytes(File1Codec.encode(response));
+      try {
+        await _sendBytes(File1Codec.encode(response));
+      } catch (_) {
+        // ACK/COMPLETE are idempotent; the sender retries the request.
+      }
     }
   }
 
@@ -161,7 +169,20 @@ final class File1TransportBridge {
           if (frame.type == File1FrameType.manifest) {
             state.lastManifestSentMs = now;
           }
-          await _sendBytes(File1Codec.encode(frame));
+          try {
+            await _sendBytes(File1Codec.encode(frame));
+            state.consecutiveWriteFailures = 0;
+            state.lastWriteError = null;
+          } catch (error) {
+            state.consecutiveWriteFailures++;
+            state.lastWriteError = error;
+            if (state.consecutiveWriteFailures >
+                state.session.maxRetries + 1) {
+              state.session.state = FileTransferSessionState.failed;
+              _emitProgress(entry.key, state, force: true);
+            }
+            break;
+          }
         }
         _completeSenderIfTerminal(entry.key, state);
       }
@@ -278,4 +299,6 @@ final class _SenderState {
   int lastManifestSentMs = -0x7fffffff;
   FileTransferSessionState? lastState;
   int lastAckedChunks = -1;
+  int consecutiveWriteFailures = 0;
+  Object? lastWriteError;
 }
