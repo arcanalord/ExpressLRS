@@ -57,30 +57,43 @@ final class _FakeEngine implements M07DirectRatchetEngine {
   }
 
   @override
-  Future<PortablePreKeyBundle> localPreKeyBundleFromState(
+  Future<M07EngineStateTransition<PortablePreKeyBundle>>
+      localPreKeyBundleFromState(
     String providerOpaqueJson,
   ) async {
     final identity = localIdentityFromState(providerOpaqueJson);
-    return PortablePreKeyBundle(
-      formatVersion: 1,
-      bundleId: 'bundle-' + identity.mmId,
-      mmId: identity.mmId,
-      deviceId: 'device',
-      epoch: 1,
-      identityPublicKey: identity.identityPublicKey,
-      signedPreKeyId: 'spk',
-      signedPreKeyPublic: 'spk-' + identity.mmId,
-      signedPreKeySignature: 'sig-' + identity.mmId,
-      expiresAtEpochMs: DateTime.utc(2030).millisecondsSinceEpoch,
-      suiteProfile: suiteProfile,
+    final raw = Map<String, dynamic>.from(jsonDecode(providerOpaqueJson) as Map);
+    raw['prekeyGeneration'] = ((raw['prekeyGeneration'] as num?)?.toInt() ?? 0) + 1;
+    return M07EngineStateTransition<PortablePreKeyBundle>(
+      nextProviderOpaqueJson: jsonEncode(raw),
+      value: PortablePreKeyBundle(
+        formatVersion: 1,
+        bundleId: 'bundle-' + identity.mmId,
+        mmId: identity.mmId,
+        deviceId: 'device',
+        epoch: raw['prekeyGeneration'] as int,
+        identityPublicKey: identity.identityPublicKey,
+        signedPreKeyId: 'spk',
+        signedPreKeyPublic: 'spk-' + identity.mmId,
+        signedPreKeySignature: 'sig-' + identity.mmId,
+        expiresAtEpochMs: DateTime.utc(2030).millisecondsSinceEpoch,
+        suiteProfile: suiteProfile,
+      ),
     );
   }
 
   @override
-  Future<String> importPeerPreKeyBundle({
+  Future<M07EngineStateTransition<void>> importPeerPreKeyBundle({
     required String providerOpaqueJson,
     required PortablePreKeyBundle bundle,
-  }) async => providerOpaqueJson;
+  }) async {
+    final raw = Map<String, dynamic>.from(jsonDecode(providerOpaqueJson) as Map);
+    raw['lastImportedPeer'] = bundle.mmId;
+    return M07EngineStateTransition<void>(
+      nextProviderOpaqueJson: jsonEncode(raw),
+      value: null,
+    );
+  }
 
   @override
   bool verifyIdentityBinding(IdentityPublicMaterial identity) =>
@@ -88,15 +101,22 @@ final class _FakeEngine implements M07DirectRatchetEngine {
       identity.fingerprint == 'fp-' + identity.mmId;
 
   @override
-  Future<SecureSessionRef> ensureDirectSession({
+  Future<M07EngineStateTransition<SecureSessionRef>> ensureDirectSession({
     required String providerOpaqueJson,
     required IdentityPublicMaterial peer,
     PortablePreKeyBundle? preKeyBundle,
-  }) async => SecureSessionRef(
-    sessionId: 's-' + peer.mmId,
-    peerMmId: peer.mmId,
-    suiteId: suiteProfile.ratchetSuite,
-  );
+  }) async {
+    final raw = Map<String, dynamic>.from(jsonDecode(providerOpaqueJson) as Map);
+    raw['sessionFor'] = peer.mmId;
+    return M07EngineStateTransition<SecureSessionRef>(
+      nextProviderOpaqueJson: jsonEncode(raw),
+      value: SecureSessionRef(
+        sessionId: 's-' + peer.mmId,
+        peerMmId: peer.mmId,
+        suiteId: suiteProfile.ratchetSuite,
+      ),
+    );
+  }
 
   @override
   Future<M07EngineEncryptTransition> encryptDirect({
@@ -201,6 +221,22 @@ Future<void> main() async {
       fingerprint: 'fp-mm:bob',
       identityPublicKey: 'pk-mm:bob',
     );
+    final preKey = await provider.localPreKeyBundle();
+    check(preKey.mmId == 'mm:alice', 'local prekey bundle must bind local identity');
+    final afterPreKey = await store.load();
+    check(
+      afterPreKey.providerOpaqueJson.contains('prekeyGeneration'),
+      'prekey generation state must be persisted',
+    );
+
+    final session = await provider.ensureDirectSession(peer);
+    check(session.peerMmId == 'mm:bob', 'session bootstrap must return peer session');
+    final afterSession = await store.load();
+    check(
+      afterSession.providerOpaqueJson.contains('sessionFor'),
+      'session bootstrap state must be persisted',
+    );
+
     final outbound = await provider.encryptDirectAtomic(
       peer: peer,
       plaintext: DirectPlaintext(
@@ -224,11 +260,36 @@ Future<void> main() async {
     check((await provider.pendingOutboundCommits()).isEmpty,
         'outbound journal must clear after app persistence');
 
+    final bobStore = M07ProviderStateStore(
+      root: bobRoot,
+      crypto: _FakeCrypto(),
+    );
     final bob = M07AtomicProvider(
       localMmId: 'mm:bob',
       engine: _FakeEngine(),
-      store: M07ProviderStateStore(root: bobRoot, crypto: _FakeCrypto()),
+      store: bobStore,
     );
+    final beforeRejected = await bobStore.load();
+    final rejected = await bob.decryptDirectAtomic(
+      peer: IdentityPublicMaterial(
+        formatVersion: 1,
+        mmId: 'mm:alice',
+        fingerprint: 'fp-mm:alice',
+        identityPublicKey: 'pk-mm:alice',
+      ),
+      envelope: outbound.envelope,
+      expectedLogicalMessageId: 'wrong-id',
+      expectedSenderMmId: 'mm:alice',
+      expectedRecipientMmId: 'mm:bob',
+      recoveryContextJson: '{"kind":"direct_in"}',
+    );
+    check(rejected is M07AtomicDecryptRejected, 'binding mismatch must reject');
+    final afterRejected = await bobStore.load();
+    check(
+      afterRejected.generation == beforeRejected.generation,
+      'rejected decrypt must not rewrite provider state',
+    );
+
     final inbound = await bob.decryptDirectAtomic(
       peer: IdentityPublicMaterial(
         formatVersion: 1,
