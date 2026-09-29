@@ -115,9 +115,16 @@ final class FileTransferSenderSession {
     switch (frame.type) {
       case File1FrameType.ack:
         final index = File1Codec.decodeAck(frame);
-        if (index == 0xffffffff) {
+        if (index == File1Codec.manifestAckIndex) {
           _manifestAcked = true;
           state = FileTransferSessionState.sending;
+          return;
+        }
+        if (index == File1Codec.verifiedCompleteAckIndex) {
+          _acked.addAll(List<int>.generate(totalChunkCount, (i) => i));
+          _lastSentAtMs.clear();
+          failureReason = null;
+          state = FileTransferSessionState.completed;
           return;
         }
         if (index >= 0 && index < totalChunkCount) {
@@ -230,7 +237,9 @@ final class FileTransferReceiverSession {
           return <File1Frame>[File1Codec.error(frame.transferId, 'busy')];
         }
         manifest = incoming;
-        return <File1Frame>[File1Codec.ack(frame.transferId, 0xffffffff)];
+        return <File1Frame>[
+          File1Codec.ack(frame.transferId, File1Codec.manifestAckIndex),
+        ];
       case File1FrameType.chunk:
         final current = manifest;
         if (current == null) {
@@ -276,8 +285,7 @@ final class FileTransferReceiverSession {
         // SHA-256 passes, confirm completion immediately. The sender's
         // explicit COMPLETE request remains as a fallback/retry path.
         return <File1Frame>[
-          ack,
-          File1Codec.complete(frame.transferId),
+          File1Codec.verifiedCompleteAck(frame.transferId),
         ];
       case File1FrameType.complete:
         final current = manifest;
