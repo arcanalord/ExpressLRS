@@ -190,4 +190,32 @@ void main() {
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
+  testWidgets('settings always shows app version', (tester) async {
+    final root = Directory.systemTemp.createTempSync('mesh_version_gate_');
+    late MeshAppController controller;
+    await tester.runAsync(() async {
+      controller = await MeshAppController.createForWidgetTest(storageRoot: root);
+    });
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(MaterialApp(home: AppShell(controller: controller)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Настройки').last);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('О приложении'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('О приложении'), findsOneWidget);
+    expect(find.text('Версия 0.6.0-secure-core-rc2 (26092902)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.binding.setSurfaceSize(null);
+    await controller.shutdown();
+    controller.dispose();
+    if (root.existsSync()) root.deleteSync(recursive: true);
+  });
+
 }
