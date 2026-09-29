@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../../core/contact_card.dart';
 import '../../../core/models.dart';
 
 import '../../application/mesh_app_controller.dart';
