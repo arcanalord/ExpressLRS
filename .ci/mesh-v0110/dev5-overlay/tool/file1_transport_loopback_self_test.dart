@@ -13,6 +13,7 @@ Future<void> main() async {
   await _runLoopback(bytes: 20 * 1024, chunkSize: 512);
   await _runLoopback(bytes: 100 * 1024, chunkSize: 1024);
   await _runExactFourChunksWithDroppedFinalComplete();
+  await _runProactiveFinalCompleteWithoutSenderFinalRequest();
   await _runCancellation();
   stdout.writeln('MESH_MESSENGER_FILE1_TRANSPORT_LOOPBACK_PASS');
 }
@@ -257,6 +258,108 @@ Future<void> _runExactFourChunksWithDroppedFinalComplete() async {
       progress.last.state != FileTransferSessionState.completed ||
       progress.last.ackedChunks != 4) {
     throw StateError('exact-four sender did not complete after 4/4 ACKs');
+  }
+
+  bridgeA.close();
+  bridgeB.close();
+}
+
+
+Future<void> _runProactiveFinalCompleteWithoutSenderFinalRequest() async {
+  final codecA = MmSerialCodec();
+  final codecB = MmSerialCodec();
+  late final File1TransportBridge bridgeA;
+  late final File1TransportBridge bridgeB;
+  Uint8List? received;
+  var senderExplicitCompleteCount = 0;
+  final progress = <File1TransportProgress>[];
+
+  Future<void> deliverAtoB(Uint8List payload) async {
+    final decoded = File1Codec.decode(payload);
+    if (decoded.type == File1FrameType.complete) {
+      senderExplicitCompleteCount++;
+      // Deliberately drop every sender COMPLETE request. The receiver must
+      // finish proactively after receiving/verifying the last chunk.
+      return;
+    }
+    final wire = codecA.encodeBinary(
+      payload,
+      tag: MmSerialCodec.file1BinaryTag,
+    );
+    for (final packet in codecB.feedPackets(wire)) {
+      if (packet is! MmSerialBinaryPacket) {
+        throw StateError('unexpected A->B packet');
+      }
+      await bridgeB.handleIncoming(packet.payload);
+    }
+  }
+
+  Future<void> deliverBtoA(Uint8List payload) async {
+    final wire = codecB.encodeBinary(
+      payload,
+      tag: MmSerialCodec.file1BinaryTag,
+    );
+    for (final packet in codecA.feedPackets(wire)) {
+      if (packet is! MmSerialBinaryPacket) {
+        throw StateError('unexpected B->A packet');
+      }
+      await bridgeA.handleIncoming(packet.payload);
+    }
+  }
+
+  final qosA = M05TransportQosAdapter(
+    writeRaw: (_) async {},
+    writeRawFile1: deliverAtoB,
+  );
+  final qosB = M05TransportQosAdapter(
+    writeRaw: (_) async {},
+    writeRawFile1: deliverBtoA,
+  );
+
+  bridgeA = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: qosA.sendFile1,
+    onReceived: (_) {},
+    onProgress: progress.add,
+  );
+  bridgeB = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: qosB.sendFile1,
+    onReceived: (event) {
+      received = Uint8List.fromList(event.bytes);
+    },
+  );
+
+  const chunkSize = 4096;
+  final payload = Uint8List.fromList(
+    List<int>.generate(10219, (index) => (index * 31 + 7) & 0xff),
+  );
+  final plan = M05FileTransferCore.createPlan(
+    transferId: 'proactive-final-3-chunks',
+    fileName: 'low_voltage_specialist.html',
+    mimeType: 'text/html',
+    bytes: payload,
+    chunkSize: chunkSize,
+  );
+  if (plan.manifest.chunkCount != 3) {
+    throw StateError('fixture must contain exactly 3 chunks');
+  }
+
+  await bridgeA.send(plan).timeout(const Duration(seconds: 10));
+
+  if (senderExplicitCompleteCount != 0) {
+    throw StateError(
+      'sender should complete from receiver proactive COMPLETE before polling explicit final request',
+    );
+  }
+  final result = received;
+  if (result == null || !_same(payload, result)) {
+    throw StateError('proactive-final payload mismatch');
+  }
+  if (progress.isEmpty ||
+      progress.last.state != FileTransferSessionState.completed ||
+      progress.last.ackedChunks != 3) {
+    throw StateError('proactive-final did not complete at 3/3');
   }
 
   bridgeA.close();
