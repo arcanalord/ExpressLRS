@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc1
+name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc2
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
       - '.ci/mesh-v0110/dev5-overlay/**'
 
 concurrency:
-  group: mesh-flutter-v0.6.0-secure-core-rc1
+  group: mesh-flutter-v0.6.0-secure-core-rc2
   cancel-in-progress: true
 
 jobs:
@@ -33,8 +33,13 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          grep -Fqx 'version: 0.6.0-secure-core-rc1+26092901' "$APP_DIR/pubspec.yaml"
+          grep -Fqx 'version: 0.6.0-secure-core-rc2+26092902' "$APP_DIR/pubspec.yaml"
+          VERSION_FULL="$(awk '/^version:/ {print $2; exit}' "$APP_DIR/pubspec.yaml")"
+          APP_VERSION="${VERSION_FULL%%+*}"
+          APP_BUILD="${VERSION_FULL#*+}"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "APP_BUILD=$APP_BUILD" >> "$GITHUB_ENV"
 
       - name: Setup Flutter 3.47.2
         uses: subosito/flutter-action@v2
@@ -69,6 +74,8 @@ jobs:
           dart run tool/diagnostic_snapshot_self_test.dart
           dart run tool/file_transfer_core_self_test.dart
           dart run tool/file_transfer_protocol_self_test.dart
+          dart run tool/file_transfer_session_self_test.dart
+          dart run tool/file1_transport_loopback_self_test.dart
           dart run tool/contact_card_self_test.dart
           dart run tool/adaptive_link_profile_self_test.dart
           dart run tool/m07_security_contract_self_test.dart
@@ -203,19 +210,23 @@ jobs:
           grep -q "contact add QR and manual routes survive repeated open close" test/app_shell_navigation_test.dart
           grep -q "general location handoff opens map without contact assertion" test/app_shell_navigation_test.dart
           grep -q "_completedReceiverAtMs" lib/platform/file1_transport_bridge.dart
+          grep -q "consecutiveWriteFailures" lib/platform/file1_transport_bridge.dart
+          grep -q "MESH_MESSENGER_FILE1_TRANSIENT_FINALIZE_PASS" tool/file1_transport_loopback_self_test.dart
           grep -q "sendChannelMapPoint" lib/core/messenger_core.dart
           grep -q "Планируемые разделы" lib/src/features/settings/settings_page.dart
+          grep -q "О приложении" lib/src/features/settings/settings_page.dart
+          grep -q "APP_VERSION" lib/src/features/settings/settings_page.dart
           grep -q "android.permission.CAMERA" android/app/src/debug/AndroidManifest.xml
           test -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           test -f android/app/src/main/res/drawable/ic_launcher_foreground.xml
 
       - name: Widget tests
         working-directory: ${{ env.APP_DIR }}
-        run: timeout 180s flutter test test/connection_page_test.dart test/app_shell_navigation_test.dart --reporter expanded --timeout 90s
+        run: timeout 180s flutter test test/connection_page_test.dart test/app_shell_navigation_test.dart --reporter expanded --timeout 90s --dart-define=APP_VERSION="$APP_VERSION" --dart-define=APP_BUILD="$APP_BUILD"
 
       - name: Build installable arm64 test APK
         working-directory: ${{ env.APP_DIR }}
-        run: flutter build apk --debug --target-platform android-arm64 --split-per-abi
+        run: flutter build apk --debug --target-platform android-arm64 --split-per-abi --dart-define=APP_VERSION="$APP_VERSION" --dart-define=APP_BUILD="$APP_BUILD"
 
       - name: Verify and package APK
         working-directory: ${{ env.APP_DIR }}
@@ -232,23 +243,23 @@ jobs:
           APK_VERSION_CODE="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/APK_BADGING.txt | head -n1)"
           test -n "$APK_VERSION_CODE"
           export APK_VERSION_CODE
-          grep -Fq "versionName='0.6.0-secure-core-rc1'" /tmp/APK_BADGING.txt
+          grep -Fq "versionName='0.6.0-secure-core-rc2'" /tmp/APK_BADGING.txt
           unzip -Z1 "$APK" > /tmp/APK_FILES.txt
           grep -Fq 'lib/arm64-v8a/' /tmp/APK_FILES.txt
           if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' /tmp/APK_FILES.txt; then
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk | tee /tmp/SHA256SUM-v0.6.0-secure-core-rc1.txt
-          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk | awk '{print $1}')"
+          cp "$APK" /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc2-arm64-debug.apk
+          sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc2-arm64-debug.apk | tee /tmp/SHA256SUM-v0.6.0-secure-core-rc2.txt
+          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc2-arm64-debug.apk | awk '{print $1}')"
           export APK_SHA256
           python3 - <<'PY'
           import json
           import os
           manifest = {
               "schema": "mesh-messenger-release-manifest/v1",
-              "version": "0.6.0-secure-core-rc1",
+              "version": "0.6.0-secure-core-rc2",
               "versionCode": int(os.environ["APK_VERSION_CODE"]),
               "applicationId": "org.fpvclub.mesh.flutter",
               "abi": ["arm64-v8a"],
@@ -260,7 +271,7 @@ jobs:
                   "runId": os.environ["GITHUB_RUN_ID"],
               },
               "artifact": {
-                  "file": "MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk",
+                  "file": "MeshMessenger-Flutter-v0.6.0-secure-core-rc2-arm64-debug.apk",
                   "sha256": os.environ["APK_SHA256"],
               },
               "gates": {
@@ -288,10 +299,10 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug
+          name: MeshMessenger-Flutter-v0.6.0-secure-core-rc2-arm64-debug
           path: |
-            /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc1-arm64-debug.apk
-            /tmp/SHA256SUM-v0.6.0-secure-core-rc1.txt
+            /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc2-arm64-debug.apk
+            /tmp/SHA256SUM-v0.6.0-secure-core-rc2.txt
             /tmp/mesh-messenger-release-manifest-v1.json
           if-no-files-found: error
           retention-days: 14
