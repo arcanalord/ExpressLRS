@@ -36,7 +36,7 @@ final class DeliveryEngine {
     required String text,
     String? messageId,
   }) async {
-    final id = messageId ?? 'msg-\${++_counter}';
+    final id = messageId ?? 'msg-${++_counter}';
     final existing = _records[id];
     if (existing != null) {
       final retryResult = await _submit(existing.message);
