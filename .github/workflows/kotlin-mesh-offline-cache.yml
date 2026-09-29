@@ -1,0 +1,85 @@
+name: Kotlin Mesh Offline Cache Builder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kotlin-mesh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout Kotlin Mesh source
+        uses: actions/checkout@v4
+        with:
+          repository: arcanalord/MeshMessenger-Kotlin-Native
+          ref: ecfd0b17a913c03f39e3c8814bcc211f3cdd00ac
+          path: kotlin-mesh
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 9.6.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-disabled: false
+
+      - name: Tool versions
+        run: |
+          java -version
+          gradle --version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
+      - name: Unit tests and APK
+        working-directory: kotlin-mesh
+        run: |
+          set -o pipefail
+          gradle --no-daemon --stacktrace test assembleDebug 2>&1 | tee ../kotlin-build.log
+
+      - name: Verify APK
+        if: always()
+        run: |
+          set -euxo pipefail
+          APK="$(find kotlin-mesh/app/build/outputs/apk -type f -name '*.apk' | head -n 1 || true)"
+          if [ -n "$APK" ]; then
+            sha256sum "$APK" | tee kotlin-apk.sha256
+            BT="$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
+            "$ANDROID_HOME/build-tools/$BT/apksigner" verify --verbose "$APK" | tee kotlin-apksigner.txt
+            "$ANDROID_HOME/build-tools/$BT/zipalign" -c -v 4 "$APK" | tee kotlin-zipalign.txt
+            "$ANDROID_HOME/build-tools/$BT/aapt" dump badging "$APK" | tee kotlin-aapt-badging.txt
+          fi
+
+      - name: Pack Gradle cache
+        if: always()
+        run: |
+          set -euxo pipefail
+          tar -C "$HOME" -czf kotlin-gradle-user-home-cache.tar.gz .gradle/caches .gradle/wrapper || true
+          sha256sum kotlin-gradle-user-home-cache.tar.gz > kotlin-gradle-user-home-cache.sha256 || true
+
+      - name: Upload APK and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kotlin-Mesh-APK-and-evidence
+          if-no-files-found: warn
+          path: |
+            kotlin-mesh/app/build/outputs/apk/**/*.apk
+            kotlin-build.log
+            kotlin-apk.sha256
+            kotlin-apksigner.txt
+            kotlin-zipalign.txt
+            kotlin-aapt-badging.txt
+
+      - name: Upload offline Gradle cache
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kotlin-Mesh-Gradle-Offline-Cache
+          if-no-files-found: warn
+          path: |
+            kotlin-gradle-user-home-cache.tar.gz
+            kotlin-gradle-user-home-cache.sha256
