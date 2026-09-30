@@ -56,6 +56,33 @@ final class File1TransportBridge {
   static const int _maxCompletedReceiverIds = 64;
   Timer? _timer;
   bool _driving = false;
+  bool _linkAvailable = true;
+
+  bool get hasActiveSenders => _senders.isNotEmpty;
+
+  void pauseForLinkLoss() {
+    if (!_linkAvailable) return;
+    _linkAvailable = false;
+    for (final entry in _senders.entries) {
+      entry.value.session.pauseForLinkLoss();
+      _emitProgress(entry.key, entry.value, force: true);
+    }
+  }
+
+  void resumeAfterLink() {
+    _linkAvailable = true;
+    for (final entry in _senders.entries) {
+      entry.value.session.resumeAfterLink();
+      entry.value.lastManifestSentMs = -0x7fffffff;
+      entry.value.consecutiveWriteFailures = 0;
+      entry.value.lastWriteError = null;
+      _emitProgress(entry.key, entry.value, force: true);
+    }
+    if (_senders.isNotEmpty) {
+      _ensureTimer();
+      unawaited(_drive());
+    }
+  }
 
   Future<void> send(FileTransferPlan plan) {
     final id = plan.manifest.transferId;
@@ -63,6 +90,9 @@ final class File1TransportBridge {
       return Future<void>.error(
         StateError('FILE/1 transfer already active: $id'),
       );
+    }
+    if (!_linkAvailable) {
+      return Future<void>.error(StateError('FILE/1 link unavailable'));
     }
     final state = _SenderState(FileTransferSenderSession(plan: plan));
     _senders[id] = state;
@@ -153,7 +183,7 @@ final class File1TransportBridge {
   }
 
   Future<void> _drive() async {
-    if (_driving) return;
+    if (_driving || !_linkAvailable) return;
     _driving = true;
     try {
       final now = _nowMs();
@@ -176,11 +206,7 @@ final class File1TransportBridge {
           } catch (error) {
             state.consecutiveWriteFailures++;
             state.lastWriteError = error;
-            if (state.consecutiveWriteFailures >
-                state.session.maxRetries + 1) {
-              state.session.state = FileTransferSessionState.failed;
-              _emitProgress(entry.key, state, force: true);
-            }
+            pauseForLinkLoss();
             break;
           }
         }
