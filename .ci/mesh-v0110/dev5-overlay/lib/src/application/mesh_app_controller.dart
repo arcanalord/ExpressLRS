@@ -138,6 +138,19 @@ final class MeshAppController extends ChangeNotifier {
       _preparedFilePlan != null &&
       !fileTransferSending &&
       (fileTransferState == 'failed' || fileTransferState == 'cancelled');
+  bool get fileTransferPausedByUser => fileTransferState == 'pausedUser';
+  bool get fileTransferWaitingRoute => fileTransferState == 'pausedLink';
+  bool get fileTransferCanPause =>
+      _preparedFilePlan != null &&
+      fileTransferSending &&
+      !fileTransferPausedByUser &&
+      !fileTransferWaitingRoute;
+  bool get fileTransferCanContinue =>
+      _preparedFilePlan != null &&
+      fileTransferSending &&
+      fileTransferPausedByUser &&
+      lr24Connected &&
+      lr24PeerReachable;
   String? lastReceivedFileName;
   String? lastReceivedFilePath;
   final Map<String, DateTime> _peerLastSeen = <String, DateTime>{};
@@ -889,6 +902,31 @@ final class MeshAppController extends ChangeNotifier {
       fileTransferSending = false;
       notifyListeners();
     }
+  }
+
+  void pausePreparedFileTransfer() {
+    final plan = _preparedFilePlan;
+    final lr24 = _lr24;
+    if (plan == null || lr24 == null || !fileTransferCanPause) return;
+    if (!lr24.pauseFileTransfer(plan.manifest.transferId)) return;
+    fileTransferState = 'pausedUser';
+    fileTransferNotice =
+        'Пауза · сохранено $fileTransferAckedChunks/${plan.manifest.chunkCount}';
+    notifyListeners();
+  }
+
+  void continuePreparedFileTransfer() {
+    final plan = _preparedFilePlan;
+    final lr24 = _lr24;
+    if (plan == null || lr24 == null || !fileTransferPausedByUser) return;
+    if (!lr24.resumeFileTransfer(plan.manifest.transferId)) {
+      fileTransferNotice = 'Сначала восстановите радиоканал';
+      notifyListeners();
+      return;
+    }
+    fileTransferState = 'sendingManifest';
+    fileTransferNotice = 'Продолжаем передачу…';
+    notifyListeners();
   }
 
   Future<void> cancelPreparedFileTransfer() async {
@@ -2490,7 +2528,10 @@ final class MeshAppController extends ChangeNotifier {
                 'Ожидание подтверждения: ${event.ackedChunks}/${event.totalChunks}';
           case 'pausedLink':
             fileTransferNotice =
-                'Связь потеряна · сохранено ${event.ackedChunks}/${event.totalChunks} · ждём LR24';
+                'Ожидает связь · сохранено ${event.ackedChunks}/${event.totalChunks}';
+          case 'pausedUser':
+            fileTransferNotice =
+                'Пауза · сохранено ${event.ackedChunks}/${event.totalChunks}';
           case 'completed':
             fileTransferNotice =
                 'Доставлено: ${event.totalChunks}/${event.totalChunks} блоков';
