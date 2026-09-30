@@ -47,6 +47,7 @@ jobs:
           cat > warmup/build.gradle.kts <<'EOF'
           plugins {
               kotlin("jvm") version "2.4.20"
+              id("org.jetbrains.kotlin.plugin.compose") version "2.4.20"
           }
 
           kotlin {
@@ -75,6 +76,7 @@ jobs:
           test -d "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-impl/2.4.20"
           test -d "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-cri-impl/2.4.20"
           test -d "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.20"
+          test -d "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compose-compiler-plugin-embeddable/2.4.20"
 
       - name: Pack Kotlin compiler cache
         run: |
