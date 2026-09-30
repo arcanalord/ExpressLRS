@@ -181,6 +181,8 @@ final class _PluginUsbSerialPortHandle implements UsbSerialPortHandle {
 /// The rest of M03 only knows [Lr24ByteStreamLink]. USB permissions,
 /// serial-driver details and Android lifecycle stay behind this class.
 final class AndroidUsbLr24ByteStreamLink implements Lr24ByteStreamLink {
+  static const int defaultBaudRate = 57600;
+
   AndroidUsbLr24ByteStreamLink._({
     required this.deviceId,
     required UsbSerialBackend backend,
@@ -219,7 +221,7 @@ final class AndroidUsbLr24ByteStreamLink implements Lr24ByteStreamLink {
 
   static Future<AndroidUsbLr24ByteStreamLink> connect({
     required int deviceId,
-    int baudRate = 115200,
+    int baudRate = defaultBaudRate,
     UsbSerialBackend? backend,
   }) async {
     final selectedBackend = backend ?? PluginUsbSerialBackend();
