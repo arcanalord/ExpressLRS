@@ -24,6 +24,7 @@ final class DeliveryManager {
     DateTime Function()? now,
     this.retryDelay = const Duration(seconds: 5),
     this.maxRetryDelay = const Duration(minutes: 5),
+    this.recipientAckTimeout = const Duration(seconds: 10),
     this.maxAttempts = 5,
     this.maxPending = 512,
   }) : _storage = storage,
@@ -35,6 +36,7 @@ final class DeliveryManager {
   final DateTime Function() _now;
   final Duration retryDelay;
   final Duration maxRetryDelay;
+  final Duration recipientAckTimeout;
   // Caps exponential backoff growth. Retryable delivery failures do not
   // become terminal just because this count is reached.
   final int maxAttempts;
@@ -163,7 +165,12 @@ final class DeliveryManager {
         }
         // ACK may arrive while send() is still returning; never overwrite it.
         if (latest.state != DeliveryState.sending) return latest;
-        return _save(latest.copyWith(state: DeliveryState.waitingAck));
+        return _save(
+          latest.copyWith(
+            state: DeliveryState.waitingAck,
+            nextRetryAt: _now().add(recipientAckTimeout),
+          ),
+        );
       }
       if (result.status != TransportSendStatus.unavailable) {
         allUnavailable = false;
@@ -246,6 +253,18 @@ final class DeliveryManager {
       if (item.state.isTerminal) continue;
       if (!now.isBefore(item.expiresAt)) {
         await _save(item.copyWith(state: DeliveryState.expired));
+      } else if (item.state == DeliveryState.waitingAck &&
+          item.nextRetryAt != null &&
+          !now.isBefore(item.nextRetryAt!)) {
+        await _save(
+          item.copyWith(
+            state: DeliveryState.queued,
+            lastError: 'RECIPIENT_ACK_TIMEOUT',
+            clearNextRetryAt: true,
+            clearSelectedTransport: true,
+          ),
+        );
+        redispatch.add(item.effectiveDeliveryId);
       } else if (item.state == DeliveryState.retryWait &&
           item.nextRetryAt != null &&
           !now.isBefore(item.nextRetryAt!)) {
