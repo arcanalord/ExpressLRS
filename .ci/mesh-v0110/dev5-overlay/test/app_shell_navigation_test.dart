@@ -325,6 +325,13 @@ void main() {
       await tester.enterText(field, 'Рабочий контакт');
       await tester.pump();
       await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+      await tester.pump();
+      await tester.runAsync(() async {
+        for (var i = 0; i < 50; i++) {
+          if (controller.hasContact('mm:nearby-contact')) return;
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
