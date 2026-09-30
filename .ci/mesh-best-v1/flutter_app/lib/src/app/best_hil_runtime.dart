@@ -34,6 +34,36 @@ final class BestHilDeliveryUpdate extends BestHilEvent {
   final DeliveryState state;
 }
 
+final class BestHilTestProgress extends BestHilEvent {
+  const BestHilTestProgress({
+    required this.completed,
+    required this.total,
+    required this.delivered,
+    required this.failed,
+  });
+
+  final int completed;
+  final int total;
+  final int delivered;
+  final int failed;
+}
+
+final class BestHilTestResult {
+  const BestHilTestResult({
+    required this.total,
+    required this.delivered,
+    required this.failed,
+    required this.elapsed,
+  });
+
+  final int total;
+  final int delivered;
+  final int failed;
+  final Duration elapsed;
+
+  bool get passed => delivered == total && failed == 0;
+}
+
 final class BestHilRuntime {
   BestHilRuntime({
     required this.localMmId,
@@ -93,6 +123,79 @@ final class BestHilRuntime {
       BestHilDeliveryUpdate(messageId: id, state: record.state),
     );
     return record;
+  }
+
+  Future<BestHilTestResult> runTextTest({
+    int count = 100,
+    Duration ackTimeout = const Duration(seconds: 5),
+  }) async {
+    if (count < 1) {
+      throw RangeError.range(count, 1, null, 'count');
+    }
+    final started = Stopwatch()..start();
+    var delivered = 0;
+    var failed = 0;
+    final runId = DateTime.now().microsecondsSinceEpoch;
+
+    for (var index = 1; index <= count; index++) {
+      final messageId = 'hil-${runId}-${index}';
+      final deliveredFuture = _waitForDelivered(
+        messageId,
+        timeout: ackTimeout,
+      );
+      final record = await sendText(
+        'HIL TEST ${index}/${count}',
+        messageId: messageId,
+      );
+
+      var ok = record.state == DeliveryState.delivered;
+      if (!ok && record.state != DeliveryState.failed) {
+        ok = await deliveredFuture;
+      }
+      if (ok) {
+        delivered++;
+      } else {
+        failed++;
+      }
+      _events.add(
+        BestHilTestProgress(
+          completed: index,
+          total: count,
+          delivered: delivered,
+          failed: failed,
+        ),
+      );
+    }
+
+    started.stop();
+    return BestHilTestResult(
+      total: count,
+      delivered: delivered,
+      failed: failed,
+      elapsed: started.elapsed,
+    );
+  }
+
+  Future<bool> _waitForDelivered(
+    String messageId, {
+    required Duration timeout,
+  }) async {
+    if (_engine.records[messageId]?.state == DeliveryState.delivered) {
+      return true;
+    }
+    try {
+      await events
+          .whereType<BestHilDeliveryUpdate>()
+          .firstWhere(
+            (event) =>
+                event.messageId == messageId &&
+                event.state == DeliveryState.delivered,
+          )
+          .timeout(timeout);
+      return true;
+    } on TimeoutException {
+      return false;
+    }
   }
 
   Future<void> _onInbound(TransportInboundFrame frame) async {
