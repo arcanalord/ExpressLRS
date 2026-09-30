@@ -563,6 +563,18 @@ final class MeshAppController extends ChangeNotifier {
     _peerLastSeen[mmId] = DateTime.now().toUtc();
   }
 
+  @visibleForTesting
+  void injectNearbyPeerForTest(
+    String mmId, {
+    String label = 'Nearby Test',
+  }) {
+    final cleanId = mmId.trim();
+    if (cleanId.isEmpty || cleanId == ownMmId) return;
+    _peerLastSeen[cleanId] = DateTime.now().toUtc();
+    _peerLabels[cleanId] = label;
+    notifyListeners();
+  }
+
   List<DeliveryEnvelope> get pendingDeliveries => _core.pending;
   DeliveryState? deliveryStateFor(String id) => _core.deliveryById(id)?.state;
 
