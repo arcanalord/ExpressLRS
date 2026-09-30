@@ -10,6 +10,7 @@ enum FileTransferSessionState {
   sending,
   waiting,
   pausedLink,
+  pausedUser,
   completed,
   failed,
   cancelled,
@@ -38,6 +39,7 @@ final class FileTransferSenderSession {
   FileTransferSessionState state = FileTransferSessionState.idle;
   bool _manifestAcked = false;
   bool _pausedForLink = false;
+  bool _pausedForUser = false;
   bool _completeSent = false;
   int _completeAttempts = 0;
   String? failureReason;
@@ -57,7 +59,9 @@ final class FileTransferSenderSession {
       state == FileTransferSessionState.cancelled;
 
   List<File1Frame> poll(int nowMs) {
-    if (isTerminal || _pausedForLink) return const <File1Frame>[];
+    if (isTerminal || _pausedForLink || _pausedForUser) {
+      return const <File1Frame>[];
+    }
     if (!_manifestAcked) {
       state = FileTransferSessionState.sendingManifest;
       return <File1Frame>[File1Codec.manifest(plan.manifest)];
@@ -119,7 +123,9 @@ final class FileTransferSenderSession {
         final index = File1Codec.decodeAck(frame);
         if (index == File1Codec.manifestAckIndex) {
           _manifestAcked = true;
-          state = FileTransferSessionState.sending;
+          state = _pausedForUser
+              ? FileTransferSessionState.pausedUser
+              : FileTransferSessionState.sending;
           return;
         }
         if (index == File1Codec.verifiedCompleteAckIndex) {
@@ -154,7 +160,9 @@ final class FileTransferSenderSession {
         _completeAttempts = 0;
         _lastCompleteSentAtMs = -0x7fffffff;
         failureReason = null;
-        state = missing.isEmpty
+        state = _pausedForUser
+            ? FileTransferSessionState.pausedUser
+            : missing.isEmpty
             ? FileTransferSessionState.waiting
             : FileTransferSessionState.sending;
       case File1FrameType.complete:
@@ -172,6 +180,7 @@ final class FileTransferSenderSession {
   void pauseForLinkLoss() {
     if (isTerminal || _pausedForLink) return;
     _pausedForLink = true;
+    if (_pausedForUser) return;
     state = FileTransferSessionState.pausedLink;
     failureReason = 'waiting-link';
   }
@@ -179,6 +188,37 @@ final class FileTransferSenderSession {
   void resumeAfterLink() {
     if (isTerminal || !_pausedForLink) return;
     _pausedForLink = false;
+    _prepareResumeHandshake();
+    if (_pausedForUser) {
+      state = FileTransferSessionState.pausedUser;
+      failureReason = 'paused-user';
+      return;
+    }
+    failureReason = null;
+    state = FileTransferSessionState.sendingManifest;
+  }
+
+  void pauseByUser() {
+    if (isTerminal || _pausedForUser) return;
+    _pausedForUser = true;
+    state = FileTransferSessionState.pausedUser;
+    failureReason = 'paused-user';
+  }
+
+  void resumeByUser() {
+    if (isTerminal || !_pausedForUser) return;
+    _pausedForUser = false;
+    _prepareResumeHandshake();
+    if (_pausedForLink) {
+      state = FileTransferSessionState.pausedLink;
+      failureReason = 'waiting-link';
+      return;
+    }
+    failureReason = null;
+    state = FileTransferSessionState.sendingManifest;
+  }
+
+  void _prepareResumeHandshake() {
     _manifestAcked = false;
     _completeSent = false;
     _completeAttempts = 0;
@@ -193,13 +233,12 @@ final class FileTransferSenderSession {
           (index) => index,
         ).where((index) => !_acked.contains(index)),
       );
-    failureReason = null;
-    state = FileTransferSessionState.sendingManifest;
   }
 
   void cancel() {
     if (!isTerminal) {
       _pausedForLink = false;
+      _pausedForUser = false;
       failureReason = 'cancelled';
       state = FileTransferSessionState.cancelled;
     }
