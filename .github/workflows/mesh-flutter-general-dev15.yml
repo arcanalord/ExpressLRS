@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc5
+name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc6
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
       - '.ci/mesh-v0110/dev5-overlay/**'
 
 concurrency:
-  group: mesh-flutter-v0.6.0-secure-core-rc5
+  group: mesh-flutter-v0.6.0-secure-core-rc6
   cancel-in-progress: true
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          grep -Fqx 'version: 0.6.0-secure-core-rc5+26093005' "$APP_DIR/pubspec.yaml"
+          grep -Fqx 'version: 0.6.0-secure-core-rc6+26093006' "$APP_DIR/pubspec.yaml"
           VERSION_FULL="$(awk '/^version:/ {print $2; exit}' "$APP_DIR/pubspec.yaml")"
           APP_VERSION="${VERSION_FULL%%+*}"
           APP_BUILD="${VERSION_FULL#*+}"
@@ -127,26 +127,26 @@ jobs:
           grep -q "MM-UART/1 first" lib/src/application/mesh_app_controller.dart
           grep -q "session.supportsMmrp" lib/src/application/mesh_app_controller.dart
 
-      - name: RC5 canonical formatter capture
+      - name: RC6 changed-file format gate
         working-directory: ${{ env.APP_DIR }}
         run: |
-          dart format \
+          dart format --output=none --set-exit-if-changed \
+            lib/core/app_build_info.dart \
+            lib/core/delivery.dart \
+            lib/core/file_transfer_session.dart \
+            lib/platform/android_diagnostics_export_bridge.dart \
+            lib/platform/file1_transport_bridge.dart \
+            lib/platform/lr24_peer_reachability.dart \
+            lib/platform/transparent_uart_radio_transport.dart \
             lib/src/application/mesh_app_controller.dart \
+            lib/src/features/chats/chats_page.dart \
+            lib/src/features/connection/connection_page.dart \
+            lib/src/features/diagnostics/diagnostics_page.dart \
+            lib/src/features/settings/settings_page.dart \
+            tool/delivery_reliability_self_test.dart \
+            tool/file1_transport_loopback_self_test.dart \
+            tool/lr24_peer_reachability_self_test.dart \
             test/app_shell_navigation_test.dart
-          tar -czf /tmp/rc5-format-fix.tar.gz \
-            lib/src/application/mesh_app_controller.dart \
-            test/app_shell_navigation_test.dart
-
-      - name: Upload RC5 format fix
-        uses: actions/upload-artifact@v4
-        with:
-          name: rc5-format-fix
-          path: /tmp/rc5-format-fix.tar.gz
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Stop after formatter capture
-        run: exit 1
 
       - name: Format check (non-blocking)
         continue-on-error: true
@@ -238,6 +238,10 @@ jobs:
           grep -q "_completedReceiverAtMs" lib/platform/file1_transport_bridge.dart
           grep -q "consecutiveWriteFailures" lib/platform/file1_transport_bridge.dart
           grep -q "MESH_MESSENGER_FILE1_TRANSIENT_FINALIZE_PASS" tool/file1_transport_loopback_self_test.dart
+          grep -q "MESH_MESSENGER_FILE1_LINK_RESUME_PASS" tool/file1_transport_loopback_self_test.dart
+          grep -q "const chunkSize = 1024" lib/src/application/mesh_app_controller.dart
+          grep -q "nearby peer save becomes contact without inherited dependency assertion" test/app_shell_navigation_test.dart
+          grep -q "class _ContactNameDialog extends StatefulWidget" lib/src/features/chats/chats_page.dart
           grep -q "sendChannelMapPoint" lib/core/messenger_core.dart
           grep -q "Планируемые разделы" lib/src/features/settings/settings_page.dart
           grep -q "О приложении" lib/src/features/settings/settings_page.dart
@@ -272,15 +276,15 @@ jobs:
           APK_VERSION_CODE="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/APK_BADGING.txt | head -n1)"
           test -n "$APK_VERSION_CODE"
           export APK_VERSION_CODE
-          grep -Fq "versionName='0.6.0-secure-core-rc5'" /tmp/APK_BADGING.txt
+          grep -Fq "versionName='0.6.0-secure-core-rc6'" /tmp/APK_BADGING.txt
           unzip -Z1 "$APK" > /tmp/APK_FILES.txt
           grep -Fq 'lib/arm64-v8a/' /tmp/APK_FILES.txt
           if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' /tmp/APK_FILES.txt; then
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
-          OUT="/tmp/Mesh Messenger Flutter rc5.apk"
-          SUM="/tmp/Mesh Messenger Flutter rc5.sha256.txt"
+          OUT="/tmp/Mesh Messenger Flutter rc6.apk"
+          SUM="/tmp/Mesh Messenger Flutter rc6.sha256.txt"
           cp "$APK" "$OUT"
           sha256sum "$OUT" | tee "$SUM"
           APK_SHA256="$(sha256sum "$OUT" | awk '{print $1}')"
@@ -290,19 +294,19 @@ jobs:
           import os
           manifest = {
               "schema": "mesh-messenger-release-manifest/v1",
-              "version": "0.6.0-secure-core-rc5",
+              "version": "0.6.0-secure-core-rc6",
               "versionCode": int(os.environ["APK_VERSION_CODE"]),
               "applicationId": "org.fpvclub.mesh.flutter",
               "abi": ["arm64-v8a"],
               "git": {
                   "repository": "arcanalord/ExpressLRS",
-                  "branch": os.environ.get("GITHUB_REF_NAME", "security/secure-core-v1-integration"),
+                  "branch": os.environ.get("GITHUB_REF_NAME", "fix/m05-file1-final-4of4"),
                   "commit": os.environ["GITHUB_SHA"],
                   "workflow": "mesh-flutter-general-dev15.yml",
                   "runId": os.environ["GITHUB_RUN_ID"],
               },
               "artifact": {
-                  "file": "Mesh Messenger Flutter rc5.apk",
+                  "file": "Mesh Messenger Flutter rc6.apk",
                   "sha256": os.environ["APK_SHA256"],
               },
               "gates": {
@@ -330,10 +334,10 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mesh Messenger Flutter rc5
+          name: Mesh Messenger Flutter rc6
           path: |
-            /tmp/Mesh Messenger Flutter rc5.apk
-            /tmp/Mesh Messenger Flutter rc5.sha256.txt
+            /tmp/Mesh Messenger Flutter rc6.apk
+            /tmp/Mesh Messenger Flutter rc6.sha256.txt
             /tmp/mesh-messenger-release-manifest-v1.json
           if-no-files-found: error
           retention-days: 14
