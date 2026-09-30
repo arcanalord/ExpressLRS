@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import '../domain/message.dart';
+import '../protocol/mmrp1_channel.dart';
 
 final class ProtectedEnvelope {
   ProtectedEnvelope({
@@ -42,27 +42,36 @@ final class DevelopmentProtectedEvent {
   final String? ackedMessageId;
 }
 
-/// Test/HIL-only placeholder.
+/// Test/HIL-only compatibility provider.
 ///
-/// This is intentionally NOT production encryption. It exists only so the
-/// greenfield Best-v1 branch can prove M02 -> M07 -> M12 -> M03 ownership,
-/// physical LR24 routing, dedupe and recipient-ACK semantics before a real
-/// crash-atomic production M07 provider is integrated.
+/// This is intentionally NOT encryption. It maps the Best-v1 HIL text/receipt
+/// path onto the same MMRP/1 CHANNEL/1 application wire used by MM U1 so the
+/// LR24 HIL can prove cross-implementation compatibility. A production M07
+/// provider must replace this before any security claim.
 final class DevelopmentMessageProtector implements MessageProtector {
-  const DevelopmentMessageProtector({this.localMmId = 'mm:local'});
+  const DevelopmentMessageProtector({
+    this.localMmId = 'mm:local',
+    this.channel = 'general',
+  });
 
   final String localMmId;
+  final String channel;
+  static const Mmrp1ChannelCodec _codec = Mmrp1ChannelCodec();
 
   @override
   ProtectedEnvelope protect(LogicalMessage message) {
-    return _encode(
-      DevelopmentProtectedEvent(
-        kind: DevelopmentProtectedKind.text,
-        messageId: message.messageId,
-        senderMmId: localMmId,
-        recipientMmId: message.recipientMmId,
-        text: message.text,
+    return ProtectedEnvelope(
+      messageId: message.messageId,
+      recipientMmId: message.recipientMmId,
+      protectedBytes: _codec.encode(
+        Mmrp1ChannelData(
+          from: localMmId,
+          channel: channel,
+          messageId: message.messageId,
+          payload: message.text,
+        ),
       ),
+      cryptoVersion: 'DEV-MMRP1-PLAINTEXT-NOT-PRODUCTION',
     );
   }
 
@@ -70,77 +79,43 @@ final class DevelopmentMessageProtector implements MessageProtector {
     required String ackedMessageId,
     required String recipientMmId,
   }) {
-    final ackEventId = 'ack:${localMmId}:${ackedMessageId}';
-    return _encode(
-      DevelopmentProtectedEvent(
-        kind: DevelopmentProtectedKind.recipientAck,
-        messageId: ackEventId,
-        senderMmId: localMmId,
-        recipientMmId: recipientMmId,
-        ackedMessageId: ackedMessageId,
+    return ProtectedEnvelope(
+      messageId: 'receipt:${localMmId}:${ackedMessageId}',
+      recipientMmId: recipientMmId,
+      protectedBytes: _codec.encode(
+        Mmrp1ChannelReceipt(
+          from: localMmId,
+          channel: channel,
+          messageId: ackedMessageId,
+        ),
       ),
+      cryptoVersion: 'DEV-MMRP1-PLAINTEXT-NOT-PRODUCTION',
     );
   }
 
   DevelopmentProtectedEvent decode(Uint8List protectedBytes) {
-    final decoded = jsonDecode(utf8.decode(protectedBytes));
-    if (decoded is! Map) {
-      throw const FormatException('BEST-V1 dev envelope is not an object');
+    final frame = _codec.decode(protectedBytes);
+    if (frame == null) {
+      throw const FormatException('unsupported MMRP/1 CHANNEL frame');
     }
-    final map = Map<String, dynamic>.from(decoded);
-    if (map['schema'] != 'mesh-best-v1-dev/v1') {
-      throw const FormatException('BEST-V1 dev envelope schema');
-    }
-    final kindValue = '${map['kind'] ?? ''}';
-    final kind = switch (kindValue) {
-      'text' => DevelopmentProtectedKind.text,
-      'recipient_ack' => DevelopmentProtectedKind.recipientAck,
-      _ => throw const FormatException('BEST-V1 dev envelope kind'),
-    };
-    final messageId = '${map['messageId'] ?? ''}'.trim();
-    final senderMmId = '${map['senderMmId'] ?? ''}'.trim();
-    final recipientMmId = '${map['recipientMmId'] ?? ''}'.trim();
-    if (messageId.isEmpty || senderMmId.isEmpty || recipientMmId.isEmpty) {
-      throw const FormatException('BEST-V1 dev envelope identity fields');
-    }
-    final text = map['text'] is String ? map['text'] as String : null;
-    final ackedMessageId =
-        map['ackedMessageId'] is String ? map['ackedMessageId'] as String : null;
-    if (kind == DevelopmentProtectedKind.text && text == null) {
-      throw const FormatException('BEST-V1 text payload missing');
-    }
-    if (kind == DevelopmentProtectedKind.recipientAck &&
-        (ackedMessageId == null || ackedMessageId.isEmpty)) {
-      throw const FormatException('BEST-V1 ACK target missing');
-    }
-    return DevelopmentProtectedEvent(
-      kind: kind,
-      messageId: messageId,
-      senderMmId: senderMmId,
-      recipientMmId: recipientMmId,
-      text: text,
-      ackedMessageId: ackedMessageId,
-    );
-  }
 
-  ProtectedEnvelope _encode(DevelopmentProtectedEvent event) {
-    final payload = <String, Object?>{
-      'schema': 'mesh-best-v1-dev/v1',
-      'kind': switch (event.kind) {
-        DevelopmentProtectedKind.text => 'text',
-        DevelopmentProtectedKind.recipientAck => 'recipient_ack',
-      },
-      'messageId': event.messageId,
-      'senderMmId': event.senderMmId,
-      'recipientMmId': event.recipientMmId,
-      if (event.text != null) 'text': event.text,
-      if (event.ackedMessageId != null) 'ackedMessageId': event.ackedMessageId,
-    };
-    return ProtectedEnvelope(
-      messageId: event.messageId,
-      recipientMmId: event.recipientMmId,
-      protectedBytes: Uint8List.fromList(utf8.encode(jsonEncode(payload))),
-      cryptoVersion: 'DEV-NOT-PRODUCTION',
-    );
+    switch (frame) {
+      case Mmrp1ChannelData():
+        return DevelopmentProtectedEvent(
+          kind: DevelopmentProtectedKind.text,
+          messageId: frame.messageId,
+          senderMmId: frame.from,
+          recipientMmId: localMmId,
+          text: frame.payload,
+        );
+      case Mmrp1ChannelReceipt():
+        return DevelopmentProtectedEvent(
+          kind: DevelopmentProtectedKind.recipientAck,
+          messageId: 'receipt:${frame.from}:${frame.messageId}',
+          senderMmId: frame.from,
+          recipientMmId: localMmId,
+          ackedMessageId: frame.messageId,
+        );
+    }
   }
 }
