@@ -1,5 +1,6 @@
 name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc7
 # rc7 product UX + M05 user pause canonical sources committed
+# canonical formatter pass trigger
 
 on:
   workflow_dispatch:
