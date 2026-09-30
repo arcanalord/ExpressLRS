@@ -212,6 +212,8 @@ final class _BestHilPageState extends State<BestHilPage> {
             ),
             const SizedBox(height: 6),
             const Text('M02 -> M07 -> M12 -> PreparedTransportPacket -> M03'),
+            const SizedBox(height: 4),
+            const Text('Release status: experimental / not production'),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
