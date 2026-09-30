@@ -37,6 +37,9 @@ jobs:
           }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  mavenCentral()
+              }
           }
           rootProject.name = "KotlinCompilerCacheWarmup"
           EOF
@@ -50,9 +53,6 @@ jobs:
               jvmToolchain(17)
           }
 
-          repositories {
-              mavenCentral()
-          }
 
           dependencies {
               implementation(kotlin("stdlib"))
