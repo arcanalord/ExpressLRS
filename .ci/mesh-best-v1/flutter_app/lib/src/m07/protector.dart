@@ -4,16 +4,17 @@ import 'dart:typed_data';
 import '../domain/message.dart';
 
 final class ProtectedEnvelope {
-  const ProtectedEnvelope({
+  ProtectedEnvelope({
     required this.messageId,
     required this.recipientMmId,
-    required this.protectedBytes,
+    required Uint8List protectedBytes,
     required this.cryptoVersion,
-  });
+  }) : _protectedBytes = Uint8List.fromList(protectedBytes);
 
   final String messageId;
   final String recipientMmId;
-  final Uint8List protectedBytes;
+  final Uint8List _protectedBytes;
+  Uint8List get protectedBytes => Uint8List.fromList(_protectedBytes);
   final String cryptoVersion;
 }
 
