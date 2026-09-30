@@ -140,8 +140,10 @@ final class FileTransferSenderSession {
         _acked
           ..clear()
           ..addAll(
-            List<int>.generate(totalChunkCount, (index) => index)
-                .where((index) => !missing.contains(index)),
+            List<int>.generate(
+              totalChunkCount,
+              (index) => index,
+            ).where((index) => !missing.contains(index)),
           );
         _pending
           ..clear()
@@ -186,8 +188,10 @@ final class FileTransferSenderSession {
     _pending
       ..clear()
       ..addAll(
-        List<int>.generate(totalChunkCount, (index) => index)
-            .where((index) => !_acked.contains(index)),
+        List<int>.generate(
+          totalChunkCount,
+          (index) => index,
+        ).where((index) => !_acked.contains(index)),
       );
     failureReason = null;
     state = FileTransferSessionState.sendingManifest;
