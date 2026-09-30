@@ -305,9 +305,17 @@ void main() {
 
       expect(find.text('Рядом'), findsOneWidget);
       expect(find.text('Mesh Nearby'), findsOneWidget);
-      final add = find.byTooltip('Добавить контакт');
-      expect(add, findsWidgets);
-      await tester.tap(add.first);
+      final nearbyTile = find.ancestor(
+        of: find.text('Mesh Nearby'),
+        matching: find.byType(ListTile),
+      );
+      expect(nearbyTile, findsOneWidget);
+      final add = find.descendant(
+        of: nearbyTile,
+        matching: find.byTooltip('Добавить контакт'),
+      );
+      expect(add, findsOneWidget);
+      await tester.tap(add);
       await tester.pumpAndSettle();
       expect(find.text('Добавить контакт'), findsWidgets);
       expect(tester.takeException(), isNull);
