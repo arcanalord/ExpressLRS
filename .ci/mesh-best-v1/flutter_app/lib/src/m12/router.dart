@@ -8,11 +8,12 @@ final class PreparedTransportPacket {
     required this.transportId,
     required Uint8List protectedBytes,
     required this.idempotencyToken,
-  }) : protectedBytes = Uint8List.fromList(protectedBytes);
+  }) : _protectedBytes = Uint8List.fromList(protectedBytes);
 
   final String routeAttemptId;
   final String transportId;
-  final Uint8List protectedBytes;
+  final Uint8List _protectedBytes;
+  Uint8List get protectedBytes => Uint8List.fromList(_protectedBytes);
   final String idempotencyToken;
 }
 
