@@ -4,6 +4,7 @@ import '../domain/message.dart';
 import '../m02/delivery_engine.dart';
 import '../m03/byte_stream_link.dart';
 import '../m03/lr24_serial_adapter.dart';
+import '../m03/mmrp1_control.dart';
 import '../m03/transport_adapter.dart';
 import '../m07/protector.dart';
 import '../m12/router.dart';
@@ -76,6 +77,11 @@ final class BestHilRuntime {
           link: link,
           localBinding: localBinding,
         ) {
+    _control = Mmrp1ControlSession(
+      transport: _transport,
+      ownMmId: localMmId,
+      ownLabel: localMmId,
+    );
     _engine = DeliveryEngine(
       protector: _protector,
       router: Lr24SingleRouteRouter(transportBinding: peerBinding),
@@ -91,6 +97,7 @@ final class BestHilRuntime {
 
   final DevelopmentMessageProtector _protector;
   final Lr24SerialAdapter _transport;
+  late final Mmrp1ControlSession _control;
   late final DeliveryEngine _engine;
   final InboundDeduper _deduper = InboundDeduper();
   final StreamController<BestHilEvent> _events =
@@ -103,6 +110,11 @@ final class BestHilRuntime {
   Map<String, DeliveryRecord> get deliveries => _engine.records;
 
   bool get available => _transport.available;
+  bool get peerReady => _control.peerReady;
+  Stream<Mmrp1LinkEvent> get linkEvents => _control.events;
+
+  Future<void> discoverPeer() => _control.discover();
+  Future<void> probePeer() => _control.probe();
 
   Future<DeliveryRecord> sendText(
     String text, {
@@ -271,6 +283,7 @@ final class BestHilRuntime {
   Future<void> close() async {
     await _subscription?.cancel();
     _subscription = null;
+    await _control.close();
     await _transport.close();
     await _events.close();
   }
