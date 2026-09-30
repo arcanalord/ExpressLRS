@@ -8,7 +8,7 @@ final class PreparedTransportPacket {
     required this.transportId,
     required Uint8List protectedBytes,
     required this.idempotencyToken,
-  }) : protectedBytes = Uint8List.unmodifiable(protectedBytes);
+  }) : protectedBytes = Uint8List.fromList(protectedBytes);
 
   final String routeAttemptId;
   final String transportId;
@@ -26,7 +26,7 @@ final class Lr24SingleRouteRouter implements SingleRouteRouter {
   @override
   PreparedTransportPacket prepare(ProtectedEnvelope envelope) {
     return PreparedTransportPacket(
-      routeAttemptId: 'lr24:\${envelope.messageId}',
+      routeAttemptId: 'lr24:${envelope.messageId}',
       transportId: 'lr24',
       protectedBytes: envelope.protectedBytes,
       idempotencyToken: envelope.messageId,
