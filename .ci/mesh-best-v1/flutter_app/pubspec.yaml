@@ -1,6 +1,6 @@
 name: mesh_messenger_best_v1
 description: Clean Best-of vertical slice for Mesh Messenger.
-version: 0.1.0-best1+1
+version: 0.1.1-best1-hil+2
 publish_to: none
 
 environment:
