@@ -74,6 +74,26 @@ void main() {
     expect(retry.state, DeliveryState.delivered);
   });
 
+  test('protected bytes cannot be mutated across M07 -> M12 boundary', () {
+    final message = LogicalMessage(
+      messageId: 'm-immutable',
+      recipientMmId: 'mm:bob',
+      text: 'secret',
+    );
+    final envelope = const DevelopmentMessageProtector().protect(message);
+    final before = envelope.protectedBytes;
+    final exposedEnvelopeBytes = envelope.protectedBytes;
+    exposedEnvelopeBytes[0] ^= 0xff;
+    expect(envelope.protectedBytes, before);
+
+    final packet = const Lr24SingleRouteRouter().prepare(envelope);
+    final packetBefore = packet.protectedBytes;
+    final exposedPacketBytes = packet.protectedBytes;
+    exposedPacketBytes[0] ^= 0xff;
+    expect(packet.protectedBytes, packetBefore);
+    expect(packet.protectedBytes, envelope.protectedBytes);
+  });
+
   test('dedupe accepts one logical message once', () {
     final deduper = InboundDeduper();
     expect(deduper.accept('m-001'), isTrue);
