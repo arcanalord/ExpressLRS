@@ -1,18 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/app_build_info.dart';
 import '../../../core/settings_registry.dart';
 import '../../application/mesh_app_controller.dart';
 import '../contacts/contact_share_dialog.dart';
-
-const _meshAppVersion = String.fromEnvironment(
-  'APP_VERSION',
-  defaultValue: '0.6.0-secure-core-rc2',
-);
-const _meshAppBuild = String.fromEnvironment(
-  'APP_BUILD',
-  defaultValue: '26092902',
-);
+import '../diagnostics/diagnostics_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({required this.controller, super.key});
@@ -142,6 +135,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ),
         const SizedBox(height: 12),
+        _DiagnosticsPanel(controller: controller),
+        const SizedBox(height: 12),
         const _PlannedSettingsPanel(),
         const SizedBox(height: 12),
         const _AboutPanel(),
@@ -229,6 +224,35 @@ class _IdentityPanel extends StatelessWidget {
   }
 }
 
+class _DiagnosticsPanel extends StatelessWidget {
+  const _DiagnosticsPanel({required this.controller});
+
+  final MeshAppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      padding: EdgeInsets.zero,
+      child: ListTile(
+        leading: const Icon(Icons.monitor_heart_outlined),
+        title: const Text(
+          'Диагностика',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: const Text(
+          'LR24, очередь доставки, файлы, журнал и экспорт diagnostics.txt',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => DiagnosticsPage(controller: controller),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AboutPanel extends StatelessWidget {
   const _AboutPanel();
 
@@ -239,7 +263,7 @@ class _AboutPanel extends StatelessWidget {
       child: ListTile(
         leading: Icon(Icons.info_outline),
         title: Text('О приложении', style: TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: Text('Версия $_meshAppVersion ($_meshAppBuild)'),
+        subtitle: Text('Версия ${MeshAppBuildInfo.display}'),
       ),
     );
   }
