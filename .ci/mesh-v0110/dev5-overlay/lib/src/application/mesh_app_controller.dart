@@ -156,15 +156,17 @@ final class MeshAppController extends ChangeNotifier {
   String identitySeedStorage = '';
 
   String get ownContactCardPayload => ContactCard(
-        mmId: ownMmId,
-        displayName: ownDeviceLabel.isEmpty ? 'Mesh Messenger' : ownDeviceLabel,
-        fingerprint: ownFingerprint.isEmpty ? null : ownFingerprint,
-        identityPublicKey:
-            ownIdentityPublicKey.isEmpty ? null : ownIdentityPublicKey,
-        agreementPublicKey:
-            ownAgreementPublicKey.isEmpty ? null : ownAgreementPublicKey,
-        radioNodeId: ep2LocalNode,
-      ).encode();
+    mmId: ownMmId,
+    displayName: ownDeviceLabel.isEmpty ? 'Mesh Messenger' : ownDeviceLabel,
+    fingerprint: ownFingerprint.isEmpty ? null : ownFingerprint,
+    identityPublicKey: ownIdentityPublicKey.isEmpty
+        ? null
+        : ownIdentityPublicKey,
+    agreementPublicKey: ownAgreementPublicKey.isEmpty
+        ? null
+        : ownAgreementPublicKey,
+    radioNodeId: ep2LocalNode,
+  ).encode();
   final Map<String, LanPairingSession> lanPairings =
       <String, LanPairingSession>{};
   String lanState = 'offline';
@@ -392,7 +394,9 @@ final class MeshAppController extends ChangeNotifier {
       _radioHilBench = MmUartHilBench(externalSession);
       transports.add(externalRadio);
       _externalRadioSub = externalRadio.events.listen(_onMmUartTransportEvent);
-      _externalSessionSub = externalSession.events.listen(_onMmUartSessionEvent);
+      _externalSessionSub = externalSession.events.listen(
+        _onMmUartSessionEvent,
+      );
 
       final lr24 = TransparentUartRadioTransport(
         bridge: usbBridge,
@@ -519,11 +523,13 @@ final class MeshAppController extends ChangeNotifier {
   String groupDeliveryLabelFor(String messageId) {
     final group = selectedGroup;
     if (group == null) return 'Сохранено';
-    final remoteCount =
-        group.memberMmIds.where((mmId) => mmId != ownMmId).length;
+    final remoteCount = group.memberMmIds
+        .where((mmId) => mmId != ownMmId)
+        .length;
     if (remoteCount == 0) return 'Сохранено';
     final delivered = _groupReceipts[messageId]?.length ?? 0;
-    final pending = _core.delivery.legsForMessage(messageId)
+    final pending = _core.delivery
+        .legsForMessage(messageId)
         .where((leg) => leg.isGroup && !leg.state.isTerminal)
         .length;
     if (delivered >= remoteCount) return 'Доставлено $delivered/$remoteCount';
@@ -650,15 +656,8 @@ final class MeshAppController extends ChangeNotifier {
     groups = await _core.groups();
     final lr24 = _lr24;
     final peer = lr24PeerMmId;
-    if (lr24?.isAvailable == true &&
-        peer != null &&
-        group.contains(peer)) {
-      unawaited(
-        lr24!.sendGroupDescriptor(
-          descriptor: group,
-          toMmId: peer,
-        ),
-      );
+    if (lr24?.isAvailable == true && peer != null && group.contains(peer)) {
+      unawaited(lr24!.sendGroupDescriptor(descriptor: group, toMmId: peer));
     }
     activeConversation = ConversationRef.group(group.groupId);
     selectedPeerMmId = null;
@@ -683,15 +682,9 @@ final class MeshAppController extends ChangeNotifier {
             peer != null &&
             group.contains(peer) &&
             _lr24?.isAvailable == true) {
-          await _lr24!.sendGroupDescriptor(
-            descriptor: group,
-            toMmId: peer,
-          );
+          await _lr24!.sendGroupDescriptor(descriptor: group, toMmId: peer);
         }
-        await _core.sendGroupText(
-          groupId: activeConversation.id,
-          text: text,
-        );
+        await _core.sendGroupText(groupId: activeConversation.id, text: text);
       } else {
         final peer = selectedPeerMmId;
         if (peer == null) return;
@@ -723,14 +716,12 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addContactCard(
-    String raw, {
-    String? displayNameOverride,
-  }) async {
+  Future<void> addContactCard(String raw, {String? displayNameOverride}) async {
     final card = ContactCard.parse(raw);
     final cleanId = card.mmId.trim();
-    final existing =
-        contacts.where((contact) => contact.mmId == cleanId).firstOrNull;
+    final existing = contacts
+        .where((contact) => contact.mmId == cleanId)
+        .firstOrNull;
     final overrideName = displayNameOverride?.trim();
     final cleanName = overrideName != null && overrideName.isNotEmpty
         ? overrideName
@@ -744,7 +735,8 @@ final class MeshAppController extends ChangeNotifier {
     final incomingFingerprint = card.fingerprint?.trim() ?? '';
     final incomingIdentityKey = card.identityPublicKey?.trim() ?? '';
     final incomingAgreementKey = card.agreementPublicKey?.trim() ?? '';
-    final identityChanged = existing != null &&
+    final identityChanged =
+        existing != null &&
         ((incomingFingerprint.isNotEmpty &&
                 (existing.fingerprint?.trim().isNotEmpty ?? false) &&
                 incomingFingerprint != existing.fingerprint!.trim()) ||
@@ -806,8 +798,8 @@ final class MeshAppController extends ChangeNotifier {
       current: preparedFileProfile,
     );
     final chunkSize = AdaptiveLinkPolicy.recommendedChunkSize(decision.profile);
-    final transferId = 'f-' +
-        DateTime.now().toUtc().microsecondsSinceEpoch.toRadixString(16);
+    final transferId =
+        'f-' + DateTime.now().toUtc().microsecondsSinceEpoch.toRadixString(16);
     final plan = M05FileTransferCore.createPlan(
       transferId: transferId,
       fileName: fileName,
@@ -824,7 +816,8 @@ final class MeshAppController extends ChangeNotifier {
     _preparedFilePlan = plan;
     fileTransferState = 'prepared';
     fileTransferAckedChunks = 0;
-    fileTransferNotice = 'Подготовлено: ' +
+    fileTransferNotice =
+        'Подготовлено: ' +
         plan.manifest.chunkCount.toString() +
         ' блоков по ' +
         chunkSize.toString() +
@@ -845,34 +838,41 @@ final class MeshAppController extends ChangeNotifier {
     fileTransferSending = true;
     fileTransferState = 'sendingManifest';
     fileTransferAckedChunks = 0;
-    fileTransferNotice =
-        'Согласование передачи · ' + plan.manifest.fileName;
+    fileTransferNotice = 'Согласование передачи · ' + plan.manifest.fileName;
     notifyListeners();
     try {
       await lr24.sendFilePlan(plan);
       fileTransferState = 'completed';
       fileTransferAckedChunks = plan.manifest.chunkCount;
-      fileTransferNotice = 'Доставлено: ' +
-          plan.manifest.fileName + ' · ' +
-          plan.manifest.totalBytes.toString() + ' Б';
+      fileTransferNotice =
+          'Доставлено: ' +
+          plan.manifest.fileName +
+          ' · ' +
+          plan.manifest.totalBytes.toString() +
+          ' Б';
       _addLr24Log(
-        'FILE SENT ' + plan.manifest.transferId + ' ' +
-        plan.manifest.fileName + ' ' +
-        plan.manifest.totalBytes.toString() + 'B',
+        'FILE SENT ' +
+            plan.manifest.transferId +
+            ' ' +
+            plan.manifest.fileName +
+            ' ' +
+            plan.manifest.totalBytes.toString() +
+            'B',
       );
       clearPreparedFile(notify: false, keepTransferStatus: true);
     } catch (error) {
       if (fileTransferState == 'cancelled') {
         fileTransferNotice = 'Передача отменена';
-        _addLr24Log(
-          'FILE CANCELLED ' + plan.manifest.transferId,
-        );
+        _addLr24Log('FILE CANCELLED ' + plan.manifest.transferId);
         return;
       }
       fileTransferState = 'failed';
       fileTransferNotice = 'Ошибка передачи файла: ' + error.toString();
       _addLr24Log(
-        'FILE SEND ERROR ' + plan.manifest.transferId + ' | ' + error.toString(),
+        'FILE SEND ERROR ' +
+            plan.manifest.transferId +
+            ' | ' +
+            error.toString(),
       );
       rethrow;
     } finally {
@@ -942,7 +942,6 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
   }
 
-
   Future<void> renameContact({
     required String mmId,
     required String displayName,
@@ -952,8 +951,9 @@ final class MeshAppController extends ChangeNotifier {
     if (cleanName.isEmpty || cleanName.length > 80) {
       throw const FormatException('Invalid local contact name');
     }
-    final existing =
-        contacts.where((contact) => contact.mmId == cleanId).firstOrNull;
+    final existing = contacts
+        .where((contact) => contact.mmId == cleanId)
+        .firstOrNull;
     if (existing == null) throw StateError('CONTACT_NOT_FOUND');
     await _core.saveContact(
       Contact(
@@ -985,12 +985,7 @@ final class MeshAppController extends ChangeNotifier {
     if (cleanName.isEmpty || cleanName.length > 80) {
       throw const FormatException('Invalid local contact name');
     }
-    await _core.saveContact(
-      Contact(
-        mmId: cleanId,
-        displayName: cleanName,
-      ),
-    );
+    await _core.saveContact(Contact(mmId: cleanId, displayName: cleanName));
     contacts = await _core.contacts();
     selectedPeerMmId = cleanId;
     activeConversation = ConversationRef.direct(cleanId);
@@ -1324,10 +1319,7 @@ final class MeshAppController extends ChangeNotifier {
         ep2InfoNotice = 'Радиомодуль отключён. Ждём повторного подключения.';
       }
 
-      if (!ep2Connected &&
-          !lr24Connected &&
-          devices.length == 1 &&
-          changed) {
+      if (!ep2Connected && !lr24Connected && devices.length == 1 && changed) {
         final device = devices.single;
         final saved = _usbProfileBinding;
         if (saved != null &&
@@ -1338,7 +1330,8 @@ final class MeshAppController extends ChangeNotifier {
               driver: device.driver,
               deviceName: device.name,
             )) {
-          ep2InfoNotice = 'Сохранённый профиль LR24-F найден · переподключаем без probe.';
+          ep2InfoNotice =
+              'Сохранённый профиль LR24-F найден · переподключаем без probe.';
           _addEp2Log(
             'USB device=${device.deviceId} saved LR24 binding matched; no active probe',
           );
@@ -1618,7 +1611,6 @@ final class MeshAppController extends ChangeNotifier {
     }
   }
 
-
   Map<String, dynamic> buildDiagnosticSnapshot() {
     final lr24 = _lr24;
     final peer = lr24PeerMmId;
@@ -1635,8 +1627,8 @@ final class MeshAppController extends ChangeNotifier {
         'lr24PeerReachable': lr24PeerReachable,
         'lr24PeerMmId': peer,
         'lr24PeerAgeMs': peer == null ? null : lr24?.peerAgeMs(peer),
-        'lr24FreshPeers': lr24?.freshPeerMmIds.toList(growable: false) ??
-            const <String>[],
+        'lr24FreshPeers':
+            lr24?.freshPeerMmIds.toList(growable: false) ?? const <String>[],
         'lr24Baud': lr24Baud,
         'externalRadioFamily': externalRadioFamily,
         'externalBoardId': externalBoardId,
@@ -1698,10 +1690,10 @@ final class MeshAppController extends ChangeNotifier {
 
   Future<String?> exportDiagnosticSnapshot() async {
     final text = diagnosticSnapshotJson();
-    final stamp = DateTime.now()
-        .toUtc()
-        .toIso8601String()
-        .replaceAll(RegExp(r'[:.]'), '-');
+    final stamp = DateTime.now().toUtc().toIso8601String().replaceAll(
+      RegExp(r'[:.]'),
+      '-',
+    );
     final fileName = 'Mesh Messenger diagnostics $stamp.txt';
     final bridge = _diagnosticsExportBridge;
     if (bridge != null) {
@@ -1836,10 +1828,7 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> connectLr24(
-    int deviceId, {
-    bool rememberProfile = true,
-  }) async {
+  Future<void> connectLr24(int deviceId, {bool rememberProfile = true}) async {
     final lr24 = _lr24;
     if (lr24 == null || busy) return;
     busy = true;
@@ -1882,7 +1871,9 @@ final class MeshAppController extends ChangeNotifier {
       _addLr24Log('CONNECT device=$deviceId baud=$lr24Baud');
       await lr24.connect(deviceId, baudRate: lr24Baud);
       if (rememberProfile) {
-        final device = ep2Devices.where((item) => item.deviceId == deviceId).firstOrNull;
+        final device = ep2Devices
+            .where((item) => item.deviceId == deviceId)
+            .firstOrNull;
         if (device != null) {
           final binding = UsbProfileBinding(
             profileId: 'MICOAIR_LR24_F_STOCK',
@@ -1957,8 +1948,7 @@ final class MeshAppController extends ChangeNotifier {
     }
 
     _addLr24Log('LINK PROBE FAILED | ${lastError ?? 'unknown'}');
-    lr24Error =
-        'Второе устройство не ответило. USB подключён, радиоканал не подтверждён.';
+    lr24Error = 'Второе устройство не ответило. USB подключён, радиоканал не подтверждён.';
     notifyListeners();
   }
 
@@ -1984,7 +1974,9 @@ final class MeshAppController extends ChangeNotifier {
     final bridge = _usbBridge;
     if (ep2 == null || session == null || bridge == null || busy) return;
     busy = true;
-    final selectedDevice = ep2Devices.where((item) => item.deviceId == deviceId).firstOrNull;
+    final selectedDevice = ep2Devices
+        .where((item) => item.deviceId == deviceId)
+        .firstOrNull;
     final saved = _usbProfileBinding;
     if (selectedDevice != null &&
         saved != null &&
@@ -2062,7 +2054,9 @@ final class MeshAppController extends ChangeNotifier {
           final selftest = await session.compatSelftest();
           final passed = selftest['result'] == 'PASS' || selftest['ok'] == true;
           final nodeRaw = selftest['nodeBinding'] ?? selftest['nodeId'];
-          final node = nodeRaw is num ? nodeRaw.toInt() : int.tryParse('$nodeRaw');
+          final node = nodeRaw is num
+              ? nodeRaw.toInt()
+              : int.tryParse('$nodeRaw');
           if (node != null && node > 0) ep2LocalNode = node;
           if (passed) ep2InfoNotice = 'MM-UART/1 · MMRP/1 · самопроверка PASS';
           _addEp2Log('AUTO SELFTEST $selftest');
@@ -2154,7 +2148,9 @@ final class MeshAppController extends ChangeNotifier {
         _addEp2Log('COMPAT_SELFTEST $result');
       } else {
         await refreshEp2Info();
-        ep2InfoNotice = ep2Error == null ? 'Радиомодуль отвечает' : ep2InfoNotice;
+        ep2InfoNotice = ep2Error == null
+            ? 'Радиомодуль отвечает'
+            : ep2InfoNotice;
       }
     } catch (error) {
       ep2Error = '$error';
@@ -2173,6 +2169,7 @@ final class MeshAppController extends ChangeNotifier {
     ep2LossCount = (stats['loss'] as num?)?.toInt();
     ep2RetryCount = (stats['retries'] as num?)?.toInt();
   }
+
   Future<void> pingEp2Neighbor() async {
     final ep2 = _ep2;
     final local = ep2LocalNode;
@@ -2276,6 +2273,7 @@ final class MeshAppController extends ChangeNotifier {
     final clean = '$value'.trim();
     return clean.isEmpty ? null : clean;
   }
+
   void clearEp2Log() {
     ep2Log.clear();
     notifyListeners();
@@ -2299,7 +2297,9 @@ final class MeshAppController extends ChangeNotifier {
     return nodeId == null ? null : _contactForEp2Node(nodeId);
   }
 
-  Future<void> _onMmUartTransportEvent(MmUartMessageTransportEvent event) async {
+  Future<void> _onMmUartTransportEvent(
+    MmUartMessageTransportEvent event,
+  ) async {
     if (event is MmUartRecipientAck) {
       final contact = _contactForMmUartBinding(event.sourceBinding);
       if (contact == null) {
@@ -2329,7 +2329,9 @@ final class MeshAppController extends ChangeNotifier {
         switch (event.messageClass) {
           case 'text':
             final payload = event.payload;
-            final text = payload is Map ? '${payload['text'] ?? ''}' : '$payload';
+            final text = payload is Map
+                ? '${payload['text'] ?? ''}'
+                : '$payload';
             if (text.trim().isEmpty) throw const FormatException('TEXT_EMPTY');
             await _core.receiveText(
               messageId: event.messageId,
@@ -2351,7 +2353,8 @@ final class MeshAppController extends ChangeNotifier {
             );
           case 'map_point':
             final payload = event.payload;
-            if (payload is! Map) throw const FormatException('MAP_POINT_INVALID');
+            if (payload is! Map)
+              throw const FormatException('MAP_POINT_INVALID');
             await _core.receiveMapPoint(
               messageId: event.messageId,
               fromMmId: contact.mmId,
@@ -2381,7 +2384,9 @@ final class MeshAppController extends ChangeNotifier {
 
   void _onMmUartSessionEvent(ExternalRadioSessionEvent event) {
     if (event is ExternalRadioStateEvent) {
-      if (_mmUartActive || event.state == 'connecting' || event.state == 'ready') {
+      if (_mmUartActive ||
+          event.state == 'connecting' ||
+          event.state == 'ready') {
         ep2State = event.state;
         if (event.reason != null) ep2Error = event.reason;
       }
@@ -2449,8 +2454,7 @@ final class MeshAppController extends ChangeNotifier {
           'GROUP DESCRIPTOR ${event.descriptor.groupId} '
           'rev=${event.descriptor.revision} <- ${event.fromMmId}',
         );
-        lastRadioNotice =
-            'Добавлена группа «${event.descriptor.displayName}»';
+        lastRadioNotice = 'Добавлена группа «${event.descriptor.displayName}»';
       } else {
         _addLr24Log(
           'DROP GROUP DESCRIPTOR ${event.descriptor.groupId} '
@@ -2508,17 +2512,28 @@ final class MeshAppController extends ChangeNotifier {
         lastReceivedFileName = name;
         lastReceivedFilePath = output.path;
         fileTransferNotice =
-            'Получен файл: ' + name + ' · ' + event.bytes.length.toString() + ' Б';
+            'Получен файл: ' +
+            name +
+            ' · ' +
+            event.bytes.length.toString() +
+            ' Б';
         _addLr24Log(
-          'FILE RECEIVED ' + event.transferId + ' ' + name + ' ' +
-          event.bytes.length.toString() + 'B',
+          'FILE RECEIVED ' +
+              event.transferId +
+              ' ' +
+              name +
+              ' ' +
+              event.bytes.length.toString() +
+              'B',
         );
       } catch (error) {
         fileTransferNotice =
             'Ошибка сохранения полученного файла: ' + error.toString();
         _addLr24Log(
-          'FILE RECEIVE STORE ERROR ' + event.transferId + ' | ' +
-          error.toString(),
+          'FILE RECEIVE STORE ERROR ' +
+              event.transferId +
+              ' | ' +
+              error.toString(),
         );
       }
       notifyListeners();
@@ -2537,9 +2552,7 @@ final class MeshAppController extends ChangeNotifier {
       lr24RttMs = event.rttMillis;
       lr24PeerMmId = event.peerMmId;
       _markPeerSeen(event.peerMmId);
-      _addLr24Log(
-        'PEER ${event.peerMmId} RTT=${event.rttMillis}ms',
-      );
+      _addLr24Log('PEER ${event.peerMmId} RTT=${event.rttMillis}ms');
       notifyListeners();
       return;
     }
@@ -2575,8 +2588,7 @@ final class MeshAppController extends ChangeNotifier {
         );
         return;
       }
-      if (event.messageClass != 'text' &&
-          event.messageClass != 'map_point') {
+      if (event.messageClass != 'text' && event.messageClass != 'map_point') {
         _addLr24Log(
           'DROP channel class=${event.messageClass} id=${event.messageId}',
         );
@@ -2610,8 +2622,7 @@ final class MeshAppController extends ChangeNotifier {
         return;
       }
       if (isGeneralChat) await _reloadMessages();
-      lastRadioNotice =
-          'Общий чат · ${displayNameForMmId(event.fromMmId)}';
+      lastRadioNotice = 'Общий чат · ${displayNameForMmId(event.fromMmId)}';
       notifyListeners();
       return;
     }
@@ -2673,17 +2684,20 @@ final class MeshAppController extends ChangeNotifier {
         await _reloadMessages();
       }
       final groupName =
-          groups.where((g) => g.groupId == event.groupId).firstOrNull?.displayName ??
+          groups
+              .where((g) => g.groupId == event.groupId)
+              .firstOrNull
+              ?.displayName ??
           'Группа';
-      lastRadioNotice =
-          '$groupName · ${displayNameForMmId(event.fromMmId)}';
+      lastRadioNotice = '$groupName · ${displayNameForMmId(event.fromMmId)}';
       notifyListeners();
       return;
     }
     if (event is TransparentUartIncomingMessage) {
       _markPeerSeen(event.fromMmId);
-      final contact =
-          contacts.where((c) => c.mmId == event.fromMmId).firstOrNull;
+      final contact = contacts
+          .where((c) => c.mmId == event.fromMmId)
+          .firstOrNull;
       if (contact == null) {
         _addLr24Log(
           'DROP unknown peer=${event.fromMmId} id=${event.messageId}',
@@ -2806,7 +2820,8 @@ final class MeshAppController extends ChangeNotifier {
     }
     if (event is Ep2RawBytesEvent) {
       ep2RxBytes += event.bytes.length;
-      final shown = event.bytes.take(32)
+      final shown = event.bytes
+          .take(32)
           .map((b) => b.toRadixString(16).padLeft(2, '0'))
           .join(' ');
       ep2LastHex = shown;
@@ -2942,8 +2957,7 @@ final class MeshAppController extends ChangeNotifier {
     messages = await _core.messagesForConversation(activeConversation);
   }
 
-  Future<void> shutdown() =>
-      _shutdownFuture ??= _shutdownResources();
+  Future<void> shutdown() => _shutdownFuture ??= _shutdownResources();
 
   Future<void> _shutdownResources() async {
     _maintenanceTimer?.cancel();

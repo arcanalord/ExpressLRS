@@ -91,13 +91,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
   Widget build(BuildContext context) {
     final controller = widget.controller;
     final pending = controller.pendingDeliveries;
-    final ep2Active = !controller.lr24Active &&
+    final ep2Active =
+        !controller.lr24Active &&
         !{
           'unavailable',
           'offline',
           'disconnected',
         }.contains(controller.ep2State);
-    final anyRouteReady = controller.lanReady ||
+    final anyRouteReady =
+        controller.lanReady ||
         controller.ep2Connected ||
         controller.lr24Connected ||
         controller.radioConnected;
@@ -118,7 +120,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
               children: [
                 Text(
                   anyRouteReady ? 'Всё работает' : 'Автоматический маршрут',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -174,9 +179,11 @@ class _ConnectionPageState extends State<ConnectionPage> {
               children: [
                 Row(
                   children: [
-                    Icon((controller.ep2Connected || controller.lr24Connected)
-                        ? Icons.usb
-                        : Icons.usb_off),
+                    Icon(
+                      (controller.ep2Connected || controller.lr24Connected)
+                          ? Icons.usb
+                          : Icons.usb_off,
+                    ),
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Text(
@@ -254,7 +261,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     const SizedBox(height: 10),
                     Card(
                       margin: EdgeInsets.zero,
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: Column(
@@ -266,8 +275,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
                             ),
                             const SizedBox(height: 6),
                             Text('USB UART: ${controller.lr24Baud} бод'),
-                            Text('TX: ${controller.lr24TxFrames} кадров · ${controller.lr24TxBytes} байт'),
-                            Text('RX: ${controller.lr24RxFrames} кадров · ${controller.lr24RxBytes} байт'),
+                            Text(
+                              'TX: ${controller.lr24TxFrames} кадров · ${controller.lr24TxBytes} байт',
+                            ),
+                            Text(
+                              'RX: ${controller.lr24RxFrames} кадров · ${controller.lr24RxBytes} байт',
+                            ),
                             Text('Ошибки кадров: ${controller.lr24BadFrames}'),
                             const SizedBox(height: 8),
                             ExpansionTile(
@@ -275,9 +288,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               childrenPadding: EdgeInsets.zero,
                               title: const Text(
                                 'Параметры и ограничения',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: TextStyle(fontWeight: FontWeight.w600),
                               ),
                               children: const [
                                 Align(
@@ -303,7 +314,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               controller.lr24PeerReachable
                                   ? 'Канал до второго устройства подтверждён.'
                                   : 'USB подключён. Второе устройство пока не подтвердило радиоканал; '
-                                      'личные сообщения останутся в очереди до восстановления связи.',
+                                        'личные сообщения останутся в очереди до восстановления связи.',
                               style: TextStyle(
                                 color: controller.lr24PeerReachable
                                     ? Theme.of(context).colorScheme.primary
@@ -321,9 +332,11 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                       ? controller.probeLr24Peer
                                       : null,
                                   icon: const Icon(Icons.network_ping),
-                                  label: Text(controller.lr24RttMs == null
-                                      ? 'Проверить связь'
-                                      : 'Связь · ${controller.lr24RttMs} мс'),
+                                  label: Text(
+                                    controller.lr24RttMs == null
+                                        ? 'Проверить связь'
+                                        : 'Связь · ${controller.lr24RttMs} мс',
+                                  ),
                                 ),
                                 OutlinedButton.icon(
                                   onPressed: controller.disconnectLr24,
@@ -332,12 +345,15 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                 ),
                               ],
                             ),
-                            if (controller.lr24PeerMmId?.isNotEmpty == true) ...[
+                            if (controller.lr24PeerMmId?.isNotEmpty ==
+                                true) ...[
                               const SizedBox(height: 8),
                               Text(
                                 'Ответил MM-ID: ${controller.lr24PeerMmId}',
                                 style: TextStyle(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                 ),
                               ),
                               if (!controller.isGeneralChat &&
@@ -348,7 +364,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                   'Радиоканал работает. Для выбранного личного чата '
                                   'обнаружен другой MM-ID; общий чат этим не блокируется.',
                                   style: TextStyle(
-                                    color: Theme.of(context).colorScheme.tertiary,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .tertiary,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -398,7 +416,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     const SizedBox(height: 12),
                     Card(
                       margin: EdgeInsets.zero,
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: Column(
@@ -414,7 +434,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                   ? 'На втором телефоне достаточно открыть приложение и подключить радиомодуль. Здесь выбери контакт с номером радиоузла.'
                                   : 'Второй узел отвечает автоматически · цель: узел ${controller.radioHilTargetNode}',
                               style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                                 fontSize: 12,
                               ),
                             ),
@@ -425,18 +447,22 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                 runSpacing: 8,
                                 children: [
                                   FilledButton.tonalIcon(
-                                    onPressed: controller.radioHilRunning ||
+                                    onPressed:
+                                        controller.radioHilRunning ||
                                             !controller.radioHilAvailable ||
-                                            controller.radioHilTargetNode == null
+                                            controller.radioHilTargetNode ==
+                                                null
                                         ? null
                                         : () => controller.runRadioHil(100),
                                     icon: const Icon(Icons.science_outlined),
                                     label: const Text('Тест 100'),
                                   ),
                                   OutlinedButton.icon(
-                                    onPressed: controller.radioHilRunning ||
+                                    onPressed:
+                                        controller.radioHilRunning ||
                                             !controller.radioHilAvailable ||
-                                            controller.radioHilTargetNode == null
+                                            controller.radioHilTargetNode ==
+                                                null
                                         ? null
                                         : () => controller.runRadioHil(1000),
                                     icon: const Icon(Icons.speed_outlined),
@@ -456,7 +482,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                 value: controller.radioHilTotal <= 0
                                     ? null
                                     : controller.radioHilDone /
-                                        controller.radioHilTotal,
+                                          controller.radioHilTotal,
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -464,14 +490,18 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
-                            if (controller.radioHilResult?.isNotEmpty == true) ...[
+                            if (controller.radioHilResult?.isNotEmpty ==
+                                true) ...[
                               const SizedBox(height: 10),
                               SelectableText(
                                 controller.radioHilResult!,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
-                            if (controller.radioHilError?.isNotEmpty == true) ...[
+                            if (controller.radioHilError?.isNotEmpty ==
+                                true) ...[
                               const SizedBox(height: 10),
                               Text(
                                 controller.radioHilError!,
@@ -573,7 +603,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               'Пароль: ' + (controller.ep2OtaPassword ?? '—'),
                             ),
                             SelectableText(
-                              'Адрес: ' + (controller.ep2OtaUrl ?? 'http://10.0.0.1'),
+                              'Адрес: ' +
+                                  (controller.ep2OtaUrl ?? 'http://10.0.0.1'),
                             ),
                           ],
                         ),
@@ -593,9 +624,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                       final lr24Selected =
                           controller.lr24Active &&
                           controller.lr24ConnectedDeviceId == device.deviceId;
-                      final compactName = device.name
-                              .toLowerCase()
-                              .contains('cp21')
+                      final compactName =
+                          device.name.toLowerCase().contains('cp21')
                           ? 'CP2102 · USB-UART'
                           : device.name;
                       return Container(
@@ -603,9 +633,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           border: Border.all(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .outlineVariant,
+                            color: Theme.of(context).colorScheme.outlineVariant,
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -637,8 +665,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                         lr24Selected
                                             ? 'Выбран как прозрачный модем · USB готов'
                                             : device.permission
-                                                ? 'USB-UART найден · выбери профиль'
-                                                : 'Android запросит разрешение USB',
+                                            ? 'USB-UART найден · выбери профиль'
+                                            : 'Android запросит разрешение USB',
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall,
@@ -649,10 +677,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                 if (lr24Selected)
                                   const Padding(
                                     padding: EdgeInsets.only(left: 8),
-                                    child: Icon(
-                                      Icons.check_circle,
-                                      size: 20,
-                                    ),
+                                    child: Icon(Icons.check_circle, size: 20),
                                   ),
                               ],
                             ),
@@ -671,18 +696,20 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                 runSpacing: 8,
                                 children: [
                                   OutlinedButton.icon(
-                                    onPressed: controller.busy ||
+                                    onPressed:
+                                        controller.busy ||
                                             controller.ep2Connected ||
                                             controller.lr24Connected
                                         ? null
                                         : () => controller.connectLr24(
-                                              device.deviceId,
-                                            ),
+                                            device.deviceId,
+                                          ),
                                     icon: const Icon(Icons.radio),
                                     label: const Text('LR24-F'),
                                   ),
                                   FilledButton.tonalIcon(
-                                    onPressed: controller.busy ||
+                                    onPressed:
+                                        controller.busy ||
                                             {
                                               'connecting',
                                               'handshaking',
@@ -693,8 +720,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                             controller.lr24Connected
                                         ? null
                                         : () => controller.connectEp2(
-                                              device.deviceId,
-                                            ),
+                                            device.deviceId,
+                                          ),
                                     icon: const Icon(Icons.auto_fix_high),
                                     label: const Text('Авто M03'),
                                   ),
@@ -721,9 +748,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                             Text('Протокол: ${controller.ep2DetectedProtocol}'),
                             Text('RX: ${controller.ep2RxBytes} байт'),
                             if (controller.ep2LastHex.isNotEmpty)
-                              SelectableText(
-                                'HEX: ${controller.ep2LastHex}',
-                              ),
+                              SelectableText('HEX: ${controller.ep2LastHex}'),
                           ],
                         ),
                       ),
@@ -1221,30 +1246,30 @@ class _MeshtasticCard extends StatelessWidget {
                   tilePadding: EdgeInsets.zero,
                   childrenPadding: EdgeInsets.zero,
                   title: const Text('Диагностика BLE'),
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Android API: ${controller.radioDiagnostics['sdkInt'] ?? '—'}',
-                        ),
-                        Text(
-                          'Bluetooth: ${controller.radioDiagnostics['bluetoothEnabled'] == true ? 'включён' : 'выключен/неизвестно'}',
-                        ),
-                        Text(
-                          'Разрешения: ${controller.radioPermissions['granted'] == true ? 'выданы' : 'не выданы'}',
-                        ),
-                      ],
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Android API: ${controller.radioDiagnostics['sdkInt'] ?? '—'}',
+                          ),
+                          Text(
+                            'Bluetooth: ${controller.radioDiagnostics['bluetoothEnabled'] == true ? 'включён' : 'выключен/неизвестно'}',
+                          ),
+                          Text(
+                            'Разрешения: ${controller.radioPermissions['granted'] == true ? 'выданы' : 'не выданы'}',
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  _LogBox(
-                    lines: controller.radioLog,
-                    onClear: controller.clearRadioLog,
-                  ),
-                ],
-              ),
+                    _LogBox(
+                      lines: controller.radioLog,
+                      onClear: controller.clearRadioLog,
+                    ),
+                  ],
+                ),
             ],
           ],
         ),

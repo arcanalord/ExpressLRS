@@ -38,9 +38,8 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       ClipboardData(text: widget.controller.diagnosticSnapshotJson()),
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Диагностика скопирована')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Диагностика скопирована')));
   }
 
   Future<void> _exportDiagnostics() async {
@@ -51,7 +50,9 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(saved == null ? 'Сохранение отменено' : 'Диагностика сохранена'),
+          content: Text(
+            saved == null ? 'Сохранение отменено' : 'Диагностика сохранена',
+          ),
         ),
       );
     } catch (error) {
@@ -80,22 +81,38 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
           _DiagnosticCard(
             title: 'LR24 / радиоканал',
             children: [
-              _Line('USB', controller.lr24Connected ? 'готов' : controller.lr24State),
+              _Line(
+                'USB',
+                controller.lr24Connected ? 'готов' : controller.lr24State,
+              ),
               _Line(
                 'Peer',
                 controller.lr24PeerReachable
                     ? 'подтверждён${peer == null ? '' : ' · $peer'}'
                     : 'не подтверждён',
               ),
-              _Line('RTT', controller.lr24RttMs == null ? '—' : '${controller.lr24RttMs} мс'),
-              _Line('TX', '${controller.lr24TxFrames} кадров · ${controller.lr24TxBytes} байт'),
-              _Line('RX', '${controller.lr24RxFrames} кадров · ${controller.lr24RxBytes} байт'),
+              _Line(
+                'RTT',
+                controller.lr24RttMs == null
+                    ? '—'
+                    : '${controller.lr24RttMs} мс',
+              ),
+              _Line(
+                'TX',
+                '${controller.lr24TxFrames} кадров · ${controller.lr24TxBytes} байт',
+              ),
+              _Line(
+                'RX',
+                '${controller.lr24RxFrames} кадров · ${controller.lr24RxBytes} байт',
+              ),
               _Line('Ошибки кадров', '${controller.lr24BadFrames}'),
               if (controller.lr24Error?.isNotEmpty == true)
                 _Line('Последняя ошибка', controller.lr24Error!),
               const SizedBox(height: 8),
               FilledButton.tonalIcon(
-                onPressed: controller.lr24Connected ? controller.probeLr24Peer : null,
+                onPressed: controller.lr24Connected
+                    ? controller.probeLr24Peer
+                    : null,
                 icon: const Icon(Icons.network_ping),
                 label: const Text('Проверить связь'),
               ),
@@ -117,7 +134,10 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
             title: 'Файлы / M05',
             children: [
               _Line('Состояние', controller.fileTransferState),
-              _Line('Chunks', '${controller.fileTransferAckedChunks}/${controller.preparedFileChunks ?? 0}'),
+              _Line(
+                'Chunks',
+                '${controller.fileTransferAckedChunks}/${controller.preparedFileChunks ?? 0}',
+              ),
               if (controller.fileTransferNotice?.isNotEmpty == true)
                 _Line('Событие', controller.fileTransferNotice!),
               if (controller.lastReceivedFileName?.isNotEmpty == true)
@@ -135,13 +155,18 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                   constraints: const BoxConstraints(maxHeight: 280),
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: SingleChildScrollView(
                     child: SelectableText(
                       controller.lr24Log.join('\n'),
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -163,7 +188,9 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                   FilledButton.icon(
                     onPressed: _exporting ? null : _exportDiagnostics,
                     icon: const Icon(Icons.download_outlined),
-                    label: Text(_exporting ? 'Сохранение…' : 'Экспорт diagnostics.txt'),
+                    label: Text(
+                      _exporting ? 'Сохранение…' : 'Экспорт diagnostics.txt',
+                    ),
                   ),
                   OutlinedButton.icon(
                     onPressed: _copyDiagnostics,
@@ -192,7 +219,10 @@ class _DiagnosticCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 10),
           ...children,
         ],

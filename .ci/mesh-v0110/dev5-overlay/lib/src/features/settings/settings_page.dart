@@ -186,10 +186,7 @@ class _IdentityPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          const Text(
-            'MM-ID',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
+          const Text('MM-ID', style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           SelectableText(controller.ownMmId),
           const SizedBox(height: 12),
@@ -262,7 +259,10 @@ class _AboutPanel extends StatelessWidget {
       padding: EdgeInsets.zero,
       child: ListTile(
         leading: Icon(Icons.info_outline),
-        title: Text('О приложении', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(
+          'О приложении',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
         subtitle: Text('Версия ${MeshAppBuildInfo.display}'),
       ),
     );
@@ -301,10 +301,7 @@ class _PlannedSettingsPanel extends StatelessWidget {
             icon: Icons.public_outlined,
             label: 'Интернет и ретрансляция',
           ),
-          _PlannedSettingTile(
-            icon: Icons.storage_outlined,
-            label: 'Хранилище',
-          ),
+          _PlannedSettingTile(icon: Icons.storage_outlined, label: 'Хранилище'),
           _PlannedSettingTile(
             icon: Icons.palette_outlined,
             label: 'Внешний вид',
@@ -320,10 +317,7 @@ class _PlannedSettingsPanel extends StatelessWidget {
 }
 
 class _PlannedSettingTile extends StatelessWidget {
-  const _PlannedSettingTile({
-    required this.icon,
-    required this.label,
-  });
+  const _PlannedSettingTile({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -353,19 +347,13 @@ class _StatusPill extends StatelessWidget {
         color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall,
-      ),
+      child: Text(label, style: Theme.of(context).textTheme.labelSmall),
     );
   }
 }
 
 class _TransportStatus extends StatelessWidget {
-  const _TransportStatus({
-    required this.transportId,
-    required this.controller,
-  });
+  const _TransportStatus({required this.transportId, required this.controller});
 
   final String transportId;
   final MeshAppController controller;
@@ -374,20 +362,16 @@ class _TransportStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, ready, detail) = switch (transportId) {
       'meshtastic' => (
-          'Meshtastic',
-          controller.radioConnected,
-          controller.radioState,
-        ),
-      'm03' => (
-          'M03 / ELRS',
-          controller.ep2Connected,
-          controller.ep2State,
-        ),
+        'Meshtastic',
+        controller.radioConnected,
+        controller.radioState,
+      ),
+      'm03' => ('M03 / ELRS', controller.ep2Connected, controller.ep2State),
       'lr24' => (
-          'MicoAir LR24-F',
-          controller.lr24Connected,
-          controller.lr24State,
-        ),
+        'MicoAir LR24-F',
+        controller.lr24Connected,
+        controller.lr24State,
+      ),
       _ => ('Модуль', false, 'unknown'),
     };
     final scheme = Theme.of(context).colorScheme;
@@ -402,10 +386,7 @@ class _TransportStatus extends StatelessWidget {
         Expanded(
           child: Text(
             label + ' · ' + (ready ? 'подключено' : detail),
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: color, fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -453,14 +434,14 @@ class _SettingsGroup extends StatelessWidget {
 }
 
 String _friendlyGroupTitle(String title) => switch (title) {
-      'Device' => 'Устройство',
-      'Radio' => 'Радио',
-      'LoRa' => 'LoRa',
-      'Bluetooth' => 'Bluetooth',
-      'Network' => 'Сеть',
-      'Power' => 'Питание',
-      _ => title,
-    };
+  'Device' => 'Устройство',
+  'Radio' => 'Радио',
+  'LoRa' => 'LoRa',
+  'Bluetooth' => 'Bluetooth',
+  'Network' => 'Сеть',
+  'Power' => 'Питание',
+  _ => title,
+};
 
 class _SettingTile extends StatelessWidget {
   const _SettingTile({
@@ -509,13 +490,13 @@ class _SettingTile extends StatelessWidget {
   }
 
   IconData _iconFor(SettingValueType type) => switch (type) {
-        SettingValueType.boolean => Icons.toggle_on_outlined,
-        SettingValueType.integer => Icons.numbers_outlined,
-        SettingValueType.decimal => Icons.calculate_outlined,
-        SettingValueType.text => Icons.text_fields_outlined,
-        SettingValueType.enumeration => Icons.list_alt_outlined,
-        SettingValueType.secret => Icons.key_outlined,
-      };
+    SettingValueType.boolean => Icons.toggle_on_outlined,
+    SettingValueType.integer => Icons.numbers_outlined,
+    SettingValueType.decimal => Icons.calculate_outlined,
+    SettingValueType.text => Icons.text_fields_outlined,
+    SettingValueType.enumeration => Icons.list_alt_outlined,
+    SettingValueType.secret => Icons.key_outlined,
+  };
 }
 
 class _ValueTypeBadge extends StatelessWidget {
@@ -540,10 +521,7 @@ class _ValueTypeBadge extends StatelessWidget {
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.65),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall,
-      ),
+      child: Text(label, style: Theme.of(context).textTheme.labelSmall),
     );
   }
 }
@@ -566,15 +544,10 @@ class _GlassPanel extends StatelessWidget {
       shadowColor: Colors.black.withValues(alpha: 0.18),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: scheme.outlineVariant.withValues(alpha: 0.45),
-        ),
+        side: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.45)),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: padding,
-        child: child,
-      ),
+      child: Padding(padding: padding, child: child),
     );
   }
 }

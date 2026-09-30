@@ -240,9 +240,7 @@ final class DeliveryManager {
       lastError: detail,
     );
     return _save(
-      retrying.copyWith(
-        nextRetryAt: _now().add(_retryDelayFor(retrying)),
-      ),
+      retrying.copyWith(nextRetryAt: _now().add(_retryDelayFor(retrying))),
     );
   }
 
@@ -305,7 +303,8 @@ final class DeliveryManager {
       delayMs *= 2;
       if (delayMs > capMs) delayMs = capMs;
     }
-    final jitterPermille = 900 +
+    final jitterPermille =
+        900 +
         (_stableHash('${item.effectiveDeliveryId}:${item.attempts}') % 201);
     delayMs = delayMs * jitterPermille ~/ 1000;
     if (delayMs > capMs) delayMs = capMs;

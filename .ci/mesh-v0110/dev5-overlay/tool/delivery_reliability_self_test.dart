@@ -5,10 +5,7 @@ import '../lib/core/delivery.dart';
 import '../lib/core/models.dart';
 
 final class _MutableTransport implements MessageTransport {
-  _MutableTransport({
-    this.status = TransportSendStatus.accepted,
-    this.detail,
-  });
+  _MutableTransport({this.status = TransportSendStatus.accepted, this.detail});
 
   bool available = true;
   TransportSendStatus status;

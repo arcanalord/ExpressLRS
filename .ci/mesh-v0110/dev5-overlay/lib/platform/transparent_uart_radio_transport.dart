@@ -74,8 +74,6 @@ final class TransparentUartChannelReceipt extends TransparentUartRadioEvent {
   final String channelId;
 }
 
-
-
 final class TransparentUartPeerDiscovered extends TransparentUartRadioEvent {
   const TransparentUartPeerDiscovered({
     required this.peerMmId,
@@ -168,8 +166,7 @@ final class TransparentUartFileProgress extends TransparentUartRadioEvent {
   final int totalChunks;
   final String? failureReason;
 
-  double get fraction =>
-      totalChunks == 0 ? 1 : ackedChunks / totalChunks;
+  double get fraction => totalChunks == 0 ? 1 : ackedChunks / totalChunks;
 }
 
 final class TransparentUartStatsEvent extends TransparentUartRadioEvent {
@@ -194,7 +191,6 @@ final class _PendingProbe {
   final Completer<Duration> completer;
   final Timer timer;
 }
-
 
 /// MessageTransport for stock transparent UART radios such as MicoAir LR24-F.
 ///
@@ -321,8 +317,9 @@ final class TransparentUartRadioTransport implements MessageTransport {
         detail: 'LR24_NOT_READY',
       );
     }
-    final targetMmId =
-        envelope.isGroup ? envelope.groupMemberMmId : envelope.recipientMmId;
+    final targetMmId = envelope.isGroup
+        ? envelope.groupMemberMmId
+        : envelope.recipientMmId;
     if (!envelope.isChannel &&
         targetMmId != null &&
         !_peerReachability.isFresh(targetMmId)) {
@@ -388,7 +385,6 @@ final class TransparentUartRadioTransport implements MessageTransport {
     }
   }
 
-
   Future<void> sendFilePlan(FileTransferPlan plan) {
     if (!isAvailable) {
       return Future<void>.error(StateError('LR24_NOT_READY'));
@@ -436,15 +432,14 @@ final class TransparentUartRadioTransport implements MessageTransport {
   Future<void> acknowledgeIncoming({
     required String messageId,
     required String toMmId,
-  }) =>
-      _writeFrame(<String, Object?>{
-        'v': 1,
-        'p': 'MMRP/1',
-        'k': 'ack',
-        'id': messageId,
-        'from': ownMmId,
-        'to': toMmId,
-      });
+  }) => _writeFrame(<String, Object?>{
+    'v': 1,
+    'p': 'MMRP/1',
+    'k': 'ack',
+    'id': messageId,
+    'from': ownMmId,
+    'to': toMmId,
+  });
 
   Future<void> acknowledgeChannelIncoming({
     required String messageId,
@@ -465,7 +460,6 @@ final class TransparentUartRadioTransport implements MessageTransport {
     });
   }
 
-
   Future<void> acknowledgeGroupIncoming({
     required String messageId,
     required String groupId,
@@ -485,7 +479,8 @@ final class TransparentUartRadioTransport implements MessageTransport {
     Duration timeout = const Duration(seconds: 2),
   }) async {
     if (!isAvailable) throw StateError('LR24_NOT_READY');
-    final nonce = DateTime.now().microsecondsSinceEpoch.toString() +
+    final nonce =
+        DateTime.now().microsecondsSinceEpoch.toString() +
         '-' +
         (_probes.length + 1).toString();
     final completer = Completer<Duration>();
@@ -541,7 +536,10 @@ final class TransparentUartRadioTransport implements MessageTransport {
 
   void _onBridgeEvent(AndroidUsbSerialEvent event) {
     if (event is AndroidUsbSerialState) {
-      final next = (event.status['state'] ?? '').toString().trim().toLowerCase();
+      final next = (event.status['state'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
       final error = event.status['error']?.toString();
       if (next == 'ready' || next == 'connected') {
         state = 'ready';
@@ -594,7 +592,6 @@ final class TransparentUartRadioTransport implements MessageTransport {
     final kind = (frame['k'] ?? '').toString().trim();
 
     switch (kind) {
-
       case 'hello':
         final label = (frame['label'] ?? '').toString().trim();
         final rawCaps = frame['caps'];
@@ -679,9 +676,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
         final id = (frame['id'] ?? '').toString().trim();
         final messageClass = (frame['class'] ?? '').toString().trim();
         final payload = frame['payload'];
-        if (id.isNotEmpty &&
-            messageClass.isNotEmpty &&
-            payload is String) {
+        if (id.isNotEmpty && messageClass.isNotEmpty && payload is String) {
           _events.add(
             TransparentUartIncomingMessage(
               messageId: id,
