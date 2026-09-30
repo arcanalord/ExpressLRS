@@ -1,44 +1,33 @@
 import 'dart:typed_data';
 
-final class MmSerialBinaryPacket {
-  const MmSerialBinaryPacket({required this.tag, required this.payload});
-
-  final int tag;
-  final Uint8List payload;
-}
-
-/// MM-SERIAL/1 framing for an opaque byte-stream radio.
-/// Wire: COBS(binary marker + tag + payload + CRC16-CCITT) + 0x00.
+/// Canonical MM-SERIAL/1 framing shared with MM U1.
+///
+/// Wire: COBS(payload + CRC16-CCITT big-endian) + 0x00 delimiter.
+///
+/// This layer owns framing only. It does not add Best-specific marker/tag bytes
+/// and does not parse MMRP/application semantics.
 final class MmSerialCodec {
   MmSerialCodec({this.maxFrameBytes = 65535});
-
-  static const List<int> _binaryMarker = <int>[0x1f, 0x4d, 0x42];
 
   final int maxFrameBytes;
   final List<int> _encoded = <int>[];
   int badFrames = 0;
+  int cobsErrors = 0;
+  int crcErrors = 0;
+  int shortFrames = 0;
+  int oversizedFrames = 0;
 
-  Uint8List encodeBinary(Uint8List payload, {required int tag}) {
-    if (tag < 0 || tag > 255) {
-      throw RangeError.range(tag, 0, 255, 'tag');
-    }
-    final tagged = Uint8List(_binaryMarker.length + 1 + payload.length)
-      ..setRange(0, _binaryMarker.length, _binaryMarker)
-      ..[_binaryMarker.length] = tag
-      ..setRange(_binaryMarker.length + 1, taggedLength(payload), payload);
-    final crc = crc16Ccitt(tagged);
-    final withCrc = Uint8List(tagged.length + 2)
-      ..setRange(0, tagged.length, tagged)
-      ..[tagged.length] = (crc >> 8) & 0xff
-      ..[tagged.length + 1] = crc & 0xff;
+  Uint8List encode(Uint8List payload) {
+    final crc = crc16Ccitt(payload);
+    final withCrc = Uint8List(payload.length + 2)
+      ..setRange(0, payload.length, payload)
+      ..[payload.length] = (crc >> 8) & 0xff
+      ..[payload.length + 1] = crc & 0xff;
     return Uint8List.fromList(<int>[...cobsEncode(withCrc), 0]);
   }
 
-  static int taggedLength(Uint8List payload) =>
-      _binaryMarker.length + 1 + payload.length;
-
-  List<MmSerialBinaryPacket> feed(Uint8List bytes) {
-    final out = <MmSerialBinaryPacket>[];
+  List<Uint8List> feed(Uint8List bytes) {
+    final out = <Uint8List>[];
     for (final byte in bytes) {
       if (byte == 0) {
         if (_encoded.isEmpty) continue;
@@ -52,6 +41,7 @@ final class MmSerialCodec {
       if (_encoded.length > maxFrameBytes) {
         _encoded.clear();
         badFrames++;
+        oversizedFrames++;
       }
     }
     return out;
@@ -59,33 +49,29 @@ final class MmSerialCodec {
 
   void reset() => _encoded.clear();
 
-  MmSerialBinaryPacket? _decode(Uint8List encoded) {
+  Uint8List? _decode(Uint8List encoded) {
+    Uint8List decoded;
     try {
-      final decoded = cobsDecode(encoded);
-      if (decoded.length < _binaryMarker.length + 1 + 2) {
-        throw const FormatException('MM-SERIAL frame too short');
-      }
-      final payload = Uint8List.sublistView(decoded, 0, decoded.length - 2);
-      final expected =
-          (decoded[decoded.length - 2] << 8) | decoded[decoded.length - 1];
-      if (crc16Ccitt(payload) != expected) {
-        throw const FormatException('MM-SERIAL CRC mismatch');
-      }
-      for (var i = 0; i < _binaryMarker.length; i++) {
-        if (payload[i] != _binaryMarker[i]) {
-          throw const FormatException('MM-SERIAL binary marker mismatch');
-        }
-      }
-      return MmSerialBinaryPacket(
-        tag: payload[_binaryMarker.length],
-        payload: Uint8List.fromList(
-          payload.sublist(_binaryMarker.length + 1),
-        ),
-      );
-    } on Object {
+      decoded = cobsDecode(encoded);
+    } on FormatException {
       badFrames++;
+      cobsErrors++;
       return null;
     }
+    if (decoded.length < 3) {
+      badFrames++;
+      shortFrames++;
+      return null;
+    }
+    final payload = Uint8List.fromList(decoded.sublist(0, decoded.length - 2));
+    final expected =
+        (decoded[decoded.length - 2] << 8) | decoded[decoded.length - 1];
+    if (crc16Ccitt(payload) != expected) {
+      badFrames++;
+      crcErrors++;
+      return null;
+    }
+    return payload;
   }
 
   static int crc16Ccitt(List<int> bytes) {
