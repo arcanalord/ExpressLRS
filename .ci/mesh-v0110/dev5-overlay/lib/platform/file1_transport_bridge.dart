@@ -98,6 +98,27 @@ final class File1TransportBridge {
     return state.completer.future;
   }
 
+  bool pauseByUser(String transferId) {
+    final state = _senders[transferId];
+    if (state == null || state.session.isTerminal) return false;
+    state.session.pauseByUser();
+    _emitProgress(transferId, state, force: true);
+    return true;
+  }
+
+  bool resumeByUser(String transferId) {
+    final state = _senders[transferId];
+    if (state == null || state.session.isTerminal) return false;
+    state.session.resumeByUser();
+    state.lastManifestSentMs = -0x7fffffff;
+    _emitProgress(transferId, state, force: true);
+    if (_linkAvailable) {
+      _ensureTimer();
+      unawaited(_drive());
+    }
+    return true;
+  }
+
   Future<bool> cancel(String transferId) async {
     final state = _senders[transferId];
     if (state == null || state.session.isTerminal) return false;
