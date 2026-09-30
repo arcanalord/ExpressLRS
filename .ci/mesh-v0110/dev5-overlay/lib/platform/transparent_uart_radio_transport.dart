@@ -275,6 +275,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
     _codec.reset();
     _failProbes(StateError('LR24 reconnect'));
     _peerReachability.clear();
+    _file1.pauseForLinkLoss();
     txBytes = 0;
     rxBytes = 0;
     txFrames = 0;
@@ -303,6 +304,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
       _codec.reset();
       _failProbes(StateError('LR24 disconnected'));
       _peerReachability.clear();
+      _file1.pauseForLinkLoss();
       deviceId = null;
       state = 'disconnected';
       _events.add(const TransparentUartStateEvent('disconnected'));
