@@ -1,0 +1,98 @@
+name: Kotlin 2.4.20 Compiler Cache Warmup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/kotlin-compiler-cache-warmup.yml'
+
+jobs:
+  warm-kotlin-compiler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 9.6.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+          cache-disabled: true
+
+      - name: Create Kotlin compiler warmup
+        run: |
+          set -euxo pipefail
+          mkdir -p warmup/src/main/kotlin
+          cat > warmup/settings.gradle.kts <<'EOF'
+          pluginManagement {
+              repositories {
+                  gradlePluginPortal()
+                  mavenCentral()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "KotlinCompilerCacheWarmup"
+          EOF
+
+          cat > warmup/build.gradle.kts <<'EOF'
+          plugins {
+              kotlin("jvm") version "2.4.20"
+          }
+
+          kotlin {
+              jvmToolchain(17)
+          }
+
+          repositories {
+              mavenCentral()
+          }
+
+          dependencies {
+              implementation(kotlin("stdlib"))
+              testImplementation(kotlin("test-junit"))
+              testImplementation("junit:junit:4.13.2")
+          }
+          EOF
+
+          cat > warmup/src/main/kotlin/Warmup.kt <<'EOF'
+          data class Warmup(val value: String)
+          fun main() = println(Warmup("ok"))
+          EOF
+
+      - name: Compile Kotlin 2.4.20
+        working-directory: warmup
+        run: |
+          set -euxo pipefail
+          gradle --no-daemon --stacktrace clean compileKotlin testClasses
+          test -d "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-compat/2.4.20"
+          test -d "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-impl/2.4.20"
+          test -d "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-build-tools-cri-impl/2.4.20"
+          test -d "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.20"
+
+      - name: Pack Kotlin compiler cache
+        run: |
+          set -euxo pipefail
+          tar -C "$HOME" -czf kotlin-2.4.20-compiler-cache.tar.gz .gradle/caches/modules-2
+          sha256sum kotlin-2.4.20-compiler-cache.tar.gz > kotlin-2.4.20-compiler-cache.sha256
+          find "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin" -maxdepth 2 -mindepth 2 -type d | sort > kotlin-2.4.20-components.txt
+
+      - name: Upload Kotlin compiler cache
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kotlin-2.4.20-Compiler-Cache
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            kotlin-2.4.20-compiler-cache.tar.gz
+            kotlin-2.4.20-compiler-cache.sha256
+            kotlin-2.4.20-components.txt
