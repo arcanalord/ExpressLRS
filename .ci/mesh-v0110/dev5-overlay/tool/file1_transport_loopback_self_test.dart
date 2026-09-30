@@ -23,10 +23,7 @@ Future<void> main() async {
   stdout.writeln('MESH_MESSENGER_FILE1_TRANSPORT_LOOPBACK_PASS');
 }
 
-Future<void> _runLoopback({
-  required int bytes,
-  required int chunkSize,
-}) async {
+Future<void> _runLoopback({required int bytes, required int chunkSize}) async {
   final codecA = MmSerialCodec();
   final codecB = MmSerialCodec();
   late final File1TransportBridge bridgeA;
@@ -196,7 +193,9 @@ Future<void> _runFinalizeWriteFailureScenario({
   await bridgeA.send(plan).timeout(const Duration(seconds: 8));
 
   if (!senderCompleteWriteFailed || !receiverVerifiedAckWriteFailed) {
-    throw StateError('Transient final-control write failures were not exercised');
+    throw StateError(
+      'Transient final-control write failures were not exercised',
+    );
   }
   final result = received;
   if (result == null || !_same(payload, result)) {
@@ -228,7 +227,8 @@ Future<void> _runLinkLossResumeMissingOnly() async {
       final frame = File1Codec.decode(payload);
       if (frame.type == File1FrameType.chunk) {
         final chunk = File1Codec.decodeChunk(frame);
-        chunkSendCounts[chunk.index] = (chunkSendCounts[chunk.index] ?? 0) + 1;
+        chunkSendCounts[chunk.index] =
+            (chunkSendCounts[chunk.index] ?? 0) + 1;
         if (chunk.index == 8 && !failedOnce) {
           failedOnce = true;
           throw StateError('simulated LR24 detach');
@@ -289,6 +289,7 @@ Future<void> _runLinkLossResumeMissingOnly() async {
   bridgeA.close();
   bridgeB.close();
 }
+
 Future<void> _runCancellation() async {
   final progress = <File1TransportProgress>[];
   final bridge = File1TransportBridge(
