@@ -389,6 +389,9 @@ final class TransparentUartRadioTransport implements MessageTransport {
     if (!isAvailable) {
       return Future<void>.error(StateError('LR24_NOT_READY'));
     }
+    if (!_peerReachability.hasFreshPeers) {
+      return Future<void>.error(StateError('LR24_PEER_NOT_REACHABLE'));
+    }
     return _file1.send(plan);
   }
 
@@ -551,6 +554,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
       } else if (next == 'permission_denied' || next == 'error') {
         state = 'error';
         lastError = error ?? next;
+        _file1.pauseForLinkLoss();
         _events.add(TransparentUartStateEvent('error', error: lastError));
       } else if (next == 'offline' ||
           next == 'disconnected' ||
@@ -559,6 +563,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
         _codec.reset();
         _failProbes(StateError('LR24 disconnected'));
         _peerReachability.clear();
+        _file1.pauseForLinkLoss();
         _events.add(const TransparentUartStateEvent('disconnected'));
       }
       return;
@@ -589,6 +594,9 @@ final class TransparentUartRadioTransport implements MessageTransport {
     final from = (frame['from'] ?? '').toString().trim();
     if (from.isEmpty || from == ownMmId) return;
     _peerReachability.markSeen(from);
+    if (_file1.hasActiveSenders) {
+      _file1.resumeAfterLink();
+    }
     final kind = (frame['k'] ?? '').toString().trim();
 
     switch (kind) {
