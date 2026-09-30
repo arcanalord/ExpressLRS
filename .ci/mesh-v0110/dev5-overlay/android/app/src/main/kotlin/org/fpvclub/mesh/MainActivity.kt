@@ -59,6 +59,9 @@ class MainActivity : FlutterActivity() {
     private val mapPackageStore: MapPackageStore by lazy { MapPackageStore(applicationContext) }
     private var mapImportResult: MethodChannel.Result? = null
     private val mapImportRequestCode = 1601
+    private var diagnosticsExportResult: MethodChannel.Result? = null
+    private var diagnosticsExportText: String? = null
+    private val diagnosticsExportRequestCode = 1602
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -76,6 +79,11 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "org.fpvclub.mesh/localnetwork",
         ).setMethodCallHandler(::handleLocalNetworkMethod)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "org.fpvclub.mesh/diagnostics",
+        ).setMethodCallHandler(::handleDiagnosticsMethod)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -301,6 +309,42 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun handleDiagnosticsMethod(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "exportText" -> {
+                if (diagnosticsExportResult != null) {
+                    result.error("BUSY", "diagnostics export already active", null)
+                    return
+                }
+                val text = call.argument<String>("text")
+                    ?: return result.error("BAD_ARGUMENT", "text required", null)
+                val fileName = call.argument<String>("fileName")
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: "Mesh Messenger diagnostics.txt"
+                diagnosticsExportResult = result
+                diagnosticsExportText = text
+                val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TITLE, fileName)
+                }
+                try {
+                    startActivityForResult(intent, diagnosticsExportRequestCode)
+                } catch (t: Throwable) {
+                    diagnosticsExportResult = null
+                    diagnosticsExportText = null
+                    result.error(
+                        "DIAGNOSTICS_EXPORT",
+                        t.message ?: t.toString(),
+                        null,
+                    )
+                }
+            }
+            else -> result.notImplemented()
+        }
+    }
+
     private fun runAsync(
         result: MethodChannel.Result,
         errorCode: String = "MESHTASTIC",
@@ -386,27 +430,69 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Android API; kept for FlutterActivity compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != mapImportRequestCode) return
-        val pending = mapImportResult
-        mapImportResult = null
-        if (pending == null) return
-        val uri = data?.data
-        if (resultCode != Activity.RESULT_OK || uri == null) {
-            pending.success(null)
-            return
-        }
-        executor.execute {
-            try {
-                runCatching {
-                    contentResolver.takePersistableUriPermission(
-                        uri,
-                        data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION),
-                    )
+        when (requestCode) {
+            mapImportRequestCode -> {
+                val pending = mapImportResult
+                mapImportResult = null
+                if (pending == null) return
+                val uri = data?.data
+                if (resultCode != Activity.RESULT_OK || uri == null) {
+                    pending.success(null)
+                    return
                 }
-                val imported = mapPackageStore.importUri(contentResolver, uri)
-                main.post { pending.success(imported) }
-            } catch (t: Throwable) {
-                main.post { pending.error("MAP_IMPORT", t.message ?: t.toString(), null) }
+                executor.execute {
+                    try {
+                        runCatching {
+                            contentResolver.takePersistableUriPermission(
+                                uri,
+                                data.flags and (
+                                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                                ),
+                            )
+                        }
+                        val imported = mapPackageStore.importUri(contentResolver, uri)
+                        main.post { pending.success(imported) }
+                    } catch (t: Throwable) {
+                        main.post {
+                            pending.error(
+                                "MAP_IMPORT",
+                                t.message ?: t.toString(),
+                                null,
+                            )
+                        }
+                    }
+                }
+            }
+            diagnosticsExportRequestCode -> {
+                val pending = diagnosticsExportResult
+                val text = diagnosticsExportText
+                diagnosticsExportResult = null
+                diagnosticsExportText = null
+                if (pending == null) return
+                val uri = data?.data
+                if (resultCode != Activity.RESULT_OK || uri == null || text == null) {
+                    pending.success(null)
+                    return
+                }
+                executor.execute {
+                    try {
+                        contentResolver.openOutputStream(uri, "wt").use { output ->
+                            requireNotNull(output) { "Cannot open diagnostics output" }
+                            output.write(text.toByteArray(Charsets.UTF_8))
+                            output.flush()
+                        }
+                        main.post { pending.success(uri.toString()) }
+                    } catch (t: Throwable) {
+                        main.post {
+                            pending.error(
+                                "DIAGNOSTICS_EXPORT",
+                                t.message ?: t.toString(),
+                                null,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
