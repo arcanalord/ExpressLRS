@@ -39,6 +39,7 @@ final class DeliveryEngine {
     final id = messageId ?? 'msg-${++_counter}';
     final existing = _records[id];
     if (existing != null) {
+      if (existing.state == DeliveryState.delivered) return existing;
       final retryResult = await _submit(existing.message);
       if (retryResult.status == TransportSubmitStatus.accepted &&
           existing.state != DeliveryState.delivered) {
@@ -60,11 +61,16 @@ final class DeliveryEngine {
     record.state = DeliveryState.queued;
 
     final result = await _submit(message);
-    record.state = switch (result.status) {
-      TransportSubmitStatus.accepted => DeliveryState.sentToTransport,
-      TransportSubmitStatus.unavailable => DeliveryState.queued,
-      TransportSubmitStatus.rejected => DeliveryState.failed,
-    };
+    // Recipient ACK may arrive synchronously/very quickly while transport
+    // submit is still unwinding. Delivered is application evidence and must
+    // never be downgraded by a later transport-level result.
+    if (record.state != DeliveryState.delivered) {
+      record.state = switch (result.status) {
+        TransportSubmitStatus.accepted => DeliveryState.sentToTransport,
+        TransportSubmitStatus.unavailable => DeliveryState.queued,
+        TransportSubmitStatus.rejected => DeliveryState.failed,
+      };
+    }
     return record;
   }
 
