@@ -15,7 +15,9 @@ Future<void> main() async {
   await _runTransientFinalizeWriteFailure();
   await _runExactFourChunksWithDroppedFinalComplete();
   await _runProactiveFinalCompleteWithoutSenderFinalRequest();
+  await _runLinkLossResumeMissingOnly();
   await _runCancellation();
+  stdout.writeln('MESH_MESSENGER_FILE1_LINK_RESUME_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_VERIFIED_FINAL_ACK_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_TRANSIENT_FINALIZE_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_TRANSPORT_LOOPBACK_PASS');
@@ -213,6 +215,80 @@ Future<void> _runFinalizeWriteFailureScenario({
   bridgeB.close();
 }
 
+Future<void> _runLinkLossResumeMissingOnly() async {
+  late final File1TransportBridge bridgeA;
+  late final File1TransportBridge bridgeB;
+  Uint8List? received;
+  var failedOnce = false;
+  final chunkSendCounts = <int, int>{};
+
+  bridgeA = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: (payload) async {
+      final frame = File1Codec.decode(payload);
+      if (frame.type == File1FrameType.chunk) {
+        final chunk = File1Codec.decodeChunk(frame);
+        chunkSendCounts[chunk.index] = (chunkSendCounts[chunk.index] ?? 0) + 1;
+        if (chunk.index == 8 && !failedOnce) {
+          failedOnce = true;
+          throw StateError('simulated LR24 detach');
+        }
+      }
+      await bridgeB.handleIncoming(payload);
+    },
+    onReceived: (_) {},
+  );
+  bridgeB = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: bridgeA.handleIncoming,
+    onReceived: (event) {
+      received = Uint8List.fromList(event.bytes);
+    },
+  );
+
+  final payload = Uint8List.fromList(
+    List<int>.generate(100 * 1024, (index) => (index * 29 + 5) & 0xff),
+  );
+  final plan = M05FileTransferCore.createPlan(
+    transferId: 'u1-style-link-resume-100k',
+    fileName: 'resume-100k.bin',
+    mimeType: 'application/octet-stream',
+    bytes: payload,
+    chunkSize: 1024,
+  );
+
+  final future = bridgeA.send(plan);
+  for (var i = 0; i < 200 && !failedOnce; i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  if (!failedOnce) {
+    throw StateError('link loss fixture was not exercised');
+  }
+  await Future<void>.delayed(const Duration(milliseconds: 30));
+  bridgeA.resumeAfterLink();
+  await future.timeout(const Duration(seconds: 10));
+
+  final result = received;
+  if (result == null || !_same(payload, result)) {
+    throw StateError('resume payload mismatch');
+  }
+  for (var index = 0; index < 8; index++) {
+    if (chunkSendCounts[index] != 1) {
+      throw StateError(
+        'resume resent already acknowledged chunk ' +
+            index.toString() +
+            ' count=' +
+            (chunkSendCounts[index] ?? 0).toString(),
+      );
+    }
+  }
+  if ((chunkSendCounts[8] ?? 0) < 2) {
+    throw StateError('missing chunk 8 was not retried after resume');
+  }
+
+  bridgeA.close();
+  bridgeB.close();
+}
 Future<void> _runCancellation() async {
   final progress = <File1TransportProgress>[];
   final bridge = File1TransportBridge(
