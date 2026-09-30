@@ -564,10 +564,7 @@ final class MeshAppController extends ChangeNotifier {
   }
 
   @visibleForTesting
-  void injectNearbyPeerForTest(
-    String mmId, {
-    String label = 'Nearby Test',
-  }) {
+  void injectNearbyPeerForTest(String mmId, {String label = 'Nearby Test'}) {
     final cleanId = mmId.trim();
     if (cleanId.isEmpty || cleanId == ownMmId) return;
     _peerLastSeen[cleanId] = DateTime.now().toUtc();
