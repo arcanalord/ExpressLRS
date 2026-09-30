@@ -40,9 +40,9 @@ final class File1TransportBridge {
     required void Function(File1TransportReceived received) onReceived,
     void Function(File1TransportProgress progress)? onProgress,
     this.tickInterval = const Duration(milliseconds: 25),
-  })  : _sendBytes = sendBytes,
-        _onReceived = onReceived,
-        _onProgress = onProgress;
+  }) : _sendBytes = sendBytes,
+       _onReceived = onReceived,
+       _onProgress = onProgress;
 
   final Future<void> Function(Uint8List payload) _sendBytes;
   final void Function(File1TransportReceived received) _onReceived;
