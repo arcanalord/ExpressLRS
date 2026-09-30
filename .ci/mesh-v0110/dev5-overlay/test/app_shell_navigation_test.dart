@@ -279,7 +279,8 @@ void main() {
     await controller.shutdown();
     controller.dispose();
     if (root.existsSync()) root.deleteSync(recursive: true);
-  });  testWidgets(
+  });
+  testWidgets(
     'nearby peer save becomes contact without inherited dependency assertion',
     (tester) async {
       final root = Directory.systemTemp.createTempSync(
@@ -331,6 +332,4 @@ void main() {
       if (root.existsSync()) root.deleteSync(recursive: true);
     },
   );
-
-
 }
