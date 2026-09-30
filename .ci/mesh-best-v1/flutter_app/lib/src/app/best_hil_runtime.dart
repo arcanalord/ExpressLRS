@@ -94,7 +94,7 @@ final class BestHilRuntime {
   late final DeliveryEngine _engine;
   final InboundDeduper _deduper = InboundDeduper();
   final StreamController<BestHilEvent> _events =
-      StreamController<BestHilEvent>.broadcast();
+      StreamController<BestHilEvent>.broadcast(sync: true);
   StreamSubscription<TransportInboundFrame>? _subscription;
   int _messageCounter = 0;
 
