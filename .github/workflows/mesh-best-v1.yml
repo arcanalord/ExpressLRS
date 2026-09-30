@@ -40,6 +40,16 @@ jobs:
       - name: Unit and widget tests
         run: flutter test --reporter expanded
 
+      - name: MM U1 compatibility source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "defaultBaudRate = 57600" lib/src/m03/android_usb_lr24_link.dart
+          ! grep -R "_Lr24PreparedWireFrame" lib
+          ! grep -R "mesh-best-v1-dev" lib
+          grep -Fq "'channel_data'" lib/src/protocol/mmrp1_channel.dart
+          grep -Fq "'channel_receipt'" lib/src/protocol/mmrp1_channel.dart
+
       - name: Create Android platform scaffold
         run: flutter create --platforms=android --project-name mesh_messenger_best_v1 --org org.fpvclub .
 
@@ -57,16 +67,30 @@ jobs:
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
           "$BT/aapt" dump badging "$APK" | tee /tmp/mesh-best-v1-badging.txt
           grep -Fq "package: name='org.fpvclub.mesh_messenger_best_v1'" /tmp/mesh-best-v1-badging.txt
-          grep -Fq "versionName='0.1.3-best1-hil'" /tmp/mesh-best-v1-badging.txt
+          grep -Fq "versionName='0.1.4-best1-hil'" /tmp/mesh-best-v1-badging.txt
+          grep -Fq "versionCode='2005'" /tmp/mesh-best-v1-badging.txt
           sha256sum "$APK" | tee /tmp/mesh-best-v1-sha256.txt
-          cp "$APK" /tmp/MeshMessenger-Best-v1-HIL-arm64-debug.apk
+          {
+            echo "source_sha=$GITHUB_SHA"
+            echo "workflow_run=$GITHUB_RUN_ID"
+            echo "package=org.fpvclub.mesh_messenger_best_v1"
+            echo "version=0.1.4-best1-hil"
+            echo "version_code=2005"
+            echo "lr24_baud=57600"
+            echo "mm_serial=COBS(payload+CRC16-CCITT-BE)+0x00"
+            echo "control_wire=MMRP/1 hello/hello_reply ping/pong"
+            echo "text_wire=MMRP/1 CHANNEL/1 channel_data/channel_receipt"
+            echo "m07=DEV-PLAINTEXT-NOT-PRODUCTION"
+          } | tee /tmp/mesh-best-v1-build-info.txt
+          cp "$APK" /tmp/MeshMessenger-Best-v1-0.1.4-best1-hil-arm64-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Best-v1-HIL-arm64-debug
+          name: MeshMessenger-Best-v1-0.1.4-best1-hil-arm64-debug
           path: |
-            /tmp/MeshMessenger-Best-v1-HIL-arm64-debug.apk
+            /tmp/MeshMessenger-Best-v1-0.1.4-best1-hil-arm64-debug.apk
             /tmp/mesh-best-v1-sha256.txt
             /tmp/mesh-best-v1-badging.txt
+            /tmp/mesh-best-v1-build-info.txt
           retention-days: 14
