@@ -39,8 +39,8 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(link.isOpen, isFalse);
 
-    expect(
-      () => link.write(Uint8List.fromList(<int>[1])),
+    await expectLater(
+      link.write(Uint8List.fromList(<int>[1])),
       throwsA(isA<StateError>()),
     );
 
