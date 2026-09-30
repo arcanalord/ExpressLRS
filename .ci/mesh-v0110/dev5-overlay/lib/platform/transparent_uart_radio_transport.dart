@@ -194,6 +194,53 @@ final class _PendingProbe {
   final Timer timer;
 }
 
+final class Lr24PeerReachability {
+  Lr24PeerReachability({
+    this.freshFor = const Duration(seconds: 30),
+    DateTime Function()? now,
+  }) : _now = now ?? (() => DateTime.now().toUtc());
+
+  final Duration freshFor;
+  final DateTime Function() _now;
+  final Map<String, DateTime> _lastSeen = <String, DateTime>{};
+
+  void clear() => _lastSeen.clear();
+
+  void markSeen(String mmId) {
+    final clean = mmId.trim();
+    if (clean.isEmpty) return;
+    _lastSeen[clean] = _now().toUtc();
+    _prune();
+  }
+
+  bool isFresh(String mmId) {
+    _prune();
+    return _lastSeen.containsKey(mmId);
+  }
+
+  bool get hasFreshPeers {
+    _prune();
+    return _lastSeen.isNotEmpty;
+  }
+
+  Set<String> get freshPeerMmIds {
+    _prune();
+    return Set<String>.unmodifiable(_lastSeen.keys.toSet());
+  }
+
+  int? ageMs(String mmId) {
+    _prune();
+    final seen = _lastSeen[mmId];
+    if (seen == null) return null;
+    return _now().toUtc().difference(seen).inMilliseconds;
+  }
+
+  void _prune() {
+    final cutoff = _now().toUtc().subtract(freshFor);
+    _lastSeen.removeWhere((_, seen) => seen.isBefore(cutoff));
+  }
+}
+
 /// MessageTransport for stock transparent UART radios such as MicoAir LR24-F.
 ///
 /// The modem is not probed or reflashed. It only carries MM-SERIAL/1 bytes.
@@ -238,7 +285,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
   late final File1TransportBridge _file1;
   final String ownMmId;
   final String ownLabel;
-  final Set<String> _discoveredPeerMmIds = <String>{};
+  final Lr24PeerReachability _peerReachability = Lr24PeerReachability();
   final MmSerialCodec _codec = MmSerialCodec();
   final StreamController<TransparentUartRadioEvent> _events =
       StreamController<TransparentUartRadioEvent>.broadcast();
@@ -263,12 +310,20 @@ final class TransparentUartRadioTransport implements MessageTransport {
   bool get isAvailable => state == 'ready';
 
   int get badFrames => _codec.badFrames;
+  bool get hasFreshPeers => _peerReachability.hasFreshPeers;
+  Set<String> get freshPeerMmIds => _peerReachability.freshPeerMmIds;
+  bool isPeerFresh(String mmId) => _peerReachability.isFresh(mmId);
+  int? peerAgeMs(String mmId) => _peerReachability.ageMs(mmId);
+  int get qosPendingControl => _qos.pendingControl;
+  int get qosPendingText => _qos.pendingText;
+  int get qosPendingFile => _qos.pendingFile;
 
   Future<void> connect(int id, {int baudRate = 57600}) async {
     await _subscription?.cancel();
     _subscription = _bridge.events.listen(_onBridgeEvent);
     _codec.reset();
     _failProbes(StateError('LR24 reconnect'));
+    _peerReachability.clear();
     txBytes = 0;
     rxBytes = 0;
     txFrames = 0;
@@ -296,6 +351,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
       _subscription = null;
       _codec.reset();
       _failProbes(StateError('LR24 disconnected'));
+      _peerReachability.clear();
       deviceId = null;
       state = 'disconnected';
       _events.add(const TransparentUartStateEvent('disconnected'));
@@ -314,8 +370,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
         envelope.isGroup ? envelope.groupMemberMmId : envelope.recipientMmId;
     if (!envelope.isChannel &&
         targetMmId != null &&
-        _discoveredPeerMmIds.isNotEmpty &&
-        !_discoveredPeerMmIds.contains(targetMmId)) {
+        !_peerReachability.isFresh(targetMmId)) {
       return const TransportSendResult(
         TransportSendStatus.unavailable,
         detail: 'LR24_PEER_NOT_REACHABLE',
@@ -550,6 +605,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
         state = 'disconnected';
         _codec.reset();
         _failProbes(StateError('LR24 disconnected'));
+        _peerReachability.clear();
         _events.add(const TransparentUartStateEvent('disconnected'));
       }
       return;
@@ -579,12 +635,12 @@ final class TransparentUartRadioTransport implements MessageTransport {
     if (to.isNotEmpty && to != ownMmId && to != '*') return;
     final from = (frame['from'] ?? '').toString().trim();
     if (from.isEmpty || from == ownMmId) return;
+    _peerReachability.markSeen(from);
     final kind = (frame['k'] ?? '').toString().trim();
 
     switch (kind) {
 
       case 'hello':
-        _discoveredPeerMmIds.add(from);
         final label = (frame['label'] ?? '').toString().trim();
         final rawCaps = frame['caps'];
         final caps = rawCaps is List
@@ -609,7 +665,6 @@ final class TransparentUartRadioTransport implements MessageTransport {
           }),
         );
       case 'hello_reply':
-        _discoveredPeerMmIds.add(from);
         final label = (frame['label'] ?? '').toString().trim();
         final rawCaps = frame['caps'];
         final caps = rawCaps is List
@@ -805,6 +860,7 @@ final class TransparentUartRadioTransport implements MessageTransport {
     await _subscription?.cancel();
     _subscription = null;
     _failProbes(StateError('LR24 transport closed'));
+    _peerReachability.clear();
     _file1.close();
     await _events.close();
   }
