@@ -41,7 +41,7 @@ jobs:
         run: flutter test --reporter expanded
 
       - name: Create Android platform scaffold
-        run: flutter create --platforms=android --project-name mesh_messenger_best_v1 .
+        run: flutter create --platforms=android --project-name mesh_messenger_best_v1 --org org.fpvclub .
 
       - name: Build arm64 debug APK
         run: flutter build apk --debug --target-platform android-arm64 --split-per-abi
@@ -55,14 +55,18 @@ jobs:
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
           "$BT/apksigner" verify --verbose "$APK"
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
+          "$BT/aapt" dump badging "$APK" | tee /tmp/mesh-best-v1-badging.txt
+          grep -Fq "package: name='org.fpvclub.mesh_messenger_best_v1'" /tmp/mesh-best-v1-badging.txt
+          grep -Fq "versionName='0.1.1-best1-hil'" /tmp/mesh-best-v1-badging.txt
           sha256sum "$APK" | tee /tmp/mesh-best-v1-sha256.txt
-          cp "$APK" /tmp/MeshMessenger-Best-v1-arm64-debug.apk
+            /tmp/mesh-best-v1-badging.txt
+          cp "$APK" /tmp/MeshMessenger-Best-v1-HIL-arm64-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Best-v1-arm64-debug
+          name: MeshMessenger-Best-v1-HIL-arm64-debug
           path: |
-            /tmp/MeshMessenger-Best-v1-arm64-debug.apk
+            /tmp/MeshMessenger-Best-v1-HIL-arm64-debug.apk
             /tmp/mesh-best-v1-sha256.txt
           retention-days: 14
