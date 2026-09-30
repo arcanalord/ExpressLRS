@@ -1,4 +1,4 @@
-name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc4
+name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc5
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ on:
       - '.ci/mesh-v0110/dev5-overlay/**'
 
 concurrency:
-  group: mesh-flutter-v0.6.0-secure-core-rc4
+  group: mesh-flutter-v0.6.0-secure-core-rc5
   cancel-in-progress: true
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          grep -Fqx 'version: 0.6.0-secure-core-rc4+26092904' "$APP_DIR/pubspec.yaml"
+          grep -Fqx 'version: 0.6.0-secure-core-rc5+26093005' "$APP_DIR/pubspec.yaml"
           VERSION_FULL="$(awk '/^version:/ {print $2; exit}' "$APP_DIR/pubspec.yaml")"
           APP_VERSION="${VERSION_FULL%%+*}"
           APP_BUILD="${VERSION_FULL#*+}"
@@ -114,6 +114,7 @@ jobs:
           dart run tool/mm_uart_1_self_test.dart
           dart run tool/mm_uart_codec_self_test.dart
           dart run tool/mm_serial_lr24_self_test.dart
+          dart run tool/lr24_peer_reachability_self_test.dart
           dart run tool/usb_profile_binding_self_test.dart
           dart run tool/radio_capability_self_test.dart
           dart run tool/settings_registry_self_test.dart
@@ -125,6 +126,22 @@ jobs:
           grep -q "implements MmUartHostLink" lib/platform/android_usb_mm_uart_host_link.dart
           grep -q "MM-UART/1 first" lib/src/application/mesh_app_controller.dart
           grep -q "session.supportsMmrp" lib/src/application/mesh_app_controller.dart
+
+      - name: RC5 changed-file format gate
+        working-directory: ${{ env.APP_DIR }}
+        run: |
+          dart format --output=none --set-exit-if-changed \
+            lib/core/app_build_info.dart \
+            lib/core/delivery.dart \
+            lib/platform/android_diagnostics_export_bridge.dart \
+            lib/platform/transparent_uart_radio_transport.dart \
+            lib/src/application/mesh_app_controller.dart \
+            lib/src/features/connection/connection_page.dart \
+            lib/src/features/diagnostics/diagnostics_page.dart \
+            lib/src/features/settings/settings_page.dart \
+            tool/delivery_reliability_self_test.dart \
+            tool/lr24_peer_reachability_self_test.dart \
+            test/app_shell_navigation_test.dart
 
       - name: Format check (non-blocking)
         continue-on-error: true
@@ -160,6 +177,9 @@ jobs:
           grep -q "group_descriptor" lib/platform/transparent_uart_radio_transport.dart
           grep -q "discoverPeers" lib/platform/transparent_uart_radio_transport.dart
           grep -q "LR24_PEER_NOT_REACHABLE" lib/platform/transparent_uart_radio_transport.dart
+          grep -q "class Lr24PeerReachability" lib/platform/transparent_uart_radio_transport.dart
+          grep -q "MESH_MESSENGER_LR24_PEER_FRESHNESS_PASS" tool/lr24_peer_reachability_self_test.dart
+          grep -q "RECIPIENT_ACK_TIMEOUT" lib/core/delivery.dart
           grep -q "groupRevision" lib/core/models.dart
           grep -q "Новая группа" lib/src/features/chats/chats_page.dart
           grep -q "MESH_MESSENGER_GROUP_DELIVERY_SELF_TEST_PASS" tool/group_delivery_self_test.dart
@@ -216,7 +236,10 @@ jobs:
           grep -q "sendChannelMapPoint" lib/core/messenger_core.dart
           grep -q "Планируемые разделы" lib/src/features/settings/settings_page.dart
           grep -q "О приложении" lib/src/features/settings/settings_page.dart
-          grep -q "APP_VERSION" lib/src/features/settings/settings_page.dart
+          grep -q "Диагностика" lib/src/features/settings/settings_page.dart
+          grep -q "Экспорт diagnostics.txt" lib/src/features/diagnostics/diagnostics_page.dart
+          grep -q "APP_VERSION" lib/core/app_build_info.dart
+          grep -q "org.fpvclub.mesh/diagnostics" android/app/src/main/kotlin/org/fpvclub/mesh/MainActivity.kt
           grep -q "android.permission.CAMERA" android/app/src/debug/AndroidManifest.xml
           test -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
           test -f android/app/src/main/res/drawable/ic_launcher_foreground.xml
@@ -244,23 +267,23 @@ jobs:
           APK_VERSION_CODE="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/APK_BADGING.txt | head -n1)"
           test -n "$APK_VERSION_CODE"
           export APK_VERSION_CODE
-          grep -Fq "versionName='0.6.0-secure-core-rc4'" /tmp/APK_BADGING.txt
+          grep -Fq "versionName='0.6.0-secure-core-rc5'" /tmp/APK_BADGING.txt
           unzip -Z1 "$APK" > /tmp/APK_FILES.txt
           grep -Fq 'lib/arm64-v8a/' /tmp/APK_FILES.txt
           if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' /tmp/APK_FILES.txt; then
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
-          cp "$APK" /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc4-arm64-debug.apk
-          sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc4-arm64-debug.apk | tee /tmp/SHA256SUM-v0.6.0-secure-core-rc4.txt
-          APK_SHA256="$(sha256sum /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc4-arm64-debug.apk | awk '{print $1}')"
+          cp "$APK" /tmp/Mesh Messenger Flutter rc5.apk
+          sha256sum /tmp/Mesh Messenger Flutter rc5.apk | tee /tmp/Mesh Messenger Flutter rc5.sha256.txt
+          APK_SHA256="$(sha256sum /tmp/Mesh Messenger Flutter rc5.apk | awk '{print $1}')"
           export APK_SHA256
           python3 - <<'PY'
           import json
           import os
           manifest = {
               "schema": "mesh-messenger-release-manifest/v1",
-              "version": "0.6.0-secure-core-rc4",
+              "version": "0.6.0-secure-core-rc5",
               "versionCode": int(os.environ["APK_VERSION_CODE"]),
               "applicationId": "org.fpvclub.mesh.flutter",
               "abi": ["arm64-v8a"],
@@ -272,7 +295,7 @@ jobs:
                   "runId": os.environ["GITHUB_RUN_ID"],
               },
               "artifact": {
-                  "file": "MeshMessenger-Flutter-v0.6.0-secure-core-rc4-arm64-debug.apk",
+                  "file": "Mesh Messenger Flutter rc5.apk",
                   "sha256": os.environ["APK_SHA256"],
               },
               "gates": {
@@ -300,10 +323,10 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeshMessenger-Flutter-v0.6.0-secure-core-rc4-arm64-debug
+          name: Mesh Messenger Flutter rc5
           path: |
-            /tmp/MeshMessenger-Flutter-v0.6.0-secure-core-rc4-arm64-debug.apk
-            /tmp/SHA256SUM-v0.6.0-secure-core-rc4.txt
+            /tmp/Mesh Messenger Flutter rc5.apk
+            /tmp/Mesh Messenger Flutter rc5.sha256.txt
             /tmp/mesh-messenger-release-manifest-v1.json
           if-no-files-found: error
           retention-days: 14
