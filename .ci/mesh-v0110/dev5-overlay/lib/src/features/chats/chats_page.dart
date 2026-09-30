@@ -1071,30 +1071,48 @@ class _ConversationPane extends StatelessWidget {
                         leading: const Icon(Icons.insert_drive_file_outlined),
                         title: Text(controller.preparedFileName!),
                         subtitle: Text(
-                          (controller.preparedFileBytes ?? 0).toString() +
-                              ' Б · ' +
-                              (controller.preparedFileChunks ?? 0).toString() +
-                              ' блоков · ' +
-                              controller.preparedFileProfile.name,
+                          _formatFileBytes(controller.preparedFileBytes ?? 0) +
+                              ' · ' +
+                              _fileTransferStateLabel(controller),
                         ),
-                        trailing: controller.fileTransferSending
-                            ? IconButton(
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (controller.fileTransferPausedByUser)
+                              IconButton(
+                                tooltip: 'Продолжить',
+                                onPressed: controller.fileTransferCanContinue
+                                    ? controller.continuePreparedFileTransfer
+                                    : null,
+                                icon: const Icon(Icons.play_arrow_rounded),
+                              )
+                            else if (controller.fileTransferCanPause)
+                              IconButton(
+                                tooltip: 'Пауза',
+                                onPressed: controller.pausePreparedFileTransfer,
+                                icon: const Icon(Icons.pause_rounded),
+                              ),
+                            if (controller.fileTransferSending)
+                              IconButton(
                                 tooltip: 'Отменить передачу',
                                 onPressed:
                                     controller.cancelPreparedFileTransfer,
                                 icon: const Icon(Icons.stop_circle_outlined),
                               )
-                            : controller.fileTransferCanRetry
-                            ? IconButton(
+                            else if (controller.fileTransferCanRetry)
+                              IconButton(
                                 tooltip: 'Повторить передачу',
                                 onPressed: controller.sendPreparedSmallFile,
                                 icon: const Icon(Icons.refresh),
                               )
-                            : IconButton(
+                            else
+                              IconButton(
                                 tooltip: 'Убрать',
                                 onPressed: controller.clearPreparedFile,
                                 icon: const Icon(Icons.close),
                               ),
+                          ],
+                        ),
                       ),
                       if (controller.fileTransferSending ||
                           controller.fileTransferProgress > 0) ...[
@@ -1102,12 +1120,24 @@ class _ConversationPane extends StatelessWidget {
                           value: controller.fileTransferProgress,
                         ),
                         const SizedBox(height: 6),
+                        Text(
+                          '${(controller.fileTransferProgress * 100).round()}%',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
                       ],
                       if (controller.fileTransferNotice != null)
                         Text(
                           controller.fileTransferNotice!,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
+                      if (controller.advancedMode) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          '${controller.preparedFileChunks ?? 0} блоков · '
+                          '${controller.preparedFileProfile.name}',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1218,7 +1248,7 @@ Future<void> _showAttachmentMenu(
           ListTile(
             leading: const Icon(Icons.insert_drive_file_outlined),
             title: const Text('Файл'),
-            subtitle: const Text('До 100 КБ через M05 / FILE/1'),
+            subtitle: const Text('Документ или другой файл · до 100 КБ'),
             onTap: () => Navigator.pop(context, 'file'),
           ),
           ListTile(
@@ -1226,12 +1256,6 @@ Future<void> _showAttachmentMenu(
             title: const Text('Местоположение'),
             subtitle: const Text('Выбрать точку на карте'),
             onTap: () => Navigator.pop(context, 'location'),
-          ),
-          const Divider(height: 1),
-          const ListTile(
-            leading: Icon(Icons.perm_media_outlined),
-            title: Text('Медиа'),
-            subtitle: Text('Голосовое сообщение · Камера · Фото — скоро'),
           ),
         ],
       ),
@@ -1292,4 +1316,27 @@ Future<void> _pickSmallFile(
       );
     }
   }
+}
+
+
+String _formatFileBytes(int bytes) {
+  if (bytes < 1024) return '$bytes Б';
+  final kib = bytes / 1024;
+  if (kib < 100) return '${kib.toStringAsFixed(1)} КБ';
+  return '${kib.round()} КБ';
+}
+
+String _fileTransferStateLabel(MeshAppController controller) {
+  return switch (controller.fileTransferState) {
+    'prepared' => 'Готов к отправке',
+    'sendingManifest' => 'Подготовка канала',
+    'sending' => 'Отправляется',
+    'waiting' => 'Ожидает подтверждения',
+    'pausedLink' => 'Ожидает связь',
+    'pausedUser' => 'Пауза',
+    'completed' => 'Доставлен',
+    'failed' => 'Ошибка',
+    'cancelled' => 'Отменён',
+    _ => 'Файл',
+  };
 }
