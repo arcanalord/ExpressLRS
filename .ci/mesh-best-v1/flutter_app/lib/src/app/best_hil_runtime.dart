@@ -76,6 +76,7 @@ final class BestHilRuntime {
         _transport = Lr24SerialAdapter(
           link: link,
           localBinding: localBinding,
+          peerBinding: peerBinding,
         ) {
     _control = Mmrp1ControlSession(
       transport: _transport,
