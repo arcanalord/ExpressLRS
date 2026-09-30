@@ -113,8 +113,13 @@ final class Mmrp1PeerReady extends Mmrp1LinkEvent {
 }
 
 final class Mmrp1ProbeResult extends Mmrp1LinkEvent {
-  const Mmrp1ProbeResult({required this.mmId, required this.rttMs});
+  const Mmrp1ProbeResult({
+    required this.mmId,
+    required this.nonce,
+    required this.rttMs,
+  });
   final String mmId;
+  final String nonce;
   final int rttMs;
 }
 
@@ -123,6 +128,7 @@ final class Mmrp1ControlSession {
     required this.transport,
     required this.ownMmId,
     required this.ownLabel,
+    this.expectedPeerMmId,
   }) {
     transport.setControlHandler(_handleInbound);
   }
@@ -130,19 +136,35 @@ final class Mmrp1ControlSession {
   final Lr24SerialAdapter transport;
   final String ownMmId;
   final String ownLabel;
+  final String? expectedPeerMmId;
   final Mmrp1ControlCodec _codec = Mmrp1ControlCodec();
   final StreamController<Mmrp1LinkEvent> _events =
       StreamController<Mmrp1LinkEvent>.broadcast();
   final Map<String, int> _pendingProbes = <String, int>{};
   int _nonceCounter = 0;
   String? _peerMmId;
+  String? _peerLabel;
 
   Stream<Mmrp1LinkEvent> get events => _events.stream;
   bool get peerReady => _peerMmId != null;
   String? get peerMmId => _peerMmId;
+  String? get peerLabel => _peerLabel;
 
-  Future<void> discover() {
-    return transport.sendRawPayload(
+  Future<Mmrp1PeerReady> discover({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
+    final ready = _peerMmId;
+    if (ready != null) {
+      return Mmrp1PeerReady(mmId: ready, label: _peerLabel ?? '');
+    }
+
+    final wait = events
+        .where((event) => event is Mmrp1PeerReady)
+        .cast<Mmrp1PeerReady>()
+        .first
+        .timeout(timeout);
+
+    await transport.sendRawPayload(
       _codec.encode(
         Mmrp1Hello(
           from: ownMmId,
@@ -158,24 +180,45 @@ final class Mmrp1ControlSession {
         ),
       ),
     );
+    return wait;
   }
 
-  Future<void> probe() async {
+  Future<Mmrp1ProbeResult> probe({
+    Duration timeout = const Duration(seconds: 3),
+  }) async {
     final peer = _peerMmId;
     if (peer == null) throw StateError('peer-not-ready');
+
     final nonce =
         'best-${DateTime.now().microsecondsSinceEpoch}-${++_nonceCounter}';
     _pendingProbes[nonce] = DateTime.now().millisecondsSinceEpoch;
-    await transport.sendRawPayload(
-      _codec.encode(
-        Mmrp1Ping(
-          from: ownMmId,
-          to: peer,
-          nonce: nonce,
-          pong: false,
+
+    final wait = events
+        .where(
+          (event) =>
+              event is Mmrp1ProbeResult &&
+              event.mmId == peer &&
+              event.nonce == nonce,
+        )
+        .cast<Mmrp1ProbeResult>()
+        .first
+        .timeout(timeout);
+
+    try {
+      await transport.sendRawPayload(
+        _codec.encode(
+          Mmrp1Ping(
+            from: ownMmId,
+            to: peer,
+            nonce: nonce,
+            pong: false,
+          ),
         ),
-      ),
-    );
+      );
+      return await wait;
+    } finally {
+      _pendingProbes.remove(nonce);
+    }
   }
 
   bool _handleInbound(Uint8List payload) {
@@ -184,9 +227,16 @@ final class Mmrp1ControlSession {
     if (frame.from == ownMmId) return true;
     if (frame.to != '*' && frame.to != ownMmId) return true;
 
+    final expected = expectedPeerMmId;
+    if (expected != null && frame.from != expected) {
+      // It is a valid MMRP control frame, but not the configured HIL peer.
+      return true;
+    }
+
     switch (frame) {
       case Mmrp1Hello():
         _peerMmId = frame.from;
+        _peerLabel = frame.label;
         _events.add(Mmrp1PeerReady(mmId: frame.from, label: frame.label));
         if (!frame.reply) {
           unawaited(
@@ -228,6 +278,7 @@ final class Mmrp1ControlSession {
             _events.add(
               Mmrp1ProbeResult(
                 mmId: frame.from,
+                nonce: frame.nonce,
                 rttMs: DateTime.now().millisecondsSinceEpoch - started,
               ),
             );
@@ -239,6 +290,7 @@ final class Mmrp1ControlSession {
 
   Future<void> close() async {
     transport.setControlHandler(null);
+    _pendingProbes.clear();
     await _events.close();
   }
 }
