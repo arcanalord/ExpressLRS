@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:usb_serial/usb_serial.dart';
+import 'package:flutter_serial_communication/flutter_serial_communication.dart';
+import 'package:flutter_serial_communication/models/device_info.dart';
 
 import 'byte_stream_link.dart';
 
@@ -40,76 +41,113 @@ abstract interface class UsbSerialBackend {
   });
 }
 
+/// Android implementation backed by usb-serial-for-android through
+/// flutter_serial_communication. M03 itself never depends on this plugin.
 final class PluginUsbSerialBackend implements UsbSerialBackend {
-  const PluginUsbSerialBackend();
+  PluginUsbSerialBackend({FlutterSerialCommunication? plugin})
+      : _plugin = plugin ?? FlutterSerialCommunication();
+
+  final FlutterSerialCommunication _plugin;
+  int? _activeDeviceId;
 
   @override
   Future<List<UsbSerialDeviceInfo>> listDevices() async {
-    final devices = await UsbSerial.listDevices();
+    final devices = await _plugin.getAvailableDevices();
     return <UsbSerialDeviceInfo>[
       for (final device in devices)
         if (device.deviceId != null)
           UsbSerialDeviceInfo(
             deviceId: device.deviceId!,
-            vendorId: device.vid,
-            productId: device.pid,
-            productName: device.productName,
-            manufacturerName: device.manufacturerName,
-            serialNumber: device.serial,
+            vendorId: device.vendorId,
+            productId: device.productId,
+            productName:
+                device.productName.trim().isEmpty ? null : device.productName,
+            manufacturerName: device.manufacturerName.trim().isEmpty
+                ? null
+                : device.manufacturerName,
+            serialNumber:
+                device.serialNumber.trim().isEmpty ? null : device.serialNumber,
           ),
     ];
   }
 
   @override
-  Stream<int> get detachedDeviceIds {
-    final source = UsbSerial.usbEventStream;
-    if (source == null) return const Stream<int>.empty();
-    return source
-        .where((event) => event.event == UsbEvent.ACTION_USB_DETACHED)
-        .map((event) => event.device?.deviceId)
-        .where((deviceId) => deviceId != null)
-        .cast<int>();
-  }
+  Stream<int> get detachedDeviceIds => _plugin
+      .getDeviceConnectionListener()
+      .receiveBroadcastStream()
+      .where((event) => event == false)
+      .map((_) => _activeDeviceId)
+      .where((deviceId) => deviceId != null)
+      .cast<int>();
 
   @override
   Future<UsbSerialPortHandle> open({
     required int deviceId,
     required int baudRate,
   }) async {
-    final port = await UsbSerial.createFromDeviceId(deviceId);
-    if (port == null) {
-      throw StateError('USB serial driver unavailable for device $deviceId');
+    final devices = await _plugin.getAvailableDevices();
+    DeviceInfo? selected;
+    for (final device in devices) {
+      if (device.deviceId == deviceId) {
+        selected = device;
+        break;
+      }
     }
-    final opened = await port.open();
-    if (!opened) {
-      throw StateError('USB serial open failed for device $deviceId');
+    if (selected == null) {
+      throw StateError('USB serial device $deviceId is no longer available');
+    }
+
+    final connected = await _plugin.connect(selected, baudRate);
+    if (!connected) {
+      throw StateError('USB serial connect failed for device $deviceId');
     }
     try {
-      await port.setPortParameters(
-        baudRate,
-        UsbPort.DATABITS_8,
-        UsbPort.STOPBITS_1,
-        UsbPort.PARITY_NONE,
+      await _plugin.setParameters(baudRate, 8, 1, 0);
+      await _plugin.setDTR(true);
+      await _plugin.setRTS(true);
+      _activeDeviceId = deviceId;
+
+      final input = _plugin
+          .getSerialMessageListener()
+          .receiveBroadcastStream()
+          .map(_coerceSerialBytes);
+      return _PluginUsbSerialPortHandle(
+        plugin: _plugin,
+        input: input,
+        onClosed: () {
+          if (_activeDeviceId == deviceId) _activeDeviceId = null;
+        },
       );
-      await port.setFlowControl(UsbPort.FLOW_CONTROL_OFF);
-      await port.setDTR(true);
-      await port.setRTS(true);
-      final input = port.inputStream;
-      if (input == null) {
-        throw StateError('USB serial input stream unavailable');
-      }
-      return _PluginUsbSerialPortHandle(port, input);
     } on Object {
-      await port.close();
+      await _plugin.disconnect();
       rethrow;
     }
+  }
+
+  static Uint8List _coerceSerialBytes(dynamic event) {
+    if (event is Uint8List) return Uint8List.fromList(event);
+    if (event is List<int>) return Uint8List.fromList(event);
+    if (event is List) {
+      return Uint8List.fromList(
+        event.map((value) => (value as num).toInt() & 0xff).toList(),
+      );
+    }
+    throw FormatException(
+      'Unexpected Android serial event type: ${event.runtimeType}',
+    );
   }
 }
 
 final class _PluginUsbSerialPortHandle implements UsbSerialPortHandle {
-  _PluginUsbSerialPortHandle(this._port, this.input);
+  _PluginUsbSerialPortHandle({
+    required FlutterSerialCommunication plugin,
+    required this.input,
+    required void Function() onClosed,
+  })  : _plugin = plugin,
+        _onClosed = onClosed;
 
-  final UsbPort _port;
+  final FlutterSerialCommunication _plugin;
+  final void Function() _onClosed;
 
   @override
   final Stream<Uint8List> input;
@@ -122,21 +160,26 @@ final class _PluginUsbSerialPortHandle implements UsbSerialPortHandle {
   @override
   Future<void> write(Uint8List bytes) async {
     if (!_isOpen) throw StateError('USB serial port is closed');
-    await _port.write(Uint8List.fromList(bytes));
+    final sent = await _plugin.write(Uint8List.fromList(bytes));
+    if (!sent) throw StateError('USB serial write failed');
   }
 
   @override
   Future<void> close() async {
     if (!_isOpen) return;
     _isOpen = false;
-    await _port.close();
+    try {
+      await _plugin.disconnect();
+    } finally {
+      _onClosed();
+    }
   }
 }
 
 /// Android USB-UART implementation of the transport-neutral LR24 byte stream.
 ///
-/// The rest of M03 only knows [Lr24ByteStreamLink]. USB permission prompts,
-/// chip-specific serial drivers and Android lifecycle stay behind this class.
+/// The rest of M03 only knows [Lr24ByteStreamLink]. USB permissions,
+/// serial-driver details and Android lifecycle stay behind this class.
 final class AndroidUsbLr24ByteStreamLink implements Lr24ByteStreamLink {
   AndroidUsbLr24ByteStreamLink._({
     required this.deviceId,
@@ -170,19 +213,23 @@ final class AndroidUsbLr24ByteStreamLink implements Lr24ByteStreamLink {
   bool _detached = false;
 
   static Future<List<UsbSerialDeviceInfo>> listDevices({
-    UsbSerialBackend backend = const PluginUsbSerialBackend(),
+    UsbSerialBackend? backend,
   }) =>
-      backend.listDevices();
+      (backend ?? PluginUsbSerialBackend()).listDevices();
 
   static Future<AndroidUsbLr24ByteStreamLink> connect({
     required int deviceId,
     int baudRate = 115200,
-    UsbSerialBackend backend = const PluginUsbSerialBackend(),
+    UsbSerialBackend? backend,
   }) async {
-    final port = await backend.open(deviceId: deviceId, baudRate: baudRate);
+    final selectedBackend = backend ?? PluginUsbSerialBackend();
+    final port = await selectedBackend.open(
+      deviceId: deviceId,
+      baudRate: baudRate,
+    );
     return AndroidUsbLr24ByteStreamLink._(
       deviceId: deviceId,
-      backend: backend,
+      backend: selectedBackend,
       port: port,
     );
   }
