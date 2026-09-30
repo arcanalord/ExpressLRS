@@ -16,7 +16,9 @@ Future<void> main() async {
   await _runExactFourChunksWithDroppedFinalComplete();
   await _runProactiveFinalCompleteWithoutSenderFinalRequest();
   await _runLinkLossResumeMissingOnly();
+  await _runUserPauseResume();
   await _runCancellation();
+  stdout.writeln('MESH_MESSENGER_FILE1_USER_PAUSE_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_LINK_RESUME_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_VERIFIED_FINAL_ACK_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_TRANSIENT_FINALIZE_PASS');
@@ -283,6 +285,82 @@ Future<void> _runLinkLossResumeMissingOnly() async {
     throw StateError('missing chunk 8 was not retried after resume');
   }
 
+  bridgeA.close();
+  bridgeB.close();
+}
+
+Future<void> _runUserPauseResume() async {
+  late final File1TransportBridge bridgeA;
+  late final File1TransportBridge bridgeB;
+  final progress = <File1TransportProgress>[];
+  final chunkSendCounts = <int, int>{};
+  Uint8List? received;
+
+  bridgeA = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 3),
+    sendBytes: (payload) async {
+      final frame = File1Codec.decode(payload);
+      if (frame.type == File1FrameType.chunk) {
+        final chunk = File1Codec.decodeChunk(frame);
+        chunkSendCounts[chunk.index] = (chunkSendCounts[chunk.index] ?? 0) + 1;
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+      await bridgeB.handleIncoming(payload);
+    },
+    onReceived: (_) {},
+    onProgress: progress.add,
+  );
+  bridgeB = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 3),
+    sendBytes: bridgeA.handleIncoming,
+    onReceived: (event) {
+      received = Uint8List.fromList(event.bytes);
+    },
+  );
+
+  final payload = Uint8List.fromList(
+    List<int>.generate(24 * 1024, (index) => (index * 13 + 7) & 0xff),
+  );
+  final plan = M05FileTransferCore.createPlan(
+    transferId: 'user-pause-resume',
+    fileName: 'pause-resume.bin',
+    mimeType: 'application/octet-stream',
+    bytes: payload,
+    chunkSize: 1024,
+  );
+
+  final future = bridgeA.send(plan);
+  var ackedBeforePause = 0;
+  for (var i = 0; i < 400; i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 3));
+    if (progress.isNotEmpty) ackedBeforePause = progress.last.ackedChunks;
+    if (ackedBeforePause >= 3 && ackedBeforePause < plan.manifest.chunkCount) break;
+  }
+  if (ackedBeforePause < 3) throw StateError('user pause fixture did not make progress');
+  if (!bridgeA.pauseByUser(plan.manifest.transferId)) throw StateError('user pause returned false');
+  await Future<void>.delayed(const Duration(milliseconds: 25));
+  if (progress.where((e) => e.state == FileTransferSessionState.pausedUser).isEmpty) {
+    throw StateError('pausedUser progress state missing');
+  }
+  final sentWhilePaused = chunkSendCounts.values.fold<int>(0, (a, b) => a + b);
+  await Future<void>.delayed(const Duration(milliseconds: 25));
+  final sentStillPaused = chunkSendCounts.values.fold<int>(0, (a, b) => a + b);
+  if (sentStillPaused != sentWhilePaused) {
+    throw StateError('FILE/1 continued sending while user-paused');
+  }
+
+  if (!bridgeA.resumeByUser(plan.manifest.transferId)) throw StateError('user resume returned false');
+  await future.timeout(const Duration(seconds: 8));
+  final result = received;
+  if (result == null || !_same(payload, result)) throw StateError('user pause/resume payload mismatch');
+  for (var index = 0; index < ackedBeforePause; index++) {
+    if (chunkSendCounts[index] != 1) {
+      throw StateError('user resume resent acknowledged chunk $index count=${chunkSendCounts[index] ?? 0}');
+    }
+  }
+  if (progress.last.state != FileTransferSessionState.completed) {
+    throw StateError('user pause/resume did not complete');
+  }
   bridgeA.close();
   bridgeB.close();
 }
