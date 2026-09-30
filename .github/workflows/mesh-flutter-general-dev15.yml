@@ -10,6 +10,9 @@ on:
       - '.github/workflows/mesh-flutter-general-dev15.yml'
       - '.ci/mesh-v0110/dev5-overlay/**'
 
+permissions:
+  contents: write
+
 concurrency:
   group: mesh-flutter-v0.6.0-secure-core-rc6
   cancel-in-progress: true
@@ -126,6 +129,43 @@ jobs:
           grep -q "implements MmUartHostLink" lib/platform/android_usb_mm_uart_host_link.dart
           grep -q "MM-UART/1 first" lib/src/application/mesh_app_controller.dart
           grep -q "session.supportsMmrp" lib/src/application/mesh_app_controller.dart
+
+      - name: RC6 canonicalize changed files
+        working-directory: ${{ env.APP_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format \
+            lib/core/file_transfer_session.dart \
+            lib/platform/file1_transport_bridge.dart \
+            lib/src/features/chats/chats_page.dart \
+            tool/file1_transport_loopback_self_test.dart
+          cp lib/core/file_transfer_session.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart"
+          cp lib/platform/file1_transport_bridge.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/platform/file1_transport_bridge.dart"
+          cp lib/src/features/chats/chats_page.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/features/chats/chats_page.dart"
+          cp tool/file1_transport_loopback_self_test.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart"
+          cd "$GITHUB_WORKSPACE"
+          PATHS=(
+            .ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart
+            .ci/mesh-v0110/dev5-overlay/lib/platform/file1_transport_bridge.dart
+            .ci/mesh-v0110/dev5-overlay/lib/src/features/chats/chats_page.dart
+            .ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart
+          )
+          if git diff --quiet -- "${PATHS[@]}"; then
+            echo "RC6 changed files already canonical."
+          else
+            git config user.name "mesh-ci"
+            git config user.email "mesh-ci@users.noreply.github.com"
+            git add -- "${PATHS[@]}"
+            git commit -m "style(mesh): canonicalize rc6 M05/contact changes"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+            echo "Canonical formatting committed; new run validates committed sources."
+            exit 1
+          fi
 
       - name: RC6 changed-file format gate
         working-directory: ${{ env.APP_DIR }}
