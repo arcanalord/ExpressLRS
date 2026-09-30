@@ -561,16 +561,15 @@ Future<String?> _promptContactName(
   required String title,
   required String subtitle,
   String? helperText,
-}) =>
-    showDialog<String>(
-      context: context,
-      builder: (dialogContext) => _ContactNameDialog(
-        initialName: initialName,
-        title: title,
-        subtitle: subtitle,
-        helperText: helperText,
-      ),
-    );
+}) => showDialog<String>(
+  context: context,
+  builder: (dialogContext) => _ContactNameDialog(
+    initialName: initialName,
+    title: title,
+    subtitle: subtitle,
+    helperText: helperText,
+  ),
+);
 
 class _ContactNameDialog extends StatefulWidget {
   const _ContactNameDialog({
@@ -590,8 +589,9 @@ class _ContactNameDialog extends StatefulWidget {
 }
 
 class _ContactNameDialogState extends State<_ContactNameDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initialName.trim());
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialName.trim(),
+  );
 
   @override
   void dispose() {
