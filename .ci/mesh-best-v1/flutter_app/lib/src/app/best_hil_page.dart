@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../domain/message.dart';
 import '../m03/android_usb_lr24_link.dart';
 import 'best_hil_runtime.dart';
 
