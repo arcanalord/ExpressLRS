@@ -204,9 +204,13 @@ final class File1TransportBridge {
             state.consecutiveWriteFailures = 0;
             state.lastWriteError = null;
           } catch (error) {
+            // A single UART write exception can be transient (including the
+            // final COMPLETE control frame). Keep the FILE/1 session alive and
+            // let its timeout/retry state machine resend the same logical
+            // frame. Real USB detach/error is signalled separately by M03 and
+            // calls pauseForLinkLoss(), which freezes retry timers.
             state.consecutiveWriteFailures++;
             state.lastWriteError = error;
-            pauseForLinkLoss();
             break;
           }
         }
