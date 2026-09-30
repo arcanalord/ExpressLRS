@@ -185,7 +185,8 @@ final class BestHilRuntime {
     }
     try {
       await events
-          .whereType<BestHilDeliveryUpdate>()
+          .where((event) => event is BestHilDeliveryUpdate)
+          .cast<BestHilDeliveryUpdate>()
           .firstWhere(
             (event) =>
                 event.messageId == messageId &&
