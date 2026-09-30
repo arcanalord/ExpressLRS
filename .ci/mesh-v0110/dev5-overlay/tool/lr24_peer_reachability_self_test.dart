@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import '../lib/platform/transparent_uart_radio_transport.dart';
+import '../lib/platform/lr24_peer_reachability.dart';
 
 void main() {
   var now = DateTime.utc(2026, 9, 30, 10);
