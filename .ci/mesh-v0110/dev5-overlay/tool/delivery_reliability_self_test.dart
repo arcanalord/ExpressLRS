@@ -44,6 +44,7 @@ Future<void> main() async {
       now: () => now,
       retryDelay: const Duration(milliseconds: 100),
       maxRetryDelay: const Duration(milliseconds: 500),
+      recipientAckTimeout: const Duration(milliseconds: 250),
       maxAttempts: 2,
     );
     await delivery.restore();
@@ -81,6 +82,31 @@ Future<void> main() async {
     if (item.state != DeliveryState.waitingAck) {
       throw StateError('Recovered route did not return to WAITING_ACK');
     }
+    final ackDeadline = item.nextRetryAt;
+    if (ackDeadline == null) {
+      throw StateError('WAITING_ACK deadline missing');
+    }
+    transport.status = TransportSendStatus.unavailable;
+    transport.detail = 'LR24_PEER_NOT_REACHABLE';
+    now = ackDeadline.add(const Duration(milliseconds: 1));
+    await delivery.maintenance();
+    item = delivery.byId(stableMessageId)!;
+    if (item.state != DeliveryState.retryWait || item.state.isTerminal) {
+      throw StateError('Recipient ACK timeout did not return to retry');
+    }
+    if (item.messageId != stableMessageId) {
+      throw StateError('ACK timeout changed logical messageId');
+    }
+
+    transport.status = TransportSendStatus.accepted;
+    transport.detail = null;
+    now = item.nextRetryAt!.add(const Duration(milliseconds: 1));
+    await delivery.maintenance();
+    item = delivery.byId(stableMessageId)!;
+    if (item.state != DeliveryState.waitingAck) {
+      throw StateError('Peer recovery did not resend after ACK timeout');
+    }
+
     final delivered = await delivery.acknowledge(
       messageId: stableMessageId,
       fromMmId: 'mm:peer',
