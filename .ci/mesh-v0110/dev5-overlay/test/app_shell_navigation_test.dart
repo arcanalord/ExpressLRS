@@ -228,5 +228,41 @@ void main() {
     controller.dispose();
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
+  testWidgets('diagnostics page exposes LR24 state and export action',
+      (tester) async {
+    final root = Directory.systemTemp.createTempSync('mesh_diagnostics_gate_');
+    late MeshAppController controller;
+    await tester.runAsync(() async {
+      controller = await MeshAppController.createForWidgetTest(
+        storageRoot: root,
+      );
+    });
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(MaterialApp(home: AppShell(controller: controller)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Настройки').last);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Диагностика'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Диагностика').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Диагностика Mesh Messenger'), findsOneWidget);
+    expect(find.text('LR24 / радиоканал'), findsOneWidget);
+    expect(find.text('Очередь доставки'), findsOneWidget);
+    expect(find.text('Экспорт diagnostics.txt'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.binding.setSurfaceSize(null);
+    await controller.shutdown();
+    controller.dispose();
+    if (root.existsSync()) root.deleteSync(recursive: true);
+  });
 
 }
