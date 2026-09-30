@@ -29,7 +29,7 @@ final class DevelopmentMessageProtector implements MessageProtector {
   @override
   ProtectedEnvelope protect(LogicalMessage message) {
     final payload = utf8.encode(
-      'best-v1-dev|\${message.messageId}|\${message.recipientMmId}|\${message.text}',
+      'best-v1-dev|${message.messageId}|${message.recipientMmId}|${message.text}',
     );
     return ProtectedEnvelope(
       messageId: message.messageId,
