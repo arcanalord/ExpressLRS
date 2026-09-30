@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,24 @@ import 'package:mesh_messenger_best_v1/src/m03/lr24_serial_adapter.dart';
 import 'package:mesh_messenger_best_v1/src/m03/mmrp1_control.dart';
 
 void main() {
+  test('MMRP1 hello bytes match MM U1 canonical control shape', () {
+    final codec = Mmrp1ControlCodec();
+    final bytes = codec.encode(
+      const Mmrp1Hello(
+        from: 'mm:a',
+        to: '*',
+        label: 'A',
+        capabilities: <String>['CHANNEL/1', 'DIRECT/1', 'MMRP/1'],
+        reply: false,
+      ),
+    );
+    expect(
+      utf8.decode(bytes),
+      '{"v":1,"p":"MMRP/1","k":"hello","from":"mm:a","to":"*",'
+      '"label":"A","caps":["CHANNEL/1","DIRECT/1","MMRP/1"]}',
+    );
+  });
+
   test('MMRP1 discovery makes both configured peers ready and probe returns pong',
       () async {
     final linkA = MemoryLr24ByteStreamLink();
