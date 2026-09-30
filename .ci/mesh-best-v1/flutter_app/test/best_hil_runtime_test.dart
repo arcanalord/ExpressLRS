@@ -36,7 +36,59 @@ void main() {
       if (event is BestHilIncomingText) {
         incomingCount++;
         if (!incoming.isCompleted) incoming.complete(event);
-      }
+        test('sequential HIL test runner gets recipient ACK for every message',
+      () async {
+    final linkA = MemoryLr24ByteStreamLink();
+    final linkB = MemoryLr24ByteStreamLink();
+    linkA.connectPeer(linkB);
+    linkB.connectPeer(linkA);
+
+    final nodeA = BestHilRuntime(
+      localMmId: 'mm:a',
+      peerMmId: 'mm:b',
+      localBinding: 'lr24:A',
+      peerBinding: 'lr24:B',
+      link: linkA,
+    );
+    final nodeB = BestHilRuntime(
+      localMmId: 'mm:b',
+      peerMmId: 'mm:a',
+      localBinding: 'lr24:B',
+      peerBinding: 'lr24:A',
+      link: linkB,
+    );
+
+    var incoming = 0;
+    final progress = <BestHilTestProgress>[];
+    final subB = nodeB.events.listen((event) {
+      if (event is BestHilIncomingText) incoming++;
+    });
+    final subA = nodeA.events.listen((event) {
+      if (event is BestHilTestProgress) progress.add(event);
+    });
+
+    final result = await nodeA.runTextTest(
+      count: 10,
+      ackTimeout: const Duration(seconds: 1),
+    );
+
+    expect(result.passed, isTrue);
+    expect(result.delivered, 10);
+    expect(result.failed, 0);
+    expect(incoming, 10);
+    expect(progress, hasLength(10));
+    expect(progress.last.completed, 10);
+    expect(progress.last.delivered, 10);
+
+    await subA.cancel();
+    await subB.cancel();
+    await nodeA.close();
+    await nodeB.close();
+    await linkA.close();
+    await linkB.close();
+  });
+
+}
     });
     final subA = nodeA.events.listen((event) {
       if (event is BestHilDeliveryUpdate &&
