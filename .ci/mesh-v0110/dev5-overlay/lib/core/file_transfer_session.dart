@@ -9,6 +9,7 @@ enum FileTransferSessionState {
   sendingManifest,
   sending,
   waiting,
+  pausedLink,
   completed,
   failed,
   cancelled,
@@ -17,8 +18,8 @@ enum FileTransferSessionState {
 final class FileTransferSenderSession {
   FileTransferSenderSession({
     required this.plan,
-    this.windowSize = 4,
-    this.ackTimeoutMs = 750,
+    this.windowSize = 1,
+    this.ackTimeoutMs = 3000,
     this.maxRetries = 8,
   }) {
     if (windowSize <= 0) throw RangeError.value(windowSize, 'windowSize');
@@ -36,6 +37,7 @@ final class FileTransferSenderSession {
 
   FileTransferSessionState state = FileTransferSessionState.idle;
   bool _manifestAcked = false;
+  bool _pausedForLink = false;
   bool _completeSent = false;
   int _completeAttempts = 0;
   String? failureReason;
@@ -55,7 +57,7 @@ final class FileTransferSenderSession {
       state == FileTransferSessionState.cancelled;
 
   List<File1Frame> poll(int nowMs) {
-    if (isTerminal) return const <File1Frame>[];
+    if (isTerminal || _pausedForLink) return const <File1Frame>[];
     if (!_manifestAcked) {
       state = FileTransferSessionState.sendingManifest;
       return <File1Frame>[File1Codec.manifest(plan.manifest)];
@@ -132,22 +134,27 @@ final class FileTransferSenderSession {
           _lastSentAtMs.remove(index);
         }
       case File1FrameType.missing:
-        final missing = File1Codec.decodeMissing(frame);
-        var reopened = false;
-        for (final index in missing) {
-          if (index >= 0 && index < totalChunkCount) {
-            _acked.remove(index);
-            _lastSentAtMs.remove(index);
-            if (!_pending.contains(index)) _pending.add(index);
-            reopened = true;
-          }
-        }
-        if (reopened) {
-          _completeSent = false;
-          _completeAttempts = 0;
-          _lastCompleteSentAtMs = -0x7fffffff;
-          state = FileTransferSessionState.sending;
-        }
+        final missing = File1Codec.decodeMissing(frame)
+            .where((index) => index >= 0 && index < totalChunkCount)
+            .toSet();
+        _acked
+          ..clear()
+          ..addAll(
+            List<int>.generate(totalChunkCount, (index) => index)
+                .where((index) => !missing.contains(index)),
+          );
+        _pending
+          ..clear()
+          ..addAll(missing.toList()..sort());
+        _lastSentAtMs.clear();
+        _attempts.removeWhere((index, _) => missing.contains(index));
+        _completeSent = false;
+        _completeAttempts = 0;
+        _lastCompleteSentAtMs = -0x7fffffff;
+        failureReason = null;
+        state = missing.isEmpty
+            ? FileTransferSessionState.waiting
+            : FileTransferSessionState.sending;
       case File1FrameType.complete:
         failureReason = null;
         state = FileTransferSessionState.completed;
@@ -160,8 +167,35 @@ final class FileTransferSenderSession {
     }
   }
 
+  void pauseForLinkLoss() {
+    if (isTerminal || _pausedForLink) return;
+    _pausedForLink = true;
+    state = FileTransferSessionState.pausedLink;
+    failureReason = 'waiting-link';
+  }
+
+  void resumeAfterLink() {
+    if (isTerminal || !_pausedForLink) return;
+    _pausedForLink = false;
+    _manifestAcked = false;
+    _completeSent = false;
+    _completeAttempts = 0;
+    _lastCompleteSentAtMs = -0x7fffffff;
+    _lastSentAtMs.clear();
+    _attempts.removeWhere((index, _) => !_acked.contains(index));
+    _pending
+      ..clear()
+      ..addAll(
+        List<int>.generate(totalChunkCount, (index) => index)
+            .where((index) => !_acked.contains(index)),
+      );
+    failureReason = null;
+    state = FileTransferSessionState.sendingManifest;
+  }
+
   void cancel() {
     if (!isTerminal) {
+      _pausedForLink = false;
       failureReason = 'cancelled';
       state = FileTransferSessionState.cancelled;
     }
@@ -237,8 +271,10 @@ final class FileTransferReceiverSession {
           return <File1Frame>[File1Codec.error(frame.transferId, 'busy')];
         }
         manifest = incoming;
+        final missing = missingIndexes();
         return <File1Frame>[
           File1Codec.ack(frame.transferId, File1Codec.manifestAckIndex),
+          File1Codec.missing(frame.transferId, missing),
         ];
       case File1FrameType.chunk:
         final current = manifest;
@@ -252,7 +288,7 @@ final class FileTransferReceiverSession {
           chunk = File1Codec.decodeChunk(frame);
         } on FormatException {
           return <File1Frame>[
-            File1Codec.missing(frame.transferId, const <int>[]),
+            File1Codec.missing(frame.transferId, missingIndexes()),
           ];
         }
         if (chunk.totalChunks != current.chunkCount ||
