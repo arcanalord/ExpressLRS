@@ -279,5 +279,58 @@ void main() {
     await controller.shutdown();
     controller.dispose();
     if (root.existsSync()) root.deleteSync(recursive: true);
-  });
+  });  testWidgets(
+    'nearby peer save becomes contact without inherited dependency assertion',
+    (tester) async {
+      final root = Directory.systemTemp.createTempSync(
+        'mesh_nearby_contact_gate_',
+      );
+      late MeshAppController controller;
+      await tester.runAsync(() async {
+        controller = await MeshAppController.createForWidgetTest(
+          storageRoot: root,
+        );
+      });
+      controller.injectNearbyPeerForTest(
+        'mm:nearby-contact',
+        label: 'Mesh Nearby',
+      );
+
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(
+        MaterialApp(home: AppShell(controller: controller)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Рядом'), findsOneWidget);
+      expect(find.text('Mesh Nearby'), findsOneWidget);
+      final add = find.byTooltip('Добавить контакт');
+      expect(add, findsWidgets);
+      await tester.tap(add.first);
+      await tester.pumpAndSettle();
+      expect(find.text('Добавить контакт'), findsWidgets);
+      expect(tester.takeException(), isNull);
+
+      final field = find.byType(TextField);
+      expect(field, findsOneWidget);
+      await tester.enterText(field, 'Рабочий контакт');
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilledButton, 'Сохранить'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(controller.hasContact('mm:nearby-contact'), isTrue);
+      expect(find.text('Рабочий контакт'), findsOneWidget);
+      expect(find.text('Рядом'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.binding.setSurfaceSize(null);
+      await controller.shutdown();
+      controller.dispose();
+      if (root.existsSync()) root.deleteSync(recursive: true);
+    },
+  );
+
+
 }
