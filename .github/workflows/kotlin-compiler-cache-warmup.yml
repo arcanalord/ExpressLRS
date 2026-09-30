@@ -38,6 +38,7 @@ jobs:
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories {
+                  google()
                   mavenCentral()
               }
           }
@@ -57,6 +58,7 @@ jobs:
 
           dependencies {
               implementation(kotlin("stdlib"))
+              implementation("androidx.compose.runtime:runtime:1.10.0")
               testImplementation(kotlin("test-junit"))
               testImplementation("junit:junit:4.13.2")
           }
