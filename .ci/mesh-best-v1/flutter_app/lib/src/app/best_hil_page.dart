@@ -98,7 +98,6 @@ final class _BestHilPageState extends State<BestHilPage> {
       await _disconnect(updateUi: false);
       final link = await AndroidUsbLr24ByteStreamLink.connect(
         deviceId: deviceId,
-        baudRate: 57600,
       );
       final runtime = BestHilRuntime(
         localMmId: _localMm.text.trim(),
@@ -170,8 +169,11 @@ final class _BestHilPageState extends State<BestHilPage> {
       return;
     }
     try {
-      await runtime.discoverPeer();
-      if (mounted) setState(() => _status = 'Discovery sent...');
+      if (mounted) setState(() => _status = 'Finding peer...');
+      final peer = await runtime.discoverPeer();
+      if (mounted) {
+        setState(() => _status = 'Peer ready: ${peer.mmId}');
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _status = 'Discovery failed: $error');
     }
@@ -184,7 +186,11 @@ final class _BestHilPageState extends State<BestHilPage> {
       return;
     }
     try {
-      await runtime.probePeer();
+      if (mounted) setState(() => _status = 'Probing peer...');
+      final result = await runtime.probePeer();
+      if (mounted) {
+        setState(() => _status = 'Probe OK: ${result.rttMs} ms');
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _status = 'Probe failed: $error');
     }
