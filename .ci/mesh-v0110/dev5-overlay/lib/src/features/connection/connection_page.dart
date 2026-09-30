@@ -299,6 +299,19 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               ],
                             ),
                             const SizedBox(height: 10),
+                            Text(
+                              controller.lr24PeerReachable
+                                  ? 'Канал до второго устройства подтверждён.'
+                                  : 'USB подключён. Второе устройство пока не подтвердило радиоканал; '
+                                      'личные сообщения останутся в очереди до восстановления связи.',
+                              style: TextStyle(
+                                color: controller.lr24PeerReachable
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.tertiary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
