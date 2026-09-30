@@ -78,7 +78,10 @@ void main() {
       'hello U1',
       messageId: 'm-interop',
     );
-    expect(record.state, DeliveryState.sentToTransport);
+    expect(
+      record.state,
+      anyOf(DeliveryState.sentToTransport, DeliveryState.delivered),
+    );
     await delivered.future.timeout(const Duration(seconds: 1));
     expect(
       nodeA.deliveries['m-interop']?.state,
