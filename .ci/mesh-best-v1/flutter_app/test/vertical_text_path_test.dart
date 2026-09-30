@@ -6,6 +6,45 @@ import 'package:mesh_messenger_best_v1/src/m07/protector.dart';
 import 'package:mesh_messenger_best_v1/src/m12/router.dart';
 
 void main() {
+  test('recipient ACK during submit cannot be downgraded by transport result',
+      () async {
+    late DeliveryEngine engine;
+    final transport = _CallbackTransport(
+      onSubmit: (packet) {
+        engine.onRecipientAck(
+          const RecipientAck(
+            messageId: 'm-early-ack',
+            recipientMmId: 'mm:bob',
+            authenticated: true,
+          ),
+        );
+      },
+    );
+    engine = DeliveryEngine(
+      protector: const DevelopmentMessageProtector(localMmId: 'mm:alice'),
+      router: const Lr24SingleRouteRouter(),
+      transport: transport,
+    );
+
+    final record = await engine.sendText(
+      recipientMmId: 'mm:bob',
+      text: 'fast receipt',
+      messageId: 'm-early-ack',
+    );
+
+    expect(record.state, DeliveryState.delivered);
+    expect(engine.records['m-early-ack']?.state, DeliveryState.delivered);
+
+    // Delivered retries are idempotent and do not put another frame on wire.
+    final again = await engine.sendText(
+      recipientMmId: 'mm:bob',
+      text: 'fast receipt',
+      messageId: 'm-early-ack',
+    );
+    expect(again.state, DeliveryState.delivered);
+    expect(transport.submitCount, 1);
+  });
+
   test('text path keeps one messageId and transport cannot mark Delivered',
       () async {
     final transport = MemoryLr24Adapter();
@@ -100,4 +139,29 @@ void main() {
     expect(deduper.accept('m-001'), isFalse);
     expect(deduper.accept('m-002'), isTrue);
   });
+}
+
+
+final class _CallbackTransport implements PreparedTransportAdapter {
+  _CallbackTransport({required this.onSubmit});
+
+  final void Function(PreparedTransportPacket packet) onSubmit;
+  int submitCount = 0;
+
+  @override
+  String get id => 'lr24';
+
+  @override
+  bool get available => true;
+
+  @override
+  Stream<TransportInboundFrame> get inbound =>
+      const Stream<TransportInboundFrame>.empty();
+
+  @override
+  Future<TransportSubmitResult> submit(PreparedTransportPacket packet) async {
+    submitCount++;
+    onSubmit(packet);
+    return const TransportSubmitResult(TransportSubmitStatus.accepted);
+  }
 }
