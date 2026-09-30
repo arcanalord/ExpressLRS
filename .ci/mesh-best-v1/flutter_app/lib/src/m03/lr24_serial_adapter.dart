@@ -17,14 +17,13 @@ final class Lr24SerialAdapter implements PreparedTransportAdapter {
     _subscription = _link.received.listen(_onBytes);
   }
 
-  static const int _preparedPacketTag = 2;
-
   final Lr24ByteStreamLink _link;
   final String localBinding;
   final MmSerialCodec _codec;
   final StreamController<TransportInboundFrame> _inbound =
       StreamController<TransportInboundFrame>.broadcast();
   StreamSubscription<Uint8List>? _subscription;
+  bool Function(Uint8List payload)? _controlHandler;
 
   @override
   String get id => 'lr24';
@@ -34,6 +33,15 @@ final class Lr24SerialAdapter implements PreparedTransportAdapter {
 
   @override
   Stream<TransportInboundFrame> get inbound => _inbound.stream;
+
+  void setControlHandler(bool Function(Uint8List payload)? handler) {
+    _controlHandler = handler;
+  }
+
+  Future<void> sendRawPayload(Uint8List payload) async {
+    if (!available) throw StateError('lr24-link-closed');
+    await _link.write(_codec.encode(Uint8List.fromList(payload)));
+  }
 
   @override
   Future<TransportSubmitResult> submit(PreparedTransportPacket packet) async {
@@ -63,12 +71,7 @@ final class Lr24SerialAdapter implements PreparedTransportAdapter {
       payload: packet.protectedBytes,
     );
     try {
-      await _link.write(
-        _codec.encodeBinary(
-          frame.encode(),
-          tag: _preparedPacketTag,
-        ),
-      );
+      await sendRawPayload(frame.encode());
       return const TransportSubmitResult(TransportSubmitStatus.accepted);
     } on Object catch (error) {
       return TransportSubmitResult(
@@ -79,11 +82,13 @@ final class Lr24SerialAdapter implements PreparedTransportAdapter {
   }
 
   void _onBytes(Uint8List bytes) {
-    for (final packet in _codec.feed(bytes)) {
-      if (packet.tag != _preparedPacketTag) continue;
+    for (final payload in _codec.feed(bytes)) {
+      if (_controlHandler?.call(Uint8List.fromList(payload)) == true) {
+        continue;
+      }
       _Lr24PreparedWireFrame frame;
       try {
-        frame = _Lr24PreparedWireFrame.decode(packet.payload);
+        frame = _Lr24PreparedWireFrame.decode(payload);
       } on FormatException {
         continue;
       }
