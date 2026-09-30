@@ -67,7 +67,8 @@ final class PluginUsbSerialBackend implements UsbSerialBackend {
     return source
         .where((event) => event.event == UsbEvent.ACTION_USB_DETACHED)
         .map((event) => event.device?.deviceId)
-        .whereType<int>();
+        .where((deviceId) => deviceId != null)
+        .cast<int>();
   }
 
   @override
