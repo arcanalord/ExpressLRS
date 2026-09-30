@@ -81,6 +81,7 @@ final class BestHilRuntime {
       transport: _transport,
       ownMmId: localMmId,
       ownLabel: localMmId,
+      expectedPeerMmId: peerMmId,
     );
     _engine = DeliveryEngine(
       protector: _protector,
@@ -113,13 +114,23 @@ final class BestHilRuntime {
   bool get peerReady => _control.peerReady;
   Stream<Mmrp1LinkEvent> get linkEvents => _control.events;
 
-  Future<void> discoverPeer() => _control.discover();
-  Future<void> probePeer() => _control.probe();
+  Future<Mmrp1PeerReady> discoverPeer({
+    Duration timeout = const Duration(seconds: 3),
+  }) =>
+      _control.discover(timeout: timeout);
+
+  Future<Mmrp1ProbeResult> probePeer({
+    Duration timeout = const Duration(seconds: 3),
+  }) =>
+      _control.probe(timeout: timeout);
 
   Future<DeliveryRecord> sendText(
     String text, {
     String? messageId,
   }) async {
+    if (!_control.peerReady || _control.peerMmId != peerMmId) {
+      throw StateError('peer-not-ready');
+    }
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError.value(text, 'text', 'must not be empty');
@@ -143,6 +154,9 @@ final class BestHilRuntime {
   }) async {
     if (count < 1) {
       throw RangeError.range(count, 1, null, 'count');
+    }
+    if (!_control.peerReady || _control.peerMmId != peerMmId) {
+      throw StateError('peer-not-ready');
     }
     final started = Stopwatch()..start();
     var delivered = 0;
