@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../m03/android_usb_lr24_link.dart';
+import '../m03/mmrp1_control.dart';
 import 'best_hil_runtime.dart';
 
 final class BestHilPage extends StatefulWidget {
@@ -25,6 +26,7 @@ final class _BestHilPageState extends State<BestHilPage> {
   AndroidUsbLr24ByteStreamLink? _link;
   BestHilRuntime? _runtime;
   StreamSubscription<BestHilEvent>? _eventSubscription;
+  StreamSubscription<Mmrp1LinkEvent>? _linkEventSubscription;
   final List<String> _log = <String>[];
   String _status = 'Disconnected';
   bool _busy = false;
@@ -96,7 +98,7 @@ final class _BestHilPageState extends State<BestHilPage> {
       await _disconnect(updateUi: false);
       final link = await AndroidUsbLr24ByteStreamLink.connect(
         deviceId: deviceId,
-        baudRate: 115200,
+        baudRate: 57600,
       );
       final runtime = BestHilRuntime(
         localMmId: _localMm.text.trim(),
@@ -106,8 +108,10 @@ final class _BestHilPageState extends State<BestHilPage> {
         link: link,
       );
       final subscription = runtime.events.listen(_onHilEvent);
+      final linkSubscription = runtime.linkEvents.listen(_onLinkEvent);
       if (!mounted) {
         await subscription.cancel();
+        await linkSubscription.cancel();
         await runtime.close();
         await link.close();
         return;
@@ -116,7 +120,8 @@ final class _BestHilPageState extends State<BestHilPage> {
         _link = link;
         _runtime = runtime;
         _eventSubscription = subscription;
-        _status = 'LR24 connected @ 115200';
+        _linkEventSubscription = linkSubscription;
+        _status = 'LR24 connected @ 57600';
         _log.insert(0, '[LINK] connected USB device $deviceId');
       });
     } on Object catch (error) {
@@ -145,10 +150,54 @@ final class _BestHilPageState extends State<BestHilPage> {
     });
   }
 
+  void _onLinkEvent(Mmrp1LinkEvent event) {
+    if (!mounted) return;
+    setState(() {
+      switch (event) {
+        case Mmrp1PeerReady():
+          _status = 'Peer ready: ${event.mmId}';
+          _log.insert(0, '[PEER] ${event.mmId} ${event.label}');
+        case Mmrp1ProbeResult():
+          _log.insert(0, '[PING] ${event.mmId} ${event.rttMs} ms');
+      }
+    });
+  }
+
+  Future<void> _findPeer() async {
+    final runtime = _runtime;
+    if (runtime == null || !runtime.available) {
+      setState(() => _status = 'Connect LR24 first');
+      return;
+    }
+    try {
+      await runtime.discoverPeer();
+      if (mounted) setState(() => _status = 'Discovery sent...');
+    } on Object catch (error) {
+      if (mounted) setState(() => _status = 'Discovery failed: $error');
+    }
+  }
+
+  Future<void> _probePeer() async {
+    final runtime = _runtime;
+    if (runtime == null || !runtime.peerReady) {
+      setState(() => _status = 'Find Peer first');
+      return;
+    }
+    try {
+      await runtime.probePeer();
+    } on Object catch (error) {
+      if (mounted) setState(() => _status = 'Probe failed: $error');
+    }
+  }
+
   Future<void> _send() async {
     final runtime = _runtime;
     if (runtime == null || !runtime.available) {
       setState(() => _status = 'Connect LR24 first');
+      return;
+    }
+    if (!runtime.peerReady) {
+      setState(() => _status = 'Find Peer first');
       return;
     }
     final text = _message.text.trim();
@@ -172,6 +221,10 @@ final class _BestHilPageState extends State<BestHilPage> {
     final runtime = _runtime;
     if (runtime == null || !runtime.available) {
       setState(() => _status = 'Connect LR24 first');
+      return;
+    }
+    if (!runtime.peerReady) {
+      setState(() => _status = 'Find Peer first');
       return;
     }
     setState(() {
@@ -211,12 +264,15 @@ final class _BestHilPageState extends State<BestHilPage> {
 
   Future<void> _disconnect({bool updateUi = true}) async {
     final sub = _eventSubscription;
+    final linkSub = _linkEventSubscription;
     final runtime = _runtime;
     final link = _link;
     _eventSubscription = null;
+    _linkEventSubscription = null;
     _runtime = null;
     _link = null;
     await sub?.cancel();
+    await linkSub?.cancel();
     await runtime?.close();
     await link?.close();
     if (mounted && updateUi) {
@@ -317,13 +373,22 @@ final class _BestHilPageState extends State<BestHilPage> {
                   : (value) => setState(() => _selectedDeviceId = value),
             ),
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 FilledButton(
                   onPressed: _busy ? null : _connect,
                   child: const Text('Connect LR24'),
                 ),
-                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: _busy ? null : _findPeer,
+                  child: const Text('Find Peer'),
+                ),
+                OutlinedButton(
+                  onPressed: _busy ? null : _probePeer,
+                  child: const Text('Probe'),
+                ),
                 OutlinedButton(
                   onPressed: _busy ? null : _disconnect,
                   child: const Text('Disconnect'),
