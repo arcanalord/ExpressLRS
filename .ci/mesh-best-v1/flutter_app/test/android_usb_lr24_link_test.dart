@@ -9,13 +9,12 @@ void main() {
     final backend = _FakeUsbBackend();
     final link = await AndroidUsbLr24ByteStreamLink.connect(
       deviceId: 42,
-      baudRate: 115200,
       backend: backend,
     );
 
     expect(link.isOpen, isTrue);
     expect(backend.openedDeviceId, 42);
-    expect(backend.openedBaudRate, 115200);
+    expect(backend.openedBaudRate, 57600);
 
     final received = <Uint8List>[];
     final sub = link.received.listen(received.add);
