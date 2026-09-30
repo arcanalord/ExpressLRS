@@ -94,7 +94,7 @@ final class BestHilRuntime {
   late final DeliveryEngine _engine;
   final InboundDeduper _deduper = InboundDeduper();
   final StreamController<BestHilEvent> _events =
-      StreamController<BestHilEvent>.broadcast(sync: true);
+      StreamController<BestHilEvent>.broadcast();
   StreamSubscription<TransportInboundFrame>? _subscription;
   int _messageCounter = 0;
 
@@ -165,6 +165,10 @@ final class BestHilRuntime {
           failed: failed,
         ),
       );
+      // Let async broadcast listeners observe progress before the next item
+      // and before the final result returns. Avoid sync-controller reentrancy
+      // because recipient ACK can arrive while an event is being delivered.
+      await Future<void>.delayed(Duration.zero);
     }
 
     started.stop();
