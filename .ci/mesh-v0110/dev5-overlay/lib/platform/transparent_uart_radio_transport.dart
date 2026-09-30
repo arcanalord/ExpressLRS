@@ -400,6 +400,13 @@ final class TransparentUartRadioTransport implements MessageTransport {
   Future<bool> cancelFileTransfer(String transferId) =>
       _file1.cancel(transferId);
 
+  bool pauseFileTransfer(String transferId) => _file1.pauseByUser(transferId);
+
+  bool resumeFileTransfer(String transferId) {
+    if (!isAvailable || !_peerReachability.hasFreshPeers) return false;
+    return _file1.resumeByUser(transferId);
+  }
+
   Future<void> discoverPeers() async {
     if (!isAvailable) return;
     await _writeFrame(<String, Object?>{
