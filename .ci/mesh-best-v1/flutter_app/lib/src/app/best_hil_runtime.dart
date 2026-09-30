@@ -212,6 +212,10 @@ final class BestHilRuntime {
       return true;
     } on TimeoutException {
       return false;
+    } on StateError {
+      // Broadcast stream closed before a matching Delivered event.
+      // Treat as delivery failure instead of surfacing "Bad state: No element".
+      return false;
     }
   }
 
