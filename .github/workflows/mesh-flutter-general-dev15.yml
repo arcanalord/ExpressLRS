@@ -127,22 +127,26 @@ jobs:
           grep -q "MM-UART/1 first" lib/src/application/mesh_app_controller.dart
           grep -q "session.supportsMmrp" lib/src/application/mesh_app_controller.dart
 
-      - name: RC5 changed-file format gate
+      - name: RC5 canonical formatter capture
         working-directory: ${{ env.APP_DIR }}
         run: |
-          dart format --output=none --set-exit-if-changed \
-            lib/core/app_build_info.dart \
-            lib/core/delivery.dart \
-            lib/platform/android_diagnostics_export_bridge.dart \
-            lib/platform/lr24_peer_reachability.dart \
-            lib/platform/transparent_uart_radio_transport.dart \
+          dart format \
             lib/src/application/mesh_app_controller.dart \
-            lib/src/features/connection/connection_page.dart \
-            lib/src/features/diagnostics/diagnostics_page.dart \
-            lib/src/features/settings/settings_page.dart \
-            tool/delivery_reliability_self_test.dart \
-            tool/lr24_peer_reachability_self_test.dart \
             test/app_shell_navigation_test.dart
+          tar -czf /tmp/rc5-format-fix.tar.gz \
+            lib/src/application/mesh_app_controller.dart \
+            test/app_shell_navigation_test.dart
+
+      - name: Upload RC5 format fix
+        uses: actions/upload-artifact@v4
+        with:
+          name: rc5-format-fix
+          path: /tmp/rc5-format-fix.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Stop after formatter capture
+        run: exit 1
 
       - name: Format check (non-blocking)
         continue-on-error: true
