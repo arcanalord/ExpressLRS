@@ -79,6 +79,7 @@ jobs:
           test -d "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compose-compiler-plugin-embeddable/2.4.20"
 
       - name: Pack Kotlin compiler cache
+        if: always()
         run: |
           set -euxo pipefail
           tar -C "$HOME" -czf kotlin-2.4.20-compiler-cache.tar.gz .gradle/caches/modules-2
@@ -86,6 +87,7 @@ jobs:
           find "$HOME/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin" -maxdepth 2 -mindepth 2 -type d | sort > kotlin-2.4.20-components.txt
 
       - name: Upload Kotlin compiler cache
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Kotlin-2.4.20-Compiler-Cache
