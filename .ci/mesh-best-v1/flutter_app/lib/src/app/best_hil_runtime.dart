@@ -242,6 +242,7 @@ final class BestHilRuntime {
       return;
     }
     if (event.recipientMmId != localMmId) return;
+    if (event.senderMmId != peerMmId) return;
 
     switch (event.kind) {
       case DevelopmentProtectedKind.text:
