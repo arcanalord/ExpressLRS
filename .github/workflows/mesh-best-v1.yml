@@ -57,7 +57,7 @@ jobs:
           "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
           "$BT/aapt" dump badging "$APK" | tee /tmp/mesh-best-v1-badging.txt
           grep -Fq "package: name='org.fpvclub.mesh_messenger_best_v1'" /tmp/mesh-best-v1-badging.txt
-          grep -Fq "versionName='0.1.1-best1-hil'" /tmp/mesh-best-v1-badging.txt
+          grep -Fq "versionName='0.1.2-best1-hil'" /tmp/mesh-best-v1-badging.txt
           sha256sum "$APK" | tee /tmp/mesh-best-v1-sha256.txt
           cp "$APK" /tmp/MeshMessenger-Best-v1-HIL-arm64-debug.apk
 
