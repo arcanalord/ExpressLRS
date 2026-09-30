@@ -1,5 +1,5 @@
-name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc6
-# rc6 canonical sources committed
+name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc7
+# rc7 product UX + M05 user pause canonical sources committed
 
 on:
   workflow_dispatch:
@@ -7,6 +7,7 @@ on:
     branches:
       - security/secure-core-v1-integration
       - fix/m05-file1-final-4of4
+      - feat/flutter-rc7-product-ux
     paths:
       - '.github/workflows/mesh-flutter-general-dev15.yml'
       - '.ci/mesh-v0110/dev5-overlay/**'
@@ -15,7 +16,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: mesh-flutter-v0.6.0-secure-core-rc6
+  group: mesh-flutter-v0.6.0-secure-core-rc7
   cancel-in-progress: true
 
 jobs:
@@ -38,7 +39,7 @@ jobs:
           test -n "$ROOT"
           APP_DIR="$ROOT/flutter_app"
           cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
-          grep -Fqx 'version: 0.6.0-secure-core-rc6+26093006' "$APP_DIR/pubspec.yaml"
+          grep -Fqx 'version: 0.6.0-secure-core-rc7+26093007' "$APP_DIR/pubspec.yaml"
           VERSION_FULL="$(awk '/^version:/ {print $2; exit}' "$APP_DIR/pubspec.yaml")"
           APP_VERSION="${VERSION_FULL%%+*}"
           APP_BUILD="${VERSION_FULL#*+}"
@@ -131,7 +132,7 @@ jobs:
           grep -q "MM-UART/1 first" lib/src/application/mesh_app_controller.dart
           grep -q "session.supportsMmrp" lib/src/application/mesh_app_controller.dart
 
-      - name: RC6 canonicalize changed files
+      - name: RC7 canonicalize changed files
         working-directory: ${{ env.APP_DIR }}
         shell: bash
         run: |
@@ -139,36 +140,48 @@ jobs:
           dart format \
             lib/core/file_transfer_session.dart \
             lib/platform/file1_transport_bridge.dart \
+            lib/platform/transparent_uart_radio_transport.dart \
+            lib/src/application/mesh_app_controller.dart \
             lib/src/features/chats/chats_page.dart \
-            tool/file1_transport_loopback_self_test.dart
+            tool/file1_transport_loopback_self_test.dart \
+            test/app_shell_navigation_test.dart
           cp lib/core/file_transfer_session.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart"
           cp lib/platform/file1_transport_bridge.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/platform/file1_transport_bridge.dart"
+          cp lib/platform/transparent_uart_radio_transport.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/platform/transparent_uart_radio_transport.dart"
+          cp lib/src/application/mesh_app_controller.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/application/mesh_app_controller.dart"
           cp lib/src/features/chats/chats_page.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/features/chats/chats_page.dart"
           cp tool/file1_transport_loopback_self_test.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart"
+          cp test/app_shell_navigation_test.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/test/app_shell_navigation_test.dart"
           cd "$GITHUB_WORKSPACE"
           PATHS=(
             .ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart
             .ci/mesh-v0110/dev5-overlay/lib/platform/file1_transport_bridge.dart
+            .ci/mesh-v0110/dev5-overlay/lib/platform/transparent_uart_radio_transport.dart
+            .ci/mesh-v0110/dev5-overlay/lib/src/application/mesh_app_controller.dart
             .ci/mesh-v0110/dev5-overlay/lib/src/features/chats/chats_page.dart
             .ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart
+            .ci/mesh-v0110/dev5-overlay/test/app_shell_navigation_test.dart
           )
           if git diff --quiet -- "${PATHS[@]}"; then
-            echo "RC6 changed files already canonical."
+            echo "RC7 changed files already canonical."
           else
             git config user.name "mesh-ci"
             git config user.email "mesh-ci@users.noreply.github.com"
             git add -- "${PATHS[@]}"
-            git commit -m "style(mesh): canonicalize rc6 M05/contact changes"
+            git commit -m "style(mesh): canonicalize rc7 product UX changes"
             git push origin "HEAD:$GITHUB_REF_NAME"
             echo "Canonical formatting committed; new run validates committed sources."
             exit 1
           fi
 
-      - name: RC6 changed-file format gate
+      - name: RC7 changed-file format gate
         working-directory: ${{ env.APP_DIR }}
         run: |
           dart format --output=none --set-exit-if-changed \
@@ -260,7 +273,10 @@ jobs:
           grep -q "m07DirectEnvelopeClass" lib/platform/transparent_uart_radio_transport.dart
           grep -q "m07DirectEnvelopeClass" lib/platform/lan_transport.dart
           grep -q "m07DirectEnvelopeClass" lib/platform/mm_uart_message_transport.dart
-          grep -q "Голосовое сообщение" lib/src/features/chats/chats_page.dart
+          ! grep -q "Голосовое сообщение" lib/src/features/chats/chats_page.dart
+          grep -q "pausedUser" lib/core/file_transfer_session.dart
+          grep -q "pausePreparedFileTransfer" lib/src/application/mesh_app_controller.dart
+          grep -q "MESH_MESSENGER_FILE1_USER_PAUSE_PASS" tool/file1_transport_loopback_self_test.dart
           grep -q "Выбрать точку на карте" lib/src/features/chats/chats_page.dart
           grep -q "mesh-messenger-file/v1" lib/core/file_transfer_core.dart
           ! grep -q "mm:demo-alexey" lib/src/application/mesh_app_controller.dart
@@ -317,15 +333,15 @@ jobs:
           APK_VERSION_CODE="$(sed -n "s/.*versionCode='\([^']*\)'.*/\1/p" /tmp/APK_BADGING.txt | head -n1)"
           test -n "$APK_VERSION_CODE"
           export APK_VERSION_CODE
-          grep -Fq "versionName='0.6.0-secure-core-rc6'" /tmp/APK_BADGING.txt
+          grep -Fq "versionName='0.6.0-secure-core-rc7'" /tmp/APK_BADGING.txt
           unzip -Z1 "$APK" > /tmp/APK_FILES.txt
           grep -Fq 'lib/arm64-v8a/' /tmp/APK_FILES.txt
           if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' /tmp/APK_FILES.txt; then
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
-          OUT="/tmp/Mesh Messenger Flutter rc6.apk"
-          SUM="/tmp/Mesh Messenger Flutter rc6.sha256.txt"
+          OUT="/tmp/Mesh Messenger Flutter rc7.apk"
+          SUM="/tmp/Mesh Messenger Flutter rc7.sha256.txt"
           cp "$APK" "$OUT"
           sha256sum "$OUT" | tee "$SUM"
           APK_SHA256="$(sha256sum "$OUT" | awk '{print $1}')"
@@ -335,7 +351,7 @@ jobs:
           import os
           manifest = {
               "schema": "mesh-messenger-release-manifest/v1",
-              "version": "0.6.0-secure-core-rc6",
+              "version": "0.6.0-secure-core-rc7",
               "versionCode": int(os.environ["APK_VERSION_CODE"]),
               "applicationId": "org.fpvclub.mesh.flutter",
               "abi": ["arm64-v8a"],
@@ -347,7 +363,7 @@ jobs:
                   "runId": os.environ["GITHUB_RUN_ID"],
               },
               "artifact": {
-                  "file": "Mesh Messenger Flutter rc6.apk",
+                  "file": "Mesh Messenger Flutter rc7.apk",
                   "sha256": os.environ["APK_SHA256"],
               },
               "gates": {
@@ -375,10 +391,10 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: Mesh Messenger Flutter rc6
+          name: Mesh Messenger Flutter rc7
           path: |
-            /tmp/Mesh Messenger Flutter rc6.apk
-            /tmp/Mesh Messenger Flutter rc6.sha256.txt
+            /tmp/Mesh Messenger Flutter rc7.apk
+            /tmp/Mesh Messenger Flutter rc7.sha256.txt
             /tmp/mesh-messenger-release-manifest-v1.json
           if-no-files-found: error
           retention-days: 14
