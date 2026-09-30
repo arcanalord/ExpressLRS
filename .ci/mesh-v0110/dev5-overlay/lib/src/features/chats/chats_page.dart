@@ -561,66 +561,95 @@ Future<String?> _promptContactName(
   required String title,
   required String subtitle,
   String? helperText,
-}) async {
-  final controller = TextEditingController(text: initialName.trim());
-  try {
-    return await showDialog<String>(
+}) =>
+    showDialog<String>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) {
-          final clean = controller.text.trim();
-          return AlertDialog(
-            title: Text(title),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    autofocus: true,
-                    maxLength: 80,
-                    textInputAction: TextInputAction.done,
-                    onChanged: (_) => setState(() {}),
-                    onSubmitted: (_) {
-                      final value = controller.text.trim();
-                      if (value.isNotEmpty) Navigator.of(dialogContext).pop(value);
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Имя контакта',
-                      helperText: helperText,
-                      helperMaxLines: 3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Отмена'),
-              ),
-              FilledButton(
-                onPressed: clean.isEmpty
-                    ? null
-                    : () => Navigator.of(dialogContext).pop(clean),
-                child: const Text('Сохранить'),
-              ),
-            ],
-          );
-        },
+      builder: (dialogContext) => _ContactNameDialog(
+        initialName: initialName,
+        title: title,
+        subtitle: subtitle,
+        helperText: helperText,
       ),
     );
-  } finally {
-    controller.dispose();
+
+class _ContactNameDialog extends StatefulWidget {
+  const _ContactNameDialog({
+    required this.initialName,
+    required this.title,
+    required this.subtitle,
+    this.helperText,
+  });
+
+  final String initialName;
+  final String title;
+  final String subtitle;
+  final String? helperText;
+
+  @override
+  State<_ContactNameDialog> createState() => _ContactNameDialogState();
+}
+
+class _ContactNameDialogState extends State<_ContactNameDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialName.trim());
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    if (value.isEmpty) return;
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final clean = _controller.text.trim();
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              maxLength: 80,
+              textInputAction: TextInputAction.done,
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                labelText: 'Имя контакта',
+                helperText: widget.helperText,
+                helperMaxLines: 3,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: clean.isEmpty ? null : _submit,
+          child: const Text('Сохранить'),
+        ),
+      ],
+    );
   }
 }
 
