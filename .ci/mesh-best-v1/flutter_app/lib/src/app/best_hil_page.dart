@@ -28,6 +28,10 @@ final class _BestHilPageState extends State<BestHilPage> {
   final List<String> _log = <String>[];
   String _status = 'Disconnected';
   bool _busy = false;
+  bool _testRunning = false;
+  int _testCompleted = 0;
+  int _testDelivered = 0;
+  int _testFailed = 0;
 
   @override
   void initState() {
@@ -133,6 +137,10 @@ final class _BestHilPageState extends State<BestHilPage> {
             0,
             '[DELIVERY ${event.messageId}] ${event.state.name}',
           );
+        case BestHilTestProgress():
+          _testCompleted = event.completed;
+          _testDelivered = event.delivered;
+          _testFailed = event.failed;
       }
     });
   }
@@ -157,6 +165,47 @@ final class _BestHilPageState extends State<BestHilPage> {
       });
     } on Object catch (error) {
       if (mounted) setState(() => _status = 'Send failed: $error');
+    }
+  }
+
+  Future<void> _runTest100() async {
+    final runtime = _runtime;
+    if (runtime == null || !runtime.available) {
+      setState(() => _status = 'Connect LR24 first');
+      return;
+    }
+    setState(() {
+      _testRunning = true;
+      _testCompleted = 0;
+      _testDelivered = 0;
+      _testFailed = 0;
+      _status = 'Test 100 running...';
+      _log.insert(0, '[TEST100] started');
+    });
+    try {
+      final result = await runtime.runTextTest();
+      if (!mounted) return;
+      setState(() {
+        _status = result.passed
+            ? 'Test 100 PASS'
+            : 'Test 100 FAIL: ${result.delivered}/${result.total} delivered';
+        _log.insert(
+          0,
+          '[TEST100] ${result.passed ? 'PASS' : 'FAIL'} '
+          '${result.delivered}/${result.total} delivered, '
+          '${result.failed} failed, '
+          '${result.elapsed.inMilliseconds} ms',
+        );
+      });
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          _status = 'Test 100 error: $error';
+          _log.insert(0, '[TEST100] ERROR $error');
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _testRunning = false);
     }
   }
 
@@ -294,9 +343,25 @@ final class _BestHilPageState extends State<BestHilPage> {
             ),
             const SizedBox(height: 8),
             FilledButton(
-              onPressed: _busy ? null : _send,
+              onPressed: _busy || _testRunning ? null : _send,
               child: const Text('Send'),
             ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: _busy || _testRunning ? null : _runTest100,
+              child: Text(
+                _testRunning
+                    ? 'Test 100: $_testCompleted/100'
+                    : 'Test 100',
+              ),
+            ),
+            if (_testRunning || _testCompleted > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Delivered $_testDelivered | Failed $_testFailed',
+                ),
+              ),
             const SizedBox(height: 16),
             const Text(
               'HIL log',
