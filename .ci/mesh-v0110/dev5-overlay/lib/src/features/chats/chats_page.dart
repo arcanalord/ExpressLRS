@@ -105,8 +105,8 @@ class _ChatsPageState extends State<ChatsPage> {
               ],
             )
           : _mobileConversationOpen
-              ? conversation
-              : contacts,
+          ? conversation
+          : contacts,
     );
   }
 }
@@ -166,7 +166,10 @@ class _ContactList extends StatelessWidget {
       if (controller.contacts.isNotEmpty)
         const Padding(
           padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text('Приватные', style: TextStyle(fontWeight: FontWeight.w700)),
+          child: Text(
+            'Приватные',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
         ),
       for (final contact in controller.contacts)
         ListTile(
@@ -242,10 +245,7 @@ class _ContactList extends StatelessWidget {
                 subtitle: mmId,
               );
               if (name == null) return;
-              await controller.addNearbyPeerAsContact(
-                mmId,
-                displayName: name,
-              );
+              await controller.addNearbyPeerAsContact(mmId, displayName: name);
             },
           ),
         ),
@@ -385,10 +385,9 @@ class _CreateGroupDialogState extends State<_CreateGroupDialog> {
           child: const Text('Отмена'),
         ),
         FilledButton(
-          onPressed:
-              _saving || _selected.isEmpty || _name.text.trim().isEmpty
-                  ? null
-                  : _create,
+          onPressed: _saving || _selected.isEmpty || _name.text.trim().isEmpty
+              ? null
+              : _create,
           child: _saving
               ? const SizedBox.square(
                   dimension: 18,
@@ -448,14 +447,13 @@ class _AddContactPageState extends State<_AddContactPage> {
       if (!mounted || name == null) return;
 
       setState(() => _busy = true);
-      await widget.controller.addContactCard(
-        raw,
-        displayNameOverride: name,
-      );
+      await widget.controller.addContactCard(raw, displayNameOverride: name);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(existing == null ? 'Контакт добавлен' : 'Контакт обновлён'),
+          content: Text(
+            existing == null ? 'Контакт добавлен' : 'Контакт обновлён',
+          ),
         ),
       );
       Navigator.of(context).pop();
@@ -480,9 +478,8 @@ class _AddContactPageState extends State<_AddContactPage> {
     final raw = (await Clipboard.getData('text/plain'))?.text;
     if (!mounted) return;
     if (raw == null || raw.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Буфер обмена пуст')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Буфер обмена пуст')));
       return;
     }
     await _importContact(raw);
@@ -508,14 +505,16 @@ class _AddContactPageState extends State<_AddContactPage> {
                 ListTile(
                   leading: const Icon(Icons.qr_code_2),
                   title: const Text('Показать мой QR'),
-                  subtitle: const Text('Другой телефон отсканирует ваш контакт'),
+                  subtitle: const Text(
+                    'Другой телефон отсканирует ваш контакт',
+                  ),
                   enabled: !_busy,
                   onTap: _busy
                       ? null
                       : () => showOwnContactCardDialog(
-                            context,
-                            widget.controller,
-                          ),
+                          context,
+                          widget.controller,
+                        ),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -767,9 +766,8 @@ class _AddContactDialogState extends State<_AddContactDialog> {
   Future<void> _save() async {
     if (_saving) return;
     if (_name.text.trim().isEmpty || _mmId.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Укажите имя и MM-ID')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Укажите имя и MM-ID')));
       return;
     }
     setState(() => _saving = true);
@@ -784,9 +782,9 @@ class _AddContactDialogState extends State<_AddContactDialog> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Не удалось сохранить: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Не удалось сохранить: $error')));
     }
   }
 
@@ -816,9 +814,7 @@ class _AddContactDialogState extends State<_AddContactDialog> {
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: EdgeInsets.zero,
                 title: const Text('Дополнительно'),
-                subtitle: const Text(
-                  'Meshtastic и привязка радиомодуля',
-                ),
+                subtitle: const Text('Meshtastic и привязка радиомодуля'),
                 children: [
                   TextField(
                     controller: _node,
@@ -911,9 +907,7 @@ class _ConversationPane extends StatelessWidget {
                   ? const Icon(Icons.forum_outlined, size: 20)
                   : isGroup
                   ? const Icon(Icons.groups_2_outlined, size: 20)
-                  : Text(
-                      contact!.displayName.characters.first.toUpperCase(),
-                    ),
+                  : Text(contact!.displayName.characters.first.toUpperCase()),
             ),
             title: Text(
               isGeneral
@@ -970,9 +964,7 @@ class _ConversationPane extends StatelessWidget {
                                   controller.displayNameForMmId(
                                     message.senderMmId!,
                                   ),
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .labelSmall
+                                  style: Theme.of(context).textTheme.labelSmall
                                       ?.copyWith(fontWeight: FontWeight.w600),
                                 ),
                                 const SizedBox(height: 3),
@@ -1043,9 +1035,10 @@ class _ConversationPane extends StatelessWidget {
                                           : isGeneral &&
                                                 state ==
                                                     DeliveryState.broadcasted &&
-                                                controller.channelReceiptCountFor(
-                                                      message.messageId,
-                                                    ) >
+                                                controller
+                                                        .channelReceiptCountFor(
+                                                          message.messageId,
+                                                        ) >
                                                     0
                                           ? 'Получено: ${controller.channelReceiptCountFor(message.messageId)}'
                                           : stateLabel(state),
@@ -1087,7 +1080,8 @@ class _ConversationPane extends StatelessWidget {
                         trailing: controller.fileTransferSending
                             ? IconButton(
                                 tooltip: 'Отменить передачу',
-                                onPressed: controller.cancelPreparedFileTransfer,
+                                onPressed:
+                                    controller.cancelPreparedFileTransfer,
                                 icon: const Icon(Icons.stop_circle_outlined),
                               )
                             : controller.fileTransferCanRetry
@@ -1145,18 +1139,18 @@ class _ConversationPane extends StatelessWidget {
                     onPressed: controller.busy
                         ? null
                         : () => _showAttachmentMenu(
-                              context,
-                              controller,
-                              onOpenMapComposer,
-                            ),
+                            context,
+                            controller,
+                            onOpenMapComposer,
+                          ),
                     icon: const Icon(Icons.add_circle_outline),
                   ),
                   const SizedBox(width: 4),
                   IconButton.filled(
                     tooltip: controller.preparedFileName != null
                         ? controller.fileTransferCanRetry
-                            ? 'Повторить отправку файла'
-                            : 'Отправить файл'
+                              ? 'Повторить отправку файла'
+                              : 'Отправить файл'
                         : 'Отправить',
                     onPressed: controller.busy
                         ? null
@@ -1299,4 +1293,3 @@ Future<void> _pickSmallFile(
     }
   }
 }
-

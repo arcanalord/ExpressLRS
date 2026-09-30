@@ -145,8 +145,7 @@ Future<void> _runFinalizeWriteFailureScenario({
     tickInterval: const Duration(milliseconds: 5),
     sendBytes: (payload) async {
       final frame = File1Codec.decode(payload);
-      if (frame.type == File1FrameType.complete &&
-          !senderCompleteWriteFailed) {
+      if (frame.type == File1FrameType.complete && !senderCompleteWriteFailed) {
         senderCompleteWriteFailed = true;
         throw StateError('simulated transient sender COMPLETE write');
       }
@@ -160,8 +159,7 @@ Future<void> _runFinalizeWriteFailureScenario({
     sendBytes: (payload) async {
       final frame = File1Codec.decode(payload);
       if (frame.type == File1FrameType.ack &&
-          File1Codec.decodeAck(frame) ==
-              File1Codec.verifiedCompleteAckIndex &&
+          File1Codec.decodeAck(frame) == File1Codec.verifiedCompleteAckIndex &&
           !receiverVerifiedAckWriteFailed) {
         receiverVerifiedAckWriteFailed = true;
         throw StateError('simulated transient receiver verified ACK write');
@@ -227,8 +225,7 @@ Future<void> _runLinkLossResumeMissingOnly() async {
       final frame = File1Codec.decode(payload);
       if (frame.type == File1FrameType.chunk) {
         final chunk = File1Codec.decodeChunk(frame);
-        chunkSendCounts[chunk.index] =
-            (chunkSendCounts[chunk.index] ?? 0) + 1;
+        chunkSendCounts[chunk.index] = (chunkSendCounts[chunk.index] ?? 0) + 1;
         if (chunk.index == 8 && !failedOnce) {
           failedOnce = true;
           throw StateError('simulated LR24 detach');
@@ -340,7 +337,6 @@ bool _same(Uint8List a, Uint8List b) {
   return true;
 }
 
-
 Future<void> _runExactFourChunksWithDroppedFinalComplete() async {
   final codecA = MmSerialCodec();
   final codecB = MmSerialCodec();
@@ -360,8 +356,7 @@ Future<void> _runExactFourChunksWithDroppedFinalComplete() async {
     final decoded = File1Codec.decode(payload);
     if (dropVerifiedAckResponse &&
         decoded.type == File1FrameType.ack &&
-        File1Codec.decodeAck(decoded) ==
-            File1Codec.verifiedCompleteAckIndex &&
+        File1Codec.decodeAck(decoded) == File1Codec.verifiedCompleteAckIndex &&
         dropFirstVerifiedAck) {
       dropFirstVerifiedAck = false;
       return;
@@ -384,8 +379,7 @@ Future<void> _runExactFourChunksWithDroppedFinalComplete() async {
   late final M05TransportQosAdapter qosB;
   qosA = M05TransportQosAdapter(
     writeRaw: (_) async {},
-    writeRawFile1: (payload) =>
-        deliver(codecA, codecB, bridgeB, payload),
+    writeRawFile1: (payload) => deliver(codecA, codecB, bridgeB, payload),
   );
   qosB = M05TransportQosAdapter(
     writeRaw: (_) async {},

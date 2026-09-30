@@ -6,10 +6,7 @@ import '../core/file_transfer_protocol.dart';
 import '../core/file_transfer_session.dart';
 
 final class File1TransportReceived {
-  const File1TransportReceived({
-    required this.manifest,
-    required this.bytes,
-  });
+  const File1TransportReceived({required this.manifest, required this.bytes});
 
   final FileTransferManifest manifest;
   final Uint8List bytes;
@@ -30,8 +27,7 @@ final class File1TransportProgress {
   final int totalChunks;
   final String? failureReason;
 
-  double get fraction =>
-      totalChunks == 0 ? 1 : ackedChunks / totalChunks;
+  double get fraction => totalChunks == 0 ? 1 : ackedChunks / totalChunks;
 }
 
 final class File1TransportBridge {
@@ -235,11 +231,7 @@ final class File1TransportBridge {
     }
   }
 
-  void _emitProgress(
-    String id,
-    _SenderState state, {
-    bool force = false,
-  }) {
+  void _emitProgress(String id, _SenderState state, {bool force = false}) {
     final callback = _onProgress;
     if (callback == null) return;
     final session = state.session;

@@ -87,8 +87,8 @@ final class FileTransferSenderSession {
     }
 
     if (_acked.length == totalChunkCount) {
-      final shouldSendComplete = !_completeSent ||
-          nowMs - _lastCompleteSentAtMs >= ackTimeoutMs;
+      final shouldSendComplete =
+          !_completeSent || nowMs - _lastCompleteSentAtMs >= ackTimeoutMs;
       if (shouldSendComplete) {
         final attempts = _completeAttempts + 1;
         if (attempts > maxRetries + 1) {
