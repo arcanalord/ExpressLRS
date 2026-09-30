@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../../core/app_build_info.dart';
 import '../../core/app_storage.dart';
 import '../../core/adaptive_link_profile.dart';
 import '../../core/file_transfer_core.dart';
@@ -17,6 +18,7 @@ import '../../core/secure_core_policy.dart';
 import '../../core/models.dart';
 import '../../core/usb_profile_binding.dart';
 import '../../platform/android_app_storage_crypto.dart';
+import '../../platform/android_diagnostics_export_bridge.dart';
 import '../../platform/android_local_network_bridge.dart';
 import '../../platform/android_secure_identity_bridge.dart';
 import '../../platform/android_meshtastic_bridge.dart';
@@ -81,6 +83,7 @@ final class MeshAppController extends ChangeNotifier {
   MeshtasticTransport? _meshtastic;
   AndroidMeshtasticBridge? _androidBridge;
   AndroidUsbSerialBridge? _usbBridge;
+  AndroidDiagnosticsExportBridge? _diagnosticsExportBridge;
   Ep2UartTransport? _ep2;
   MmUartExternalRadioSession? _externalRadioSession;
   MmUartMessageTransport? _externalRadio;
@@ -103,6 +106,7 @@ final class MeshAppController extends ChangeNotifier {
   bool _maintenanceBusy = false;
   bool _usbMaintenanceBusy = false;
   int _usbMaintenanceTick = 0;
+  int _lr24DiscoveryTick = 0;
 
   bool initialized = false;
   bool busy = false;
@@ -236,6 +240,12 @@ final class MeshAppController extends ChangeNotifier {
   bool get mmUartActive => _mmUartActive;
   bool get lr24Active => _lr24Active;
   bool get lr24Connected => _lr24?.isAvailable == true;
+  bool get lr24PeerReachable => _lr24?.hasFreshPeers == true;
+  bool get lr24SelectedPeerReachable {
+    final peer = selectedPeerMmId;
+    return peer != null && (_lr24?.isPeerFresh(peer) ?? false);
+  }
+
   bool get ep2Connected =>
       (_externalRadio?.isAvailable ?? false) || (_ep2?.isAvailable ?? false);
   String? get externalRadioFamily =>
@@ -298,6 +308,8 @@ final class MeshAppController extends ChangeNotifier {
       localNetworkBridge = AndroidLocalNetworkBridge();
       bridge = AndroidMeshtasticBridge();
       usbBridge = AndroidUsbSerialBridge();
+      controller._diagnosticsExportBridge =
+          const AndroidDiagnosticsExportBridge();
       root = storageRoot ?? Directory(await bridge.appDataPath());
     } else {
       root =
@@ -1228,6 +1240,29 @@ final class MeshAppController extends ChangeNotifier {
     _maintenanceBusy = true;
     try {
       await _core.maintenance();
+      final lr24 = _lr24;
+      if (lr24?.isAvailable == true) {
+        _lr24DiscoveryTick++;
+        final noFreshPeer = !lr24!.hasFreshPeers;
+        final due = noFreshPeer
+            ? _lr24DiscoveryTick >= 3
+            : _lr24DiscoveryTick >= 15;
+        if (due) {
+          _lr24DiscoveryTick = 0;
+          try {
+            await lr24.discoverPeers();
+            _addLr24Log(
+              noFreshPeer
+                  ? 'DISCOVERY refresh · peer not confirmed'
+                  : 'DISCOVERY refresh · keepalive',
+            );
+          } catch (error) {
+            _addLr24Log('DISCOVERY ERROR $error');
+          }
+        }
+      } else {
+        _lr24DiscoveryTick = 0;
+      }
       _usbMaintenanceTick++;
       if (_usbMaintenanceTick >= 3) {
         _usbMaintenanceTick = 0;
@@ -1585,8 +1620,10 @@ final class MeshAppController extends ChangeNotifier {
 
 
   Map<String, dynamic> buildDiagnosticSnapshot() {
+    final lr24 = _lr24;
+    final peer = lr24PeerMmId;
     return DiagnosticSnapshot.build(
-      appVersion: '0.1.10-dev.15-channel-r2',
+      appVersion: MeshAppBuildInfo.display,
       ownMmId: ownMmId,
       activeConversation: activeConversation.key,
       transport: <String, dynamic>{
@@ -1594,8 +1631,12 @@ final class MeshAppController extends ChangeNotifier {
         'meshtasticState': radioState,
         'ep2State': ep2State,
         'lr24State': lr24State,
-        'lr24Connected': lr24Connected,
-        'lr24PeerMmId': lr24PeerMmId,
+        'lr24UsbReady': lr24Connected,
+        'lr24PeerReachable': lr24PeerReachable,
+        'lr24PeerMmId': peer,
+        'lr24PeerAgeMs': peer == null ? null : lr24?.peerAgeMs(peer),
+        'lr24FreshPeers': lr24?.freshPeerMmIds.toList(growable: false) ??
+            const <String>[],
         'lr24Baud': lr24Baud,
         'externalRadioFamily': externalRadioFamily,
         'externalBoardId': externalBoardId,
@@ -1608,6 +1649,10 @@ final class MeshAppController extends ChangeNotifier {
         'lr24RxFrames': lr24RxFrames,
         'lr24BadFrames': lr24BadFrames,
         'lr24RttMs': lr24RttMs,
+        'lr24QosControl': lr24?.qosPendingControl ?? 0,
+        'lr24QosText': lr24?.qosPendingText ?? 0,
+        'lr24QosFile': lr24?.qosPendingFile ?? 0,
+        'pendingDeliveries': pendingDeliveries.length,
         'ep2TxCount': ep2TxCount,
         'ep2RxCount': ep2RxCount,
         'ep2LossCount': ep2LossCount,
@@ -1622,12 +1667,54 @@ final class MeshAppController extends ChangeNotifier {
         'radioError': radioError,
         'ep2Error': ep2Error,
         'lr24Error': lr24Error,
+        'fileTransfer': <String, dynamic>{
+          'state': fileTransferState,
+          'ackedChunks': fileTransferAckedChunks,
+          'totalChunks': preparedFileChunks,
+          'notice': fileTransferNotice,
+          'lastReceivedFileName': lastReceivedFileName,
+        },
+        'outbox': pendingDeliveries
+            .map(
+              (item) => <String, dynamic>{
+                'messageId': item.messageId,
+                'deliveryId': item.effectiveDeliveryId,
+                'recipient': item.recipientMmId,
+                'state': item.state.name,
+                'attempts': item.attempts,
+                'transport': item.selectedTransportId,
+                'lastError': item.lastError,
+                'nextRetryAt': item.nextRetryAt?.toIso8601String(),
+              },
+            )
+            .toList(growable: false),
+        'lr24Log': List<String>.unmodifiable(lr24Log),
       },
     );
   }
 
   String diagnosticSnapshotJson() =>
       DiagnosticSnapshot.encode(buildDiagnosticSnapshot());
+
+  Future<String?> exportDiagnosticSnapshot() async {
+    final text = diagnosticSnapshotJson();
+    final stamp = DateTime.now()
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(RegExp(r'[:.]'), '-');
+    final fileName = 'Mesh Messenger diagnostics $stamp.txt';
+    final bridge = _diagnosticsExportBridge;
+    if (bridge != null) {
+      return bridge.exportText(fileName: fileName, text: text);
+    }
+    final storage = _appStorage;
+    if (storage == null) return null;
+    final directory = Directory('${storage.root.path}/diagnostics');
+    await directory.create(recursive: true);
+    final output = File('${directory.path}/$fileName');
+    await output.writeAsString(text, flush: true);
+    return output.path;
+  }
 
   Future<void> refreshRadioDiagnostics() async {
     final bridge = _androidBridge;
@@ -1869,7 +1956,9 @@ final class MeshAppController extends ChangeNotifier {
       }
     }
 
-    lr24Error = lastError?.toString() ?? 'LR24 probe failed';
+    _addLr24Log('LINK PROBE FAILED | ${lastError ?? 'unknown'}');
+    lr24Error =
+        'Второе устройство не ответило. USB подключён, радиоканал не подтверждён.';
     notifyListeners();
   }
 
@@ -2320,6 +2409,11 @@ final class MeshAppController extends ChangeNotifier {
       lr24State = event.state;
       lr24Error = event.error;
       _lr24Active = event.state != 'disconnected' && event.state != 'error';
+      if (event.state == 'disconnected' || event.state == 'error') {
+        lr24PeerMmId = null;
+        lr24RttMs = null;
+        _lr24DiscoveryTick = 0;
+      }
       _addLr24Log(
         'STATE ${event.state}${event.error == null ? '' : ' | ${event.error}'}',
       );
@@ -2335,6 +2429,8 @@ final class MeshAppController extends ChangeNotifier {
       if (label.isNotEmpty) _peerLabels[event.peerMmId] = label;
       _peerCapabilities[event.peerMmId] = event.capabilities;
       lr24PeerMmId = event.peerMmId;
+      lr24Error = null;
+      _lr24DiscoveryTick = 0;
       _addLr24Log(
         'DISCOVER ${event.peerMmId} caps=${event.capabilities.join(',')}',
       );
