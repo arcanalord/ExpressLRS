@@ -792,12 +792,12 @@ final class MeshAppController extends ChangeNotifier {
       throw ArgumentError('Пока поддерживаются файлы до 100 КБ');
     }
 
-    final rssi = ep2Rssi10 == null ? null : ep2Rssi10! / 10.0;
-    final decision = AdaptiveLinkPolicy.choose(
-      LinkQualitySample(rssiDbm: rssi),
-      current: preparedFileProfile,
-    );
-    final chunkSize = AdaptiveLinkPolicy.recommendedChunkSize(decision.profile);
+    // Match the proven MM U1 LR24 transfer baseline: one 1024-byte
+    // block at a time. The previous adaptive path treated missing LR24 RSSI as
+    // an ideal link and selected 4096-byte bulk chunks, which is too aggressive
+    // for 57 600 baud stop-and-wait ACK timing.
+    const chunkSize = 1024;
+    const transferProfile = AdaptiveLinkProfile.balanced;
     final transferId =
         'f-' + DateTime.now().toUtc().microsecondsSinceEpoch.toRadixString(16);
     final plan = M05FileTransferCore.createPlan(
@@ -812,7 +812,7 @@ final class MeshAppController extends ChangeNotifier {
     preparedFileBytes = plan.manifest.totalBytes;
     preparedFileChunks = plan.manifest.chunkCount;
     preparedFileSha256 = plan.manifest.sha256Hex;
-    preparedFileProfile = decision.profile;
+    preparedFileProfile = transferProfile;
     _preparedFilePlan = plan;
     fileTransferState = 'prepared';
     fileTransferAckedChunks = 0;
@@ -822,7 +822,7 @@ final class MeshAppController extends ChangeNotifier {
         ' блоков по ' +
         chunkSize.toString() +
         ' Б · ' +
-        decision.profile.name;
+        transferProfile.name;
     notifyListeners();
   }
 
@@ -2479,6 +2479,9 @@ final class MeshAppController extends ChangeNotifier {
           case 'waiting':
             fileTransferNotice =
                 'Ожидание подтверждения: ${event.ackedChunks}/${event.totalChunks}';
+          case 'pausedLink':
+            fileTransferNotice =
+                'Связь потеряна · сохранено ${event.ackedChunks}/${event.totalChunks} · ждём LR24';
           case 'completed':
             fileTransferNotice =
                 'Доставлено: ${event.totalChunks}/${event.totalChunks} блоков';
