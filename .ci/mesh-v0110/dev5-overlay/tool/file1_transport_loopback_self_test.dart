@@ -334,12 +334,17 @@ Future<void> _runUserPauseResume() async {
   for (var i = 0; i < 400; i++) {
     await Future<void>.delayed(const Duration(milliseconds: 3));
     if (progress.isNotEmpty) ackedBeforePause = progress.last.ackedChunks;
-    if (ackedBeforePause >= 3 && ackedBeforePause < plan.manifest.chunkCount) break;
+    if (ackedBeforePause >= 3 && ackedBeforePause < plan.manifest.chunkCount)
+      break;
   }
-  if (ackedBeforePause < 3) throw StateError('user pause fixture did not make progress');
-  if (!bridgeA.pauseByUser(plan.manifest.transferId)) throw StateError('user pause returned false');
+  if (ackedBeforePause < 3)
+    throw StateError('user pause fixture did not make progress');
+  if (!bridgeA.pauseByUser(plan.manifest.transferId))
+    throw StateError('user pause returned false');
   await Future<void>.delayed(const Duration(milliseconds: 25));
-  if (progress.where((e) => e.state == FileTransferSessionState.pausedUser).isEmpty) {
+  if (progress
+      .where((e) => e.state == FileTransferSessionState.pausedUser)
+      .isEmpty) {
     throw StateError('pausedUser progress state missing');
   }
   final sentWhilePaused = chunkSendCounts.values.fold<int>(0, (a, b) => a + b);
@@ -349,13 +354,17 @@ Future<void> _runUserPauseResume() async {
     throw StateError('FILE/1 continued sending while user-paused');
   }
 
-  if (!bridgeA.resumeByUser(plan.manifest.transferId)) throw StateError('user resume returned false');
+  if (!bridgeA.resumeByUser(plan.manifest.transferId))
+    throw StateError('user resume returned false');
   await future.timeout(const Duration(seconds: 8));
   final result = received;
-  if (result == null || !_same(payload, result)) throw StateError('user pause/resume payload mismatch');
+  if (result == null || !_same(payload, result))
+    throw StateError('user pause/resume payload mismatch');
   for (var index = 0; index < ackedBeforePause; index++) {
     if (chunkSendCounts[index] != 1) {
-      throw StateError('user resume resent acknowledged chunk $index count=${chunkSendCounts[index] ?? 0}');
+      throw StateError(
+        'user resume resent acknowledged chunk $index count=${chunkSendCounts[index] ?? 0}',
+      );
     }
   }
   if (progress.last.state != FileTransferSessionState.completed) {

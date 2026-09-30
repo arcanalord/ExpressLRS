@@ -1318,7 +1318,6 @@ Future<void> _pickSmallFile(
   }
 }
 
-
 String _formatFileBytes(int bytes) {
   if (bytes < 1024) return '$bytes Б';
   final kib = bytes / 1024;
