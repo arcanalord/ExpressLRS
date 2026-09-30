@@ -1,0 +1,9 @@
+{
+  "name": "chat-lite-backend",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "ai": "^6.0.0"
+  }
+}
