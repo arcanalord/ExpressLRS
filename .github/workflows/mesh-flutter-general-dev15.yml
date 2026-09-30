@@ -274,9 +274,11 @@ jobs:
             echo "Unexpected non-arm64 ABI in APK" >&2
             exit 1
           fi
-          cp "$APK" /tmp/Mesh Messenger Flutter rc5.apk
-          sha256sum /tmp/Mesh Messenger Flutter rc5.apk | tee /tmp/Mesh Messenger Flutter rc5.sha256.txt
-          APK_SHA256="$(sha256sum /tmp/Mesh Messenger Flutter rc5.apk | awk '{print $1}')"
+          OUT="/tmp/Mesh Messenger Flutter rc5.apk"
+          SUM="/tmp/Mesh Messenger Flutter rc5.sha256.txt"
+          cp "$APK" "$OUT"
+          sha256sum "$OUT" | tee "$SUM"
+          APK_SHA256="$(sha256sum "$OUT" | awk '{print $1}')"
           export APK_SHA256
           python3 - <<'PY'
           import json
