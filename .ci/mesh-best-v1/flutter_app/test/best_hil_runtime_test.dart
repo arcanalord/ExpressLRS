@@ -6,7 +6,36 @@ import 'package:mesh_messenger_best_v1/src/domain/message.dart';
 import 'package:mesh_messenger_best_v1/src/m03/byte_stream_link.dart';
 
 void main() {
-  test('two Best-v1 nodes exchange text, dedupe retry, and recipient ACK',
+  test('runtime refuses user traffic before configured peer discovery', () async {
+    final linkA = MemoryLr24ByteStreamLink();
+    final linkB = MemoryLr24ByteStreamLink();
+    linkA.connectPeer(linkB);
+    linkB.connectPeer(linkA);
+
+    final nodeA = BestHilRuntime(
+      localMmId: 'mm:a',
+      peerMmId: 'mm:b',
+      localBinding: 'lr24:A',
+      peerBinding: 'lr24:B',
+      link: linkA,
+    );
+
+    await expectLater(
+      nodeA.sendText('must not leave before discovery'),
+      throwsA(isA<StateError>()),
+    );
+    await expectLater(
+      nodeA.runTextTest(count: 1),
+      throwsA(isA<StateError>()),
+    );
+    expect(nodeA.deliveries, isEmpty);
+
+    await nodeA.close();
+    await linkA.close();
+    await linkB.close();
+  });
+
+  test('two discovered Best-v1 nodes exchange text, dedupe retry, and ACK',
       () async {
     final linkA = MemoryLr24ByteStreamLink();
     final linkB = MemoryLr24ByteStreamLink();
@@ -27,6 +56,15 @@ void main() {
       peerBinding: 'lr24:A',
       link: linkB,
     );
+
+    final peer = await nodeA.discoverPeer(
+      timeout: const Duration(seconds: 1),
+    );
+    expect(peer.mmId, 'mm:b');
+    expect(nodeA.peerReady, isTrue);
+    expect(nodeB.peerReady, isTrue);
+    final probe = await nodeA.probePeer(timeout: const Duration(seconds: 1));
+    expect(probe.mmId, 'mm:b');
 
     var incomingCount = 0;
     final incoming = Completer<BestHilIncomingText>();
@@ -76,7 +114,7 @@ void main() {
     await linkB.close();
   });
 
-  test('sequential HIL test runner gets recipient ACK for every message',
+  test('sequential HIL runner gets recipient ACK for every discovered message',
       () async {
     final linkA = MemoryLr24ByteStreamLink();
     final linkB = MemoryLr24ByteStreamLink();
@@ -97,6 +135,7 @@ void main() {
       peerBinding: 'lr24:A',
       link: linkB,
     );
+    await nodeA.discoverPeer(timeout: const Duration(seconds: 1));
 
     var incoming = 0;
     final progress = <BestHilTestProgress>[];
@@ -108,17 +147,17 @@ void main() {
     });
 
     final result = await nodeA.runTextTest(
-      count: 10,
+      count: 100,
       ackTimeout: const Duration(seconds: 1),
     );
 
     expect(result.passed, isTrue);
-    expect(result.delivered, 10);
+    expect(result.delivered, 100);
     expect(result.failed, 0);
-    expect(incoming, 10);
-    expect(progress, hasLength(10));
-    expect(progress.last.completed, 10);
-    expect(progress.last.delivered, 10);
+    expect(incoming, 100);
+    expect(progress, hasLength(100));
+    expect(progress.last.completed, 100);
+    expect(progress.last.delivered, 100);
 
     await subA.cancel();
     await subB.cancel();
