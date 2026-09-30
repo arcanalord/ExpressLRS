@@ -174,7 +174,10 @@ void main() {
       expect(addAction, isNotNull);
       addAction?.call();
       await tester.pumpAndSettle();
+      expect(find.text('Файл'), findsOneWidget);
       expect(find.text('Местоположение'), findsOneWidget);
+      expect(find.text('Медиа'), findsNothing);
+      expect(find.textContaining('Голосовое сообщение'), findsNothing);
       final locationTile = tester.widget<ListTile>(
         find.widgetWithText(ListTile, 'Местоположение'),
       );
