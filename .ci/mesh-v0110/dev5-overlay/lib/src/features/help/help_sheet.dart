@@ -75,8 +75,9 @@ Future<void> showHelpSheet(
               title: const Text('Безопасность'),
               children: [
                 Text(
-                  'Discovered peer, Contact и Verified — разные состояния. QR/SAS используется для '
-                  'проверки identity. Текущую verification нельзя обозначать как полноценное production '
+                  'Discovered peer, Contact и Verified — разные состояния. Для локальной проверки '
+                  'контакта используется шестизначный SAS-код на двух телефонах; QR/SAS относится к '
+                  'проверке identity. Текущую verification нельзя обозначать как полноценное production '
                   'E2EE до завершения M07 production-provider gates.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
