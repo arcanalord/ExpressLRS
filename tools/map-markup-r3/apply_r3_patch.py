@@ -5,25 +5,30 @@ root = Path(sys.argv[1])
 p = root / "tool" / "ui_visual_gate.py"
 s = p.read_text(encoding="utf-8")
 
-repls = []
+def once(old, new, label):
+    global s
+    if old not in s:
+        raise SystemExit(f"patch anchor missing: {label}")
+    s = s.replace(old, new, 1)
 
-repls.append((
-"""        ui / 'src' / 'vector-runtime-bootstrap.js',
+once(
+'''        ui / 'src' / 'vector-runtime-bootstrap.js',
         ui / 'app.js',
-""",
-"""        ui / 'src' / 'vector-runtime-bootstrap.js',
+''',
+'''        ui / 'src' / 'vector-runtime-bootstrap.js',
         ui / 'src' / 'map-point-v1.js',
         ui / 'app.js',
-"""
-))
+''',
+"bundle",
+)
 
-repls.append((
-"""        base_geometry = assert_no_overlap(page, label)
+once(
+'''        base_geometry = assert_no_overlap(page, label)
         shot(page, f'MAP_SHELL_{release_version}_{label}_base.png')
 
         page.click('#layersButton')
-""",
-"""        base_geometry = assert_no_overlap(page, label)
+''',
+'''        base_geometry = assert_no_overlap(page, label)
 
         adapter_runtime = page.evaluate("""() => {
           const grid = window.__MAP_MARKUP_SHELL__.gridAdapter;
@@ -61,16 +66,17 @@ repls.append((
         shot(page, f'MAP_SHELL_{release_version}_{label}_base.png')
 
         page.click('#layersButton')
-"""
-))
+''',
+"map-adapter-runtime",
+)
 
-repls.append((
-"""        page.fill('#pointCode', 'P-101')
+once(
+'''        page.fill('#pointCode', 'P-101')
         page.fill('#pointLabel', 'Контрольная')
         page.click('[data-add-point]')
         assert 'добавлена' in page.locator('[data-tool-feedback]').inner_text()
-""",
-"""        page.fill('#pointCode', 'P-101')
+''',
+'''        page.fill('#pointCode', 'P-101')
         page.fill('#pointLabel', 'Контрольная')
         page.evaluate("""() => {
           window.__MAP_POINT_V1_EVENTS__ = [];
@@ -87,13 +93,14 @@ repls.append((
         assert isinstance(shared_events[0]['lat'], (int, float)), shared_events
         assert isinstance(shared_events[0]['lon'], (int, float)), shared_events
         assert shared_events[0]['createdAt'], shared_events
-"""
-))
+''',
+"map-point-runtime",
+)
 
-repls.append((
-"""        results.append({'viewport': label, 'version': runtime_version, 'console_errors': console_errors, 'base_geometry': base_geometry})
-""",
-"""        results.append({
+once(
+'''        results.append({'viewport': label, 'version': runtime_version, 'console_errors': console_errors, 'base_geometry': base_geometry})
+''',
+'''        results.append({
             'viewport': label,
             'version': runtime_version,
             'console_errors': console_errors,
@@ -102,13 +109,9 @@ repls.append((
             'map_point_v1_event': shared_events[0],
             'provider_fallback_project_unchanged': True,
         })
-"""
-))
-
-for old, new in repls:
-    if old not in s:
-        raise SystemExit("patch anchor missing")
-    s = s.replace(old, new, 1)
+''',
+"result",
+)
 
 p.write_text(s, encoding="utf-8")
 print("MAP_MARKUP_R3_PATCH_OK")
