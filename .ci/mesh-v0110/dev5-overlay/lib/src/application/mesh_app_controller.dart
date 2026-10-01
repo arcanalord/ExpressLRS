@@ -117,6 +117,7 @@ final class MeshAppController extends ChangeNotifier {
   List<Contact> contacts = const [];
   List<GroupDefinition> groups = const [];
   List<ConversationMessage> messages = const [];
+  List<String> messageRequestPeerMmIds = const [];
   String? preparedFileName;
   int? preparedFileBytes;
   int? preparedFileChunks;
@@ -470,6 +471,7 @@ final class MeshAppController extends ChangeNotifier {
 
     contacts = await _core.contacts();
     groups = await _core.groups();
+    await _refreshMessageRequests();
     for (final receipt in await _core.groupReceipts()) {
       _groupReceipts
           .putIfAbsent(receipt.messageId, () => <String>{})
@@ -505,6 +507,13 @@ final class MeshAppController extends ChangeNotifier {
     final id = selectedPeerMmId;
     if (id == null) return null;
     return contacts.where((c) => c.mmId == id).firstOrNull;
+  }
+
+  bool get isDirectChat => activeConversation.kind == ConversationKind.direct;
+  bool get selectedDirectIsKnownContact => selectedContact != null;
+  String get selectedDirectDisplayName {
+    final id = selectedPeerMmId;
+    return id == null ? '' : displayNameForMmId(id);
   }
 
   bool get isGeneralChat =>
@@ -653,12 +662,16 @@ final class MeshAppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> selectContact(String mmId) async {
-    activeConversation = ConversationRef.direct(mmId);
-    selectedPeerMmId = mmId;
+  Future<void> selectDirectPeer(String mmId) async {
+    final clean = mmId.trim();
+    if (clean.isEmpty || clean == ownMmId) return;
+    activeConversation = ConversationRef.direct(clean);
+    selectedPeerMmId = clean;
     await _reloadMessages();
     notifyListeners();
   }
+
+  Future<void> selectContact(String mmId) => selectDirectPeer(mmId);
 
   Future<void> selectGroup(String groupId) async {
     activeConversation = ConversationRef.group(groupId);
@@ -713,6 +726,9 @@ final class MeshAppController extends ChangeNotifier {
         await _core.sendText(peerMmId: peer, text: text);
       }
       await _reloadMessages();
+      if (activeConversation.kind == ConversationKind.direct) {
+        await _refreshMessageRequests();
+      }
     } finally {
       busy = false;
       notifyListeners();
@@ -1034,6 +1050,7 @@ final class MeshAppController extends ChangeNotifier {
     }
     await _core.saveContact(Contact(mmId: cleanId, displayName: cleanName));
     contacts = await _core.contacts();
+    await _refreshMessageRequests();
     selectedPeerMmId = cleanId;
     activeConversation = ConversationRef.direct(cleanId);
     await _reloadMessages();
@@ -1042,6 +1059,19 @@ final class MeshAppController extends ChangeNotifier {
 
   bool hasContact(String mmId) =>
       contacts.any((contact) => contact.mmId == mmId);
+
+  Future<void> _refreshMessageRequests() async {
+    final known = contacts.map((contact) => contact.mmId).toSet();
+    final all = await _core.allMessages();
+    final ids = <String>{};
+    for (final message in all) {
+      if (!message.effectiveConversationKey.startsWith('direct:')) continue;
+      final id = message.peerMmId.trim();
+      if (id.isEmpty || id == ownMmId || known.contains(id)) continue;
+      ids.add(id);
+    }
+    messageRequestPeerMmIds = ids.toList(growable: false)..sort();
+  }
 
   LanPairingSession? pairingFor(String mmId) => lanPairings[mmId];
 
@@ -2752,9 +2782,34 @@ final class MeshAppController extends ChangeNotifier {
           .where((c) => c.mmId == event.fromMmId)
           .firstOrNull;
       if (contact == null) {
-        _addLr24Log(
-          'DROP unknown peer=${event.fromMmId} id=${event.messageId}',
-        );
+        if (event.messageClass != 'text') {
+          _addLr24Log(
+            'QUARANTINE unknown class=${event.messageClass} '
+            'peer=${event.fromMmId} id=${event.messageId}',
+          );
+          return;
+        }
+        try {
+          await _core.receiveText(
+            messageId: event.messageId,
+            fromMmId: event.fromMmId,
+            text: event.payload,
+          );
+          await _lr24?.acknowledgeIncoming(
+            messageId: event.messageId,
+            toMmId: event.fromMmId,
+          );
+          await _refreshMessageRequests();
+          if (selectedPeerMmId == event.fromMmId) await _reloadMessages();
+          lastRadioNotice =
+              'Запрос сообщения от ${displayNameForMmId(event.fromMmId)}';
+          _addLr24Log(
+            'REQUEST unknown peer=${event.fromMmId} id=${event.messageId}',
+          );
+          notifyListeners();
+        } catch (error) {
+          _addLr24Log('REQUEST STORE ERROR ${event.messageId} | $error');
+        }
         return;
       }
       try {
