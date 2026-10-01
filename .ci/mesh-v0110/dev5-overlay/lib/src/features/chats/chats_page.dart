@@ -940,27 +940,24 @@ class _ConversationPane extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          if (onBack != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                tooltip: 'Назад к чатам',
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back),
-              ),
-            ),
           ListTile(
-            leading: CircleAvatar(
-              child: isGeneral
-                  ? const Icon(Icons.forum_outlined, size: 20)
-                  : isGroup
-                  ? const Icon(Icons.groups_2_outlined, size: 20)
-                  : Text(
-                      directDisplayName.isEmpty
-                          ? '?'
-                          : directDisplayName.characters.first.toUpperCase(),
-                    ),
-            ),
+            leading: onBack != null
+                ? IconButton(
+                    tooltip: 'Назад к чатам',
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back),
+                  )
+                : CircleAvatar(
+                    child: isGeneral
+                        ? const Icon(Icons.forum_outlined, size: 20)
+                        : isGroup
+                        ? const Icon(Icons.groups_2_outlined, size: 20)
+                        : Text(
+                            directDisplayName.isEmpty
+                                ? '?'
+                                : directDisplayName.characters.first.toUpperCase(),
+                          ),
+                  ),
             title: Text(
               isGeneral
                   ? 'Общий чат'
@@ -984,14 +981,17 @@ class _ConversationPane extends StatelessWidget {
             _ConnectionSummary(controller: controller, compact: compact),
             if (contact == null)
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.tertiaryContainer,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: compact ? 7 : 12,
+                    ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1000,7 +1000,7 @@ class _ConversationPane extends StatelessWidget {
                         Expanded(
                           child: Text(
                             compact
-                                ? 'Запрос: доступен только текст. Добавьте контакт для файлов и карты.'
+                                ? 'Запрос · только текст. Файлы и карта — после контакта.'
                                 : 'Запрос от неизвестного узла: текст можно читать и отправлять. '
                                       'Вложения, карта и управляющие действия доступны после явного добавления контакта.',
                             style: Theme.of(context).textTheme.bodySmall,
