@@ -1381,10 +1381,7 @@ class _ConversationPane extends StatelessWidget {
 }
 
 class _ConnectionSummary extends StatelessWidget {
-  const _ConnectionSummary({
-    required this.controller,
-    required this.compact,
-  });
+  const _ConnectionSummary({required this.controller, required this.compact});
 
   final MeshAppController controller;
   final bool compact;
