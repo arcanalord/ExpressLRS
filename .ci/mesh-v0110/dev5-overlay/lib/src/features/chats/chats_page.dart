@@ -237,10 +237,6 @@ class _ContactList extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          onTap: () {
-            controller.selectDirectPeer(mmId);
-            onOpenConversation();
-          },
           trailing: IconButton(
             tooltip: 'Добавить контакт',
             icon: const Icon(Icons.person_add_alt_1_outlined),
@@ -276,6 +272,10 @@ class _ContactList extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          onTap: () {
+            controller.selectDirectPeer(mmId);
+            onOpenConversation();
+          },
           trailing: IconButton(
             tooltip: 'Добавить контакт',
             icon: const Icon(Icons.person_add_alt_1_outlined),
