@@ -1,6 +1,6 @@
 name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc8
 # rc8 request inbox + FILE route recovery candidate
-# canonical formatter pass trigger
+# canonical rc8 sources committed; validation trigger
 
 on:
   workflow_dispatch:
