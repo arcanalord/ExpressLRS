@@ -529,13 +529,16 @@ final class MeshAppController extends ChangeNotifier {
 
   List<String> get nearbyPeerMmIds {
     final cutoff = DateTime.now().toUtc().subtract(const Duration(seconds: 30));
-    final saved = contacts.map((c) => c.mmId).toSet();
+    final hidden = <String>{
+      ...contacts.map((c) => c.mmId),
+      ...messageRequestPeerMmIds,
+    };
     return _peerLastSeen.entries
         .where(
           (entry) =>
               entry.key != ownMmId &&
               entry.value.isAfter(cutoff) &&
-              !saved.contains(entry.key),
+              !hidden.contains(entry.key),
         )
         .map((entry) => entry.key)
         .toList(growable: false)
