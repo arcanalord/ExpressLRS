@@ -923,6 +923,7 @@ class _ConversationPane extends StatelessWidget {
     final directPeerMmId = controller.selectedPeerMmId;
     final directDisplayName = controller.selectedDirectDisplayName;
     final group = controller.selectedGroup;
+    final compact = MediaQuery.sizeOf(context).width < 600;
     if (isDirect && directPeerMmId == null) {
       return const Card(
         child: Center(child: Text('Нет выбранного собеседника')),
@@ -980,7 +981,7 @@ class _ConversationPane extends StatelessWidget {
             ),
           ),
           if (isDirect) ...[
-            _ConnectionSummary(controller: controller),
+            _ConnectionSummary(controller: controller, compact: compact),
             if (contact == null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -998,8 +999,10 @@ class _ConversationPane extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Запрос от неизвестного узла: текст можно читать и отправлять. '
-                            'Вложения, карта и управляющие действия доступны после явного добавления контакта.',
+                            compact
+                                ? 'Запрос: доступен только текст. Добавьте контакт для файлов и карты.'
+                                : 'Запрос от неизвестного узла: текст можно читать и отправлять. '
+                                      'Вложения, карта и управляющие действия доступны после явного добавления контакта.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ),
@@ -1353,9 +1356,13 @@ class _ConversationPane extends StatelessWidget {
 }
 
 class _ConnectionSummary extends StatelessWidget {
-  const _ConnectionSummary({required this.controller});
+  const _ConnectionSummary({
+    required this.controller,
+    required this.compact,
+  });
 
   final MeshAppController controller;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1406,7 +1413,7 @@ class _ConnectionSummary extends StatelessWidget {
             .surfaceContainerLow,
         leading: Icon(icon, color: color, size: 20),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(detail),
+        subtitle: compact ? null : Text(detail),
         children: [
           Wrap(
             spacing: 6,
