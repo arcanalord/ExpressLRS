@@ -20,7 +20,8 @@ env:
   VERSION_NAME: "0.3.0-dev.9"
   VERSION_CODE: "33"
   GRADLE_VERSION: "8.10.2"
-  BASE_PROJECT_URL: "https://ucdd92c7ca0ff44942b233575aa7.dl.dropboxusercontent.com/cd/0/get/DIq5XpbnGL7XdqnG_yMr2D_i8xaNy2oglWaaxbUylxmTJnpi0wVpmF8KGK71w9flKHoVI47_B32Fagh5bnIZsNbjtu7NA-NfSfmHuapkFd_tIk02K4pgF2iCp5NPw_STmSgQfvf_urxfLrFxcI2sOgT8_tscc7YTelI61J_PB2KrnA/file?c_luid=cfbe8875"
+  LEGACY_FOLDER_URL: "https://www.dropbox.com/scl/fo/gca5cqopw6r0b194shp0z/ACc1Sa9cLgqFvlVcbpLv9-0?rlkey=zo23mjd3x6bm73u2rx8oy1pg4&st=n7jcdyy8&dl=1"
+  BASE_PROJECT_SHA256: "a3a3ce2a8904f7f57aaaed9164bf3f3e60989ef1491ad13be8ce7bbff1e1fe81"
 
 jobs:
   build:
@@ -51,13 +52,59 @@ jobs:
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
           echo "$ANDROID_HOME/build-tools/35.0.0" >> "$GITHUB_PATH"
 
-      - name: Restore Android baseline and recovery
+      - name: Restore exact Android baseline and recovery
         shell: bash
         run: |
           set -euo pipefail
           rm -rf _ppo
-          mkdir -p _ppo/base _ppo/out
-          curl -L --fail --retry 3 --connect-timeout 20 "$BASE_PROJECT_URL" -o _ppo/base.zip
+          mkdir -p _ppo/base _ppo/out _ppo/legacy
+
+          curl -L --fail --retry 3 --connect-timeout 20 --max-time 240 "$LEGACY_FOLDER_URL" -o _ppo/legacy-folder.zip
+
+          python3 - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib, zipfile
+
+          outer = Path("_ppo/legacy-folder.zip")
+          root = Path("_ppo/legacy")
+          target_sha = "a3a3ce2a8904f7f57aaaed9164bf3f3e60989ef1491ad13be8ce7bbff1e1fe81"
+          target_name = "PPO_RADAR_ANDROID_v0.2.6_PROJECT.zip"
+
+          root.mkdir(parents=True, exist_ok=True)
+          with zipfile.ZipFile(outer) as z:
+              for info in z.infolist():
+                  raw = info.filename.replace("\\", "/")
+                  parts = [p for p in PurePosixPath(raw).parts if p not in ("", ".", "/")]
+                  if not parts or any(p == ".." for p in parts):
+                      continue
+                  dst = root.joinpath(*parts)
+                  if info.is_dir():
+                      dst.mkdir(parents=True, exist_ok=True)
+                      continue
+                  dst.parent.mkdir(parents=True, exist_ok=True)
+                  with z.open(info) as src, dst.open("wb") as fh:
+                      fh.write(src.read())
+
+          candidates = sorted(root.rglob(target_name))
+          if not candidates:
+              raise SystemExit(f"exact baseline not found: {target_name}")
+
+          exact = []
+          for p in candidates:
+              sha = hashlib.sha256(p.read_bytes()).hexdigest()
+              print(f"baseline-candidate {p.relative_to(root)} sha256={sha}")
+              if sha == target_sha:
+                  exact.append(p)
+
+          if len(exact) != 1:
+              raise SystemExit(f"expected exactly one SHA-matched baseline, got {len(exact)}")
+
+          Path("_ppo/base.zip").write_bytes(exact[0].read_bytes())
+          PY
+
+          echo "$BASE_PROJECT_SHA256  _ppo/base.zip" | sha256sum -c -
+          sha256sum _ppo/base.zip | tee _ppo/out/BASE_PROJECT_SHA256.txt
+
           unzip -q _ppo/base.zip -d _ppo/base
           ANDROID_DIR="$(find _ppo/base -type f -path '*/app/build.gradle' -printf '%h\n' | sed 's#/app$##' | head -n1)"
           test -n "$ANDROID_DIR"
@@ -65,7 +112,6 @@ jobs:
           echo "RECOVERY_DIR=$GITHUB_WORKSPACE/ppo-radar-ci/dev7-recovery" >> "$GITHUB_ENV"
           test -f "$ANDROID_DIR/app/src/main/assets/web/index.html"
           test -f "ppo-radar-ci/dev7-recovery/tools/apply-runtime-recovery.mjs"
-          sha256sum _ppo/base.zip | tee _ppo/out/BASE_PROJECT_SHA256.txt
 
       - name: Apply runtime recovery dev.7
         shell: bash
