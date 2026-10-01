@@ -10,6 +10,7 @@ on:
       - fix/m05-file1-final-4of4
       - feat/flutter-rc7-product-ux
       - fix/flutter-rc8-requests-file-route
+      - ui/flutter-rc8-connection-chatgpt
     paths:
       - '.github/workflows/mesh-flutter-general-dev15.yml'
       - '.ci/mesh-v0110/dev5-overlay/**'
