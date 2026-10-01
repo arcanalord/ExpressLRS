@@ -811,6 +811,7 @@ final class MeshAppController extends ChangeNotifier {
       ),
     );
     contacts = await _core.contacts();
+    await _refreshMessageRequests();
     selectedPeerMmId = cleanId;
     activeConversation = ConversationRef.direct(cleanId);
     await _reloadMessages();
@@ -995,6 +996,7 @@ final class MeshAppController extends ChangeNotifier {
       ),
     );
     contacts = await _core.contacts();
+    await _refreshMessageRequests();
     _lan?.setAllowedPeers(
       contacts
           .where((contact) => contact.verified)
