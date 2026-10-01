@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -393,6 +394,18 @@ void main() {
     expect(find.byTooltip('Сначала добавьте контакт'), findsOneWidget);
     expect(find.text('LR24 отключён'), findsOneWidget);
     expect(find.textContaining('FILE/1'), findsWidgets);
+
+    await controller.prepareSmallFile(
+      fileName: 'request-blocked.bin',
+      mimeType: 'application/octet-stream',
+      bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+    );
+    await tester.pumpAndSettle();
+    final blockedFileSend = tester.widget<IconButton>(
+      find.byTooltip('Для запроса сначала добавьте контакт или уберите файл'),
+    );
+    expect(blockedFileSend.onPressed, isNull);
+    expect(controller.hasContact('mm:unknown-direct'), isFalse);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
