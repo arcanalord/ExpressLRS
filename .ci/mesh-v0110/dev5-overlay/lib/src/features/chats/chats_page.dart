@@ -1233,6 +1233,18 @@ class _ConversationPane extends StatelessWidget {
                               : 'LR24 отключён',
                           style: Theme.of(context).textTheme.labelSmall,
                         ),
+                        if (controller.preparedFileTransferId != null)
+                          Text(
+                            'transferId: ${controller.preparedFileTransferId}',
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        if (controller.preparedFileSha256 != null)
+                          Text(
+                            'SHA-256: ${controller.preparedFileSha256}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
                       ],
                     ],
                   ),
@@ -1275,12 +1287,21 @@ class _ConversationPane extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   IconButton.filled(
-                    tooltip: controller.preparedFileName != null
+                    tooltip:
+                        controller.preparedFileName != null &&
+                            contact == null &&
+                            isDirect
+                        ? 'Для запроса сначала добавьте контакт или уберите файл'
+                        : controller.preparedFileName != null
                         ? controller.fileTransferCanRetry
                               ? 'Повторить отправку файла'
                               : 'Отправить файл'
                         : 'Отправить',
-                    onPressed: controller.busy
+                    onPressed:
+                        controller.busy ||
+                            (controller.preparedFileName != null &&
+                                contact == null &&
+                                isDirect)
                         ? null
                         : () async {
                             try {
