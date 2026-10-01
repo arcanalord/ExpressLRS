@@ -221,10 +221,7 @@ class _ContactList extends StatelessWidget {
       if (controller.messageRequestPeerMmIds.isNotEmpty)
         const Padding(
           padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-          child: Text(
-            'Запросы',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
+          child: Text('Запросы', style: TextStyle(fontWeight: FontWeight.w700)),
         ),
       for (final mmId in controller.messageRequestPeerMmIds)
         ListTile(
@@ -927,7 +924,9 @@ class _ConversationPane extends StatelessWidget {
     final directDisplayName = controller.selectedDirectDisplayName;
     final group = controller.selectedGroup;
     if (isDirect && directPeerMmId == null) {
-      return const Card(child: Center(child: Text('Нет выбранного собеседника')));
+      return const Card(
+        child: Center(child: Text('Нет выбранного собеседника')),
+      );
     }
     if (!isGeneral && !isGroup && !isDirect) {
       return const Card(child: Center(child: Text('Нет выбранного чата')));

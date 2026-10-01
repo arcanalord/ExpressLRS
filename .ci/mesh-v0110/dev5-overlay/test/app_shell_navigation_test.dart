@@ -343,10 +343,13 @@ void main() {
       controller.dispose();
       if (root.existsSync()) root.deleteSync(recursive: true);
     },
-  );  testWidgets('nearby peer opens direct chat without becoming a contact', (
+  );
+  testWidgets('nearby peer opens direct chat without becoming a contact', (
     tester,
   ) async {
-    final root = Directory.systemTemp.createTempSync('mesh_unknown_direct_gate_');
+    final root = Directory.systemTemp.createTempSync(
+      'mesh_unknown_direct_gate_',
+    );
     late MeshAppController controller;
     await tester.runAsync(() async {
       controller = await MeshAppController.createForWidgetTest(
@@ -387,6 +390,4 @@ void main() {
     controller.dispose();
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
-
-
 }

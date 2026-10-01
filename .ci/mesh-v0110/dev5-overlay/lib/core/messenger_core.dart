@@ -38,6 +38,7 @@ final class MeshMessengerCore {
     await delivery.restore();
     await _recoverAtomicCryptoCommits();
   }
+
   Future<List<Contact>> contacts() => _storage.loadContacts();
   Future<void> saveContact(Contact contact) => _storage.saveContact(contact);
   Future<List<GroupDefinition>> groups() => _storage.loadGroups();
@@ -160,7 +161,6 @@ final class MeshMessengerCore {
     return result;
   }
 
-
   Future<GroupDefinition> createGroup({
     required String displayName,
     required Iterable<String> memberMmIds,
@@ -186,7 +186,6 @@ final class MeshMessengerCore {
     return group;
   }
 
-
   Future<bool> upsertGroupDescriptor({
     required GroupDefinition descriptor,
     required String fromMmId,
@@ -200,8 +199,9 @@ final class MeshMessengerCore {
     }
     final knownCreator = (await contacts()).any((c) => c.mmId == fromMmId);
     if (!knownCreator) return false;
-    final existing =
-        (await groups()).where((g) => g.groupId == descriptor.groupId).firstOrNull;
+    final existing = (await groups())
+        .where((g) => g.groupId == descriptor.groupId)
+        .firstOrNull;
     if (existing != null) {
       if (existing.creatorMmId != descriptor.creatorMmId ||
           descriptor.revision <= existing.revision) {
@@ -218,7 +218,9 @@ final class MeshMessengerCore {
   }) async {
     final clean = text.trim();
     if (clean.isEmpty) throw ArgumentError('text must not be empty');
-    final group = (await groups()).where((g) => g.groupId == groupId).firstOrNull;
+    final group = (await groups())
+        .where((g) => g.groupId == groupId)
+        .firstOrNull;
     if (group == null) throw StateError('GROUP_NOT_FOUND');
     if (!group.contains(ownMmId)) throw StateError('GROUP_NOT_MEMBER');
     final now = _now();
@@ -272,7 +274,6 @@ final class MeshMessengerCore {
     return legs;
   }
 
-
   Future<bool> receiveGroupText({
     required String messageId,
     required String fromMmId,
@@ -299,8 +300,12 @@ final class MeshMessengerCore {
     required int membershipRevision,
     required String text,
   }) async {
-    final group = (await groups()).where((g) => g.groupId == groupId).firstOrNull;
-    if (group == null || !group.contains(ownMmId) || !group.contains(fromMmId)) {
+    final group = (await groups())
+        .where((g) => g.groupId == groupId)
+        .firstOrNull;
+    if (group == null ||
+        !group.contains(ownMmId) ||
+        !group.contains(fromMmId)) {
       return false;
     }
     if (membershipRevision > group.revision) return false;
@@ -322,7 +327,9 @@ final class MeshMessengerCore {
     required String fromMmId,
     required String groupId,
   }) async {
-    final group = (await groups()).where((g) => g.groupId == groupId).firstOrNull;
+    final group = (await groups())
+        .where((g) => g.groupId == groupId)
+        .firstOrNull;
     if (group == null || !group.contains(fromMmId)) return null;
     await _storage.saveGroupReceipt(
       GroupReceiptRecord(
@@ -591,7 +598,9 @@ final class MeshMessengerCore {
   }
 
   Future<Contact> _peerContact(String peerMmId) async {
-    final contact = (await contacts()).where((c) => c.mmId == peerMmId).firstOrNull;
+    final contact = (await contacts())
+        .where((c) => c.mmId == peerMmId)
+        .firstOrNull;
     if (contact == null) throw StateError('M07_CONTACT_REQUIRED');
     return contact;
   }
@@ -636,10 +645,7 @@ final class MeshMessengerCore {
         throw StateError('M07_PREKEY_BINDING_REJECTED');
       }
     }
-    await provider.ensureDirectSession(
-      peer,
-      preKeyBundle: preKeyBundle,
-    );
+    await provider.ensureDirectSession(peer, preKeyBundle: preKeyBundle);
     final encrypted = await provider.encryptDirect(
       DirectPlaintext(
         logicalMessageId: logicalMessageId,
@@ -717,9 +723,7 @@ final class MeshMessengerCore {
       }),
     );
     if (outcome is M07AtomicDecryptRejected) {
-      throw FormatException(
-        'M07_DECRYPT_REJECTED:${outcome.rejection.reason}',
-      );
+      throw FormatException('M07_DECRYPT_REJECTED:${outcome.rejection.reason}');
     }
     final commit = outcome as M07AtomicInboundCommit;
     final stored = await _storeValidatedDirectPlaintext(
