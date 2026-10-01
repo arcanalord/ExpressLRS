@@ -16,8 +16,10 @@ Future<void> main() async {
   await _runExactFourChunksWithDroppedFinalComplete();
   await _runProactiveFinalCompleteWithoutSenderFinalRequest();
   await _runLinkLossResumeMissingOnly();
+  await _runFreshSendAfterLinkRecovery();
   await _runUserPauseResume();
   await _runCancellation();
+  stdout.writeln('MESH_MESSENGER_FILE1_FRESH_AFTER_LINK_RECOVERY_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_USER_PAUSE_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_LINK_RESUME_PASS');
   stdout.writeln('MESH_MESSENGER_FILE1_VERIFIED_FINAL_ACK_PASS');
@@ -370,6 +372,51 @@ Future<void> _runUserPauseResume() async {
   if (progress.last.state != FileTransferSessionState.completed) {
     throw StateError('user pause/resume did not complete');
   }
+  bridgeA.close();
+  bridgeB.close();
+}
+
+Future<void> _runFreshSendAfterLinkRecovery() async {
+  late final File1TransportBridge bridgeA;
+  late final File1TransportBridge bridgeB;
+  Uint8List? received;
+
+  bridgeA = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: (payload) => bridgeB.handleIncoming(payload),
+    onReceived: (_) {},
+  );
+  bridgeB = File1TransportBridge(
+    tickInterval: const Duration(milliseconds: 5),
+    sendBytes: (payload) => bridgeA.handleIncoming(payload),
+    onReceived: (event) {
+      received = Uint8List.fromList(event.bytes);
+    },
+  );
+
+  // Reproduce the rc7 physical failure: transport connect marks FILE/1
+  // unavailable before any sender exists. Peer discovery must make a later
+  // first transfer possible.
+  bridgeA.pauseForLinkLoss();
+  bridgeA.resumeAfterLink();
+
+  final payload = Uint8List.fromList(
+    List<int>.generate(8192, (index) => (index * 13 + 5) & 0xff),
+  );
+  final plan = M05FileTransferCore.createPlan(
+    transferId: 'fresh-after-link-recovery',
+    fileName: 'fresh.bin',
+    mimeType: 'application/octet-stream',
+    bytes: payload,
+    chunkSize: 1024,
+  );
+
+  await bridgeA.send(plan).timeout(const Duration(seconds: 10));
+  final result = received;
+  if (result == null || !_same(payload, result)) {
+    throw StateError('fresh send after link recovery payload mismatch');
+  }
+
   bridgeA.close();
   bridgeB.close();
 }
