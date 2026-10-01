@@ -259,6 +259,8 @@ final class TransparentUartRadioTransport implements MessageTransport {
 
   @override
   bool get isAvailable => state == 'ready';
+  bool get file1RouteAvailable =>
+      isAvailable && hasFreshPeers && _file1.linkAvailable;
 
   int get badFrames => _codec.badFrames;
   bool get hasFreshPeers => _peerReachability.hasFreshPeers;

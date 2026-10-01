@@ -1,6 +1,6 @@
 name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc8
 # rc8 request inbox + FILE route recovery candidate
-# canonical rc8 sources committed; validation trigger
+# canonical rc8 UI sources committed; validation trigger 3
 
 on:
   workflow_dispatch:
@@ -10,6 +10,7 @@ on:
       - fix/m05-file1-final-4of4
       - feat/flutter-rc7-product-ux
       - fix/flutter-rc8-requests-file-route
+      - ui/flutter-rc8-connection-chatgpt
     paths:
       - '.github/workflows/mesh-flutter-general-dev15.yml'
       - '.ci/mesh-v0110/dev5-overlay/**'
@@ -146,6 +147,11 @@ jobs:
             lib/platform/transparent_uart_radio_transport.dart \
             lib/src/application/mesh_app_controller.dart \
             lib/src/features/chats/chats_page.dart \
+            lib/src/features/connection/connection_page.dart \
+            lib/src/features/diagnostics/diagnostics_page.dart \
+            lib/src/features/help/help_sheet.dart \
+            lib/src/features/settings/settings_page.dart \
+            lib/src/app.dart \
             tool/file1_transport_loopback_self_test.dart \
             test/app_shell_navigation_test.dart
           cp lib/core/file_transfer_session.dart \
@@ -160,6 +166,16 @@ jobs:
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/application/mesh_app_controller.dart"
           cp lib/src/features/chats/chats_page.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/features/chats/chats_page.dart"
+          cp lib/src/features/connection/connection_page.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/features/connection/connection_page.dart"
+          cp lib/src/features/diagnostics/diagnostics_page.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/features/diagnostics/diagnostics_page.dart"
+          cp lib/src/features/help/help_sheet.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/features/help/help_sheet.dart"
+          cp lib/src/features/settings/settings_page.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/features/settings/settings_page.dart"
+          cp lib/src/app.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/app.dart"
           cp tool/file1_transport_loopback_self_test.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart"
           cp test/app_shell_navigation_test.dart \
@@ -172,6 +188,11 @@ jobs:
             .ci/mesh-v0110/dev5-overlay/lib/platform/transparent_uart_radio_transport.dart
             .ci/mesh-v0110/dev5-overlay/lib/src/application/mesh_app_controller.dart
             .ci/mesh-v0110/dev5-overlay/lib/src/features/chats/chats_page.dart
+            .ci/mesh-v0110/dev5-overlay/lib/src/features/connection/connection_page.dart
+            .ci/mesh-v0110/dev5-overlay/lib/src/features/diagnostics/diagnostics_page.dart
+            .ci/mesh-v0110/dev5-overlay/lib/src/features/help/help_sheet.dart
+            .ci/mesh-v0110/dev5-overlay/lib/src/features/settings/settings_page.dart
+            .ci/mesh-v0110/dev5-overlay/lib/src/app.dart
             .ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart
             .ci/mesh-v0110/dev5-overlay/test/app_shell_navigation_test.dart
           )
@@ -228,12 +249,15 @@ jobs:
           grep -q "waiting profile selection; no active probe" lib/src/application/mesh_app_controller.dart
           grep -q "runRadioSelfTest" lib/src/application/mesh_app_controller.dart
           grep -q "session.enterOta" lib/src/application/mesh_app_controller.dart
-          grep -q "Всё работает" lib/src/features/connection/connection_page.dart
+          grep -q "Маршрут доступен" lib/src/features/connection/connection_page.dart
           grep -q "runRadioHil" lib/src/application/mesh_app_controller.dart
           grep -q "Тест 1000" lib/src/features/connection/connection_page.dart
           grep -q "MM_UART_HIL_100_PASS" tool/mm_two_node_radio_sim_test.dart
           grep -q "class TransparentUartRadioTransport" lib/platform/transparent_uart_radio_transport.dart
           grep -q "MicoAir LR24-F" lib/src/features/connection/connection_page.dart
+          grep -q "Инженерный режим" lib/src/features/connection/connection_page.dart
+          grep -q "FILE/1 route" lib/src/features/diagnostics/diagnostics_page.dart
+          grep -q "Справка Mesh Messenger" lib/src/features/help/help_sheet.dart
           grep -q "no active probe" lib/src/application/mesh_app_controller.dart
           grep -q "saved LR24 binding matched; no active probe" lib/src/application/mesh_app_controller.dart
           grep -q "USB_PROFILE_BINDING_PASS" tool/usb_profile_binding_self_test.dart

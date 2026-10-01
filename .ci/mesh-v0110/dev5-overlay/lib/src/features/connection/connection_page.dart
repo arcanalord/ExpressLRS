@@ -101,7 +101,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     final anyRouteReady =
         controller.lanReady ||
         controller.ep2Connected ||
-        controller.lr24Connected ||
+        controller.lr24PeerReachable ||
         controller.radioConnected;
 
     return ListView(
@@ -119,7 +119,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  anyRouteReady ? 'Всё работает' : 'Автоматический маршрут',
+                  anyRouteReady ? 'Маршрут доступен' : 'Автоматический маршрут',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -128,7 +128,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                 const SizedBox(height: 6),
                 Text(
                   anyRouteReady
-                      ? 'Есть доступный канал связи. Сообщения пойдут по подходящему маршруту автоматически.'
+                      ? 'Есть подтверждённый путь к удалённому узлу. Сообщения пойдут по подходящему маршруту автоматически.'
+                      : controller.lr24Connected
+                      ? 'LR24 подключён по USB, но удалённый peer ещё не подтверждён. Это не считается готовым маршрутом.'
                       : 'Одна очередь сообщений. Подключи доступный канал — приложение выберет маршрут само.',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -155,7 +157,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     _StatusPill(
                       icon: Icons.usb_rounded,
                       label: 'LR24-F',
-                      ready: controller.lr24Connected,
+                      ready: controller.lr24PeerReachable,
+                      detail: controller.lr24Connected
+                          ? controller.lr24PeerReachable
+                                ? 'peer ready'
+                                : 'USB ready · peer pending'
+                          : 'USB off',
                     ),
                     _StatusPill(
                       icon: Icons.bluetooth,
@@ -309,6 +316,36 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                 ),
                               ],
                             ),
+                            if (controller.advancedMode) ...[
+                              const Divider(height: 20),
+                              const Text(
+                                'Инженерный режим',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'FILE/1 route: ${controller.lr24FileRouteAvailable ? 'ready' : 'waiting'}',
+                              ),
+                              Text(
+                                'Peer age: ${controller.lr24PeerAgeMs == null ? '—' : '${controller.lr24PeerAgeMs} ms'}',
+                              ),
+                              Text(
+                                'QoS: control ${controller.lr24QosPendingControl} · '
+                                'text ${controller.lr24QosPendingText} · '
+                                'file ${controller.lr24QosPendingFile}',
+                              ),
+                              if (controller.fileTransferState != 'idle')
+                                Text(
+                                  'M05: ${controller.fileTransferState} · '
+                                  '${controller.fileTransferAckedChunks}/'
+                                  '${controller.preparedFileChunks ?? 0} blocks',
+                                ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'USB ready ≠ peer ready ≠ FILE/1 ready ≠ Delivered.',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ],
                             const SizedBox(height: 10),
                             Text(
                               controller.lr24PeerReachable

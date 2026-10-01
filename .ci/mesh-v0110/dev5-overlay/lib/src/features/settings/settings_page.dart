@@ -6,6 +6,7 @@ import '../../../core/settings_registry.dart';
 import '../../application/mesh_app_controller.dart';
 import '../contacts/contact_share_dialog.dart';
 import '../diagnostics/diagnostics_page.dart';
+import '../help/help_sheet.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({required this.controller, super.key});
@@ -83,11 +84,11 @@ class _SettingsPageState extends State<SettingsPage> {
               onChanged: controller.setAdvancedMode,
               secondary: const Icon(Icons.build_circle_outlined),
               title: const Text(
-                'Расширенный режим',
+                'Инженерный режим',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: const Text(
-                'Тесты, подробная диагностика и инженерные параметры.',
+                'Сырые состояния, очереди, счётчики, FILE/1 и подробная диагностика.',
               ),
             ),
           ),
@@ -136,6 +137,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         const SizedBox(height: 12),
         _DiagnosticsPanel(controller: controller),
+        const SizedBox(height: 12),
+        _HelpPanel(controller: controller),
         const SizedBox(height: 12),
         const _PlannedSettingsPanel(),
         const SizedBox(height: 12),
@@ -245,6 +248,33 @@ class _DiagnosticsPanel extends StatelessWidget {
             builder: (_) => DiagnosticsPage(controller: controller),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _HelpPanel extends StatelessWidget {
+  const _HelpPanel({required this.controller});
+
+  final MeshAppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      padding: EdgeInsets.zero,
+      child: ListTile(
+        leading: const Icon(Icons.help_outline),
+        title: const Text(
+          'Справка и руководство',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          controller.advancedMode
+              ? 'Обычный режим + инженерные состояния соединения и FILE/1'
+              : 'Чаты, запросы, связь, файлы, безопасность и диагностика',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showHelpSheet(context, controller: controller),
       ),
     );
   }

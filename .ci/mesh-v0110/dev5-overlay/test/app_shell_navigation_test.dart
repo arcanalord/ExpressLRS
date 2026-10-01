@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -218,6 +219,13 @@ void main() {
     await tester.tap(find.text('Настройки').last);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
+      find.text('Инженерный режим'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Инженерный режим'), findsOneWidget);
+    await tester.scrollUntilVisible(
       find.text('О приложении'),
       240,
       scrollable: find.byType(Scrollable).first,
@@ -232,6 +240,7 @@ void main() {
       defaultValue: 'local',
     );
     expect(find.text('О приложении'), findsOneWidget);
+    expect(find.text('Справка и руководство'), findsOneWidget);
     expect(
       find.text('Версия $expectedVersion ($expectedBuild)'),
       findsOneWidget,
@@ -274,6 +283,12 @@ void main() {
     expect(find.text('LR24 / радиоканал'), findsOneWidget);
     expect(find.text('Очередь доставки'), findsOneWidget);
     expect(find.text('Экспорт diagnostics.txt'), findsOneWidget);
+    expect(find.text('Инженерный режим'), findsNothing);
+    await controller.setAdvancedMode(true);
+    await tester.pumpAndSettle();
+    expect(find.text('Инженерный режим'), findsOneWidget);
+    expect(find.textContaining('QoS control/text/file'), findsOneWidget);
+    expect(find.textContaining('FILE/1'), findsWidgets);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -381,6 +396,26 @@ void main() {
     expect(controller.selectedPeerMmId, 'mm:unknown-direct');
     expect(find.text('Не в контактах · запрос/прямой чат'), findsOneWidget);
     expect(find.text('Сообщение'), findsOneWidget);
+    expect(find.textContaining('Запрос: только текст'), findsOneWidget);
+    expect(find.byTooltip('Сначала добавьте контакт'), findsOneWidget);
+    expect(find.textContaining('LR24: отключён'), findsOneWidget);
+
+    await controller.prepareSmallFile(
+      fileName: 'request-blocked.bin',
+      mimeType: 'application/octet-stream',
+      bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+    );
+    await tester.pumpAndSettle();
+    final blockedFileSend = tester.widget<IconButton>(
+      find.ancestor(
+        of: find.byTooltip(
+          'Для запроса сначала добавьте контакт или уберите файл',
+        ),
+        matching: find.byType(IconButton),
+      ),
+    );
+    expect(blockedFileSend.onPressed, isNull);
+    expect(controller.hasContact('mm:unknown-direct'), isFalse);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());

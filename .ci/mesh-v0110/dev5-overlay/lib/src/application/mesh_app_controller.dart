@@ -135,6 +135,9 @@ final class MeshAppController extends ChangeNotifier {
     return (fileTransferAckedChunks / total).clamp(0.0, 1.0);
   }
 
+  int? get preparedFileChunkSize => _preparedFilePlan?.manifest.chunkSize;
+  String? get preparedFileTransferId => _preparedFilePlan?.manifest.transferId;
+
   bool get fileTransferCanRetry =>
       _preparedFilePlan != null &&
       !fileTransferSending &&
@@ -257,6 +260,16 @@ final class MeshAppController extends ChangeNotifier {
   bool get lr24Active => _lr24Active;
   bool get lr24Connected => _lr24?.isAvailable == true;
   bool get lr24PeerReachable => _lr24?.hasFreshPeers == true;
+  bool get lr24FileRouteAvailable => _lr24?.file1RouteAvailable == true;
+  int? get lr24PeerAgeMs {
+    final peer = selectedPeerMmId ?? lr24PeerMmId;
+    if (peer == null) return null;
+    return _lr24?.peerAgeMs(peer);
+  }
+
+  int get lr24QosPendingControl => _lr24?.qosPendingControl ?? 0;
+  int get lr24QosPendingText => _lr24?.qosPendingText ?? 0;
+  int get lr24QosPendingFile => _lr24?.qosPendingFile ?? 0;
   bool get lr24SelectedPeerReachable {
     final peer = selectedPeerMmId;
     return peer != null && (_lr24?.isPeerFresh(peer) ?? false);
