@@ -603,9 +603,11 @@ final class TransparentUartRadioTransport implements MessageTransport {
     final from = (frame['from'] ?? '').toString().trim();
     if (from.isEmpty || from == ownMmId) return;
     _peerReachability.markSeen(from);
-    if (_file1.hasActiveSenders) {
-      _file1.resumeAfterLink();
-    }
+    // A valid peer frame proves that the FILE/1 route is usable again.
+    // Resume the bridge even when no sender existed at disconnect time:
+    // otherwise the first new transfer after connect remains trapped behind
+    // FILE/1 link unavailable and can never become an active sender.
+    _file1.resumeAfterLink();
     final kind = (frame['k'] ?? '').toString().trim();
 
     switch (kind) {
