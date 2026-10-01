@@ -955,7 +955,8 @@ class _ConversationPane extends StatelessWidget {
                         : Text(
                             directDisplayName.isEmpty
                                 ? '?'
-                                : directDisplayName.characters.first.toUpperCase(),
+                                : directDisplayName.characters.first
+                                      .toUpperCase(),
                           ),
                   ),
             title: Text(
