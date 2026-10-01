@@ -50,6 +50,7 @@ final class MeshMessengerCore {
   Future<List<ConversationMessage>> messagesForConversation(
     ConversationRef conversation,
   ) => _storage.loadMessages(conversationKey: conversation.key);
+  Future<List<ConversationMessage>> allMessages() => _storage.loadMessages();
   DeliveryEnvelope? deliveryById(String id) => delivery.byId(id);
   Future<void> maintenance() => delivery.maintenance();
 
