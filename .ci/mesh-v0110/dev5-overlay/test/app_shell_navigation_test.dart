@@ -232,6 +232,8 @@ void main() {
       defaultValue: 'local',
     );
     expect(find.text('О приложении'), findsOneWidget);
+    expect(find.text('Справка и руководство'), findsOneWidget);
+    expect(find.text('Инженерный режим'), findsOneWidget);
     expect(
       find.text('Версия $expectedVersion ($expectedBuild)'),
       findsOneWidget,
@@ -274,6 +276,12 @@ void main() {
     expect(find.text('LR24 / радиоканал'), findsOneWidget);
     expect(find.text('Очередь доставки'), findsOneWidget);
     expect(find.text('Экспорт diagnostics.txt'), findsOneWidget);
+    expect(find.text('Инженерный режим'), findsNothing);
+    await controller.setAdvancedMode(true);
+    await tester.pumpAndSettle();
+    expect(find.text('Инженерный режим'), findsOneWidget);
+    expect(find.textContaining('QoS control/text/file'), findsOneWidget);
+    expect(find.textContaining('FILE/1'), findsWidgets);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
