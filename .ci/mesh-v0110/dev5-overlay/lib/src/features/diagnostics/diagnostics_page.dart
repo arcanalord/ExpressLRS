@@ -135,8 +135,18 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
             children: [
               _Line('Состояние', controller.fileTransferState),
               _Line(
-                'Chunks',
+                'Blocks',
                 '${controller.fileTransferAckedChunks}/${controller.preparedFileChunks ?? 0}',
+              ),
+              _Line(
+                'Logical block',
+                controller.preparedFileChunkSize == null
+                    ? '—'
+                    : '${controller.preparedFileChunkSize} байт',
+              ),
+              _Line(
+                'FILE/1 route',
+                controller.lr24FileRouteAvailable ? 'ready' : 'waiting',
               ),
               if (controller.fileTransferNotice?.isNotEmpty == true)
                 _Line('Событие', controller.fileTransferNotice!),
@@ -144,6 +154,38 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                 _Line('Последний полученный', controller.lastReceivedFileName!),
             ],
           ),
+          if (controller.advancedMode) ...[
+            const SizedBox(height: 12),
+            _DiagnosticCard(
+              title: 'Инженерный режим',
+              children: [
+                _Line('LR24 state', controller.lr24State),
+                _Line(
+                  'Peer age',
+                  controller.lr24PeerAgeMs == null
+                      ? '—'
+                      : '${controller.lr24PeerAgeMs} мс',
+                ),
+                _Line(
+                  'QoS control/text/file',
+                  '${controller.lr24QosPendingControl}/'
+                  '${controller.lr24QosPendingText}/'
+                  '${controller.lr24QosPendingFile}',
+                ),
+                _Line(
+                  'Route layers',
+                  'USB ${controller.lr24Connected ? 'ready' : 'off'} · '
+                  'peer ${controller.lr24PeerReachable ? 'ready' : 'pending'} · '
+                  'FILE/1 ${controller.lr24FileRouteAvailable ? 'ready' : 'waiting'}',
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Важно: TX/RX transport counters и TX_RESULT не означают application Delivered. '
+                  'Для stock LR24 RSSI/SNR не показываются, если транспорт их реально не предоставляет.',
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           _DiagnosticCard(
             title: 'Журнал LR24',
