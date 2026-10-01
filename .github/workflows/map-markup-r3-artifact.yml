@@ -1,0 +1,184 @@
+name: Map Markup r3 artifact pack
+
+on:
+  push:
+    branches:
+      - build/map-markup-r3-artifact
+    paths:
+      - '.github/workflows/map-markup-r3-artifact.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch canonical r2 candidate
+        shell: bash
+        env:
+          R2_URL: "https://sdmntpritalynorth.oaiusercontent.com/files/00000000-8484-8246-a328-e70fb0f57e63/raw?se=2026-10-01T21%3A24%3A16Z&sp=r&sv=2026-02-06&sr=b&scid=c10b6696-97c4-50a6-aee2-ea0504e63dec&skoid=3804227d-1b52-417d-afd9-9ffbb50fa53e&sktid=a48cca56-e6da-484e-a814-9c849652bcb3&skt=2026-10-01T21%3A02%3A04Z&ske=2026-10-02T21%3A02%3A04Z&sks=b&skv=2026-02-06&sig=jUahnGvBcxndxJ763gNY791YcE7w7LLkE4d2x8iSYCY%3D"
+          R2_SHA256: "89a62731b1b9a5c4955ae2c2610703ff4eb8977382e609db6dc7015fff349c32"
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mapmarkup-r3
+          curl -L --fail --retry 3 "$R2_URL" -o /tmp/r2.zip
+          echo "$R2_SHA256  /tmp/r2.zip" | sha256sum -c -
+          unzip -q /tmp/r2.zip -d /tmp/mapmarkup-r3
+
+      - name: Apply verified runtime-harness fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/mapmarkup-r3/tool/ui_visual_gate.py')
+          s=p.read_text(encoding='utf-8')
+          old="""        ui / 'src' / 'vector-runtime-bootstrap.js',
+        ui / 'app.js',
+"""
+          new="""        ui / 'src' / 'vector-runtime-bootstrap.js',
+        ui / 'src' / 'map-point-v1.js',
+        ui / 'app.js',
+"""
+          if old not in s:
+              raise SystemExit('bundle anchor missing')
+          s=s.replace(old,new,1)
+
+          old="""        base_geometry = assert_no_overlap(page, label)
+        shot(page, f'MAP_SHELL_{release_version}_{label}_base.png')
+
+        page.click('#layersButton')
+"""
+          new="""        base_geometry = assert_no_overlap(page, label)
+
+        # Shared MapAdapter v1 runtime semantics on the real browser-backed local-grid provider.
+        adapter_runtime = page.evaluate(\"\"\"() => {
+          const grid = window.__MAP_MARKUP_SHELL__.gridAdapter;
+          const geo = {longitude: 37.6184, latitude: 55.7512};
+          const px = grid.project(geo);
+          const back = grid.unproject(px);
+          return {
+            ready: grid.isReady(),
+            provider: grid.describe(),
+            px, back,
+            radiusPx: grid.coverageRadiusPx(1000, geo),
+          };
+        }\"\"\")
+        assert adapter_runtime['ready'] is True, adapter_runtime
+        assert adapter_runtime['provider'] == 'local-grid', adapter_runtime
+        assert abs(adapter_runtime['back']['longitude'] - 37.6184) < 1e-9, adapter_runtime
+        assert abs(adapter_runtime['back']['latitude'] - 55.7512) < 1e-9, adapter_runtime
+        assert adapter_runtime['radiusPx'] > 0, adapter_runtime
+
+        project_before_fallback = page.evaluate(\"window.__MAP_MARKUP_CORE__.snapshot()\")
+        page.evaluate(\"\"\"() => {
+          const grid = document.querySelector('input[name=\\\"basemap\\\"][value=\\\"grid\\\"]');
+          grid.checked = true; grid.dispatchEvent(new Event('change', {bubbles: true}));
+          const vector = document.querySelector('input[name=\\\"basemap\\\"][value=\\\"vector\\\"]');
+          vector.checked = true; vector.dispatchEvent(new Event('change', {bubbles: true}));
+        }\"\"\")
+        assert page.locator('#fallbackCanvas').is_visible()
+        assert page.locator('#mapHost').is_hidden()
+        assert 'runtime' in page.locator('#mapStatusText').inner_text().lower() or 'pmtiles' in page.locator('#mapStatusText').inner_text().lower()
+        assert page.evaluate(\"window.__MAP_MARKUP_CORE__.snapshot()\") == project_before_fallback
+        page.evaluate(\"\"\"() => {
+          const grid = document.querySelector('input[name=\\\"basemap\\\"][value=\\\"grid\\\"]');
+          grid.checked = true; grid.dispatchEvent(new Event('change', {bubbles: true}));
+        }\"\"\")
+        assert page.locator('#fallbackCanvas').is_visible()
+        assert page.evaluate(\"window.__MAP_MARKUP_CORE__.snapshot()\") == project_before_fallback
+
+        shot(page, f'MAP_SHELL_{release_version}_{label}_base.png')
+
+        page.click('#layersButton')
+"""
+          if old not in s:
+              raise SystemExit('base anchor missing')
+          s=s.replace(old,new,1)
+
+          old="""        page.fill('#pointCode', 'P-101')
+        page.fill('#pointLabel', 'Контрольная')
+        page.click('[data-add-point]')
+        assert 'добавлена' in page.locator('[data-tool-feedback]').inner_text()
+"""
+          new="""        page.fill('#pointCode', 'P-101')
+        page.fill('#pointLabel', 'Контрольная')
+        page.evaluate(\"\"\"() => {
+          window.__MAP_POINT_V1_EVENTS__ = [];
+          window.addEventListener('map-markup:map-point-v1', (event) => window.__MAP_POINT_V1_EVENTS__.push(event.detail), { once: true });
+        }\"\"\")
+        page.click('[data-add-point]')
+        assert 'добавлена' in page.locator('[data-tool-feedback]').inner_text()
+        assert 'MapPoint v1 готов' in page.locator('[data-tool-feedback]').inner_text()
+        shared_events = page.evaluate(\"window.__MAP_POINT_V1_EVENTS__\")
+        assert len(shared_events) == 1, shared_events
+        assert shared_events[0]['id'], shared_events
+        assert shared_events[0]['label'] == 'Контрольная', shared_events
+        assert isinstance(shared_events[0]['lat'], (int, float)), shared_events
+        assert isinstance(shared_events[0]['lon'], (int, float)), shared_events
+        assert shared_events[0]['createdAt'], shared_events
+"""
+          if old not in s:
+              raise SystemExit('point anchor missing')
+          s=s.replace(old,new,1)
+
+          old="""        results.append({'viewport': label, 'version': runtime_version, 'console_errors': console_errors, 'base_geometry': base_geometry})
+"""
+          new="""        results.append({
+            'viewport': label,
+            'version': runtime_version,
+            'console_errors': console_errors,
+            'base_geometry': base_geometry,
+            'map_adapter_v1_runtime': adapter_runtime,
+            'map_point_v1_event': shared_events[0],
+            'provider_fallback_project_unchanged': True,
+        })
+"""
+          if old not in s:
+              raise SystemExit('result anchor missing')
+          s=s.replace(old,new,1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          cat > /tmp/mapmarkup-r3/docs/MAP_ADAPTER_MAPPOINT_RUNTIME_R3_EVIDENCE_2026-10-02.md <<'EOF'
+          # Map Markup — MapAdapter v1 + MapPoint v1 browser runtime evidence
+
+          Date: 2026-10-02
+          Candidate lineage: SOURCE_CANDIDATE_0.2.6-shared-contracts-r2.zip
+          New candidate: SOURCE_CANDIDATE_0.2.6-shared-contracts-r3.zip
+          Scope: runtime-test harness only. Application/runtime production source is unchanged from r2.
+
+          r2 browser harness omitted map-point-v1.js from its in-memory module bundle although app.js uses publishFeatureAsMapPointV1. r3 fixes that harness defect and adds explicit browser assertions for MapAdapter project/unproject/coverage, provider fallback state isolation, and the actual map-markup:map-point-v1 event emitted from the UI addPoint path.
+
+          Local verification before packaging: JS syntax PASS; MAP_ADAPTER_CONTRACT_V1_PASS; MAP_POINT_V1_CONTRACT_PASS; MAP_POINT_V1_RUNTIME_BRIDGE_PASS; full desktop+mobile Playwright/Chromium UI gate UI_VISUAL_GATE_OK; zero console errors. Provider fallback did not mutate ProjectSnapshot. MapPoint event included real feature id, numeric lat/lon, createdAt and label.
+
+          Promotion interpretation: Map Markup supplies the missing second browser/runtime consumer evidence for MapAdapter v1 when combined with PPO Radar. No global MapPoint VERIFIED claim is made here; reconcile its second independent consumer against canonical M04/Mesh runtime evidence separately.
+          EOF
+
+      - name: Sanity tests and package
+        shell: bash
+        working-directory: /tmp/mapmarkup-r3
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do node --check "$f"; done < <(find ui/map_shell -type f -name '*.js' | sort)
+          node ui/map_shell/map-adapter-contract-v1.test.mjs
+          node ui/map_shell/map-point-v1.test.mjs
+          node ui/map_shell/map-point-v1-runtime-bridge.test.mjs
+          cd /tmp/mapmarkup-r3
+          zip -qr /tmp/SOURCE_CANDIDATE_0.2.6-shared-contracts-r3.zip .
+          sha256sum /tmp/SOURCE_CANDIDATE_0.2.6-shared-contracts-r3.zip | tee /tmp/SHA256SUMS.txt
+          unzip -t /tmp/SOURCE_CANDIDATE_0.2.6-shared-contracts-r3.zip >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Map-Markup-SOURCE-CANDIDATE-0.2.6-shared-contracts-r3
+          path: |
+            /tmp/SOURCE_CANDIDATE_0.2.6-shared-contracts-r3.zip
+            /tmp/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
