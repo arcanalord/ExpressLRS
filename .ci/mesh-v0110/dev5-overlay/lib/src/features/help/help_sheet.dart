@@ -72,7 +72,7 @@ Future<void> showHelpSheet(
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: const EdgeInsets.only(bottom: 8),
-              title: const Text('Безопасность'),
+              title: const Text('Безопасность и технические детали'),
               children: [
                 Text(
                   'Discovered peer, Contact и Verified — разные состояния. Для локальной проверки '
