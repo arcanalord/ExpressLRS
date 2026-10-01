@@ -157,7 +157,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     _StatusPill(
                       icon: Icons.usb_rounded,
                       label: 'LR24-F',
-                      ready: controller.lr24Connected,
+                      ready: controller.lr24PeerReachable,
+                      detail: controller.lr24Connected
+                          ? controller.lr24PeerReachable
+                                ? 'peer ready'
+                                : 'USB ready · peer pending'
+                          : 'USB off',
                     ),
                     _StatusPill(
                       icon: Icons.bluetooth,
