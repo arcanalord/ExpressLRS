@@ -136,6 +136,7 @@ final class MeshAppController extends ChangeNotifier {
   }
 
   int? get preparedFileChunkSize => _preparedFilePlan?.manifest.chunkSize;
+  String? get preparedFileTransferId => _preparedFilePlan?.manifest.transferId;
 
   bool get fileTransferCanRetry =>
       _preparedFilePlan != null &&
