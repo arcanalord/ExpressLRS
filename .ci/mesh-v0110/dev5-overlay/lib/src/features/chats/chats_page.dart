@@ -218,6 +218,48 @@ class _ContactList extends StatelessWidget {
             onOpenConversation();
           },
         ),
+      if (controller.messageRequestPeerMmIds.isNotEmpty)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Text(
+            'Запросы',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+      for (final mmId in controller.messageRequestPeerMmIds)
+        ListTile(
+          leading: const CircleAvatar(
+            child: Icon(Icons.mark_chat_unread_outlined, size: 20),
+          ),
+          title: Text(controller.displayNameForMmId(mmId)),
+          subtitle: const Text(
+            'Не в контактах · можно прочитать, ответить или добавить',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          onTap: () {
+            controller.selectDirectPeer(mmId);
+            onOpenConversation();
+          },
+          trailing: IconButton(
+            tooltip: 'Добавить контакт',
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            onPressed: () async {
+              final name = await _promptContactName(
+                context,
+                initialName: controller.displayNameForMmId(mmId),
+                title: 'Добавить контакт',
+                subtitle: mmId,
+              );
+              if (name == null) return;
+              await controller.addNearbyPeerAsContact(mmId, displayName: name);
+            },
+          ),
+          onTap: () {
+            controller.selectDirectPeer(mmId);
+            onOpenConversation();
+          },
+        ),
       if (controller.nearbyPeerMmIds.isNotEmpty)
         const Padding(
           padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -879,10 +921,16 @@ class _ConversationPane extends StatelessWidget {
   Widget build(BuildContext context) {
     final isGeneral = controller.isGeneralChat;
     final isGroup = controller.isGroupChat;
+    final isDirect = controller.isDirectChat;
     final contact = controller.selectedContact;
+    final directPeerMmId = controller.selectedPeerMmId;
+    final directDisplayName = controller.selectedDirectDisplayName;
     final group = controller.selectedGroup;
-    if (!isGeneral && !isGroup && contact == null) {
-      return const Card(child: Center(child: Text('Нет выбранного контакта')));
+    if (isDirect && directPeerMmId == null) {
+      return const Card(child: Center(child: Text('Нет выбранного собеседника')));
+    }
+    if (!isGeneral && !isGroup && !isDirect) {
+      return const Card(child: Center(child: Text('Нет выбранного чата')));
     }
     if (isGroup && group == null) {
       return const Card(child: Center(child: Text('Группа недоступна')));
@@ -907,21 +955,27 @@ class _ConversationPane extends StatelessWidget {
                   ? const Icon(Icons.forum_outlined, size: 20)
                   : isGroup
                   ? const Icon(Icons.groups_2_outlined, size: 20)
-                  : Text(contact!.displayName.characters.first.toUpperCase()),
+                  : Text(
+                      directDisplayName.isEmpty
+                          ? '?'
+                          : directDisplayName.characters.first.toUpperCase(),
+                    ),
             ),
             title: Text(
               isGeneral
                   ? 'Общий чат'
                   : isGroup
                   ? group!.displayName
-                  : contact!.displayName,
+                  : directDisplayName,
             ),
             subtitle: Text(
               isGeneral
                   ? 'Открытый канал · в сети: ${controller.generalOnlineCount}'
                   : isGroup
                   ? '${group!.memberMmIds.length} участников'
-                  : contact!.verified
+                  : contact == null
+                  ? 'Не в контактах · запрос/прямой чат'
+                  : contact.verified
                   ? 'Контакт проверен'
                   : 'Контакт не проверен',
             ),
