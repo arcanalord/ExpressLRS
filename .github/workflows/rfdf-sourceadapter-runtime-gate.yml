@@ -1,0 +1,45 @@
+name: RFDF SourceAdapter v1 Runtime Gate
+
+on:
+  push:
+    branches:
+      - build/rfdf-sourceadapter-v03-dev3-r2
+    paths:
+      - 'rfdf-ci/**'
+      - '.github/workflows/rfdf-sourceadapter-runtime-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.13.4
+
+      - name: Dart version
+        run: dart --version
+
+      - name: Analyze gate sources
+        working-directory: rfdf-ci/core
+        run: dart analyze lib tool/source_adapter_runtime_gate.dart
+
+      - name: Run SourceAdapter lifecycle + controller gate
+        working-directory: rfdf-ci/core
+        run: dart run tool/source_adapter_runtime_gate.dart | tee source_adapter_runtime_gate.log
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rfdf-sourceadapter-v1-runtime-gate
+          path: rfdf-ci/core/source_adapter_runtime_gate.log
+          if-no-files-found: warn
+          retention-days: 30
