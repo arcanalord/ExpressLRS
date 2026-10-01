@@ -381,6 +381,10 @@ void main() {
     expect(controller.selectedPeerMmId, 'mm:unknown-direct');
     expect(find.text('Не в контактах · запрос/прямой чат'), findsOneWidget);
     expect(find.text('Сообщение'), findsOneWidget);
+    expect(find.textContaining('Запрос от неизвестного узла'), findsOneWidget);
+    expect(find.byTooltip('Сначала добавьте контакт'), findsOneWidget);
+    expect(find.text('LR24 отключён'), findsOneWidget);
+    expect(find.textContaining('FILE/1'), findsWidgets);
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(const SizedBox.shrink());
