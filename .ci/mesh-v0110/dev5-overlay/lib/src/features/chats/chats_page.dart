@@ -1142,7 +1142,32 @@ class _ConversationPane extends StatelessWidget {
                     },
                   ),
           ),
-          if (controller.preparedFileName != null)
+          if (controller.preparedFileName != null &&
+              contact == null &&
+              isDirect)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              child: Card(
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.lock_outline, size: 20),
+                  title: Text(
+                    controller.preparedFileName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: const Text(
+                    'Файл не отправится в запросе · сначала добавьте контакт',
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Убрать',
+                    onPressed: controller.clearPreparedFile,
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+              ),
+            )
+          else if (controller.preparedFileName != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Card(
