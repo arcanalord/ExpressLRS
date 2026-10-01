@@ -202,7 +202,8 @@ class _AppShellState extends State<AppShell> {
         actions: [
           IconButton(
             tooltip: 'Справка',
-            onPressed: () => showHelpSheet(context, controller: widget.controller),
+            onPressed: () =>
+                showHelpSheet(context, controller: widget.controller),
             icon: const Icon(Icons.help_outline),
           ),
           const SizedBox(width: 4),

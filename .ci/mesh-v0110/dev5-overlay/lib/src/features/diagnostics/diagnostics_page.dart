@@ -175,14 +175,14 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                 _Line(
                   'QoS control/text/file',
                   '${controller.lr24QosPendingControl}/'
-                  '${controller.lr24QosPendingText}/'
-                  '${controller.lr24QosPendingFile}',
+                      '${controller.lr24QosPendingText}/'
+                      '${controller.lr24QosPendingFile}',
                 ),
                 _Line(
                   'Route layers',
                   'USB ${controller.lr24Connected ? 'ready' : 'off'} · '
-                  'peer ${controller.lr24PeerReachable ? 'ready' : 'pending'} · '
-                  'FILE/1 ${controller.lr24FileRouteAvailable ? 'ready' : 'waiting'}',
+                      'peer ${controller.lr24PeerReachable ? 'ready' : 'pending'} · '
+                      'FILE/1 ${controller.lr24FileRouteAvailable ? 'ready' : 'waiting'}',
                 ),
                 const SizedBox(height: 6),
                 const Text(

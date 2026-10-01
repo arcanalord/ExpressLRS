@@ -343,9 +343,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                               const SizedBox(height: 6),
                               Text(
                                 'USB ready ≠ peer ready ≠ FILE/1 ready ≠ Delivered.',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                style: TextStyle(fontWeight: FontWeight.w600),
                               ),
                             ],
                             const SizedBox(height: 10),
