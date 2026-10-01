@@ -1,0 +1,113 @@
+name: PPO Radar PVO-001 Source Recovery Probe
+
+on:
+  push:
+    branches:
+      - build/ppo-radar-android-v030-dev9
+    paths:
+      - ".github/workflows/ppo-radar-pvo001-source-recovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  LEGACY_FOLDER_URL: "https://www.dropbox.com/scl/fo/gca5cqopw6r0b194shp0z/ACc1Sa9cLgqFvlVcbpLv9-0?rlkey=zo23mjd3x6bm73u2rx8oy1pg4&st=n7jcdyy8&dl=1"
+  TARGET_BASE_SHA256: "a3a3ce2a8904f7f57aaaed9164bf3f3e60989ef1491ad13be8ce7bbff1e1fe81"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download legacy canonical folder snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _pvo001
+          mkdir -p _pvo001/folder _pvo001/out
+          {
+            echo "probe=PVO-001"
+            echo "target_base_sha256=$TARGET_BASE_SHA256"
+            echo "source=legacy Dropbox folder link from historical v0.2.5 workflow"
+          } > _pvo001/out/PROBE_CONTEXT.txt
+          if curl -L --fail --retry 2 --connect-timeout 20 --max-time 240 "$LEGACY_FOLDER_URL" -o _pvo001/folder.zip; then
+            echo "folder_download=PASS" | tee -a _pvo001/out/PROBE_RESULT.txt
+            sha256sum _pvo001/folder.zip | tee _pvo001/out/FOLDER_ZIP_SHA256.txt
+          else
+            echo "folder_download=FAIL" | tee -a _pvo001/out/PROBE_RESULT.txt
+            exit 0
+          fi
+
+      - name: Inventory legacy folder and nested archives
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f _pvo001/folder.zip || exit 0
+          unzip -q _pvo001/folder.zip -d _pvo001/folder
+          find _pvo001/folder -type f -printf '%P\t%s bytes\n' | sort > _pvo001/out/FOLDER_INVENTORY.txt
+          find _pvo001/folder -type f \( -iname '*.zip' -o -iname '*.apk' \) -print0 |
+            xargs -0 -r sha256sum | sed "s#_pvo001/folder/##" > _pvo001/out/ARCHIVE_SHA256.txt
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, zipfile
+
+          root = Path("_pvo001/folder")
+          out = Path("_pvo001/out")
+          target = "a3a3ce2a8904f7f57aaaed9164bf3f3e60989ef1491ad13be8ce7bbff1e1fe81"
+          rows = []
+          matches = []
+          for p in sorted(root.rglob("*")):
+              if not p.is_file() or p.suffix.lower() != ".zip":
+                  continue
+              sha = hashlib.sha256(p.read_bytes()).hexdigest()
+              has_gradle = False
+              has_web = False
+              names = []
+              try:
+                  with zipfile.ZipFile(p) as z:
+                      names = z.namelist()
+                      has_gradle = any(n.endswith("/app/build.gradle") or n == "app/build.gradle" for n in names)
+                      has_web = any(n.endswith("/app/src/main/assets/web/index.html") or n == "app/src/main/assets/web/index.html" for n in names)
+              except zipfile.BadZipFile:
+                  pass
+              rel = p.relative_to(root)
+              rows.append(f"{sha}\t{p.stat().st_size}\tgradle={int(has_gradle)}\tweb={int(has_web)}\t{rel}")
+              if sha == target:
+                  matches.append(p)
+          (out / "ZIP_CLASSIFICATION.tsv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+          if matches:
+              src = matches[0]
+              (out / "TARGET_MATCH.txt").write_text(
+                  f"TARGET_BASE_SHA256_MATCH=PASS\npath={src.relative_to(root)}\nsha256={target}\n", encoding="utf-8"
+              )
+              (out / "TARGET_BASE_PROJECT.zip").write_bytes(src.read_bytes())
+          else:
+              (out / "TARGET_MATCH.txt").write_text(
+                  f"TARGET_BASE_SHA256_MATCH=FAIL\nsha256={target}\n", encoding="utf-8"
+              )
+          PY
+
+      - name: Summarize recovery result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo
+            if test -f _pvo001/out/TARGET_MATCH.txt; then cat _pvo001/out/TARGET_MATCH.txt; fi
+            echo
+            echo "candidate names:"
+            find _pvo001/folder -type f 2>/dev/null | grep -Ei 'PPO_RADAR|SOURCE_CURRENT|ANDROID|RECOVERY|INTEGRATION' | sed 's#_pvo001/folder/##' | head -200 || true
+          } | tee -a _pvo001/out/PROBE_RESULT.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pvo-001-source-recovery-probe
+          path: _pvo001/out/*
+          retention-days: 30
