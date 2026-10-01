@@ -979,8 +979,14 @@ class _ConversationPane extends StatelessWidget {
             ),
           ),
           if (isDirect) ...[
-            _ConnectionSummary(controller: controller, compact: compact),
-            if (contact == null)
+            if (compact)
+              _CompactConnectionStrip(
+                controller: controller,
+                isRequest: contact == null,
+              )
+            else
+              _ConnectionSummary(controller: controller, compact: compact),
+            if (contact == null && !compact)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: DecoratedBox(
@@ -1143,7 +1149,8 @@ class _ConversationPane extends StatelessWidget {
                     },
                   ),
           ),
-          if (controller.preparedFileName != null &&
+          if (!compact &&
+              controller.preparedFileName != null &&
               contact == null &&
               isDirect)
             Padding(
@@ -1373,6 +1380,53 @@ class _ConversationPane extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactConnectionStrip extends StatelessWidget {
+  const _CompactConnectionStrip({
+    required this.controller,
+    required this.isRequest,
+  });
+
+  final MeshAppController controller;
+  final bool isRequest;
+
+  @override
+  Widget build(BuildContext context) {
+    final peerReady =
+        controller.lr24SelectedPeerReachable || controller.lr24PeerReachable;
+    final link = !controller.lr24Connected
+        ? 'LR24: отключён'
+        : !peerReady
+        ? 'LR24: USB · peer…'
+        : controller.lr24FileRouteAvailable
+        ? 'LR24: peer · FILE/1 ready'
+        : 'LR24: peer · route…';
+    final suffix = isRequest ? ' · Запрос: только текст' : '';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      child: Row(
+        children: [
+          Icon(
+            peerReady ? Icons.link : Icons.link_off,
+            size: 16,
+            color: peerReady
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.outline,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              link + suffix,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall,
             ),
           ),
         ],
