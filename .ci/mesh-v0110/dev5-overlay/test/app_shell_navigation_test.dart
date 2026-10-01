@@ -343,5 +343,50 @@ void main() {
       controller.dispose();
       if (root.existsSync()) root.deleteSync(recursive: true);
     },
-  );
+  );  testWidgets('nearby peer opens direct chat without becoming a contact', (
+    tester,
+  ) async {
+    final root = Directory.systemTemp.createTempSync('mesh_unknown_direct_gate_');
+    late MeshAppController controller;
+    await tester.runAsync(() async {
+      controller = await MeshAppController.createForWidgetTest(
+        storageRoot: root,
+      );
+    });
+    controller.injectNearbyPeerForTest(
+      'mm:unknown-direct',
+      label: 'Nearby Unknown',
+    );
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpWidget(
+      MaterialApp(home: AppShell(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.hasContact('mm:unknown-direct'), isFalse);
+    expect(find.text('Nearby Unknown'), findsOneWidget);
+
+    final tile = find.ancestor(
+      of: find.text('Nearby Unknown'),
+      matching: find.byType(ListTile),
+    );
+    await tester.tap(tile);
+    await tester.pumpAndSettle();
+
+    expect(controller.hasContact('mm:unknown-direct'), isFalse);
+    expect(controller.selectedPeerMmId, 'mm:unknown-direct');
+    expect(find.text('Не в контактах · запрос/прямой чат'), findsOneWidget);
+    expect(find.text('Сообщение'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.binding.setSurfaceSize(null);
+    await controller.shutdown();
+    controller.dispose();
+    if (root.existsSync()) root.deleteSync(recursive: true);
+  });
+
+
 }
