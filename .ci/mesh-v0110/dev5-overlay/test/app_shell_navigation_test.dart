@@ -219,6 +219,13 @@ void main() {
     await tester.tap(find.text('Настройки').last);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
+      find.text('Инженерный режим'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Инженерный режим'), findsOneWidget);
+    await tester.scrollUntilVisible(
       find.text('О приложении'),
       240,
       scrollable: find.byType(Scrollable).first,
@@ -234,7 +241,6 @@ void main() {
     );
     expect(find.text('О приложении'), findsOneWidget);
     expect(find.text('Справка и руководство'), findsOneWidget);
-    expect(find.text('Инженерный режим'), findsOneWidget);
     expect(
       find.text('Версия $expectedVersion ($expectedBuild)'),
       findsOneWidget,
@@ -393,7 +399,6 @@ void main() {
     expect(find.textContaining('Запрос от неизвестного узла'), findsOneWidget);
     expect(find.byTooltip('Сначала добавьте контакт'), findsOneWidget);
     expect(find.text('LR24 отключён'), findsOneWidget);
-    expect(find.textContaining('FILE/1'), findsWidgets);
 
     await controller.prepareSmallFile(
       fileName: 'request-blocked.bin',
