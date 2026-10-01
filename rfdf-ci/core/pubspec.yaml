@@ -1,0 +1,5 @@
+name: rfdf_core_gate
+description: RFDF SourceAdapter v1 runtime gate.
+version: 0.3.0
+environment:
+  sdk: '>=3.6.0 <4.0.0'
