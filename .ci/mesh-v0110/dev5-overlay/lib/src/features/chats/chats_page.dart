@@ -1339,8 +1339,8 @@ class _ConnectionSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final connected = controller.lr24Connected;
-    final peerReady = controller.lr24SelectedPeerReachable ||
-        controller.lr24PeerReachable;
+    final peerReady =
+        controller.lr24SelectedPeerReachable || controller.lr24PeerReachable;
     final fileReady = controller.lr24FileRouteAvailable;
     final peerAge = controller.lr24PeerAgeMs;
     final rtt = controller.lr24RttMs;
@@ -1380,8 +1380,9 @@ class _ConnectionSummary extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-        collapsedBackgroundColor:
-            Theme.of(context).colorScheme.surfaceContainerLow,
+        collapsedBackgroundColor: Theme.of(context)
+            .colorScheme
+            .surfaceContainerLow,
         leading: Icon(icon, color: color, size: 20),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(detail),
@@ -1414,9 +1415,8 @@ class _ConnectionSummary extends StatelessWidget {
           ),
           _ConnectionMetricRow(
             label: 'Peer',
-            value: controller.selectedPeerMmId ??
-                controller.lr24PeerMmId ??
-                '—',
+            value:
+                controller.selectedPeerMmId ?? controller.lr24PeerMmId ?? '—',
           ),
           _ConnectionMetricRow(
             label: 'TX / RX',

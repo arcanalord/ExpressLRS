@@ -265,6 +265,7 @@ final class MeshAppController extends ChangeNotifier {
     if (peer == null) return null;
     return _lr24?.peerAgeMs(peer);
   }
+
   int get lr24QosPendingControl => _lr24?.qosPendingControl ?? 0;
   int get lr24QosPendingText => _lr24?.qosPendingText ?? 0;
   int get lr24QosPendingFile => _lr24?.qosPendingFile ?? 0;
