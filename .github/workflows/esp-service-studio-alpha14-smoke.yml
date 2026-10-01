@@ -65,7 +65,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
           script: |
-            set -euo pipefail
+            set -eu
             mkdir -p /tmp/esp-emulator-evidence
             ADB="$ANDROID_HOME/platform-tools/adb"
             APK=/tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.14-x86_64-test.apk
