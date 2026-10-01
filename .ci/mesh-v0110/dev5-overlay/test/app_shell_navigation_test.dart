@@ -407,7 +407,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     final blockedFileSend = tester.widget<IconButton>(
-      find.byTooltip('Для запроса сначала добавьте контакт или уберите файл'),
+      find.ancestor(
+        of: find.byTooltip(
+          'Для запроса сначала добавьте контакт или уберите файл',
+        ),
+        matching: find.byType(IconButton),
+      ),
     );
     expect(blockedFileSend.onPressed, isNull);
     expect(controller.hasContact('mm:unknown-direct'), isFalse);
