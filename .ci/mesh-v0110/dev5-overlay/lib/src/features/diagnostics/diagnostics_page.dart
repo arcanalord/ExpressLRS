@@ -148,6 +148,12 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                 'FILE/1 route',
                 controller.lr24FileRouteAvailable ? 'ready' : 'waiting',
               ),
+              if (controller.advancedMode &&
+                  controller.preparedFileTransferId != null)
+                _Line('transferId', controller.preparedFileTransferId!),
+              if (controller.advancedMode &&
+                  controller.preparedFileSha256 != null)
+                _Line('SHA-256', controller.preparedFileSha256!),
               if (controller.fileTransferNotice?.isNotEmpty == true)
                 _Line('Событие', controller.fileTransferNotice!),
               if (controller.lastReceivedFileName?.isNotEmpty == true)
