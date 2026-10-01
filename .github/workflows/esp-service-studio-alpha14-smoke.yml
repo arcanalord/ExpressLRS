@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: esp-service-studio-alpha14-smoke
+  cancel-in-progress: true
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -54,6 +58,17 @@ jobs:
           cp build/app/outputs/flutter-apk/app-debug.apk /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.14-x86_64-test.apk
           test -s /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.14-x86_64-test.apk
           sha256sum /tmp/ESP-Service-Studio-Universal-v0.9.0-alpha.14-x86_64-test.apk | tee /tmp/SMOKE_APK_SHA256.txt
+
+      - name: Enable KVM acceleration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e /dev/kvm ]; then
+            sudo chmod 666 /dev/kvm
+            ls -l /dev/kvm
+          else
+            echo "/dev/kvm is not available"
+          fi
 
       - name: Android 15 API 35 app-launch smoke
         uses: reactivecircus/android-emulator-runner@v2
