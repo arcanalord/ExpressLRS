@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'data/profile_repository.dart';
+import 'models/device_recognition.dart';
+import 'models/esp_service_device_recognition.dart';
 import 'models/service_models.dart';
 import 'services/native_usb_service.dart';
 
@@ -74,6 +76,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
   String? regulatoryDomain;
   String lockMode = 'default';
   EspRomProbeResult? probeResult;
+  DeviceRecognitionSnapshot recognitionSnapshot = DeviceRecognition.detached();
   ElrsCatalogIndex? elrsIndex;
   ElrsTargetInfo? selectedElrsTarget;
   ElrsCatalogResult? elrsCatalog;
@@ -187,6 +190,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     setState(() {
       usbDevices = next;
       if (next.isEmpty) {
+        recognitionSnapshot = DeviceRecognition.detached();
         probeResult = null;
         probing = false;
         selectedElrsTarget = null;
@@ -200,6 +204,8 @@ class _ServiceHomePageState extends State<ServiceHomePage>
         _wifiPassword.clear();
         _autoWifiSeconds.clear();
         _rxUartBaud.clear();
+      } else {
+        recognitionSnapshot = EspServiceDeviceRecognition.attached(next.first);
       }
     });
   }
@@ -231,6 +237,7 @@ class _ServiceHomePageState extends State<ServiceHomePage>
 
     setState(() {
       probing = true;
+      recognitionSnapshot = EspServiceDeviceRecognition.attached(device);
       probeResult = null;
       error = null;
       selectedElrsTarget = null;
@@ -243,7 +250,11 @@ class _ServiceHomePageState extends State<ServiceHomePage>
     try {
       final r = await _usb.probeEspRom(deviceName: device.deviceName);
       if (!mounted) return;
-      setState(() => probeResult = r);
+      setState(() {
+        probeResult = r;
+        recognitionSnapshot =
+            EspServiceDeviceRecognition.fromProbe(device, r);
+      });
       if (r.ok) {
         await _fetchElrsIndex();
       }
