@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "name": "m03-mm-uart-confirmed",
+  "usb": {
+    "vendorId": 6790,
+    "productId": 21971,
+    "deviceName": "/dev/bus/usb/001/002",
+    "interfaceCount": 1,
+    "hasPermission": true,
+    "manufacturer": "WCH",
+    "product": "USB-Serial"
+  },
+  "probe": {
+    "status": "mesh_ready",
+    "message": "M03 ready",
+    "driver": "Ch34xSerialDriver",
+    "baudRate": 115200,
+    "meshProtocolVersion": 1,
+    "meshFirmwareFamily": "MeshMessenger_EP2",
+    "meshFirmwareVersion": "0.4.1-dev",
+    "meshBoardId": "ep2",
+    "meshRadioFamily": "SX1280",
+    "meshBuildHash": "fixture-build",
+    "meshCapabilities": {
+      "schemaVersion": 1,
+      "radioFamily": "SX1280",
+      "profileIds": ["MM-PHY-24-COMMON-v0"],
+      "networkProtocols": ["MMRP/1"],
+      "positionAvailable": true,
+      "waypointAvailable": true,
+      "fileTransferAvailable": true,
+      "voiceAvailable": false,
+      "rangingAvailable": false,
+      "timeSyncAvailable": false,
+      "rssiAvailable": true,
+      "snrAvailable": true
+    }
+  },
+  "expected": {
+    "state": "recognized",
+    "confidence": "confirmed",
+    "transportKind": "usb_uart",
+    "protocol": "mmUart1",
+    "protocolVersion": "1",
+    "controllerFamily": "ep2",
+    "radioFamily": "SX1280",
+    "firmwareVersion": "0.4.1-dev",
+    "capabilities": ["MMRP/1", "file", "position", "rssi", "snr", "waypoint"]
+  }
+}
