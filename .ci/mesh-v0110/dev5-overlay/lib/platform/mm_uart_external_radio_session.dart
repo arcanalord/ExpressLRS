@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../core/device_recognition.dart';
 import 'mm_uart_codec.dart';
+import 'mm_uart_device_recognition_adapter.dart';
 import 'radio_capability_contract.dart';
 
 abstract interface class MmUartHostLink {
@@ -124,6 +126,17 @@ final class MmUartExternalRadioSession {
     lastError: lastError,
     hostLink: _link?.describe(),
   );
+
+  DeviceRecognitionSnapshot? deviceRecognitionSnapshot() {
+    final currentInfo = info;
+    final currentCapabilities = capabilities;
+    if (currentInfo == null || currentCapabilities == null) return null;
+    return deviceRecognitionFromMmUart(
+      info: currentInfo,
+      capabilities: currentCapabilities,
+      hostLink: _link?.describe(),
+    );
+  }
 
   int _nextSequence() {
     final current = _sequence;
