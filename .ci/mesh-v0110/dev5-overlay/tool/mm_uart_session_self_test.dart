@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../lib/core/device_recognition.dart';
 import '../lib/platform/mm_uart_codec.dart';
 import '../lib/platform/mm_uart_external_radio_session.dart';
 
@@ -123,7 +124,10 @@ final class FakeLink implements MmUartHostLink {
   void setDisconnectHandler(void Function(String reason) value) =>
       disconnectHandler = value;
   @override
-  Map<String, Object?> describe() => const {'type': 'fake'};
+  Map<String, Object?> describe() => const {
+        'type': 'android_usb_serial',
+        'baudRate': 115200,
+      };
 }
 
 Future<void> main() async {
@@ -142,6 +146,33 @@ Future<void> main() async {
   if (snapshot.state != 'ready' || !session.supportsMmrp) {
     throw StateError('handshake/capabilities failed');
   }
+  final recognition = session.deviceRecognitionSnapshot();
+  if (recognition == null ||
+      !recognition.recognized ||
+      recognition.protocol != DeviceHostProtocol.mmUart1 ||
+      recognition.protocolVersion != '1' ||
+      recognition.controllerFamily != 'ep2' ||
+      recognition.radioFamily != 'SX1280' ||
+      recognition.firmwareVersion != '0.4.1-test') {
+    throw StateError('DeviceRecognition snapshot mapping failed');
+  }
+  if (!recognition.capabilities.contains('MMRP/1') ||
+      !recognition.capabilities.contains('waypoint') ||
+      !recognition.capabilities.contains('rssi') ||
+      !recognition.capabilities.contains('snr') ||
+      recognition.capabilities.contains('ranging') ||
+      recognition.capabilities.contains('file')) {
+    throw StateError('DeviceRecognition capability mapping drift');
+  }
+  if (!recognition.evidence.any(
+        (e) => e.source == 'get_caps' && e.key == 'capabilities',
+      ) ||
+      !recognition.evidence.any(
+        (e) => e.source == 'get_info' && e.key == 'board_id',
+      )) {
+    throw StateError('DeviceRecognition evidence missing');
+  }
+
   final compat = await session.compatSelftest();
   if (compat['result'] != 'PASS') throw StateError('compat selftest failed');
   final refreshed = await session.refreshInfoAndCapabilities();
