@@ -867,15 +867,52 @@ class UsbSerialProbe(private val context: Context) {
         if (!info.optBoolean("ok", false)) return null
 
         val data = info.optJSONObject("data") ?: return null
+        val capsResponse = sendMmCommand(
+            port = port,
+            type = 0x03,
+            sequence = 3,
+            payload = null,
+            timeoutMs = 750,
+        )
+        val capsData = if (capsResponse?.optBoolean("ok", false) == true) {
+            capsResponse.optJSONObject("data")
+        } else {
+            null
+        }
+        val caps = capsData?.let(::jsonObjectToMap)
+
         return linkedMapOf(
+            "status" to if (caps != null) "mesh_ready" else "mesh_caps_unavailable",
             "meshProtocolVersion" to data.optInt("protocolVersion", 1),
             "meshFirmwareFamily" to data.optString("firmwareFamily"),
             "meshFirmwareVersion" to data.optString("firmwareVersion"),
             "meshBoardId" to data.optString("boardId"),
             "meshRadioFamily" to data.optString("radioFamily"),
             "meshBuildHash" to data.optString("buildHash"),
-            "meshOtaCapable" to true,
+            "meshCapabilities" to caps,
+            "meshOtaCapable" to (capsData?.optBoolean("otaAvailable", false) ?: false),
         )
+    }
+
+    private fun jsonObjectToMap(value: JSONObject): Map<String, Any?> {
+        val out = linkedMapOf<String, Any?>()
+        val keys = value.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            out[key] = jsonValue(value.opt(key))
+        }
+        return out
+    }
+
+    private fun jsonValue(value: Any?): Any? = when (value) {
+        null, JSONObject.NULL -> null
+        is JSONObject -> jsonObjectToMap(value)
+        is org.json.JSONArray -> buildList {
+            for (i in 0 until value.length()) {
+                add(jsonValue(value.opt(i)))
+            }
+        }
+        else -> value
     }
 
     private fun sendMmCommand(
