@@ -1,0 +1,132 @@
+name: DeviceRecognition v1 Convergence
+
+on:
+  push:
+    branches:
+      - build/device-recognition-convergence-v1
+    paths:
+      - 'tools/esp-service-studio-universal/source_overlay/**'
+      - '.github/workflows/device-recognition-v1-convergence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MESH_REFERENCE_SHA: "5a8a6683636519db8527cc599b6ac9dc0a176c14"
+
+jobs:
+  convergence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout ESS convergence candidate
+        uses: actions/checkout@v4
+        with:
+          path: ess
+
+      - name: Checkout exact Mesh reference consumer
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MESH_REFERENCE_SHA }}
+          path: mesh
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+
+      - name: Prove shared contract source parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          MESH=mesh/.ci/mesh-v0110/dev5-overlay/lib/core/device_recognition.dart
+          ESS=ess/tools/esp-service-studio-universal/source_overlay/lib/models/device_recognition.dart
+          test -s "$MESH"
+          test -s "$ESS"
+          cmp "$MESH" "$ESS"
+          sha256sum "$MESH" "$ESS" | tee device-recognition-contract-sha256.txt
+
+      - name: Run exact Mesh DeviceRecognition consumer test
+        working-directory: mesh/.ci/mesh-v0110/dev5-overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart tool/device_recognition_self_test.dart | tee "$GITHUB_WORKSPACE/mesh-device-recognition.log"
+          grep -F "DEVICE_RECOGNITION_MODEL_V1_PASS" "$GITHUB_WORKSPACE/mesh-device-recognition.log"
+
+      - name: Verify ESS GET_CAPS source gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROBE=ess/tools/esp-service-studio-universal/source_overlay/android_overlay/UsbSerialProbe.kt
+          grep -F "type = 0x03" "$PROBE"
+          grep -F '"meshCapabilities" to caps' "$PROBE"
+          ! grep -F '"meshOtaCapable" to true' "$PROBE"
+          grep -F '"status" to if (caps != null) "mesh_ready" else "mesh_caps_unavailable"' "$PROBE"
+          printf '%s\n' "ESS_GET_CAPS_SOURCE_GATE_PASS" | tee ess-get-caps-source-gate.log
+
+      - name: Create ESS Flutter shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter create --platforms=android --org com.arcanalord --project-name service_studio /tmp/service_studio
+          cp -a ess/tools/esp-service-studio-universal/source_overlay/. /tmp/service_studio/
+          mkdir -p /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio
+          mkdir -p /tmp/service_studio/android/app/src/main/res/xml
+          cp ess/tools/esp-service-studio-universal/source_overlay/android_overlay/MainActivity.kt /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio/MainActivity.kt
+          cp ess/tools/esp-service-studio-universal/source_overlay/android_overlay/UsbSerialProbe.kt /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio/UsbSerialProbe.kt
+          cp ess/tools/esp-service-studio-universal/source_overlay/android_overlay/OfficialElrsService.kt /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio/OfficialElrsService.kt
+          cp ess/tools/esp-service-studio-universal/source_overlay/android_overlay/device_filter.xml /tmp/service_studio/android/app/src/main/res/xml/device_filter.xml
+          cd /tmp/service_studio
+          python3 android_overlay/patch_android.py
+          flutter pub get
+
+      - name: Run ESS DeviceRecognition fixture tests
+        working-directory: /tmp/service_studio
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter test test/device_recognition_convergence_test.dart | tee "$GITHUB_WORKSPACE/ess-device-recognition.log"
+
+      - name: Analyze ESS candidate
+        working-directory: /tmp/service_studio
+        run: flutter analyze
+
+      - name: Build ESS Android debug APK
+        working-directory: /tmp/service_studio
+        run: flutter build apk --debug
+
+      - name: Record convergence result
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "DEVICE_RECOGNITION_V1_CONVERGENCE_PASS"
+            echo "mesh_reference_sha=$MESH_REFERENCE_SHA"
+            echo "mesh_contract_source=PASS"
+            echo "mesh_self_test=PASS"
+            echo "ess_get_caps_source_gate=PASS"
+            echo "ess_fixture_tests=PASS"
+            echo "ess_analyze=PASS"
+            echo "ess_android_build=PASS"
+            echo "hardware_hil=PENDING"
+          } | tee device-recognition-convergence-result.txt
+
+      - name: Upload convergence evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-recognition-v1-convergence
+          path: |
+            device-recognition-contract-sha256.txt
+            mesh-device-recognition.log
+            ess-get-caps-source-gate.log
+            ess-device-recognition.log
+            device-recognition-convergence-result.txt
+            /tmp/service_studio/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: warn
+          retention-days: 30
