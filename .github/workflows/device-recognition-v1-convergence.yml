@@ -74,6 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter create --platforms=android --org com.arcanalord --project-name service_studio /tmp/service_studio
+          rm -rf /tmp/service_studio/test
           cp -a ess/tools/esp-service-studio-universal/source_overlay/. /tmp/service_studio/
           mkdir -p /tmp/service_studio/android/app/src/main/kotlin/com/arcanalord/service_studio
           mkdir -p /tmp/service_studio/android/app/src/main/res/xml
