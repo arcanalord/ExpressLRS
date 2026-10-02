@@ -1,0 +1,96 @@
+name: DeviceRecognition v1 Mesh Runtime Gate
+
+on:
+  push:
+    branches:
+      - build/device-recognition-mesh-runtime-v1
+    paths:
+      - '.ci/mesh-v0110/dev5-overlay/**'
+      - '.github/workflows/device-recognition-mesh-runtime.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ESS_REFERENCE_SHA: "15b189d69f1147d8b2c6dc3158548ace1f9978d9"
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Mesh runtime candidate
+        uses: actions/checkout@v4
+        with:
+          path: mesh
+
+      - name: Checkout exact ESS convergence reference
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.ESS_REFERENCE_SHA }}
+          path: ess
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.13.4
+
+      - name: Prove shared contract source parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          MESH=mesh/.ci/mesh-v0110/dev5-overlay/lib/core/device_recognition.dart
+          ESS=ess/tools/esp-service-studio-universal/source_overlay/lib/models/device_recognition.dart
+          cmp "$MESH" "$ESS"
+          sha256sum "$MESH" "$ESS" | tee device-recognition-contract-sha256.txt
+
+      - name: Analyze Mesh DeviceRecognition runtime path
+        working-directory: mesh/.ci/mesh-v0110/dev5-overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart analyze             lib/core/device_recognition.dart             lib/platform/radio_capability_contract.dart             lib/platform/mm_uart_codec.dart             lib/platform/mm_uart_external_radio_session.dart             lib/platform/mm_uart_device_recognition_adapter.dart             tool/mm_uart_session_self_test.dart
+
+      - name: Run Mesh MM-UART runtime self-test
+        working-directory: mesh/.ci/mesh-v0110/dev5-overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart tool/mm_uart_session_self_test.dart | tee "$GITHUB_WORKSPACE/mesh-device-recognition-runtime.log"
+          grep -F "MM_UART_EXTERNAL_RADIO_SESSION_PASS" "$GITHUB_WORKSPACE/mesh-device-recognition-runtime.log"
+
+      - name: Run Mesh DeviceRecognition model self-test
+        working-directory: mesh/.ci/mesh-v0110/dev5-overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart tool/device_recognition_self_test.dart | tee "$GITHUB_WORKSPACE/mesh-device-recognition-model.log"
+          grep -F "DEVICE_RECOGNITION_MODEL_V1_PASS" "$GITHUB_WORKSPACE/mesh-device-recognition-model.log"
+
+      - name: Record runtime result
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "DEVICE_RECOGNITION_V1_MESH_RUNTIME_PASS"
+            echo "mesh_runtime_head=$GITHUB_SHA"
+            echo "ess_reference_sha=$ESS_REFERENCE_SHA"
+            echo "contract_source_parity=PASS"
+            echo "mm_uart_session_snapshot=PASS"
+            echo "mesh_model_self_test=PASS"
+            echo "hardware_hil=PENDING"
+          } | tee device-recognition-mesh-runtime-result.txt
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-recognition-v1-mesh-runtime
+          path: |
+            device-recognition-contract-sha256.txt
+            mesh-device-recognition-runtime.log
+            mesh-device-recognition-model.log
+            device-recognition-mesh-runtime-result.txt
+          if-no-files-found: warn
+          retention-days: 30
