@@ -888,7 +888,10 @@ class _ServiceHomePageState extends State<ServiceHomePage>
                         ),
                         if (probeResult != null) ...[
                           const SizedBox(height: 12),
-                          _ProbeResultCard(result: probeResult!),
+                          _ProbeResultCard(
+                            result: probeResult!,
+                            recognition: recognitionSnapshot,
+                          ),
                           if (probeResult!.meshReady) ...[
                             const SizedBox(height: 10),
                             FilledButton.icon(
@@ -1520,9 +1523,13 @@ String _regionLabel(String id) {
 }
 
 class _ProbeResultCard extends StatelessWidget {
-  const _ProbeResultCard({required this.result});
+  const _ProbeResultCard({
+    required this.result,
+    required this.recognition,
+  });
 
   final EspRomProbeResult result;
+  final DeviceRecognitionSnapshot recognition;
 
   @override
   Widget build(BuildContext context) {
@@ -1568,6 +1575,17 @@ class _ProbeResultCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(result.message),
+          const SizedBox(height: 8),
+          _DiagLine(
+            'Распознавание',
+            '${recognition.state.name} · ${recognition.confidence.name}',
+          ),
+          _DiagLine('Протокол', recognition.protocol.name),
+          if (recognition.capabilities.isNotEmpty)
+            _DiagLine(
+              'Возможности',
+              (recognition.capabilities.toList()..sort()).join(', '),
+            ),
           if (result.meshReady) ...[
             const SizedBox(height: 10),
             if (result.meshFirmwareVersion != null)
