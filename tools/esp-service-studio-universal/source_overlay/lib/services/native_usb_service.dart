@@ -88,6 +88,7 @@ class EspRomProbeResult {
     this.meshRadioFamily,
     this.meshBuildHash,
     this.meshOtaCapable,
+    this.meshCapabilities,
   });
 
   final String status;
@@ -113,6 +114,7 @@ class EspRomProbeResult {
   final String? meshRadioFamily;
   final String? meshBuildHash;
   final bool? meshOtaCapable;
+  final Map<String, Object?>? meshCapabilities;
 
   bool get ok => status == 'rom_ready' || status == 'mesh_ready';
   bool get meshReady => status == 'mesh_ready';
@@ -142,6 +144,8 @@ class EspRomProbeResult {
       meshRadioFamily: map['meshRadioFamily'] as String?,
       meshBuildHash: map['meshBuildHash'] as String?,
       meshOtaCapable: map['meshOtaCapable'] as bool?,
+      meshCapabilities: (map['meshCapabilities'] as Map?)
+          ?.cast<String, Object?>(),
     );
   }
 }
