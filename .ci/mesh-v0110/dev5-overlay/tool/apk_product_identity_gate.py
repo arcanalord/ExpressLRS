@@ -67,6 +67,8 @@ def check_sources(manifest_path: Path, pubspec_path: Path,
     activity = app.find("activity")
     require(activity is not None and activity.get(ANDROID + "name") == ".MainActivity",
             "Source launcher MainActivity not found")
+    require(activity.get(ANDROID + "icon") == "@mipmap/ic_launcher",
+            "Source launcher Activity icon missing")
 
     pubspec = pubspec_path.read_text(encoding="utf-8")
     match = re.search(r"(?m)^version:\s*([^\s+]+)\+([0-9]+)\s*$", pubspec)
