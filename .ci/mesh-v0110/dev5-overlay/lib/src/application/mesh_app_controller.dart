@@ -28,6 +28,7 @@ import '../../platform/ep2_uart_transport.dart';
 import '../../platform/mm_uart_external_radio_session.dart';
 import '../../platform/mm_uart_hil_bench.dart';
 import '../../platform/mm_uart_message_transport.dart';
+import '../../platform/radio_capability_contract.dart';
 import '../../platform/transparent_uart_radio_transport.dart';
 import '../../platform/usb_profile_binding_store.dart';
 import '../../platform/lan_transport.dart';
@@ -112,6 +113,14 @@ final class MeshAppController extends ChangeNotifier {
   bool busy = false;
   bool advancedMode = false;
   AppStorage? _appStorage;
+  Map<String, Object?> _uiPreferences = <String, Object?>{};
+  RadioCapabilities? _testExternalRadioCapabilities;
+  static const int defaultRequestedRadioPowerMw = meshDefaultRequestedPowerMw;
+  int requestedRadioPowerMw = defaultRequestedRadioPowerMw;
+  int? appliedRadioPowerMw;
+  String? appliedRadioPowerStepId;
+  String? radioPowerNotice;
+  bool radioPowerBusy = false;
   ConversationRef activeConversation = const ConversationRef.channel('general');
   String? selectedPeerMmId;
   List<Contact> contacts = const [];
@@ -134,6 +143,9 @@ final class MeshAppController extends ChangeNotifier {
     if (total <= 0) return 0;
     return (fileTransferAckedChunks / total).clamp(0.0, 1.0);
   }
+
+  int? get preparedFileChunkSize => _preparedFilePlan?.manifest.chunkSize;
+  String? get preparedFileTransferId => _preparedFilePlan?.manifest.transferId;
 
   bool get fileTransferCanRetry =>
       _preparedFilePlan != null &&
@@ -257,6 +269,16 @@ final class MeshAppController extends ChangeNotifier {
   bool get lr24Active => _lr24Active;
   bool get lr24Connected => _lr24?.isAvailable == true;
   bool get lr24PeerReachable => _lr24?.hasFreshPeers == true;
+  bool get lr24FileRouteAvailable => _lr24?.file1RouteAvailable == true;
+  int? get lr24PeerAgeMs {
+    final peer = selectedPeerMmId ?? lr24PeerMmId;
+    if (peer == null) return null;
+    return _lr24?.peerAgeMs(peer);
+  }
+
+  int get lr24QosPendingControl => _lr24?.qosPendingControl ?? 0;
+  int get lr24QosPendingText => _lr24?.qosPendingText ?? 0;
+  int get lr24QosPendingFile => _lr24?.qosPendingFile ?? 0;
   bool get lr24SelectedPeerReachable {
     final peer = selectedPeerMmId;
     return peer != null && (_lr24?.isPeerFresh(peer) ?? false);
@@ -270,6 +292,20 @@ final class MeshAppController extends ChangeNotifier {
       _externalRadioSession?.snapshot().info?.boardId;
   bool get externalRadioSupportsMmrp =>
       _externalRadioSession?.supportsMmrp == true;
+  RadioCapabilities? get externalRadioCapabilities =>
+      _testExternalRadioCapabilities ??
+      _externalRadioSession?.snapshot().capabilities;
+  List<RadioPowerStep> get radioPowerSteps =>
+      externalRadioCapabilities?.selectablePowerSteps ??
+      const <RadioPowerStep>[];
+  bool get radioPowerControlAvailable =>
+      _mmUartActive &&
+      externalRadioCapabilities?.powerControlAvailable == true &&
+      radioPowerSteps.isNotEmpty;
+  bool get radioPowerAutoAdvertised =>
+      externalRadioCapabilities?.autoPowerAvailable == true;
+  String? get radioPowerCalibrationSource =>
+      externalRadioCapabilities?.powerCalibrationSource;
   bool get radioHilAvailable => _radioHilBench?.isAvailable == true;
   int? get radioHilTargetNode {
     final contactNode = selectedContact?.ep2NodeId;
@@ -307,8 +343,18 @@ final class MeshAppController extends ChangeNotifier {
     controller.messages = await controller._core.messagesForConversation(
       controller.activeConversation,
     );
+    controller._appStorage = storage;
     controller.initialized = true;
     return controller;
+  }
+
+  @visibleForTesting
+  void injectExternalRadioCapabilitiesForTest(Map<String, dynamic> raw) {
+    _testExternalRadioCapabilities = RadioCapabilities.fromJson(raw);
+    _mmUartActive = true;
+    ep2State = 'ready';
+    ep2Protocol = 'MM-UART/1';
+    notifyListeners();
   }
 
   static Future<MeshAppController> create({
@@ -366,7 +412,12 @@ final class MeshAppController extends ChangeNotifier {
     await storage.migrateSensitiveStorage();
     _appStorage = storage;
     final uiPreferences = await storage.loadUiPreferences();
+    _uiPreferences = Map<String, Object?>.from(uiPreferences);
     advancedMode = uiPreferences['advancedMode'] == true;
+    final savedPower = uiPreferences['radioPowerRequestedMw'];
+    requestedRadioPowerMw = savedPower is num && savedPower > 0
+        ? savedPower.toInt()
+        : defaultRequestedRadioPowerMw;
     final legacyIdentity = await storage.loadOrCreateIdentity();
     final seedStore = Platform.isAndroid
         ? AndroidIdentitySeedStore()
@@ -741,12 +792,63 @@ final class MeshAppController extends ChangeNotifier {
   Future<void> setAdvancedMode(bool value) async {
     if (advancedMode == value) return;
     advancedMode = value;
+    _uiPreferences['advancedMode'] = advancedMode;
     notifyListeners();
     final storage = _appStorage;
     if (storage != null) {
-      await storage.saveUiPreferences(<String, Object?>{
-        'advancedMode': advancedMode,
-      });
+      await storage.saveUiPreferences(_uiPreferences);
+    }
+  }
+
+  Future<void> setRadioPowerMw(int requestedMw, {bool persist = true}) async {
+    if (requestedMw <= 0) throw ArgumentError('POWER_MW_REQUIRED');
+    final session = _externalRadioSession;
+    final caps = externalRadioCapabilities;
+    final selection = caps?.selectPowerStep(requestedMw);
+    if (!_mmUartActive || session == null || selection == null) {
+      throw StateError('POWER_CONTROL_UNAVAILABLE');
+    }
+    if (radioPowerBusy) return;
+    radioPowerBusy = true;
+    radioPowerNotice = 'Применяем ' + selection.actualMw.toString() + ' mW…';
+    notifyListeners();
+    try {
+      final result = await session.setPowerStep(selection.step.id);
+      final actualRaw = result['nominalPowerMw'];
+      final actual = actualRaw is num ? actualRaw.toInt() : selection.actualMw;
+      requestedRadioPowerMw = requestedMw;
+      appliedRadioPowerMw = actual;
+      appliedRadioPowerStepId = (result['powerStepId'] ?? selection.step.id)
+          .toString();
+      radioPowerNotice = selection.exact
+          ? 'Мощность: ' + actual.toString() + ' mW'
+          : 'Запрошено ' +
+                requestedMw.toString() +
+                ' mW · применено ' +
+                actual.toString() +
+                ' mW';
+      if (persist) {
+        _uiPreferences['radioPowerRequestedMw'] = requestedRadioPowerMw;
+        final storage = _appStorage;
+        if (storage != null) {
+          await storage.saveUiPreferences(_uiPreferences);
+        }
+      }
+      _addEp2Log(
+        'POWER requested=' +
+            requestedMw.toString() +
+            ' actual=' +
+            actual.toString() +
+            ' step=' +
+            (appliedRadioPowerStepId ?? '-'),
+      );
+    } catch (error) {
+      radioPowerNotice = 'Не удалось изменить мощность';
+      _addEp2Log('POWER ERROR ' + error.toString());
+      rethrow;
+    } finally {
+      radioPowerBusy = false;
+      notifyListeners();
     }
   }
 
@@ -2132,6 +2234,16 @@ final class MeshAppController extends ChangeNotifier {
         _addEp2Log(
           'MM-UART READY fw=${ep2Firmware ?? '-'} radio=${snapshot.info?.radioFamily ?? '-'}',
         );
+        final powerSelection = snapshot.capabilities?.selectPowerStep(
+          requestedRadioPowerMw,
+        );
+        if (powerSelection != null) {
+          try {
+            await setRadioPowerMw(requestedRadioPowerMw, persist: false);
+          } catch (error) {
+            _addEp2Log('DEFAULT POWER skipped | ' + error.toString());
+          }
+        }
         try {
           final selftest = await session.compatSelftest();
           final passed = selftest['result'] == 'PASS' || selftest['ok'] == true;
@@ -2177,6 +2289,9 @@ final class MeshAppController extends ChangeNotifier {
     _addEp2Log('DISCONNECT requested');
     ep2ConnectedDeviceId = null;
     _mmUartActive = false;
+    appliedRadioPowerMw = null;
+    appliedRadioPowerStepId = null;
+    radioPowerNotice = null;
     if (session != null) {
       try {
         await session.disconnect();
@@ -2471,6 +2586,10 @@ final class MeshAppController extends ChangeNotifier {
           event.state == 'ready') {
         ep2State = event.state;
         if (event.reason != null) ep2Error = event.reason;
+      }
+      if (event.state == 'offline' || event.state == 'error') {
+        appliedRadioPowerMw = null;
+        appliedRadioPowerStepId = null;
       }
     } else if (event is ExternalRadioCapabilitiesEvent) {
       ep2DetectedProtocol = 'mm-uart';

@@ -55,6 +55,7 @@ final class File1TransportBridge {
   bool _linkAvailable = true;
 
   bool get hasActiveSenders => _senders.isNotEmpty;
+  bool get linkAvailable => _linkAvailable;
 
   void pauseForLinkLoss() {
     if (!_linkAvailable) return;

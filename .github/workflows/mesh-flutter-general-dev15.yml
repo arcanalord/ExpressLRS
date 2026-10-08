@@ -1,6 +1,6 @@
 name: Mesh Messenger Flutter Android v0.6.0-secure-core-rc8
 # rc8 request inbox + FILE route recovery candidate
-# canonical rc8 sources committed; validation trigger
+# canonical rc8 UI sources committed; validation trigger 3
 
 on:
   workflow_dispatch:
@@ -10,12 +10,13 @@ on:
       - fix/m05-file1-final-4of4
       - feat/flutter-rc7-product-ux
       - fix/flutter-rc8-requests-file-route
+      - ui/flutter-rc8-connection-chatgpt
     paths:
       - '.github/workflows/mesh-flutter-general-dev15.yml'
       - '.ci/mesh-v0110/dev5-overlay/**'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: mesh-flutter-v0.6.0-secure-core-rc8
@@ -133,59 +134,11 @@ jobs:
           grep -q "implements MmUartHostLink" lib/platform/android_usb_mm_uart_host_link.dart
           grep -q "MM-UART/1 first" lib/src/application/mesh_app_controller.dart
           grep -q "session.supportsMmrp" lib/src/application/mesh_app_controller.dart
-
-      - name: RC8 canonicalize changed files
-        working-directory: ${{ env.APP_DIR }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          dart format \
-            lib/core/file_transfer_session.dart \
-            lib/core/messenger_core.dart \
-            lib/platform/file1_transport_bridge.dart \
-            lib/platform/transparent_uart_radio_transport.dart \
-            lib/src/application/mesh_app_controller.dart \
-            lib/src/features/chats/chats_page.dart \
-            tool/file1_transport_loopback_self_test.dart \
-            test/app_shell_navigation_test.dart
-          cp lib/core/file_transfer_session.dart \
-            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart"
-          cp lib/core/messenger_core.dart \
-            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/core/messenger_core.dart"
-          cp lib/platform/file1_transport_bridge.dart \
-            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/platform/file1_transport_bridge.dart"
-          cp lib/platform/transparent_uart_radio_transport.dart \
-            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/platform/transparent_uart_radio_transport.dart"
-          cp lib/src/application/mesh_app_controller.dart \
-            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/application/mesh_app_controller.dart"
-          cp lib/src/features/chats/chats_page.dart \
-            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/features/chats/chats_page.dart"
-          cp tool/file1_transport_loopback_self_test.dart \
-            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart"
-          cp test/app_shell_navigation_test.dart \
-            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/test/app_shell_navigation_test.dart"
-          cd "$GITHUB_WORKSPACE"
-          PATHS=(
-            .ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart
-            .ci/mesh-v0110/dev5-overlay/lib/core/messenger_core.dart
-            .ci/mesh-v0110/dev5-overlay/lib/platform/file1_transport_bridge.dart
-            .ci/mesh-v0110/dev5-overlay/lib/platform/transparent_uart_radio_transport.dart
-            .ci/mesh-v0110/dev5-overlay/lib/src/application/mesh_app_controller.dart
-            .ci/mesh-v0110/dev5-overlay/lib/src/features/chats/chats_page.dart
-            .ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart
-            .ci/mesh-v0110/dev5-overlay/test/app_shell_navigation_test.dart
-          )
-          if git diff --quiet -- "${PATHS[@]}"; then
-            echo "RC8 changed files already canonical."
-          else
-            git config user.name "mesh-ci"
-            git config user.email "mesh-ci@users.noreply.github.com"
-            git add -- "${PATHS[@]}"
-            git commit -m "style(mesh): canonicalize rc8 request and FILE route changes"
-            git push origin "HEAD:$GITHUB_REF_NAME"
-            echo "Canonical formatting committed; new run validates committed sources."
-            exit 1
-          fi
+          grep -q "meshDefaultRequestedPowerMw = 100" lib/platform/radio_capability_contract.dart
+          grep -q "static const int setPower = 0x19" lib/platform/mm_uart_codec.dart
+          grep -q "setPowerStep" lib/platform/mm_uart_external_radio_session.dart
+          grep -q "defaultRequestedRadioPowerMw" lib/src/application/mesh_app_controller.dart
+          grep -q "По умолчанию 100 mW" lib/src/features/connection/connection_page.dart
 
       - name: RC8 changed-file format gate
         working-directory: ${{ env.APP_DIR }}
@@ -197,6 +150,9 @@ jobs:
             lib/core/messenger_core.dart \
             lib/platform/android_diagnostics_export_bridge.dart \
             lib/platform/file1_transport_bridge.dart \
+            lib/platform/radio_capability_contract.dart \
+            lib/platform/mm_uart_codec.dart \
+            lib/platform/mm_uart_external_radio_session.dart \
             lib/platform/lr24_peer_reachability.dart \
             lib/platform/transparent_uart_radio_transport.dart \
             lib/src/application/mesh_app_controller.dart \
@@ -206,8 +162,10 @@ jobs:
             lib/src/features/settings/settings_page.dart \
             tool/delivery_reliability_self_test.dart \
             tool/file1_transport_loopback_self_test.dart \
+            tool/radio_capability_self_test.dart \
             tool/lr24_peer_reachability_self_test.dart \
-            test/app_shell_navigation_test.dart
+            test/app_shell_navigation_test.dart \
+            test/connection_page_test.dart
 
       - name: Format check (non-blocking)
         continue-on-error: true
@@ -228,12 +186,15 @@ jobs:
           grep -q "waiting profile selection; no active probe" lib/src/application/mesh_app_controller.dart
           grep -q "runRadioSelfTest" lib/src/application/mesh_app_controller.dart
           grep -q "session.enterOta" lib/src/application/mesh_app_controller.dart
-          grep -q "Всё работает" lib/src/features/connection/connection_page.dart
+          grep -q "Маршрут доступен" lib/src/features/connection/connection_page.dart
           grep -q "runRadioHil" lib/src/application/mesh_app_controller.dart
           grep -q "Тест 1000" lib/src/features/connection/connection_page.dart
           grep -q "MM_UART_HIL_100_PASS" tool/mm_two_node_radio_sim_test.dart
           grep -q "class TransparentUartRadioTransport" lib/platform/transparent_uart_radio_transport.dart
           grep -q "MicoAir LR24-F" lib/src/features/connection/connection_page.dart
+          grep -q "Инженерный режим" lib/src/features/connection/connection_page.dart
+          grep -q "FILE/1 route" lib/src/features/diagnostics/diagnostics_page.dart
+          grep -q "Справка Mesh Messenger" lib/src/features/help/help_sheet.dart
           grep -q "no active probe" lib/src/application/mesh_app_controller.dart
           grep -q "saved LR24 binding matched; no active probe" lib/src/application/mesh_app_controller.dart
           grep -q "USB_PROFILE_BINDING_PASS" tool/usb_profile_binding_self_test.dart

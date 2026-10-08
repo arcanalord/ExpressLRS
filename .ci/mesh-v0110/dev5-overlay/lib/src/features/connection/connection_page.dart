@@ -101,7 +101,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
     final anyRouteReady =
         controller.lanReady ||
         controller.ep2Connected ||
-        controller.lr24Connected ||
+        controller.lr24PeerReachable ||
         controller.radioConnected;
 
     return ListView(
@@ -119,7 +119,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  anyRouteReady ? 'Всё работает' : 'Автоматический маршрут',
+                  anyRouteReady ? 'Маршрут доступен' : 'Автоматический маршрут',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -128,7 +128,9 @@ class _ConnectionPageState extends State<ConnectionPage> {
                 const SizedBox(height: 6),
                 Text(
                   anyRouteReady
-                      ? 'Есть доступный канал связи. Сообщения пойдут по подходящему маршруту автоматически.'
+                      ? 'Есть подтверждённый путь к удалённому узлу. Сообщения пойдут по подходящему маршруту автоматически.'
+                      : controller.lr24Connected
+                      ? 'LR24 подключён по USB, но удалённый peer ещё не подтверждён. Это не считается готовым маршрутом.'
                       : 'Одна очередь сообщений. Подключи доступный канал — приложение выберет маршрут само.',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -155,7 +157,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     _StatusPill(
                       icon: Icons.usb_rounded,
                       label: 'LR24-F',
-                      ready: controller.lr24Connected,
+                      ready: controller.lr24PeerReachable,
+                      detail: controller.lr24Connected
+                          ? controller.lr24PeerReachable
+                                ? 'peer ready'
+                                : 'USB ready · peer pending'
+                          : 'USB off',
                     ),
                     _StatusPill(
                       icon: Icons.bluetooth,
@@ -309,6 +316,36 @@ class _ConnectionPageState extends State<ConnectionPage> {
                                 ),
                               ],
                             ),
+                            if (controller.advancedMode) ...[
+                              const Divider(height: 20),
+                              const Text(
+                                'Инженерный режим',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'FILE/1 route: ${controller.lr24FileRouteAvailable ? 'ready' : 'waiting'}',
+                              ),
+                              Text(
+                                'Peer age: ${controller.lr24PeerAgeMs == null ? '—' : '${controller.lr24PeerAgeMs} ms'}',
+                              ),
+                              Text(
+                                'QoS: control ${controller.lr24QosPendingControl} · '
+                                'text ${controller.lr24QosPendingText} · '
+                                'file ${controller.lr24QosPendingFile}',
+                              ),
+                              if (controller.fileTransferState != 'idle')
+                                Text(
+                                  'M05: ${controller.fileTransferState} · '
+                                  '${controller.fileTransferAckedChunks}/'
+                                  '${controller.preparedFileChunks ?? 0} blocks',
+                                ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'USB ready ≠ peer ready ≠ FILE/1 ready ≠ Delivered.',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ],
                             const SizedBox(height: 10),
                             Text(
                               controller.lr24PeerReachable
@@ -398,11 +435,118 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   if (controller.mmUartActive) ...[
                     const SizedBox(height: 6),
                     Text(
-                      '${controller.externalRadioFamily ?? 'Радио'} · '
-                      '${controller.externalBoardId ?? 'плата не указана'} · '
-                      '${controller.externalRadioSupportsMmrp ? 'MMRP/1' : 'без MMRP/1'}',
+                      controller.externalRadioSupportsMmrp
+                          ? 'Радио подключено · MMRP/1'
+                          : 'Радио подключено',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
+                    const SizedBox(height: 10),
+                    if (controller.radioPowerControlAvailable)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Мощность',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'По умолчанию 100 mW · сейчас '
+                                  '${controller.appliedRadioPowerMw ?? controller.requestedRadioPowerMw} mW',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 132,
+                            child: DropdownButtonFormField<int>(
+                              initialValue:
+                                  controller.radioPowerSteps.any(
+                                    (step) =>
+                                        step.nominalMw ==
+                                        controller.requestedRadioPowerMw,
+                                  )
+                                  ? controller.requestedRadioPowerMw
+                                  : null,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                labelText: 'mW',
+                              ),
+                              items: controller.radioPowerSteps
+                                  .map(
+                                    (step) => DropdownMenuItem<int>(
+                                      value: step.nominalMw,
+                                      child: Text('${step.nominalMw} mW'),
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                              onChanged: controller.radioPowerBusy
+                                  ? null
+                                  : (value) async {
+                                      if (value == null) return;
+                                      await controller.setRadioPowerMw(value);
+                                    },
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Text(
+                        'Мощность задаётся устройством',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    if (controller.radioPowerNotice?.isNotEmpty == true) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        controller.radioPowerNotice!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    if (controller.advancedMode) ...[
+                      const SizedBox(height: 8),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        title: const Text('Инженерные параметры радио'),
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Board: ${controller.externalBoardId ?? '—'}',
+                                ),
+                                Text(
+                                  'Radio: ${controller.externalRadioFamily ?? '—'}',
+                                ),
+                                Text(
+                                  'Requested: ${controller.requestedRadioPowerMw} mW',
+                                ),
+                                Text(
+                                  'Actual: ${controller.appliedRadioPowerMw ?? '—'} mW',
+                                ),
+                                Text(
+                                  'Step: ${controller.appliedRadioPowerStepId ?? '—'}',
+                                ),
+                                Text(
+                                  'Calibration: ${controller.radioPowerCalibrationSource ?? 'device capability'}',
+                                ),
+                                Text(
+                                  'Auto eligible: ${controller.radioPowerAutoAdvertised ? 'yes' : 'no'}',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                   if (controller.ep2LocalNode != null ||
                       controller.ep2Firmware != null ||

@@ -262,6 +262,20 @@ final class MmUartExternalRadioSession {
     return request(MmUartFrameType.setProfile, {'profileId': profileId});
   }
 
+  Future<Map<String, dynamic>> setPowerStep(String powerStepId) async {
+    final clean = powerStepId.trim();
+    if (clean.isEmpty) throw ArgumentError('POWER_STEP_REQUIRED');
+    final caps = capabilities;
+    final supported = caps?.selectablePowerSteps ?? const <RadioPowerStep>[];
+    if (!supported.any((step) => step.id == clean)) {
+      throw StateError('UNSUPPORTED_POWER_STEP');
+    }
+    return _asMap(
+          await request(MmUartFrameType.setPower, {'powerStepId': clean}),
+        ) ??
+        <String, dynamic>{};
+  }
+
   Future<Object?> send({
     required String messageId,
     required Object recipientBinding,

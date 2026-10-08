@@ -32,6 +32,50 @@ void main() {
     expect(find.text('Автоматический маршрут'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
+    controller.injectExternalRadioCapabilitiesForTest({
+      'networkProtocols': ['MMRP/1'],
+      'powerControlAvailable': true,
+      'powerControlVersion': 1,
+      'powerUnit': 'mW',
+      'powerCalibrationSource': 'STOCK_EXPRESSLRS_TARGET',
+      'autoPowerAvailable': true,
+      'powerSteps': [
+        {
+          'id': 'P100',
+          'nominalMw': 100,
+          'radiatedPowerCalibrated': true,
+          'normalUiRecommended': true,
+          'autoEligible': true,
+        },
+        {
+          'id': 'P250',
+          'nominalMw': 250,
+          'radiatedPowerCalibrated': true,
+          'normalUiRecommended': true,
+          'autoEligible': true,
+        },
+        {
+          'id': 'P500',
+          'nominalMw': 500,
+          'radiatedPowerCalibrated': true,
+          'normalUiRecommended': true,
+          'autoEligible': true,
+        },
+        {
+          'id': 'P1000',
+          'nominalMw': 1000,
+          'radiatedPowerCalibrated': true,
+          'normalUiRecommended': true,
+          'autoEligible': true,
+        },
+      ],
+    });
+    await tester.pump();
+    expect(find.text('Мощность'), findsOneWidget);
+    expect(find.textContaining('По умолчанию 100 mW'), findsOneWidget);
+    expect(find.text('100 mW'), findsWidgets);
+    expect(find.textContaining('плата не указана'), findsNothing);
+
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
     await tester.binding.setSurfaceSize(null);

@@ -923,6 +923,7 @@ class _ConversationPane extends StatelessWidget {
     final directPeerMmId = controller.selectedPeerMmId;
     final directDisplayName = controller.selectedDirectDisplayName;
     final group = controller.selectedGroup;
+    final compact = MediaQuery.sizeOf(context).width < 600;
     if (isDirect && directPeerMmId == null) {
       return const Card(
         child: Center(child: Text('Нет выбранного собеседника')),
@@ -939,27 +940,25 @@ class _ConversationPane extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          if (onBack != null)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                tooltip: 'Назад к чатам',
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back),
-              ),
-            ),
           ListTile(
-            leading: CircleAvatar(
-              child: isGeneral
-                  ? const Icon(Icons.forum_outlined, size: 20)
-                  : isGroup
-                  ? const Icon(Icons.groups_2_outlined, size: 20)
-                  : Text(
-                      directDisplayName.isEmpty
-                          ? '?'
-                          : directDisplayName.characters.first.toUpperCase(),
-                    ),
-            ),
+            leading: onBack != null
+                ? IconButton(
+                    tooltip: 'Назад к чатам',
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back),
+                  )
+                : CircleAvatar(
+                    child: isGeneral
+                        ? const Icon(Icons.forum_outlined, size: 20)
+                        : isGroup
+                        ? const Icon(Icons.groups_2_outlined, size: 20)
+                        : Text(
+                            directDisplayName.isEmpty
+                                ? '?'
+                                : directDisplayName.characters.first
+                                      .toUpperCase(),
+                          ),
+                  ),
             title: Text(
               isGeneral
                   ? 'Общий чат'
@@ -979,6 +978,47 @@ class _ConversationPane extends StatelessWidget {
                   : 'Контакт не проверен',
             ),
           ),
+          if (isDirect) ...[
+            if (compact)
+              _CompactConnectionStrip(
+                controller: controller,
+                isRequest: contact == null,
+              )
+            else
+              _ConnectionSummary(controller: controller, compact: compact),
+            if (contact == null && !compact)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: compact ? 7 : 12,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.info_outline, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            compact
+                                ? 'Запрос · только текст. Файлы и карта — после контакта.'
+                                : 'Запрос от неизвестного узла: текст можно читать и отправлять. '
+                                      'Вложения, карта и управляющие действия доступны после явного добавления контакта.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
           const Divider(height: 1),
           Expanded(
             child: controller.messages.isEmpty
@@ -1109,7 +1149,33 @@ class _ConversationPane extends StatelessWidget {
                     },
                   ),
           ),
-          if (controller.preparedFileName != null)
+          if (!compact &&
+              controller.preparedFileName != null &&
+              contact == null &&
+              isDirect)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+              child: Card(
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.lock_outline, size: 20),
+                  title: Text(
+                    controller.preparedFileName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: const Text(
+                    'Файл не отправится в запросе · сначала добавьте контакт',
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Убрать',
+                    onPressed: controller.clearPreparedFile,
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+              ),
+            )
+          else if (controller.preparedFileName != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Card(
@@ -1186,10 +1252,35 @@ class _ConversationPane extends StatelessWidget {
                       if (controller.advancedMode) ...[
                         const SizedBox(height: 6),
                         Text(
+                          '${controller.fileTransferAckedChunks}/'
                           '${controller.preparedFileChunks ?? 0} блоков · '
+                          '${controller.preparedFileChunkSize ?? 0} Б logical block · '
                           '${controller.preparedFileProfile.name}',
                           style: Theme.of(context).textTheme.labelSmall,
                         ),
+                        const SizedBox(height: 3),
+                        Text(
+                          controller.lr24FileRouteAvailable
+                              ? 'FILE/1 route ready'
+                              : controller.lr24PeerReachable
+                              ? 'Peer найден · FILE/1 route восстанавливается'
+                              : controller.lr24Connected
+                              ? 'USB готов · ожидаем peer'
+                              : 'LR24 отключён',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                        if (controller.preparedFileTransferId != null)
+                          Text(
+                            'transferId: ${controller.preparedFileTransferId}',
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        if (controller.preparedFileSha256 != null)
+                          Text(
+                            'SHA-256: ${controller.preparedFileSha256}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
                       ],
                     ],
                   ),
@@ -1218,8 +1309,10 @@ class _ConversationPane extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    tooltip: 'Добавить',
-                    onPressed: controller.busy
+                    tooltip: contact == null && isDirect
+                        ? 'Сначала добавьте контакт'
+                        : 'Добавить',
+                    onPressed: controller.busy || (contact == null && isDirect)
                         ? null
                         : () => _showAttachmentMenu(
                             context,
@@ -1230,12 +1323,21 @@ class _ConversationPane extends StatelessWidget {
                   ),
                   const SizedBox(width: 4),
                   IconButton.filled(
-                    tooltip: controller.preparedFileName != null
+                    tooltip:
+                        controller.preparedFileName != null &&
+                            contact == null &&
+                            isDirect
+                        ? 'Для запроса сначала добавьте контакт или уберите файл'
+                        : controller.preparedFileName != null
                         ? controller.fileTransferCanRetry
                               ? 'Повторить отправку файла'
                               : 'Отправить файл'
                         : 'Отправить',
-                    onPressed: controller.busy
+                    onPressed:
+                        controller.busy ||
+                            (controller.preparedFileName != null &&
+                                contact == null &&
+                                isDirect)
                         ? null
                         : () async {
                             try {
@@ -1278,6 +1380,227 @@ class _ConversationPane extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactConnectionStrip extends StatelessWidget {
+  const _CompactConnectionStrip({
+    required this.controller,
+    required this.isRequest,
+  });
+
+  final MeshAppController controller;
+  final bool isRequest;
+
+  @override
+  Widget build(BuildContext context) {
+    final peerReady =
+        controller.lr24SelectedPeerReachable || controller.lr24PeerReachable;
+    final link = !controller.lr24Connected
+        ? 'LR24: отключён'
+        : !peerReady
+        ? 'LR24: USB · peer…'
+        : controller.lr24FileRouteAvailable
+        ? 'LR24: peer · FILE/1 ready'
+        : 'LR24: peer · route…';
+    final suffix = isRequest ? ' · Запрос: только текст' : '';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      child: Row(
+        children: [
+          Icon(
+            peerReady ? Icons.link : Icons.link_off,
+            size: 16,
+            color: peerReady
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.outline,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              link + suffix,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionSummary extends StatelessWidget {
+  const _ConnectionSummary({required this.controller, required this.compact});
+
+  final MeshAppController controller;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final connected = controller.lr24Connected;
+    final peerReady =
+        controller.lr24SelectedPeerReachable || controller.lr24PeerReachable;
+    final fileReady = controller.lr24FileRouteAvailable;
+    final peerAge = controller.lr24PeerAgeMs;
+    final rtt = controller.lr24RttMs;
+
+    final (icon, title, detail, color) = !connected
+        ? (
+            Icons.radio_button_unchecked,
+            'LR24 отключён',
+            'USB/радиоканал недоступен',
+            Theme.of(context).colorScheme.error,
+          )
+        : !peerReady
+        ? (
+            Icons.sync,
+            'LR24 подключён · ищем peer',
+            'USB готов, но удалённый узел ещё не подтверждён',
+            Theme.of(context).colorScheme.tertiary,
+          )
+        : (
+            Icons.check_circle_outline,
+            'Радиоканал готов',
+            fileReady
+                ? 'Peer подтверждён · FILE/1 route ready'
+                : 'Peer подтверждён · FILE/1 route восстанавливается',
+            fileReady
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.tertiary,
+          );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        collapsedShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+        collapsedBackgroundColor: Theme.of(context)
+            .colorScheme
+            .surfaceContainerLow,
+        leading: Icon(icon, color: color, size: 20),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: compact ? null : Text(detail),
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _ConnectionChip(
+                label: connected ? 'USB ready' : 'USB offline',
+                ok: connected,
+              ),
+              _ConnectionChip(
+                label: peerReady ? 'Peer ready' : 'Peer pending',
+                ok: peerReady,
+              ),
+              _ConnectionChip(
+                label: fileReady ? 'FILE/1 ready' : 'FILE/1 waiting',
+                ok: fileReady,
+              ),
+              if (rtt != null) _ConnectionChip(label: 'RTT $rtt ms'),
+              if (peerAge != null)
+                _ConnectionChip(label: 'peer age $peerAge ms'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _ConnectionMetricRow(
+            label: 'LR24 state',
+            value: controller.lr24State,
+          ),
+          _ConnectionMetricRow(
+            label: 'Peer',
+            value:
+                controller.selectedPeerMmId ?? controller.lr24PeerMmId ?? '—',
+          ),
+          _ConnectionMetricRow(
+            label: 'TX / RX',
+            value:
+                '${_formatFileBytes(controller.lr24TxBytes)} / '
+                '${_formatFileBytes(controller.lr24RxBytes)}',
+          ),
+          _ConnectionMetricRow(
+            label: 'Frames',
+            value:
+                '${controller.lr24TxFrames} TX · '
+                '${controller.lr24RxFrames} RX · '
+                '${controller.lr24BadFrames} bad',
+          ),
+          _ConnectionMetricRow(
+            label: 'Queues',
+            value:
+                'control ${controller.lr24QosPendingControl} · '
+                'text ${controller.lr24QosPendingText} · '
+                'file ${controller.lr24QosPendingFile}',
+          ),
+          if (!peerReady)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Последние известные значения не считаются текущим качеством связи. '
+                'Для stock LR24 числовая RSSI/SNR freshness не выдумывается.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionChip extends StatelessWidget {
+  const _ConnectionChip({required this.label, this.ok});
+
+  final String label;
+  final bool? ok;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ok == null
+        ? Theme.of(context).colorScheme.secondaryContainer
+        : ok!
+        ? Theme.of(context).colorScheme.primaryContainer
+        : Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Chip(
+      visualDensity: VisualDensity.compact,
+      backgroundColor: color,
+      label: Text(label),
+    );
+  }
+}
+
+class _ConnectionMetricRow extends StatelessWidget {
+  const _ConnectionMetricRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: Theme.of(context).textTheme.labelSmall,
             ),
           ),
         ],
