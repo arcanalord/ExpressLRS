@@ -1,0 +1,22 @@
+name: Mesh hardened runner smoke
+
+on:
+  push:
+    branches:
+      - ci/mesh-hardened-apk-20261008
+    paths:
+      - '.github/workflows/mesh-hardened-runner-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Runner alive
+        run: |
+          echo "MESH_ELRS_RUNNER_PASS"
+          uname -a
