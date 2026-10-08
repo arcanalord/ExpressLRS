@@ -180,6 +180,9 @@ final class MeshAppController extends ChangeNotifier {
         ? null
         : ownAgreementPublicKey,
     radioNodeId: ep2LocalNode,
+    radioNodeBinding: _mmUartActive
+        ? _externalRadioSession?.localNodeBinding
+        : null,
   ).encode();
   final Map<String, LanPairingSession> lanPairings =
       <String, LanPairingSession>{};
@@ -811,6 +814,9 @@ final class MeshAppController extends ChangeNotifier {
             ? existing?.meshtasticNodeNum
             : _parseNodeNum(card.meshtasticNodeId),
         ep2NodeId: card.radioNodeId ?? existing?.ep2NodeId,
+        radioNodeBinding: card.radioNodeBinding?.trim().isNotEmpty == true
+            ? card.radioNodeBinding!.trim()
+            : existing?.radioNodeBinding,
       ),
     );
     contacts = await _core.contacts();
@@ -2372,10 +2378,20 @@ final class MeshAppController extends ChangeNotifier {
     }
   }
 
-  Object? _resolveMmUartBinding(String mmId) => _resolveEp2Node(mmId);
+  Object? _resolveMmUartBinding(String mmId) {
+    final contact = contacts.where((c) => c.mmId == mmId).firstOrNull;
+    final native = contact?.radioNodeBinding?.trim();
+    if (native != null && native.isNotEmpty) return native;
+    return contact?.ep2NodeId; // Legacy EP2 numeric routing remains separate.
+  }
 
   Contact? _contactForMmUartBinding(Object binding) {
-    final nodeId = binding is num ? binding.toInt() : int.tryParse('$binding');
+    final opaque = '$binding'.trim();
+    final native = contacts
+        .where((c) => c.radioNodeBinding?.trim() == opaque)
+        .firstOrNull;
+    if (native != null) return native;
+    final nodeId = binding is num ? binding.toInt() : int.tryParse(opaque);
     return nodeId == null ? null : _contactForEp2Node(nodeId);
   }
 
@@ -3054,6 +3070,67 @@ final class MeshAppController extends ChangeNotifier {
       throw FormatException('Неверный Meshtastic node ID');
     }
     return parsed;
+  }
+
+  String? _parseRadioNodeBinding(String? value) {
+    final binding = value?.trim() ?? '';
+    if (binding.isEmpty) return null;
+    if (!RegExp(r'^[A-Za-z0-9._:-]{1,64}
+    final text = value?.trim() ?? '';
+    if (text.isEmpty) return null;
+    final parsed = int.tryParse(text);
+    if (parsed == null || parsed < 1 || parsed > 15) {
+      throw FormatException('Номер узла EP2 должен быть от 1 до 15');
+    }
+    return parsed;
+  }
+
+  Future<void> _reloadMessages() async {
+    messages = await _core.messagesForConversation(activeConversation);
+  }
+
+  Future<void> shutdown() => _shutdownFuture ??= _shutdownResources();
+
+  Future<void> _shutdownResources() async {
+    _maintenanceTimer?.cancel();
+    _maintenanceTimer = null;
+    await _deliverySub?.cancel();
+    await _lanSub?.cancel();
+    await _meshtasticSub?.cancel();
+    await _androidSub?.cancel();
+    await _ep2Sub?.cancel();
+    await _externalRadioSub?.cancel();
+    await _externalSessionSub?.cancel();
+    await _lr24Sub?.cancel();
+    await _radioHilBench?.close();
+    await _lr24?.close();
+    await _externalRadio?.close();
+    await _externalRadioSession?.close();
+    await _lan?.close();
+    await _meshtastic?.close();
+    await _ep2?.close();
+    await _androidBridge?.close();
+    await _usbBridge?.close();
+    await _core.close();
+  }
+
+  @override
+  void dispose() {
+    unawaited(shutdown());
+    super.dispose();
+  }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    return iterator.moveNext() ? iterator.current : null;
+  }
+}
+).hasMatch(binding)) {
+      throw const FormatException('Некорректный M03 node binding');
+    }
+    return binding;
   }
 
   int? _parseEp2Node(String? value) {
