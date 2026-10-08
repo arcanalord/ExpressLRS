@@ -435,11 +435,117 @@ class _ConnectionPageState extends State<ConnectionPage> {
                   if (controller.mmUartActive) ...[
                     const SizedBox(height: 6),
                     Text(
-                      '${controller.externalRadioFamily ?? 'Радио'} · '
-                      '${controller.externalBoardId ?? 'плата не указана'} · '
-                      '${controller.externalRadioSupportsMmrp ? 'MMRP/1' : 'без MMRP/1'}',
+                      controller.externalRadioSupportsMmrp
+                          ? 'Радио подключено · MMRP/1'
+                          : 'Радио подключено',
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
+                    const SizedBox(height: 10),
+                    if (controller.radioPowerControlAvailable)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Мощность',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'По умолчанию 100 mW · сейчас '
+                                  '${controller.appliedRadioPowerMw ?? controller.requestedRadioPowerMw} mW',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 132,
+                            child: DropdownButtonFormField<int>(
+                              value: controller.radioPowerSteps.any(
+                                (step) =>
+                                    step.nominalMw ==
+                                    controller.requestedRadioPowerMw,
+                              )
+                                  ? controller.requestedRadioPowerMw
+                                  : null,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                labelText: 'mW',
+                              ),
+                              items: controller.radioPowerSteps
+                                  .map(
+                                    (step) => DropdownMenuItem<int>(
+                                      value: step.nominalMw,
+                                      child: Text('${step.nominalMw} mW'),
+                                    ),
+                                  )
+                                  .toList(growable: false),
+                              onChanged: controller.radioPowerBusy
+                                  ? null
+                                  : (value) async {
+                                      if (value == null) return;
+                                      await controller.setRadioPowerMw(value);
+                                    },
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Text(
+                        'Мощность задаётся устройством',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    if (controller.radioPowerNotice?.isNotEmpty == true) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        controller.radioPowerNotice!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    if (controller.advancedMode) ...[
+                      const SizedBox(height: 8),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: EdgeInsets.zero,
+                        title: const Text('Инженерные параметры радио'),
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Board: ${controller.externalBoardId ?? '—'}',
+                                ),
+                                Text(
+                                  'Radio: ${controller.externalRadioFamily ?? '—'}',
+                                ),
+                                Text(
+                                  'Requested: ${controller.requestedRadioPowerMw} mW',
+                                ),
+                                Text(
+                                  'Actual: ${controller.appliedRadioPowerMw ?? '—'} mW',
+                                ),
+                                Text(
+                                  'Step: ${controller.appliedRadioPowerStepId ?? '—'}',
+                                ),
+                                Text(
+                                  'Calibration: ${controller.radioPowerCalibrationSource ?? 'device capability'}',
+                                ),
+                                Text(
+                                  'Auto eligible: ${controller.radioPowerAutoAdvertised ? 'yes' : 'no'}',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                   if (controller.ep2LocalNode != null ||
                       controller.ep2Firmware != null ||
