@@ -28,7 +28,7 @@ final class ContactCard {
   final String? preKeyBundle;
   final String? meshtasticNodeId;
   final int? radioNodeId;
-  /// Routing hint only: this does not verify the contact's cryptographic keys.
+  /// Routing hint only; not a verified identity.
   final String? radioNodeBinding;
 
   String encode() {
@@ -157,10 +157,7 @@ final class ContactCard {
     }
     final opaque = card.radioNodeBinding?.trim() ?? '';
     if (opaque.isNotEmpty &&
-        !RegExp(r'^[A-Za-z0-9._:-]{1,64}
-  }
-}
-).hasMatch(opaque)) {
+        !RegExp(r'^[A-Za-z0-9._:-]{1,64}$').hasMatch(opaque)) {
       throw const FormatException('Invalid M03 radio node binding');
     }
     return card;
