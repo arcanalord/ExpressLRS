@@ -162,7 +162,8 @@ jobs:
             lib/src/app.dart \
             tool/radio_capability_self_test.dart \
             tool/file1_transport_loopback_self_test.dart \
-            test/app_shell_navigation_test.dart
+            test/app_shell_navigation_test.dart \
+            test/connection_page_test.dart
           cp lib/core/file_transfer_session.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart"
           cp lib/core/messenger_core.dart \
@@ -197,6 +198,8 @@ jobs:
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart"
           cp test/app_shell_navigation_test.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/test/app_shell_navigation_test.dart"
+          cp test/connection_page_test.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/test/connection_page_test.dart"
           cd "$GITHUB_WORKSPACE"
           PATHS=(
             .ci/mesh-v0110/dev5-overlay/lib/core/file_transfer_session.dart
@@ -213,8 +216,10 @@ jobs:
             .ci/mesh-v0110/dev5-overlay/lib/src/features/help/help_sheet.dart
             .ci/mesh-v0110/dev5-overlay/lib/src/features/settings/settings_page.dart
             .ci/mesh-v0110/dev5-overlay/lib/src/app.dart
+            .ci/mesh-v0110/dev5-overlay/tool/radio_capability_self_test.dart
             .ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart
             .ci/mesh-v0110/dev5-overlay/test/app_shell_navigation_test.dart
+            .ci/mesh-v0110/dev5-overlay/test/connection_page_test.dart
           )
           if git diff --quiet -- "${PATHS[@]}"; then
             echo "RC8 changed files already canonical."
@@ -238,6 +243,9 @@ jobs:
             lib/core/messenger_core.dart \
             lib/platform/android_diagnostics_export_bridge.dart \
             lib/platform/file1_transport_bridge.dart \
+            lib/platform/radio_capability_contract.dart \
+            lib/platform/mm_uart_1.dart \
+            lib/platform/mm_uart_external_radio_session.dart \
             lib/platform/lr24_peer_reachability.dart \
             lib/platform/transparent_uart_radio_transport.dart \
             lib/src/application/mesh_app_controller.dart \
@@ -247,8 +255,10 @@ jobs:
             lib/src/features/settings/settings_page.dart \
             tool/delivery_reliability_self_test.dart \
             tool/file1_transport_loopback_self_test.dart \
+            tool/radio_capability_self_test.dart \
             tool/lr24_peer_reachability_self_test.dart \
-            test/app_shell_navigation_test.dart
+            test/app_shell_navigation_test.dart \
+            test/connection_page_test.dart
 
       - name: Format check (non-blocking)
         continue-on-error: true
