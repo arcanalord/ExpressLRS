@@ -1,6 +1,8 @@
 final class RadioInfo {
   const RadioInfo({
     this.protocolVersion,
+    this.hostProtocol,
+    this.networkProtocol,
     this.firmwareFamily,
     this.firmwareVersion,
     this.boardId,
@@ -11,6 +13,8 @@ final class RadioInfo {
   });
 
   final int? protocolVersion;
+  final String? hostProtocol;
+  final String? networkProtocol;
   final String? firmwareFamily;
   final String? firmwareVersion;
   final String? boardId;
@@ -24,6 +28,8 @@ final class RadioInfo {
         protocolVersion: raw['protocolVersion'] is int
             ? raw['protocolVersion'] as int
             : null,
+        hostProtocol: _cleanString(raw['hostProtocol']),
+        networkProtocol: _cleanString(raw['networkProtocol']),
         firmwareFamily: _cleanString(raw['firmwareFamily']),
         firmwareVersion: _cleanString(raw['firmwareVersion']),
         boardId: _cleanString(raw['boardId']),
@@ -93,7 +99,16 @@ final class RadioCapabilities {
     final maxPayload = maxPayloadNumber != null && maxPayloadNumber > 0
         ? maxPayloadNumber.floor()
         : null;
-    final protocols = _uniqueStrings(raw['networkProtocols']);
+    // Existing Cyclone builds advertised MMRP/1 in GET_INFO but omitted
+    // GET_CAPS.networkProtocols. Accept only that explicit v1 MM-UART identity;
+    // an explicitly empty capabilities list remains authoritative (no fallback).
+    final protocols = raw.containsKey('networkProtocols')
+        ? _uniqueStrings(raw['networkProtocols'])
+        : info?.protocolVersion == 1 &&
+              info?.hostProtocol == 'MM-UART/1' &&
+              info?.networkProtocol == 'MMRP/1'
+        ? const <String>['MMRP/1']
+        : const <String>[];
     return RadioCapabilities(
       radioFamily: _cleanString(raw['radioFamily']) ?? info?.radioFamily,
       profileIds: _uniqueStrings(raw['profileIds']),
