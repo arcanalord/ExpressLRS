@@ -180,6 +180,9 @@ final class MeshAppController extends ChangeNotifier {
         ? null
         : ownAgreementPublicKey,
     radioNodeId: ep2LocalNode,
+    radioNodeBinding: _mmUartActive
+        ? _externalRadioSession?.localNodeBinding
+        : null,
   ).encode();
   final Map<String, LanPairingSession> lanPairings =
       <String, LanPairingSession>{};
@@ -270,6 +273,14 @@ final class MeshAppController extends ChangeNotifier {
       _externalRadioSession?.snapshot().info?.boardId;
   bool get externalRadioSupportsMmrp =>
       _externalRadioSession?.supportsMmrp == true;
+  bool get externalRadioUsbConnected => _mmUartActive;
+  bool get externalRadioCanSend => _externalRadioSession?.canSend == true;
+  bool get externalRadioTxDisabled =>
+      _externalRadioSession?.deviceState?['txDisabled'] == true;
+  String? get externalRadioLocalBinding =>
+      _externalRadioSession?.localNodeBinding;
+  List<String> get externalRadioProfiles =>
+      _externalRadioSession?.capabilities?.profileIds ?? const <String>[];
   bool get radioHilAvailable => _radioHilBench?.isAvailable == true;
   int? get radioHilTargetNode {
     final contactNode = selectedContact?.ep2NodeId;
@@ -811,6 +822,9 @@ final class MeshAppController extends ChangeNotifier {
             ? existing?.meshtasticNodeNum
             : _parseNodeNum(card.meshtasticNodeId),
         ep2NodeId: card.radioNodeId ?? existing?.ep2NodeId,
+        radioNodeBinding: card.radioNodeBinding?.trim().isNotEmpty == true
+            ? card.radioNodeBinding!.trim()
+            : existing?.radioNodeBinding,
       ),
     );
     contacts = await _core.contacts();
@@ -984,18 +998,35 @@ final class MeshAppController extends ChangeNotifier {
     required String displayName,
     String? meshtasticNode,
     String? ep2Node,
+    String? radioNodeBinding,
   }) async {
     final cleanId = mmId.trim();
     final cleanName = displayName.trim();
-    if (cleanId.isEmpty || cleanName.isEmpty) return;
+    if (!RegExp(r'^mm:[0-9A-Za-z._:-]{4,128}$').hasMatch(cleanId) ||
+        cleanName.isEmpty || cleanName.length > 80) {
+      throw const FormatException('Неверный MM-ID или имя контакта');
+    }
     final nodeNum = _parseNodeNum(meshtasticNode);
     final ep2NodeId = _parseEp2Node(ep2Node);
+    final binding = _parseRadioNodeBinding(radioNodeBinding);
+    final existing = contacts.where((c) => c.mmId == cleanId).firstOrNull;
+    if (binding != null &&
+        contacts.any((c) => c.mmId != cleanId && c.radioNodeBinding == binding)) {
+      throw const FormatException('Этот M03 узел уже привязан к другому контакту');
+    }
     await _core.saveContact(
       Contact(
         mmId: cleanId,
         displayName: cleanName,
-        meshtasticNodeNum: nodeNum,
-        ep2NodeId: ep2NodeId,
+        verified: existing?.verified ?? false,
+        identityPublicKey: existing?.identityPublicKey,
+        agreementPublicKey: existing?.agreementPublicKey,
+        preKeyBundle: existing?.preKeyBundle,
+        fingerprint: existing?.fingerprint,
+        verifiedAt: existing?.verifiedAt,
+        meshtasticNodeNum: nodeNum ?? existing?.meshtasticNodeNum,
+        ep2NodeId: ep2NodeId ?? existing?.ep2NodeId,
+        radioNodeBinding: binding ?? existing?.radioNodeBinding,
       ),
     );
     contacts = await _core.contacts();
@@ -1035,6 +1066,7 @@ final class MeshAppController extends ChangeNotifier {
         verifiedAt: existing.verifiedAt,
         meshtasticNodeNum: existing.meshtasticNodeNum,
         ep2NodeId: existing.ep2NodeId,
+        radioNodeBinding: existing.radioNodeBinding,
       ),
     );
     contacts = await _core.contacts();
@@ -1177,6 +1209,7 @@ final class MeshAppController extends ChangeNotifier {
         verifiedAt: DateTime.now().toUtc(),
         meshtasticNodeNum: existing?.meshtasticNodeNum,
         ep2NodeId: existing?.ep2NodeId,
+        radioNodeBinding: existing?.radioNodeBinding,
       ),
     );
     contacts = await _core.contacts();
@@ -1415,9 +1448,10 @@ final class MeshAppController extends ChangeNotifier {
           ep2InfoNotice =
               'Сохранённый профиль LR24-F найден · переподключаем без probe.';
           _addEp2Log(
-            'USB device=${device.deviceId} saved LR24 binding matched; no active probe',
+            'USB device=${device.deviceId} LR24 hint matched; awaiting user confirmation',
           );
-          await connectLr24(device.deviceId, rememberProfile: false);
+          // CP210x bridge VID/PID/name is not a trusted hardware identity.
+          // Show the saved hint, never automatically open another radio as LR24.
         } else {
           ep2InfoNotice =
               'USB-модуль найден · выбери LR24-F или Авто M03. '
@@ -2127,8 +2161,13 @@ final class MeshAppController extends ChangeNotifier {
         ep2Protocol = 'MM-UART/1';
         ep2Baud = 115200;
         ep2Firmware = snapshot.info?.firmwareVersion;
-        ep2Profile = snapshot.capabilities?.profileIds.firstOrNull;
-        ep2InfoNotice = 'MM-UART/1 · MMRP/1 готов';
+        ep2Profile = null; // Advertised profiles are not yet activated.
+        ep2State = snapshot.state;
+        ep2InfoNotice = snapshot.deviceState?['txDisabled'] == true
+            ? 'M03 USB подключён · сервисная прошивка TX-OFF'
+            : snapshot.deviceState?['ready'] == true
+            ? 'M03 RF инициализирован · проверяйте второй узел'
+            : 'M03 USB подключён · выберите профиль и запустите радио';
         _addEp2Log(
           'MM-UART READY fw=${ep2Firmware ?? '-'} radio=${snapshot.info?.radioFamily ?? '-'}',
         );
@@ -2153,10 +2192,19 @@ final class MeshAppController extends ChangeNotifier {
         return;
       } catch (error) {
         _mmUartActive = false;
-        _addEp2Log('MM-UART fallback · $error');
+        final isNativeM03 = session.info?.hostProtocol == 'MM-UART/1';
+        _addEp2Log('MM-UART handshake failed · $error');
         try {
           await session.disconnect();
         } catch (_) {}
+        if (isNativeM03) {
+          ep2DetectedProtocol = 'mm-uart';
+          ep2Protocol = 'MM-UART/1';
+          ep2State = 'error';
+          ep2Error = 'M03 обнаружен, но контракт несовместим: $error';
+          ep2InfoNotice = 'Проверьте версию M03-прошивки и экспортируйте диагностику';
+          return; // Do not re-probe a known M03 radio as EP2/CRSF.
+        }
       }
 
       _addEp2Log('AUTO fallback -> EP2 LINK / CRSF');
@@ -2164,6 +2212,35 @@ final class MeshAppController extends ChangeNotifier {
     } catch (error) {
       ep2Error = '$error';
       _addEp2Log('CONNECT ERROR $error');
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> activateExternalRadioProfile(String profileId) async {
+    final session = _externalRadioSession;
+    if (session == null || !_mmUartActive || busy) return;
+    busy = true;
+    ep2Error = null;
+    ep2State = 'configuring';
+    ep2InfoNotice = 'Применение профиля $profileId…';
+    notifyListeners();
+    try {
+      final snapshot = await session.activateProfile(profileId);
+      ep2Profile = profileId;
+      ep2State = snapshot.state;
+      ep2InfoNotice = snapshot.deviceState?['txDisabled'] == true
+          ? 'RX / сервисный режим · TX отключён прошивкой'
+          : snapshot.deviceState?['ready'] == true
+          ? 'M03 RF готов · доставка подтвердится только после ACK второго узла'
+          : 'M03 профиль принят, радио ещё не готово';
+      _addEp2Log('RADIO_INIT profile=$profileId state=${snapshot.state}');
+    } catch (error) {
+      ep2Error = '$error';
+      ep2State = session.state;
+      ep2InfoNotice = 'Ошибка настройки M03: $error';
+      _addEp2Log('RADIO_INIT ERROR $error');
     } finally {
       busy = false;
       notifyListeners();
@@ -2243,8 +2320,12 @@ final class MeshAppController extends ChangeNotifier {
   }
 
   void _applyMmUartStats(Map<String, dynamic> stats) {
-    ep2Rssi10 = (stats['rssi10'] as num?)?.toInt();
-    ep2Snr10 = (stats['snr10'] as num?)?.toInt();
+    final rssi = stats['rssi'];
+    final snr = stats['snr'];
+    ep2Rssi10 = (stats['rssi10'] as num?)?.toInt() ??
+        (rssi is num ? (rssi * 10).round() : null);
+    ep2Snr10 = (stats['snr10'] as num?)?.toInt() ??
+        (snr is num ? (snr * 10).round() : null);
     ep2RttMs = (stats['rttMs'] as num?)?.toInt();
     ep2TxCount = (stats['tx'] as num?)?.toInt();
     ep2RxCount = (stats['rx'] as num?)?.toInt();
@@ -2372,10 +2453,20 @@ final class MeshAppController extends ChangeNotifier {
     }
   }
 
-  Object? _resolveMmUartBinding(String mmId) => _resolveEp2Node(mmId);
+  Object? _resolveMmUartBinding(String mmId) {
+    final contact = contacts.where((c) => c.mmId == mmId).firstOrNull;
+    final native = contact?.radioNodeBinding?.trim();
+    if (native != null && native.isNotEmpty) return native;
+    return contact?.ep2NodeId; // Legacy EP2 numeric route only.
+  }
 
   Contact? _contactForMmUartBinding(Object binding) {
-    final nodeId = binding is num ? binding.toInt() : int.tryParse('$binding');
+    final opaque = '$binding'.trim();
+    final native = contacts
+        .where((c) => c.radioNodeBinding?.trim() == opaque)
+        .firstOrNull;
+    if (native != null) return native;
+    final nodeId = binding is num ? binding.toInt() : int.tryParse(opaque);
     return nodeId == null ? null : _contactForEp2Node(nodeId);
   }
 
@@ -2477,7 +2568,7 @@ final class MeshAppController extends ChangeNotifier {
       ep2Protocol = 'MM-UART/1';
       ep2Baud = 115200;
       ep2Firmware = event.info.firmwareVersion;
-      ep2Profile = event.capabilities.profileIds.firstOrNull;
+      // GET_CAPS offers profiles; it does not select one.
       ep2InfoNotice = event.capabilities.supportsMmrp
           ? 'MM-UART/1 · MMRP/1 подтверждён'
           : 'MM-UART/1 без MMRP/1';
@@ -3054,6 +3145,15 @@ final class MeshAppController extends ChangeNotifier {
       throw FormatException('Неверный Meshtastic node ID');
     }
     return parsed;
+  }
+
+  String? _parseRadioNodeBinding(String? value) {
+    final binding = value?.trim() ?? '';
+    if (binding.isEmpty) return null;
+    if (!RegExp(r'^[A-Za-z0-9._:-]{1,64}$').hasMatch(binding)) {
+      throw const FormatException('Некорректный M03 node binding');
+    }
+    return binding;
   }
 
   int? _parseEp2Node(String? value) {

@@ -66,6 +66,8 @@ final class ExternalRadioSessionSnapshot {
     this.capabilities,
     this.stats,
     this.bootId,
+    this.localNodeBinding,
+    this.deviceState,
     this.lastError,
     this.hostLink,
   });
@@ -75,6 +77,8 @@ final class ExternalRadioSessionSnapshot {
   final RadioCapabilities? capabilities;
   final Map<String, dynamic>? stats;
   final String? bootId;
+  final String? localNodeBinding;
+  final Map<String, dynamic>? deviceState;
   final String? lastError;
   final Map<String, Object?>? hostLink;
 }
@@ -111,7 +115,20 @@ final class MmUartExternalRadioSession {
   RadioCapabilities? capabilities;
   Map<String, dynamic>? stats;
   String? bootId;
+  String? localNodeBinding;
+  Map<String, dynamic>? deviceState;
   String? lastError;
+
+  // READY is only a USB event until GET_STATE reports an initialized,
+  // TX-capable and route-ready RF link. A service TX-OFF build never sends.
+  bool get canSend =>
+      state == 'ready' &&
+      supportsMmrp &&
+      deviceState?['ready'] == true &&
+      deviceState?['txDisabled'] != true &&
+      deviceState?['otaActive'] != true &&
+      (deviceState?['fhssMode'] != 'FHSS_STATIC' ||
+          deviceState?['fhssRouteReady'] == true);
 
   Stream<ExternalRadioSessionEvent> get events => _events.stream;
 
@@ -121,6 +138,8 @@ final class MmUartExternalRadioSession {
     capabilities: capabilities,
     stats: stats,
     bootId: bootId,
+    localNodeBinding: localNodeBinding,
+    deviceState: deviceState,
     lastError: lastError,
     hostLink: _link?.describe(),
   );
@@ -149,6 +168,10 @@ final class MmUartExternalRadioSession {
     if (_link != null && !identical(_link, link)) await disconnect();
     _link = link;
     _decoder.reset();
+    info = null;
+    capabilities = null;
+    deviceState = null;
+    localNodeBinding = null;
     link.setReceiver(_decoder.push);
     link.setDisconnectHandler((reason) => _handleDisconnect(reason));
     _setState('connecting');
@@ -177,6 +200,7 @@ final class MmUartExternalRadioSession {
       }),
     );
     bootId = _stringOrNull(hello?['bootId']);
+    localNodeBinding = _stringOrNull(hello?['nodeBinding']);
     await refreshInfoAndCapabilities();
   }
 
@@ -192,6 +216,7 @@ final class MmUartExternalRadioSession {
 
     final rawState =
         _asMap(await request(MmUartFrameType.getState)) ?? const {};
+    deviceState = rawState;
     final ready = rawState['ready'] == true;
     _setState(
       ready ? 'ready' : (_stringOrNull(rawState['state']) ?? 'connected'),
@@ -206,6 +231,10 @@ final class MmUartExternalRadioSession {
     _recovering = false;
     _rejectPending(StateError('DISCONNECTED'));
     _decoder.reset();
+    info = null;
+    capabilities = null;
+    deviceState = null;
+    localNodeBinding = null;
     _setState('offline');
     if (link != null) await link.close();
   }
@@ -256,10 +285,18 @@ final class MmUartExternalRadioSession {
 
   Future<Object?> setProfile(String profileId) {
     final supported = capabilities?.profileIds ?? const [];
-    if (supported.isNotEmpty && !supported.contains(profileId)) {
+    if (!supported.contains(profileId)) {
       throw StateError('UNSUPPORTED_PROFILE');
     }
     return request(MmUartFrameType.setProfile, {'profileId': profileId});
+  }
+
+  /// Explicit user action only: no automatic RF init or band guessing.
+  Future<ExternalRadioSessionSnapshot> activateProfile(String profileId) async {
+    if (!supportsMmrp) throw StateError('MMRP_NOT_ADVERTISED');
+    await setProfile(profileId);
+    await request(MmUartFrameType.radioInit);
+    return refreshInfoAndCapabilities();
   }
 
   Future<Object?> send({
@@ -269,6 +306,7 @@ final class MmUartExternalRadioSession {
     required String payloadType,
     String qos = 'normal',
   }) {
+    if (!canSend) throw StateError('RADIO_NOT_READY_OR_TX_DISABLED');
     if (messageId.trim().isEmpty) throw ArgumentError('MESSAGE_ID_REQUIRED');
     if ('$recipientBinding'.trim().isEmpty) {
       throw ArgumentError('RECIPIENT_REQUIRED');
@@ -350,9 +388,15 @@ final class MmUartExternalRadioSession {
     final payload = _asMap(decoded) ?? <String, dynamic>{};
     switch (frame.type) {
       case MmUartFrameType.ready:
-        _setState('ready');
+        // READY means the device has booted, NOT that RF TX is allowed.
+        _setState(payload['ready'] == true
+            ? 'ready'
+            : (_stringOrNull(payload['state']) ?? 'connected'));
       case MmUartFrameType.stateChanged:
-        _setState(_stringOrNull(payload['state']) ?? 'connected');
+        deviceState = <String, dynamic>{...?deviceState, ...payload};
+        _setState(payload['ready'] == true
+            ? 'ready'
+            : (_stringOrNull(payload['state']) ?? 'connected'));
       case MmUartFrameType.linkStats:
         stats = payload;
         _events.add(ExternalRadioStatsEvent(payload));
@@ -366,6 +410,8 @@ final class MmUartExternalRadioSession {
         bootId = _stringOrNull(payload['bootId']);
         info = null;
         capabilities = null;
+        deviceState = null;
+        localNodeBinding = null;
         final generation = ++_recoveryGeneration;
         _setState('connecting', reason: 'deviceReset');
         _events.add(ExternalRadioDeviceResetEvent(payload));

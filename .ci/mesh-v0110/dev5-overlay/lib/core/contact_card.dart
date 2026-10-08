@@ -12,6 +12,7 @@ final class ContactCard {
     this.preKeyBundle,
     this.meshtasticNodeId,
     this.radioNodeId,
+    this.radioNodeBinding,
   });
 
   static const scheme = 'mesh';
@@ -27,6 +28,8 @@ final class ContactCard {
   final String? preKeyBundle;
   final String? meshtasticNodeId;
   final int? radioNodeId;
+  /// Routing hint only; not a verified identity.
+  final String? radioNodeBinding;
 
   String encode() {
     final uri = Uri(
@@ -46,6 +49,8 @@ final class ContactCard {
         if (meshtasticNodeId?.trim().isNotEmpty == true)
           'mesh': meshtasticNodeId!.trim(),
         if (radioNodeId != null) 'radio': radioNodeId.toString(),
+        if (radioNodeBinding?.trim().isNotEmpty == true)
+          'm03': radioNodeBinding!.trim(),
       },
     );
     return uri.toString();
@@ -66,6 +71,8 @@ final class ContactCard {
         if (meshtasticNodeId?.trim().isNotEmpty == true)
           'meshtasticNodeId': meshtasticNodeId!.trim(),
         if (radioNodeId != null) 'radioNodeId': radioNodeId,
+        if (radioNodeBinding?.trim().isNotEmpty == true)
+          'radioNodeBinding': radioNodeBinding!.trim(),
       });
 
   static ContactCard parse(String raw) {
@@ -92,6 +99,7 @@ final class ContactCard {
           preKeyBundle: decoded['preKeyBundle'] as String?,
           meshtasticNodeId: decoded['meshtasticNodeId'] as String?,
           radioNodeId: (decoded['radioNodeId'] as num?)?.toInt(),
+          radioNodeBinding: decoded['radioNodeBinding'] as String?,
         ),
       );
     }
@@ -115,6 +123,7 @@ final class ContactCard {
         preKeyBundle: q['pkb'],
         meshtasticNodeId: q['mesh'],
         radioNodeId: int.tryParse(q['radio'] ?? ''),
+        radioNodeBinding: q['m03'],
       ),
     );
   }
@@ -145,6 +154,11 @@ final class ContactCard {
     final node = card.radioNodeId;
     if (node != null && (node < 1 || node > 255)) {
       throw const FormatException('Invalid radio node ID');
+    }
+    final opaque = card.radioNodeBinding?.trim() ?? '';
+    if (opaque.isNotEmpty &&
+        !RegExp(r'^[A-Za-z0-9._:-]{1,64}$').hasMatch(opaque)) {
+      throw const FormatException('Invalid M03 radio node binding');
     }
     return card;
   }

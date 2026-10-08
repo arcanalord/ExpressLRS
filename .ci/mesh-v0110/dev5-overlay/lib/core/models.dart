@@ -153,6 +153,7 @@ final class Contact {
     this.verifiedAt,
     this.meshtasticNodeNum,
     this.ep2NodeId,
+    this.radioNodeBinding,
   });
   final String mmId;
   final String displayName;
@@ -164,6 +165,8 @@ final class Contact {
   final DateTime? verifiedAt;
   final int? meshtasticNodeNum;
   final int? ep2NodeId;
+  // Opaque M03 firmware routing binding (not a verified MM-ID / identity).
+  final String? radioNodeBinding;
 
   Map<String, Object?> toJson() => {
     'mmId': mmId,
@@ -176,6 +179,7 @@ final class Contact {
     'verifiedAt': verifiedAt?.toIso8601String(),
     'meshtasticNodeNum': meshtasticNodeNum,
     'ep2NodeId': ep2NodeId,
+    'radioNodeBinding': radioNodeBinding,
   };
 
   factory Contact.fromJson(Map<String, dynamic> json) => Contact(
@@ -191,6 +195,7 @@ final class Contact {
         : DateTime.tryParse(json['verifiedAt'] as String),
     meshtasticNodeNum: (json['meshtasticNodeNum'] as num?)?.toInt(),
     ep2NodeId: (json['ep2NodeId'] as num?)?.toInt(),
+    radioNodeBinding: json['radioNodeBinding'] as String?,
   );
 }
 

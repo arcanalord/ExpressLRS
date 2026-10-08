@@ -52,7 +52,7 @@ final class MmUartMessageTransport implements MessageTransport {
   String get id => 'external-radio';
 
   @override
-  bool get isAvailable => session.state == 'ready' && session.supportsMmrp;
+  bool get isAvailable => session.canSend;
 
   @override
   Future<TransportSendResult> send(DeliveryEnvelope envelope) async {

@@ -791,6 +791,7 @@ class _AddContactDialogState extends State<_AddContactDialog> {
   final TextEditingController _mmId = TextEditingController();
   final TextEditingController _node = TextEditingController();
   final TextEditingController _ep2Node = TextEditingController();
+  final TextEditingController _m03Binding = TextEditingController();
   bool _saving = false;
 
   @override
@@ -799,6 +800,7 @@ class _AddContactDialogState extends State<_AddContactDialog> {
     _mmId.dispose();
     _node.dispose();
     _ep2Node.dispose();
+    _m03Binding.dispose();
     super.dispose();
   }
 
@@ -816,6 +818,7 @@ class _AddContactDialogState extends State<_AddContactDialog> {
         displayName: _name.text,
         meshtasticNode: _node.text,
         ep2Node: _ep2Node.text,
+        radioNodeBinding: _m03Binding.text,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -868,8 +871,17 @@ class _AddContactDialogState extends State<_AddContactDialog> {
                     enabled: !_saving,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
-                      labelText: 'Узел радиомодуля (1-15)',
+                      labelText: 'Узел EP2 (1-15)',
                       hintText: '2',
+                    ),
+                  ),
+                  TextField(
+                    controller: _m03Binding,
+                    enabled: !_saving,
+                    decoration: const InputDecoration(
+                      labelText: 'Радиоузел M03 / Cyclone',
+                      hintText: 'node-1234abcd',
+                      helperText: 'Это адрес радио, а не подтверждение MM-ID или ключей.',
                     ),
                   ),
                 ],

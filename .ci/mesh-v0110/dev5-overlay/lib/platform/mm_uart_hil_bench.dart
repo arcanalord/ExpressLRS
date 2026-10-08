@@ -78,7 +78,7 @@ final class MmUartHilBench {
   final Map<String, Completer<Map<String, dynamic>>> _mapWaiters = {};
   final Set<String> _seenDeliveries = <String>{};
 
-  bool get isAvailable => session.state == 'ready' && session.supportsMmrp;
+  bool get isAvailable => session.canSend;
 
   Future<MmUartHilReport> run({
     required Object recipientBinding,
