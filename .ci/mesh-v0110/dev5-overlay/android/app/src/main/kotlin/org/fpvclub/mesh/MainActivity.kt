@@ -146,6 +146,15 @@ class MainActivity : FlutterActivity() {
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
+            "org.fpvclub.mesh/m07",
+        ).setMethodCallHandler { call, result ->
+            runAsync(result, "M07_PROVIDER") {
+                M07NativeProviderRuntime.invoke(call.method, call.arguments)
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
             "org.fpvclub.mesh/meshtastic",
         ).setMethodCallHandler(::handleMeshtasticMethod)
         EventChannel(
