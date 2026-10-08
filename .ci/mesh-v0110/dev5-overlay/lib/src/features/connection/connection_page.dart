@@ -32,6 +32,32 @@ class _ConnectionPageState extends State<ConnectionPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _confirmM03Profile(String profileId) async {
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Запустить радиомодуль?'),
+        content: Text(
+          'Профиль: $profileId. Проверьте совместимую антенну и что диапазон '
+          'разрешён для испытаний в вашем регионе. '
+          'Сервисная прошивка TX-OFF не сможет передавать.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Применить'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || approved != true) return;
+    await widget.controller.activateExternalRadioProfile(profileId);
+  }
+
   @override
   void dispose() {
     widget.controller.removeListener(_refresh);
@@ -53,7 +79,10 @@ class _ConnectionPageState extends State<ConnectionPage> {
 
   String _transportState(String state) => switch (state) {
     'ready' => 'Готово',
-    'connected' => 'Подключено',
+    'connected' => 'USB подключён',
+    'idle' => 'M03 USB обнаружен · RF выключен',
+    'configured' => 'RF настроен · запуск ожидается',
+    'configuring' => 'Настройка радиопрофиля…',
     'connecting' || 'starting' => 'Подключение…',
     'handshaking' || 'probing' => 'Проверка радиомодуля…',
     'crsf' => 'ELRS / CRSF',
@@ -75,7 +104,8 @@ class _ConnectionPageState extends State<ConnectionPage> {
 
   String _transportLabel(String? id) => switch (id) {
     'lan' => 'Локальная сеть',
-    'ep2-uart' => 'Радиомодуль',
+    'ep2-uart' => 'EP2 / ELRS',
+    'external-radio' => 'M03 / Cyclone',
     'lr24-usb' => 'MicoAir LR24-F',
     'meshtastic' => 'Meshtastic',
     null => 'Канал выбирается',
@@ -410,6 +440,38 @@ class _ConnectionPageState extends State<ConnectionPage> {
                     const SizedBox(height: 6),
                     Text(
                       'Узел ${controller.ep2LocalNode ?? '—'} · ${controller.ep2Firmware ?? '—'} · ${controller.ep2Profile ?? '—'}',
+                    ),
+                  ],
+                  if (controller.mmUartActive) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'M03 USB обнаружен · ${controller.externalRadioTxDisabled ? 'TX-OFF сервис' : controller.externalRadioCanSend ? 'RF готов' : 'RF выключен / ожидание профиля'}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if (controller.externalRadioLocalBinding != null)
+                      SelectableText('Ваш радиоузел: ${controller.externalRadioLocalBinding}'),
+                    if (controller.ep2InfoNotice?.isNotEmpty == true)
+                      Text(controller.ep2InfoNotice!),
+                    const SizedBox(height: 8),
+                    const Text('Радиопрофиль M03 · выберите разрешённый диапазон вручную'),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final profile in controller.externalRadioProfiles)
+                          OutlinedButton(
+                            onPressed: controller.busy
+                                ? null
+                                : () => _confirmM03Profile(profile),
+                            child: Text(profile),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'USB и радиоканал — разные состояния. Доставка только после ACK второго устройства. '
+                      'Привяжите его M03 node ID к контакту через «Добавить контакт».',
                     ),
                   ],
                   if (controller.mmUartActive) ...[
