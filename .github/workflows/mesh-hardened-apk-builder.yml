@@ -1,6 +1,11 @@
 name: Mesh hardened APK builder
 
 on:
+  push:
+    branches:
+      - ci/mesh-hardened-apk-20261008
+    paths:
+      - '.github/workflows/mesh-hardened-apk-builder.yml'
   workflow_dispatch:
     inputs:
       mesh_ref:
