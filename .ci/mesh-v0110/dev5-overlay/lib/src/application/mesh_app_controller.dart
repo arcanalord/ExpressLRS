@@ -12,6 +12,8 @@ import '../../core/contact_card.dart';
 import '../../core/diagnostic_snapshot.dart';
 import '../../core/delivery.dart';
 import '../../core/identity_crypto.dart';
+import '../../core/m07_atomic_provider.dart';
+import '../../core/m07_provider_state_store.dart';
 import '../../core/m07_security.dart';
 import '../../core/messenger_core.dart';
 import '../../core/secure_core_policy.dart';
@@ -20,6 +22,7 @@ import '../../core/usb_profile_binding.dart';
 import '../../platform/android_app_storage_crypto.dart';
 import '../../platform/android_diagnostics_export_bridge.dart';
 import '../../platform/android_local_network_bridge.dart';
+import '../../platform/android_m07_direct_ratchet_engine.dart';
 import '../../platform/android_secure_identity_bridge.dart';
 import '../../platform/android_meshtastic_bridge.dart';
 import '../../platform/android_usb_serial_bridge.dart';
@@ -358,9 +361,11 @@ final class MeshAppController extends ChangeNotifier {
     }
 
     final securityPolicy = SecureCorePolicy.forBuild(isRelease: kReleaseMode);
+    final storageCrypto =
+        Platform.isAndroid ? AndroidAppStorageCrypto() : null;
     final storage = AppStorage(
       root,
-      crypto: Platform.isAndroid ? AndroidAppStorageCrypto() : null,
+      crypto: storageCrypto,
       requireEncryption: securityPolicy.requireEncryptedStorage,
     );
     await storage.migrateSensitiveStorage();
@@ -390,6 +395,21 @@ final class MeshAppController extends ChangeNotifier {
       agreementPublicKey: _identity.agreementPublicKeyB64,
       seedStorage: identitySeedStorage,
     );
+
+    M07CryptoProvider? cryptoProvider;
+    if (Platform.isAndroid && storageCrypto != null) {
+      final engine = await AndroidM07DirectRatchetEngine.tryCreate();
+      if (engine != null) {
+        cryptoProvider = M07AtomicProvider(
+          localMmId: ownMmId,
+          engine: engine,
+          store: M07ProviderStateStore(
+            root: root,
+            crypto: storageCrypto,
+          ),
+        );
+      }
+    }
 
     final transports = <MessageTransport>[];
     final lan = LanTransport(ownMmId: ownMmId, deviceLabel: ownDeviceLabel);
@@ -462,6 +482,7 @@ final class MeshAppController extends ChangeNotifier {
       ownMmId: ownMmId,
       storage: storage,
       transports: transports,
+      cryptoProvider: cryptoProvider,
       requirePrivateE2ee: securityPolicy.requirePrivateE2ee,
     );
     await _core.restore();
