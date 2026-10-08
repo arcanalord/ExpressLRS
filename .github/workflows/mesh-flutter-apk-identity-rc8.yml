@@ -94,7 +94,11 @@ jobs:
         run: |
           set -euo pipefail
           cd "$APP_DIR"
-          flutter build apk --debug --target-platform android-arm64 \
+          # Flutter debug without split-per-abi includes extra native ABIs.
+          # This Gradle project property prevents the ABI-specific +2000 versionCode.
+          # Keep About/build manifest and aapt badging at the same source build number.
+          printf "\nforce-version-code-ignoring-abi=true\n" >> android/gradle.properties
+          flutter build apk --debug --target-platform android-arm64 --split-per-abi \
             --dart-define=APP_VERSION="$APP_VERSION" \
             --dart-define=APP_BUILD="$APP_BUILD"
 
@@ -103,7 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$APP_DIR"
-          APK="build/app/outputs/flutter-apk/app-debug.apk"
+          APK="build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk"
           test -s "$APK"
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
           "$BT/apksigner" verify --verbose "$APK"
