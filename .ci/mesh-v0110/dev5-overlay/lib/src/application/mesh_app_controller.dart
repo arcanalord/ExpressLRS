@@ -2161,8 +2161,13 @@ final class MeshAppController extends ChangeNotifier {
         ep2Protocol = 'MM-UART/1';
         ep2Baud = 115200;
         ep2Firmware = snapshot.info?.firmwareVersion;
-        ep2Profile = snapshot.capabilities?.profileIds.firstOrNull;
-        ep2InfoNotice = 'MM-UART/1 · MMRP/1 готов';
+        ep2Profile = null; // Advertised profiles are not yet activated.
+        ep2State = snapshot.state;
+        ep2InfoNotice = snapshot.deviceState?['txDisabled'] == true
+            ? 'M03 USB подключён · сервисная прошивка TX-OFF'
+            : snapshot.deviceState?['ready'] == true
+            ? 'M03 RF инициализирован · проверяйте второй узел'
+            : 'M03 USB подключён · выберите профиль и запустите радио';
         _addEp2Log(
           'MM-UART READY fw=${ep2Firmware ?? '-'} radio=${snapshot.info?.radioFamily ?? '-'}',
         );
@@ -2187,10 +2192,19 @@ final class MeshAppController extends ChangeNotifier {
         return;
       } catch (error) {
         _mmUartActive = false;
-        _addEp2Log('MM-UART fallback · $error');
+        final isNativeM03 = session.info?.hostProtocol == 'MM-UART/1';
+        _addEp2Log('MM-UART handshake failed · $error');
         try {
           await session.disconnect();
         } catch (_) {}
+        if (isNativeM03) {
+          ep2DetectedProtocol = 'mm-uart';
+          ep2Protocol = 'MM-UART/1';
+          ep2State = 'error';
+          ep2Error = 'M03 обнаружен, но контракт несовместим: $error';
+          ep2InfoNotice = 'Проверьте версию M03-прошивки и экспортируйте диагностику';
+          return; // Do not re-probe a known M03 radio as EP2/CRSF.
+        }
       }
 
       _addEp2Log('AUTO fallback -> EP2 LINK / CRSF');
@@ -2198,6 +2212,35 @@ final class MeshAppController extends ChangeNotifier {
     } catch (error) {
       ep2Error = '$error';
       _addEp2Log('CONNECT ERROR $error');
+    } finally {
+      busy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> activateExternalRadioProfile(String profileId) async {
+    final session = _externalRadioSession;
+    if (session == null || !_mmUartActive || busy) return;
+    busy = true;
+    ep2Error = null;
+    ep2State = 'configuring';
+    ep2InfoNotice = 'Применение профиля $profileId…';
+    notifyListeners();
+    try {
+      final snapshot = await session.activateProfile(profileId);
+      ep2Profile = profileId;
+      ep2State = snapshot.state;
+      ep2InfoNotice = snapshot.deviceState?['txDisabled'] == true
+          ? 'RX / сервисный режим · TX отключён прошивкой'
+          : snapshot.deviceState?['ready'] == true
+          ? 'M03 RF готов · доставка подтвердится только после ACK второго узла'
+          : 'M03 профиль принят, радио ещё не готово';
+      _addEp2Log('RADIO_INIT profile=$profileId state=${snapshot.state}');
+    } catch (error) {
+      ep2Error = '$error';
+      ep2State = session.state;
+      ep2InfoNotice = 'Ошибка настройки M03: $error';
+      _addEp2Log('RADIO_INIT ERROR $error');
     } finally {
       busy = false;
       notifyListeners();
@@ -2277,8 +2320,12 @@ final class MeshAppController extends ChangeNotifier {
   }
 
   void _applyMmUartStats(Map<String, dynamic> stats) {
-    ep2Rssi10 = (stats['rssi10'] as num?)?.toInt();
-    ep2Snr10 = (stats['snr10'] as num?)?.toInt();
+    final rssi = stats['rssi'];
+    final snr = stats['snr'];
+    ep2Rssi10 = (stats['rssi10'] as num?)?.toInt() ??
+        (rssi is num ? (rssi * 10).round() : null);
+    ep2Snr10 = (stats['snr10'] as num?)?.toInt() ??
+        (snr is num ? (snr * 10).round() : null);
     ep2RttMs = (stats['rttMs'] as num?)?.toInt();
     ep2TxCount = (stats['tx'] as num?)?.toInt();
     ep2RxCount = (stats['rx'] as num?)?.toInt();
@@ -2521,7 +2568,7 @@ final class MeshAppController extends ChangeNotifier {
       ep2Protocol = 'MM-UART/1';
       ep2Baud = 115200;
       ep2Firmware = event.info.firmwareVersion;
-      ep2Profile = event.capabilities.profileIds.firstOrNull;
+      // GET_CAPS offers profiles; it does not select one.
       ep2InfoNotice = event.capabilities.supportsMmrp
           ? 'MM-UART/1 · MMRP/1 подтверждён'
           : 'MM-UART/1 без MMRP/1';
