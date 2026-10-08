@@ -1,0 +1,139 @@
+name: Mesh Flutter RC8 APK Product Identity
+# Isolated M01/M10 package gate. Does not promote CURRENT_RELEASE.
+on:
+  push:
+    branches:
+      - feature/mesh-flutter-rc8-apk-identity-20261008
+    paths:
+      - '.github/workflows/mesh-flutter-apk-identity-rc8.yml'
+      - '.ci/mesh-v0110/dev5-overlay/android/app/src/main/AndroidManifest.xml'
+      - '.ci/mesh-v0110/dev5-overlay/pubspec.yaml'
+      - '.ci/mesh-v0110/dev5-overlay/lib/core/app_build_info.dart'
+      - '.ci/mesh-v0110/dev5-overlay/tool/apk_product_identity_gate.py'
+  pull_request:
+    branches:
+      - fix/flutter-rc8-requests-file-route
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mesh-flutter-rc8-apk-identity
+  cancel-in-progress: true
+
+jobs:
+  apk-product-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout product candidate
+        uses: actions/checkout@v4
+
+      - name: Reconstruct pinned source and overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mesh-rc8-source
+          base64 -d .ci/mesh-v0110/source_v0110_dev3.zip.b64 > /tmp/mesh-rc8-source/source.zip
+          echo '38a92c9c3873239c7db9c472800e4229d60a8a539bbb964b057e03029eebcda4  /tmp/mesh-rc8-source/source.zip' | sha256sum -c -
+          unzip -q /tmp/mesh-rc8-source/source.zip -d /tmp/mesh-rc8-source/unpacked
+          ROOT="$(find /tmp/mesh-rc8-source/unpacked -maxdepth 1 -mindepth 1 -type d -name 'mesh_messenger_flutter_*' -print -quit)"
+          test -n "$ROOT"
+          APP_DIR="$ROOT/flutter_app"
+          cp -a .ci/mesh-v0110/dev5-overlay/. "$APP_DIR/"
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+          VERSION_FULL="$(sed -n 's/^version: //p' "$APP_DIR/pubspec.yaml" | head -n1)"
+          APP_VERSION="$(printf '%s' "$VERSION_FULL" | cut -d+ -f1)"
+          APP_BUILD="$(printf '%s' "$VERSION_FULL" | cut -d+ -f2)"
+          test "$APP_VERSION" = '0.6.0-secure-core-rc8'
+          test "$APP_BUILD" = '26102109'
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "APP_BUILD=$APP_BUILD" >> "$GITHUB_ENV"
+
+      - name: Gate self-test including negative samples
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR"
+          python3 tool/apk_product_identity_gate.py --self-test
+          python3 tool/apk_product_identity_gate.py \
+            --manifest android/app/src/main/AndroidManifest.xml \
+            --pubspec pubspec.yaml \
+            --build-info lib/core/app_build_info.dart \
+            --source-only
+          test -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          test -f android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          test -f android/app/src/main/res/drawable/ic_launcher_foreground.xml
+
+      - name: Setup Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Dependencies and pinned map vendor
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR"
+          flutter pub get
+          python3 tool/fetch_map_vendor.py
+          python3 tool/map_vendor_gate.py
+
+      - name: Analyze and targeted widget regression
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR"
+          flutter analyze
+          timeout 180s flutter test test/app_shell_navigation_test.dart \
+            --reporter expanded --timeout 90s \
+            --dart-define=APP_VERSION="$APP_VERSION" \
+            --dart-define=APP_BUILD="$APP_BUILD"
+
+      - name: Build fresh installable ARM64 debug candidate
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR"
+          flutter build apk --debug --target-platform android-arm64 --split-per-abi \
+            --dart-define=APP_VERSION="$APP_VERSION" \
+            --dart-define=APP_BUILD="$APP_BUILD"
+
+      - name: Verify actual APK contents and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$APP_DIR"
+          APK="build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk"
+          test -s "$APK"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
+          "$BT/apksigner" verify --verbose "$APK"
+          "$BT/zipalign" -c -P 16 -v 4 "$APK" >/dev/null
+          "$BT/aapt" dump badging "$APK" > /tmp/mesh-rc8-apk-badging.txt
+          python3 tool/apk_product_identity_gate.py \
+            --manifest android/app/src/main/AndroidManifest.xml \
+            --pubspec pubspec.yaml \
+            --build-info lib/core/app_build_info.dart \
+            --badging /tmp/mesh-rc8-apk-badging.txt
+          "$BT/aapt" dump permissions "$APK" > /tmp/mesh-rc8-apk-permissions.txt
+          "$BT/aapt" dump xmltree "$APK" AndroidManifest.xml > /tmp/mesh-rc8-apk-manifest-tree.txt
+          grep -q 'android:roundIcon' /tmp/mesh-rc8-apk-manifest-tree.txt
+          unzip -Z1 "$APK" | grep -q '^lib/arm64-v8a/'
+          if unzip -Z1 "$APK" | grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/'; then
+            echo "Unexpected ABI in ARM64 candidate" >&2
+            exit 1
+          fi
+          mkdir -p /tmp/mesh-rc8-apk-product-evidence
+          cp "$APK" "/tmp/mesh-rc8-apk-product-evidence/Mesh Messenger rc8 product gate debug.apk"
+          cp /tmp/mesh-rc8-apk-badging.txt /tmp/mesh-rc8-apk-permissions.txt /tmp/mesh-rc8-apk-manifest-tree.txt /tmp/mesh-rc8-apk-product-evidence/
+          cd /tmp/mesh-rc8-apk-product-evidence
+          sha256sum *.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          cat /tmp/mesh-rc8-apk-badging.txt | grep -E '^(package:|application:|launchable-activity:)'
+
+      - name: Upload non-release debug verification artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesh-flutter-rc8-apk-product-identity-debug
+          path: /tmp/mesh-rc8-apk-product-evidence/
+          if-no-files-found: error
+          retention-days: 14
