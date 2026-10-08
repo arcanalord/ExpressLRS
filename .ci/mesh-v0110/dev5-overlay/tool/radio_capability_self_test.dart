@@ -86,7 +86,9 @@ void main() {
     'profileIds': ['MM-PHY-24-COMMON-v0'],
   });
   if (absentMmrp.supportsMmrp) {
-    throw StateError('MMRP must require explicit networkProtocols advertisement');
+    throw StateError(
+      'MMRP must require explicit networkProtocols advertisement',
+    );
   }
 
   print('RADIO_CAPABILITY_DART_PASS');

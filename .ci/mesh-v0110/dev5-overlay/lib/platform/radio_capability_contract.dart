@@ -141,13 +141,14 @@ final class RadioCapabilities {
   bool get supportsMmrp => networkProtocols.contains('MMRP/1');
 
   List<RadioPowerStep> get selectablePowerSteps {
-    final result = powerSteps
-        .where(
-          (step) =>
-              step.radiatedPowerCalibrated && step.normalUiRecommended,
-        )
-        .toList(growable: false)
-      ..sort((a, b) => a.nominalMw.compareTo(b.nominalMw));
+    final result =
+        powerSteps
+            .where(
+              (step) =>
+                  step.radiatedPowerCalibrated && step.normalUiRecommended,
+            )
+            .toList(growable: false)
+          ..sort((a, b) => a.nominalMw.compareTo(b.nominalMw));
     return List.unmodifiable(result);
   }
 

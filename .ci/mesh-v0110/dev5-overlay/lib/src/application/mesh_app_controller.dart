@@ -800,10 +800,7 @@ final class MeshAppController extends ChangeNotifier {
     }
   }
 
-  Future<void> setRadioPowerMw(
-    int requestedMw, {
-    bool persist = true,
-  }) async {
+  Future<void> setRadioPowerMw(int requestedMw, {bool persist = true}) async {
     if (requestedMw <= 0) throw ArgumentError('POWER_MW_REQUIRED');
     final session = _externalRadioSession;
     final caps = externalRadioCapabilities;
@@ -821,8 +818,8 @@ final class MeshAppController extends ChangeNotifier {
       final actual = actualRaw is num ? actualRaw.toInt() : selection.actualMw;
       requestedRadioPowerMw = requestedMw;
       appliedRadioPowerMw = actual;
-      appliedRadioPowerStepId =
-          (result['powerStepId'] ?? selection.step.id).toString();
+      appliedRadioPowerStepId = (result['powerStepId'] ?? selection.step.id)
+          .toString();
       radioPowerNotice = selection.exact
           ? 'Мощность: ' + actual.toString() + ' mW'
           : 'Запрошено ' +
