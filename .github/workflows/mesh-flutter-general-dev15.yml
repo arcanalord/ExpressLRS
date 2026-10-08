@@ -10,6 +10,7 @@ on:
       - fix/m05-file1-final-4of4
       - feat/flutter-rc7-product-ux
       - fix/flutter-rc8-requests-file-route
+      - security/m07-vodozemac-platform-bridge-20261008
     paths:
       - '.github/workflows/mesh-flutter-general-dev15.yml'
       - '.ci/mesh-v0110/dev5-overlay/**'
@@ -144,6 +145,7 @@ jobs:
             lib/core/messenger_core.dart \
             lib/platform/file1_transport_bridge.dart \
             lib/platform/transparent_uart_radio_transport.dart \
+            lib/platform/android_m07_direct_ratchet_engine.dart \
             lib/src/application/mesh_app_controller.dart \
             lib/src/features/chats/chats_page.dart \
             tool/file1_transport_loopback_self_test.dart \
@@ -156,6 +158,8 @@ jobs:
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/platform/file1_transport_bridge.dart"
           cp lib/platform/transparent_uart_radio_transport.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/platform/transparent_uart_radio_transport.dart"
+          cp lib/platform/android_m07_direct_ratchet_engine.dart \
+            "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/platform/android_m07_direct_ratchet_engine.dart"
           cp lib/src/application/mesh_app_controller.dart \
             "$GITHUB_WORKSPACE/.ci/mesh-v0110/dev5-overlay/lib/src/application/mesh_app_controller.dart"
           cp lib/src/features/chats/chats_page.dart \
@@ -170,6 +174,7 @@ jobs:
             .ci/mesh-v0110/dev5-overlay/lib/core/messenger_core.dart
             .ci/mesh-v0110/dev5-overlay/lib/platform/file1_transport_bridge.dart
             .ci/mesh-v0110/dev5-overlay/lib/platform/transparent_uart_radio_transport.dart
+            .ci/mesh-v0110/dev5-overlay/lib/platform/android_m07_direct_ratchet_engine.dart
             .ci/mesh-v0110/dev5-overlay/lib/src/application/mesh_app_controller.dart
             .ci/mesh-v0110/dev5-overlay/lib/src/features/chats/chats_page.dart
             .ci/mesh-v0110/dev5-overlay/tool/file1_transport_loopback_self_test.dart
@@ -199,6 +204,7 @@ jobs:
             lib/platform/file1_transport_bridge.dart \
             lib/platform/lr24_peer_reachability.dart \
             lib/platform/transparent_uart_radio_transport.dart \
+            lib/platform/android_m07_direct_ratchet_engine.dart \
             lib/src/application/mesh_app_controller.dart \
             lib/src/features/chats/chats_page.dart \
             lib/src/features/connection/connection_page.dart \
@@ -268,6 +274,10 @@ jobs:
           grep -q "M07_PROVIDER_STATE_STORE_PASS" tool/m07_provider_state_store_self_test.dart
           grep -q "M07_ATOMIC_PROVIDER_ADAPTER_PASS" tool/m07_atomic_provider_self_test.dart
           grep -q "abstract interface class M07DirectRatchetEngine" lib/core/m07_atomic_provider.dart
+          grep -q "class AndroidM07DirectRatchetEngine implements M07DirectRatchetEngine" lib/platform/android_m07_direct_ratchet_engine.dart
+          grep -q "org.fpvclub.mesh/m07" android/app/src/main/kotlin/org/fpvclub/mesh/MainActivity.kt
+          grep -q "M07_VODOZEMAC_NATIVE_BACKEND_NOT_PACKAGED" android/app/src/main/kotlin/org/fpvclub/mesh/M07NativeProviderRuntime.kt
+          grep -q "cryptoProvider: cryptoProvider" lib/src/application/mesh_app_controller.dart
           grep -q "mesh-messenger-m07-provider-state/v1" lib/core/m07_provider_state_store.dart
           grep -q "abstract interface class M07AtomicCryptoProvider" lib/core/m07_security.dart
           grep -q "LOCAL_STORAGE_ENCRYPTION_SELF_TEST_PASS" tool/storage_encryption_self_test.dart
