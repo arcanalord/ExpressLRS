@@ -466,7 +466,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                           SizedBox(
                             width: 132,
                             child: DropdownButtonFormField<int>(
-                              value: controller.radioPowerSteps.any(
+                              initialValue: controller.radioPowerSteps.any(
                                 (step) =>
                                     step.nominalMw ==
                                     controller.requestedRadioPowerMw,
