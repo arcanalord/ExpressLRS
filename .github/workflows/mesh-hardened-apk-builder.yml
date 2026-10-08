@@ -1,0 +1,134 @@
+name: Mesh hardened APK builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      mesh_ref:
+        description: Mesh Messenger ref or commit to build
+        required: true
+        default: 59c1af84daa55be5b1c65d084293a9db01c18fbb
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Require private source token
+        shell: bash
+        env:
+          MESH_REPO_TOKEN: ${{ secrets.MESH_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$MESH_REPO_TOKEN"
+          echo "Private source credential present"
+
+      - name: Checkout private Mesh Messenger source
+        uses: actions/checkout@v4
+        with:
+          repository: arcanalord/MeshMessenger-Kotlin-Native
+          ref: ${{ inputs.mesh_ref }}
+          token: ${{ secrets.MESH_REPO_TOKEN }}
+          path: mesh-src
+          persist-credentials: false
+          fetch-depth: 1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Locate Android SDK tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT" -type f -name sdkmanager 2>/dev/null | head -n 1)"
+          fi
+          test -n "$SDKMANAGER"
+          test -x "$SDKMANAGER"
+          echo "SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
+
+      - name: Verify source identity
+        working-directory: mesh-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          echo "MESH_SOURCE_SHA=$ACTUAL_SHA"
+          test "$ACTUAL_SHA" = "${{ inputs.mesh_ref }}" || {
+            echo "Requested ref resolved to $ACTUAL_SHA"
+          }
+          git status --short
+
+      - name: Unit tests
+        working-directory: mesh-src
+        run: gradle testDebugUnitTest --stacktrace
+
+      - name: Build obfuscated release APK
+        working-directory: mesh-src
+        run: gradle assembleRelease --stacktrace
+
+      - name: Verify R8 release and sign test APK
+        working-directory: mesh-src
+        shell: bash
+        run: |
+          set -euo pipefail
+          UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+          MAP="app/build/outputs/mapping/release/mapping.txt"
+          OUT="$RUNNER_TEMP/mesh-hardened"
+          mkdir -p "$OUT"
+          test -s "$UNSIGNED"
+          test -s "$MAP"
+
+          KEYSTORE="$RUNNER_TEMP/mesh-hardened-test.keystore"
+          keytool -genkeypair -v             -keystore "$KEYSTORE"             -storepass android             -keypass android             -alias hardenedtest             -keyalg RSA             -keysize 3072             -validity 3650             -dname "CN=Mesh Messenger Hardened Test,O=A1 Workspace,C=NL"
+
+          ZIPALIGN="$SDK_ROOT/build-tools/37.0.0/zipalign"
+          APKSIGNER="$SDK_ROOT/build-tools/37.0.0/apksigner"
+          "$ZIPALIGN" -p -f 4 "$UNSIGNED" "$OUT/app-hardened-aligned.apk"
+          "$APKSIGNER" sign             --ks "$KEYSTORE"             --ks-pass pass:android             --key-pass pass:android             --ks-key-alias hardenedtest             --out "$OUT/app-hardened.apk"             "$OUT/app-hardened-aligned.apk"
+          "$APKSIGNER" verify --verbose --print-certs "$OUT/app-hardened.apk"
+
+          SHA256="$(sha256sum "$OUT/app-hardened.apk" | awk '{print $1}')"
+          echo "$SHA256  app-hardened.apk" > "$OUT/app-hardened.apk.sha256"
+          cp "$MAP" "$OUT/mapping.txt"
+          printf '%s\n' "${{ inputs.mesh_ref }}" > "$OUT/source-ref.txt"
+          rm -f "$KEYSTORE" "$OUT/app-hardened-aligned.apk"
+          echo "SEC_HARDENED_APK_PASS sha256=$SHA256"
+
+      - name: Upload hardened APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesh-messenger-hardened-apk
+          path: |
+            ${{ runner.temp }}/mesh-hardened/app-hardened.apk
+            ${{ runner.temp }}/mesh-hardened/app-hardened.apk.sha256
+            ${{ runner.temp }}/mesh-hardened/source-ref.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload private mapping artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesh-messenger-r8-mapping
+          path: ${{ runner.temp }}/mesh-hardened/mapping.txt
+          if-no-files-found: error
+          retention-days: 3
