@@ -13,7 +13,6 @@ abstract final class MmUart1FrameType {
   static const int cancel = 0x13;
   static const int resetStats = 0x14;
   static const int reboot = 0x15;
-  static const int setPower = 0x19;
   static const int ready = 0x80;
   static const int stateChanged = 0x81;
   static const int rxPacket = 0x82;

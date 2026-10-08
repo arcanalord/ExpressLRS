@@ -20,6 +20,7 @@ abstract final class MmUartFrameType {
   static const int reboot = 0x15;
   static const int enterOta = 0x16;
   static const int exitOta = 0x17;
+  static const int setPower = 0x19;
 
   static const int ready = 0x80;
   static const int stateChanged = 0x81;
@@ -46,6 +47,7 @@ abstract final class MmUartFrameType {
     reboot: 'REBOOT',
     enterOta: 'ENTER_OTA',
     exitOta: 'EXIT_OTA',
+    setPower: 'SET_POWER',
     ready: 'READY',
     stateChanged: 'STATE_CHANGED',
     rxPacket: 'RX_PACKET',
