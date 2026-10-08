@@ -115,10 +115,11 @@ void main() {
     await s.activateProfile('MM-PHY-915-LORA-RANGE-v1');
     expect(s.state, 'ready');
     expect(s.canSend, isFalse);
-    await expectLater(s.send(
-      messageId: 'test1', recipientBinding: 'node-deadbeef',
-      payloadType: 'text', payload: {'text': 'hello'},
-    ), throwsStateError);
+    expect(
+      () => s.send(messageId: 'test1', recipientBinding: 'node-deadbeef',
+        payloadType: 'text', payload: {'text': 'hello'}),
+      throwsStateError,
+    );
     expect(mock.sent, 0);
     await s.close();
   });
