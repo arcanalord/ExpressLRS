@@ -81,6 +81,42 @@ fn main() {
         .expect("Bob decrypts ratcheted message");
     assert_eq!(second_received, second_plaintext);
 
+    // Candidate-crate software checks ONLY. This does not establish product
+    // replay protection, storage durability, or Android/Flutter interoperability.
+    assert!(
+        bob_session.decrypt(&second).is_err(),
+        "replaying an already-consumed ratchet ciphertext must fail"
+    );
+
+    // A short bounded reordering window should be decryptable once per
+    // message, including previously skipped receive-chain keys.
+    let mut buffered_messages = Vec::new();
+    for index in 0..4 {
+        let plaintext = format!("mesh-out-of-order-{index}").into_bytes();
+        let ciphertext = alice_session
+            .encrypt(&plaintext)
+            .expect("Alice encrypts buffered message");
+        buffered_messages.push((ciphertext, plaintext));
+    }
+
+    for &index in &[3usize, 0, 2, 1] {
+        let decrypted = bob_session
+            .decrypt(&buffered_messages[index].0)
+            .expect("Bob decrypts out-of-order message");
+        assert_eq!(
+            decrypted.as_slice(),
+            buffered_messages[index].1.as_slice(),
+            "out-of-order decryption must recover exact original plaintext"
+        );
+    }
+    assert!(
+        bob_session.decrypt(&buffered_messages[3].0).is_err(),
+        "an out-of-order message must also reject replay"
+    );
+
+    println!("M07_VODOZEMAC_REPLAY_PROBE_PASS");
+    println!("M07_VODOZEMAC_OUT_OF_ORDER_SMALL_WINDOW_PASS");
+
     println!("M07_VODOZEMAC_DIRECT_PROBE_PASS");
     println!("M07_VODOZEMAC_ASYNC_PREKEY_PASS");
     println!("M07_VODOZEMAC_RATCHET_ROUNDTRIP_PASS");
