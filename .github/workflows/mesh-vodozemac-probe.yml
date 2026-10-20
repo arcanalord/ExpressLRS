@@ -1,6 +1,7 @@
 name: Mesh M07 vodozemac direct provider probe
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - security/m07-private-pipeline
@@ -13,6 +14,9 @@ on:
     paths:
       - '.ci/mesh-v0110/dev5-overlay/tool/vodozemac_probe/**'
       - '.github/workflows/mesh-vodozemac-probe.yml'
+
+permissions:
+  contents: read
 
 concurrency:
   group: mesh-vodozemac-probe-${{ github.ref }}
